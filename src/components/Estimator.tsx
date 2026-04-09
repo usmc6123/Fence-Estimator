@@ -457,8 +457,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                 
                 <div className="space-y-6">
                   {estimate.runs?.map((run, idx) => (
-                    <div key={run.id} className="grid gap-6 md:grid-cols-5 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
-                      <div className="md:col-span-2 space-y-2">
+                    <div key={run.id} className="grid gap-6 md:grid-cols-12 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
+                      <div className="md:col-span-4 space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
                         <input 
                           type="text" 
@@ -471,7 +471,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
                         />
                       </div>
-                      <div className="space-y-2">
+                      <div className="md:col-span-2 space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
                         <input 
                           type="number" 
@@ -484,7 +484,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
                         />
                       </div>
-                      <div className="space-y-2">
+                      <div className="md:col-span-2 space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Corners</label>
                         <input 
                           type="number" 
@@ -497,9 +497,9 @@ export default function Estimator({ materials }: EstimatorProps) {
                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
                         />
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates</label>
+                      <div className="md:col-span-4 space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates</label>
+                        <div className="flex items-center gap-2">
                           <input 
                             type="number" 
                             value={run.gates} 
@@ -508,18 +508,18 @@ export default function Estimator({ materials }: EstimatorProps) {
                               newRuns[idx].gates = Number(e.target.value);
                               setEstimate({ ...estimate, runs: newRuns });
                             }}
-                            className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                            className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all"
                           />
+                          <button 
+                            onClick={() => {
+                              const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                              setEstimate({ ...estimate, runs: newRuns });
+                            }}
+                            className="p-2 text-american-red hover:bg-american-red/10 rounded-lg transition-all flex-shrink-0"
+                          >
+                            <Trash2 size={18} />
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="p-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all"
-                        >
-                          <Trash2 size={20} />
-                        </button>
                       </div>
                     </div>
                   ))}
