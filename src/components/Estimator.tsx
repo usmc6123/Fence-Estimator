@@ -5,11 +5,15 @@ import {
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map
 } from 'lucide-react';
-import { MATERIALS, FENCE_STYLES } from '../constants';
+import { FENCE_STYLES } from '../constants';
 import { MaterialItem, FenceStyle, Estimate } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 
-export default function Estimator() {
+interface EstimatorProps {
+  materials: MaterialItem[];
+}
+
+export default function Estimator({ materials }: EstimatorProps) {
   const [step, setStep] = React.useState(1);
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
     linearFeet: 100,
@@ -20,9 +24,9 @@ export default function Estimator() {
     color: 'White',
     styleId: FENCE_STYLES[0].id,
     visualStyleId: FENCE_STYLES[0].visualStyles[0].id,
-    postCapId: MATERIALS.find(m => m.category === 'PostCap')?.id || '',
+    postCapId: materials.find(m => m.category === 'PostCap')?.id || '',
     gateCount: 1,
-    gateStyleId: MATERIALS.find(m => m.category === 'Gate')?.id || '',
+    gateStyleId: materials.find(m => m.category === 'Gate')?.id || '',
     footingType: 'Cuboid',
     postWidth: 6,
     postThickness: 6,
@@ -66,7 +70,7 @@ export default function Estimator() {
 
     // 1. Posts
     const postCount = Math.ceil(lf * logic.postsPerLF) + 1 + corners + gates;
-    const postMat = MATERIALS.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || MATERIALS[0];
+    const postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
     const postQty = Math.ceil(postCount * wasteFactor);
     rawItems.push({ 
       name: `${postMat.name} (incl. waste)`, 
@@ -79,7 +83,7 @@ export default function Estimator() {
     // 2. Main Panels/Pickets
     const panelCount = Math.ceil(lf / (estimate.width || 8));
     const visualStyleModifier = selectedVisualStyle.priceModifier;
-    const panelMat = MATERIALS.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || MATERIALS[0];
+    const panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
     const panelQty = Math.ceil(panelCount * wasteFactor);
     rawItems.push({ 
       name: `${selectedVisualStyle.name} Panels (incl. waste)`, 
@@ -90,7 +94,7 @@ export default function Estimator() {
     });
 
     // 3. Post Caps
-    const capMat = MATERIALS.find(m => m.id === estimate.postCapId);
+    const capMat = materials.find(m => m.id === estimate.postCapId);
     if (capMat) {
       rawItems.push({ 
         name: `${capMat.name} Caps`, 
@@ -102,7 +106,7 @@ export default function Estimator() {
     }
 
     // 4. Gates
-    const gateMat = MATERIALS.find(m => m.id === estimate.gateStyleId);
+    const gateMat = materials.find(m => m.id === estimate.gateStyleId);
     if (gateMat && gates > 0) {
       rawItems.push({ 
         name: `${gateMat.name} Gate Kit`, 
@@ -115,7 +119,7 @@ export default function Estimator() {
 
     // 5. Concrete & Gravel
     const concreteBags = Math.ceil(postCount * logic.concretePerPost);
-    const concreteMat = MATERIALS.find(m => m.id === 'i-concrete-80') || MATERIALS.find(m => m.category === 'Concrete')!;
+    const concreteMat = materials.find(m => m.id === 'i-concrete-80') || materials.find(m => m.category === 'Concrete')!;
     rawItems.push({ 
       name: `${concreteMat.name}`, 
       qty: concreteBags, 
@@ -125,7 +129,7 @@ export default function Estimator() {
     });
 
     if (estimate.includeGravel) {
-      const gravelMat = MATERIALS.find(m => m.id === 'i-gravel')!;
+      const gravelMat = materials.find(m => m.id === 'i-gravel')!;
       const gravelQty = postCount * 0.5 / 27; // 0.5 cu ft per hole, convert to cu yd
       rawItems.push({ 
         name: 'Drainage Gravel', 
@@ -154,9 +158,9 @@ export default function Estimator() {
       const footingWeight = estimate.removeConcreteFootings ? (postCount * 225) : 0;
       const totalWeight = fenceWeight + footingWeight;
       
-      const dumpsterMat = MATERIALS.find(m => m.id === 'd-dumpster')!;
-      const haulingMat = MATERIALS.find(m => m.id === 'd-hauling')!;
-      const bladeMat = MATERIALS.find(m => m.id === 'd-blade')!;
+      const dumpsterMat = materials.find(m => m.id === 'd-dumpster')!;
+      const haulingMat = materials.find(m => m.id === 'd-hauling')!;
+      const bladeMat = materials.find(m => m.id === 'd-blade')!;
       
       const dumpstersNeeded = Math.ceil(totalWeight / 6000); // Assume 3 tons per dumpster
       const bladesNeeded = Math.ceil(dLF / 50);
@@ -176,11 +180,11 @@ export default function Estimator() {
     let sitePrepCost = 0;
     if (estimate.hasSitePrep) {
       if (estimate.needsMarking) {
-        const markingMat = MATERIALS.find(m => m.id === 's-marking')!;
+        const markingMat = materials.find(m => m.id === 's-marking')!;
         items.push({ name: markingMat.name, qty: 1, unitCost: markingMat.cost, total: markingMat.cost, category: 'SitePrep' });
       }
       if (estimate.needsClearing) {
-        const clearingMat = MATERIALS.find(m => m.id === 's-clearing')!;
+        const clearingMat = materials.find(m => m.id === 's-clearing')!;
         const clearingHours = Math.ceil(lf / 20);
         items.push({ name: 'Vegetation Clearing', qty: clearingHours, unitCost: clearingMat.cost, total: clearingHours * clearingMat.cost, category: 'SitePrep' });
       }
@@ -189,7 +193,7 @@ export default function Estimator() {
 
     // 8. Finishing
     if (estimate.includeStain && selectedStyle.type === 'Wood') {
-      const stainMat = MATERIALS.find(m => m.id === 'f-stain')!;
+      const stainMat = materials.find(m => m.id === 'f-stain')!;
       const sqFt = lf * (estimate.height || 6) * 2; // Two sides
       const gallons = Math.ceil(sqFt / 175);
       items.push({ name: 'Sealant/Stain', qty: gallons, unitCost: stainMat.cost, total: gallons * stainMat.cost, category: 'Finishing' });
@@ -413,7 +417,7 @@ export default function Estimator() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-5">
-              {MATERIALS.filter(m => m.category === 'PostCap').map(cap => (
+              {materials.filter(m => m.category === 'PostCap').map(cap => (
                 <button key={cap.id} onClick={() => setEstimate({...estimate, postCapId: cap.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.postCapId === cap.id ? "border-[#1A1A1A] bg-[#F9F9F9]" : "border-[#E5E5E5] hover:border-[#1A1A1A]")}>
                   <img src={cap.imageUrl} alt={cap.name} className="w-full aspect-square object-cover rounded-lg mb-2" referrerPolicy="no-referrer" />
                   <p className="text-[10px] font-bold">{cap.name}</p>
@@ -722,34 +726,48 @@ export default function Estimator() {
 
           <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#666666] mb-6">Material Breakdown</h3>
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {results.items.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between group">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-[#1A1A1A]">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#999999] uppercase tracking-wider">Qty:</span>
-                      <input 
-                        type="number" 
-                        value={item.qty} 
-                        onChange={(e) => {
-                          const newQty = Number(e.target.value);
-                          setEstimate({
-                            ...estimate,
-                            manualQuantities: {
-                              ...(estimate.manualQuantities || {}),
-                              [item.name]: newQty
-                            }
-                          });
-                        }}
-                        className="w-16 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
-                      />
-                      <span className="text-[10px] text-[#999999] uppercase tracking-wider">× {formatCurrency(item.unitCost)}</span>
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {results.items.map((item, idx) => {
+                const material = materials.find(m => m.name === item.name || item.name.startsWith(m.name));
+                return (
+                  <div key={idx} className="flex items-center justify-between group gap-4">
+                    <div className="flex items-center gap-3 flex-1">
+                      {material?.imageUrl ? (
+                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-[#F9F9F9] border border-[#E5E5E5] shrink-0">
+                          <img src={material.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-[#999999] shrink-0">
+                          <Box size={20} />
+                        </div>
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold text-[#1A1A1A] truncate">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">Qty:</span>
+                          <input 
+                            type="number" 
+                            value={item.qty} 
+                            onChange={(e) => {
+                              const newQty = Number(e.target.value);
+                              setEstimate({
+                                ...estimate,
+                                manualQuantities: {
+                                  ...(estimate.manualQuantities || {}),
+                                  [item.name]: newQty
+                                }
+                              });
+                            }}
+                            className="w-16 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
+                          />
+                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">× {formatCurrency(item.unitCost)}</span>
+                        </div>
+                      </div>
                     </div>
+                    <span className="text-sm font-mono font-medium shrink-0">{formatCurrency(item.total)}</span>
                   </div>
-                  <span className="text-sm font-mono font-medium">{formatCurrency(item.total)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             
             <div className="mt-8 p-4 rounded-2xl bg-orange-50 border border-orange-100 flex items-start gap-3">

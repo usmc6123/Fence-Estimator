@@ -22,8 +22,12 @@ const CATEGORY_ICONS: Record<string, any> = {
   'PostCap': ImageIcon,
 };
 
-export default function MaterialLibrary() {
-  const [materials, setMaterials] = React.useState<MaterialItem[]>(MATERIALS);
+interface MaterialLibraryProps {
+  materials: MaterialItem[];
+  setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
+}
+
+export default function MaterialLibrary({ materials, setMaterials }: MaterialLibraryProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<MaterialCategory | 'All'>('All');
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
@@ -82,9 +86,7 @@ export default function MaterialLibrary() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this material?')) {
-      setMaterials(materials.filter(m => m.id !== id));
-    }
+    setMaterials(materials.filter(m => m.id !== id));
   };
 
   return (
