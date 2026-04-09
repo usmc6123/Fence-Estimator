@@ -45,6 +45,8 @@ export interface Estimate {
   id: string;
   customerName: string;
   customerEmail: string;
+  customerPhone: string;
+  customerAddress: string;
   date: string;
   
   // Measurements

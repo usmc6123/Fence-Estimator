@@ -17,6 +17,10 @@ interface EstimatorProps {
 export default function Estimator({ materials }: EstimatorProps) {
   const [step, setStep] = React.useState(1);
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
+    customerName: '',
+    customerEmail: '',
+    customerPhone: '',
+    customerAddress: '',
     linearFeet: 100,
     corners: 2,
     height: 6,
@@ -313,6 +317,62 @@ export default function Estimator({ materials }: EstimatorProps) {
       case 1:
         return (
           <div className="space-y-8">
+            {/* Customer Information Section */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5] space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-10 w-10 rounded-xl bg-american-blue/10 flex items-center justify-center text-american-blue">
+                  <Share2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#1A1A1A]">Customer Information</h3>
+                  <p className="text-xs text-[#666666]">Details for the estimate and invoice.</p>
+                </div>
+              </div>
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Customer Name</label>
+                  <input 
+                    type="text" 
+                    value={estimate.customerName} 
+                    onChange={(e) => setEstimate({...estimate, customerName: e.target.value})} 
+                    placeholder="John Doe"
+                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={estimate.customerEmail} 
+                    onChange={(e) => setEstimate({...estimate, customerEmail: e.target.value})} 
+                    placeholder="john@example.com"
+                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    value={estimate.customerPhone} 
+                    onChange={(e) => setEstimate({...estimate, customerPhone: e.target.value})} 
+                    placeholder="(555) 000-0000"
+                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Project Address</label>
+                  <input 
+                    type="text" 
+                    value={estimate.customerAddress} 
+                    onChange={(e) => setEstimate({...estimate, customerAddress: e.target.value})} 
+                    placeholder="123 Fencing St, Austin, TX"
+                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
                 <Ruler size={24} />
@@ -950,6 +1010,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                     <p className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-2">Customer Details</p>
                     <p className="text-lg font-bold">{estimate.customerName || 'Valued Customer'}</p>
                     <p className="text-sm text-[#666666]">{estimate.customerEmail || 'No email provided'}</p>
+                    {estimate.customerPhone && <p className="text-sm text-[#666666]">{estimate.customerPhone}</p>}
+                    {estimate.customerAddress && <p className="text-sm text-[#666666]">{estimate.customerAddress}</p>}
                   </div>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-2">Project Scope</p>
@@ -1064,9 +1126,16 @@ export default function Estimator({ materials }: EstimatorProps) {
                             <circle cx={x1} cy={y1} r="6" fill="#B22234" />
                             <circle cx={x1 + length} cy={y1} r="6" fill="#B22234" />
                             <text x={x1 + length/2} y={y1 - 15} textAnchor="middle" className="text-[12px] font-bold fill-american-blue">{run.name} ({run.linearFeet}')</text>
-                            {run.gates > 0 && (
-                              <rect x={x1 + length/2 - 10} y={y1 - 4} width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
-                            )}
+                            {run.gates > 0 && Array.from({ length: run.gates }).map((_, gIdx) => {
+                              const gatePos = (length / (run.gates + 1)) * (gIdx + 1);
+                              return (
+                                <g key={gIdx} transform={`translate(${x1 + gatePos}, ${y1})`}>
+                                  <rect x="-10" y="-6" width="20" height="12" fill="#F5F5F5" />
+                                  <line x1="-10" y1="0" x2="10" y2="0" stroke="#B22234" strokeWidth="4" />
+                                  <text y="18" textAnchor="middle" className="text-[8px] font-bold fill-american-red">G</text>
+                                </g>
+                              );
+                            })}
                           </g>
                         );
                       })
@@ -1108,11 +1177,23 @@ export default function Estimator({ materials }: EstimatorProps) {
                               <text x={centerX} y={centerY} textAnchor="middle" className="text-sm font-bold fill-american-blue">
                                 {results.lf} LF Total Perimeter
                               </text>
-                              {estimate.gateCount > 0 && (
-                                <g transform={`translate(${points[0][0]}, ${points[0][1]}) rotate(${(360/corners)/2})`}>
-                                   <rect x={radius/2 - 10} y="-4" width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
-                                </g>
-                              )}
+                              {estimate.gateCount > 0 && Array.from({ length: estimate.gateCount }).map((_, gIdx) => {
+                                // Place gates on different sides if possible
+                                const sideIdx = gIdx % corners;
+                                const p1 = points[sideIdx];
+                                const p2 = points[(sideIdx + 1) % corners];
+                                const gateX = p1[0] + (p2[0] - p1[0]) * 0.5;
+                                const gateY = p1[1] + (p2[1] - p1[1]) * 0.5;
+                                const angle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * (180 / Math.PI);
+                                
+                                return (
+                                  <g key={gIdx} transform={`translate(${gateX}, ${gateY}) rotate(${angle})`}>
+                                    <rect x="-10" y="-6" width="20" height="12" fill="#F5F5F5" />
+                                    <line x1="-10" y1="0" x2="10" y2="0" stroke="#B22234" strokeWidth="4" />
+                                    <text y="18" textAnchor="middle" transform={`rotate(${-angle})`} className="text-[8px] font-bold fill-american-red">G</text>
+                                  </g>
+                                );
+                              })}
                             </g>
                           );
                         } else if (corners === 1) {
@@ -1144,9 +1225,16 @@ export default function Estimator({ materials }: EstimatorProps) {
                               <circle cx="200" cy="225" r="6" fill="#B22234" />
                               <circle cx="600" cy="225" r="6" fill="#B22234" />
                               <text x="400" y="210" textAnchor="middle" className="text-sm font-bold fill-american-blue">Main Run ({results.lf}')</text>
-                              {estimate.gateCount > 0 && (
-                                <rect x="390" y="221" width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
-                              )}
+                              {estimate.gateCount > 0 && Array.from({ length: estimate.gateCount }).map((_, gIdx) => {
+                                const gatePos = 200 + (400 / (estimate.gateCount + 1)) * (gIdx + 1);
+                                return (
+                                  <g key={gIdx} transform={`translate(${gatePos}, 225)`}>
+                                    <rect x="-10" y="-6" width="20" height="12" fill="#F5F5F5" />
+                                    <line x1="-10" y1="0" x2="10" y2="0" stroke="#B22234" strokeWidth="4" />
+                                    <text y="18" textAnchor="middle" className="text-[8px] font-bold fill-american-red">G</text>
+                                  </g>
+                                );
+                              })}
                             </g>
                           );
                         }
