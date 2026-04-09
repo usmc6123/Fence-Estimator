@@ -94,27 +94,27 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-bold tracking-tighter text-[#1A1A1A]">Material Library</h1>
+          <h1 className="text-4xl font-bold tracking-tighter text-american-blue">Material Library</h1>
           <p className="text-[#666666] mt-2">Manage your inventory and pricing for accurate estimates.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-white rounded-xl border border-[#E5E5E5] p-1 shadow-sm">
             <button 
               onClick={() => setViewMode('grid')}
-              className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-[#F5F5F5] text-[#1A1A1A]" : "text-[#999999] hover:text-[#1A1A1A]")}
+              className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-american-blue/10 text-american-blue" : "text-[#999999] hover:text-american-blue")}
             >
               <Grid size={18} />
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-[#F5F5F5] text-[#1A1A1A]" : "text-[#999999] hover:text-[#1A1A1A]")}
+              className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-american-blue/10 text-american-blue" : "text-[#999999] hover:text-american-blue")}
             >
               <ListIcon size={18} />
             </button>
           </div>
           <button 
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-bold text-white hover:bg-[#333333] transition-all shadow-lg active:scale-95"
+            className="flex items-center gap-2 rounded-xl bg-american-blue px-6 py-3 text-sm font-bold text-white hover:bg-american-blue/90 transition-all shadow-lg active:scale-95"
           >
             <Plus size={18} />
             Add Material
@@ -131,7 +131,7 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
             placeholder="Search materials, SKUs, or categories..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-12 py-4 text-lg focus:border-[#1A1A1A] focus:outline-none shadow-sm transition-all"
+            className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-12 py-4 text-lg focus:border-american-blue focus:outline-none shadow-sm transition-all"
           />
         </div>
 
@@ -144,8 +144,8 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
                 className={cn(
                   "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
                   selectedCategory === cat 
-                    ? "bg-[#1A1A1A] text-white shadow-md" 
-                    : "text-[#666666] hover:bg-[#F5F5F5]"
+                    ? "bg-american-blue text-white shadow-md" 
+                    : "text-[#666666] hover:bg-[#F5F5F5] hover:text-american-blue"
                 )}
               >
                 {cat}
@@ -171,13 +171,13 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="group bg-white rounded-3xl p-6 border border-[#E5E5E5] shadow-sm hover:shadow-xl hover:border-[#1A1A1A] transition-all relative overflow-hidden"
+                  className="group bg-white rounded-3xl p-6 border border-[#E5E5E5] shadow-sm hover:shadow-xl hover:border-american-blue transition-all relative overflow-hidden"
                 >
                   <div className="flex items-start justify-between mb-6">
-                    <div className="h-12 w-12 rounded-2xl bg-[#F9F9F9] flex items-center justify-center text-[#1A1A1A] group-hover:bg-[#1A1A1A] group-hover:text-white transition-colors">
+                    <div className="h-12 w-12 rounded-2xl bg-[#F9F9F9] flex items-center justify-center text-american-blue group-hover:bg-american-blue group-hover:text-white transition-colors">
                       <Icon size={24} />
                     </div>
-                    <button className="p-2 text-[#999999] hover:text-[#1A1A1A] transition-colors">
+                    <button className="p-2 text-[#999999] hover:text-american-blue transition-colors">
                       <MoreVertical size={20} />
                     </button>
                   </div>
@@ -387,7 +387,7 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 px-6 py-4 rounded-xl bg-[#1A1A1A] text-white font-bold text-sm hover:bg-[#333333] transition-all shadow-lg"
+                    className="flex-1 px-6 py-4 rounded-xl bg-american-blue text-white font-bold text-sm hover:bg-american-blue/90 transition-all shadow-lg"
                   >
                     {editingMaterial ? 'Save Changes' : 'Add Material'}
                   </button>

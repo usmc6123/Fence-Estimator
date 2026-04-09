@@ -338,7 +338,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                     const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
                     setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
                   }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1A1A1A] text-white text-xs font-bold hover:bg-[#333333] transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-american-blue text-white text-xs font-bold hover:bg-american-blue/90 transition-all shadow-sm"
                 >
                   <Plus size={14} />
                   Add Run
@@ -436,7 +436,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               {FENCE_STYLES.map(style => (
-                <button key={style.id} onClick={() => setEstimate({...estimate, styleId: style.id, visualStyleId: style.visualStyles[0].id})} className={cn("p-4 rounded-2xl border transition-all text-left", estimate.styleId === style.id ? "border-[#1A1A1A] bg-[#F9F9F9]" : "border-[#E5E5E5] hover:border-[#1A1A1A]")}>
+                <button key={style.id} onClick={() => setEstimate({...estimate, styleId: style.id, visualStyleId: style.visualStyles[0].id})} className={cn("p-4 rounded-2xl border transition-all text-left", estimate.styleId === style.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
                   <p className="text-sm font-bold">{style.name}</p>
                   <p className="text-[10px] text-[#666666]">{style.type}</p>
                 </button>
@@ -444,7 +444,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               {selectedStyle.visualStyles.map(vs => (
-                <button key={vs.id} onClick={() => setEstimate({...estimate, visualStyleId: vs.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.visualStyleId === vs.id ? "border-[#1A1A1A] bg-[#F9F9F9]" : "border-[#E5E5E5] hover:border-[#1A1A1A]")}>
+                <button key={vs.id} onClick={() => setEstimate({...estimate, visualStyleId: vs.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.visualStyleId === vs.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
                   <img src={vs.imageUrl} alt={vs.name} className="w-full aspect-video object-cover rounded-lg mb-2" referrerPolicy="no-referrer" />
                   <p className="text-xs font-bold">{vs.name}</p>
                 </button>
@@ -466,7 +466,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
             <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-5">
               {materials.filter(m => m.category === 'PostCap').map(cap => (
-                <button key={cap.id} onClick={() => setEstimate({...estimate, postCapId: cap.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.postCapId === cap.id ? "border-[#1A1A1A] bg-[#F9F9F9]" : "border-[#E5E5E5] hover:border-[#1A1A1A]")}>
+                <button key={cap.id} onClick={() => setEstimate({...estimate, postCapId: cap.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.postCapId === cap.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
                   <img src={cap.imageUrl} alt={cap.name} className="w-full aspect-square object-cover rounded-lg mb-2" referrerPolicy="no-referrer" />
                   <p className="text-[10px] font-bold">{cap.name}</p>
                 </button>
@@ -490,7 +490,7 @@ export default function Estimator({ materials }: EstimatorProps) {
               <div className="p-6 rounded-2xl border border-[#E5E5E5] space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold">Demolition</h3>
-                  <button onClick={() => setEstimate({...estimate, hasDemolition: !estimate.hasDemolition})} className={cn("h-6 w-12 rounded-full relative transition-all", estimate.hasDemolition ? "bg-[#1A1A1A]" : "bg-[#E5E5E5]")}>
+                  <button onClick={() => setEstimate({...estimate, hasDemolition: !estimate.hasDemolition})} className={cn("h-6 w-12 rounded-full relative transition-all", estimate.hasDemolition ? "bg-american-red" : "bg-[#E5E5E5]")}>
                     <div className={cn("absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all", estimate.hasDemolition ? "right-1" : "left-1")} />
                   </button>
                 </div>
@@ -514,7 +514,7 @@ export default function Estimator({ materials }: EstimatorProps) {
               <div className="p-6 rounded-2xl border border-[#E5E5E5] space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold">Site Prep</h3>
-                  <button onClick={() => setEstimate({...estimate, hasSitePrep: !estimate.hasSitePrep})} className={cn("h-6 w-12 rounded-full relative transition-all", estimate.hasSitePrep ? "bg-[#1A1A1A]" : "bg-[#E5E5E5]")}>
+                  <button onClick={() => setEstimate({...estimate, hasSitePrep: !estimate.hasSitePrep})} className={cn("h-6 w-12 rounded-full relative transition-all", estimate.hasSitePrep ? "bg-american-red" : "bg-[#E5E5E5]")}>
                     <div className={cn("absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all", estimate.hasSitePrep ? "right-1" : "left-1")} />
                   </button>
                 </div>
@@ -552,7 +552,7 @@ export default function Estimator({ materials }: EstimatorProps) {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Waste Allowance (%)</label>
-                  <input type="range" min="0" max="25" step="1" value={estimate.wastePercentage} onChange={(e) => setEstimate({...estimate, wastePercentage: Number(e.target.value)})} className="w-full h-2 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-[#1A1A1A]" />
+                  <input type="range" min="0" max="25" step="1" value={estimate.wastePercentage} onChange={(e) => setEstimate({...estimate, wastePercentage: Number(e.target.value)})} className="w-full h-2 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-blue" />
                   <div className="flex justify-between text-[10px] font-bold text-[#999999]">
                     <span>0%</span>
                     <span>{estimate.wastePercentage}%</span>
@@ -572,8 +572,11 @@ export default function Estimator({ materials }: EstimatorProps) {
                   )}
                 </div>
               </div>
-              <div className="bg-[#1A1A1A] rounded-2xl p-6 text-white">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-4">Structural Specs</h4>
+              <div className="bg-american-blue rounded-2xl p-6 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5">
+                  <div className="american-star w-24 h-24 bg-white" />
+                </div>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-white/60 mb-4">Structural Specs</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-[10px] text-[#999999]">Footing</p>
@@ -624,7 +627,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                 onClick={() => { setStep(s.id); setIsFullView(false); }}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all shrink-0 text-xs font-bold uppercase tracking-wider",
-                  !isFullView && step === s.id ? "bg-[#1A1A1A] text-white shadow-md" : "text-[#999999] hover:bg-[#F5F5F5]"
+                  !isFullView && step === s.id ? "bg-american-blue text-white shadow-md" : "text-[#999999] hover:bg-[#F5F5F5] hover:text-american-blue"
                 )}
               >
                 <s.icon size={14} />
@@ -636,7 +639,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             onClick={() => setIsFullView(!isFullView)}
             className={cn(
               "flex items-center gap-2 px-6 py-3.5 rounded-2xl border font-bold text-xs uppercase tracking-wider transition-all shadow-sm",
-              isFullView ? "bg-[#1A1A1A] text-white border-[#1A1A1A]" : "bg-white text-[#1A1A1A] border-[#E5E5E5] hover:border-[#1A1A1A]"
+              isFullView ? "bg-american-blue text-white border-american-blue" : "bg-white text-american-blue border-[#E5E5E5] hover:border-american-blue"
             )}
           >
             <Map size={16} />
@@ -676,7 +679,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                   {step < 6 ? (
                     <button 
                       onClick={handleNext}
-                      className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-8 py-3 text-sm font-bold text-white hover:bg-[#333333] transition-all shadow-lg active:scale-95"
+                      className="flex items-center gap-2 rounded-xl bg-american-blue px-8 py-3 text-sm font-bold text-white hover:bg-american-blue/90 transition-all shadow-lg active:scale-95"
                     >
                       Next Step
                       <ChevronRight size={18} />
@@ -684,7 +687,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                   ) : (
                     <button 
                       onClick={handleSave}
-                      className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-8 py-3 text-sm font-bold text-white hover:bg-[#333333] transition-all shadow-lg active:scale-95"
+                      className="flex items-center gap-2 rounded-xl bg-american-red px-8 py-3 text-sm font-bold text-white hover:bg-american-red/90 transition-all shadow-lg active:scale-95"
                     >
                       Generate & Send to CRM
                       <Send size={18} />
@@ -700,12 +703,12 @@ export default function Estimator({ materials }: EstimatorProps) {
       {/* Right Column: Live Summary */}
       <div className="lg:col-span-5">
         <div className="sticky top-8 space-y-6">
-          <section className="bg-[#1A1A1A] text-white rounded-3xl p-6 shadow-2xl overflow-hidden relative">
+          <section className="patriotic-gradient text-white rounded-3xl p-6 shadow-2xl overflow-hidden relative">
             <div className="absolute top-0 right-0 p-8 opacity-10">
-              <Calculator size={120} />
+              <div className="american-star w-32 h-32 bg-white" />
             </div>
             
-            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-[#999999] mb-2">Estimated Total</h2>
+            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-white/60 mb-2">Estimated Total</h2>
             <div className="text-5xl font-bold tracking-tighter mb-8">
               {formatCurrency(results.total)}
             </div>

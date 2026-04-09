@@ -4,6 +4,9 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-american-red: #BF0A30;
+  --color-american-blue: #002868;
+  --color-american-white: #FFFFFF;
 }
 
 @layer base {
@@ -11,8 +14,18 @@
     @apply border-[#E5E5E5];
   }
   body {
-    @apply bg-[#F5F5F5] text-[#1A1A1A] antialiased;
+    @apply bg-[#F8F9FA] text-[#1A1A1A] antialiased;
+    background-image: radial-gradient(rgba(0, 40, 104, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
+}
+
+.patriotic-gradient {
+  background: linear-gradient(135deg, var(--color-american-blue) 0%, #001a45 100%);
+}
+
+.american-star {
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
 }
 
 /* Custom Scrollbar */

@@ -31,13 +31,13 @@ export default function Settings() {
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold tracking-tighter text-[#1A1A1A]">Settings</h1>
+          <h1 className="text-4xl font-bold tracking-tighter text-american-blue">Settings</h1>
           <p className="text-[#666666] mt-2">Configure your business profile and external integrations.</p>
         </div>
         <button 
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center gap-2 rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-bold text-white hover:bg-[#333333] transition-all shadow-lg active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-american-blue px-6 py-3 text-sm font-bold text-white hover:bg-american-blue/90 transition-all shadow-lg active:scale-95 disabled:opacity-50"
         >
           {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
           Save Changes
@@ -53,7 +53,7 @@ export default function Settings() {
               onClick={() => setActiveSection(s.id as any)}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
-                activeSection === s.id ? "bg-[#1A1A1A] text-white shadow-md" : "text-[#666666] hover:bg-white hover:shadow-sm"
+                activeSection === s.id ? "bg-american-blue text-white shadow-md" : "text-[#666666] hover:bg-white hover:shadow-sm hover:text-american-blue"
               )}
             >
               <s.icon size={18} />
@@ -73,7 +73,7 @@ export default function Settings() {
             {activeSection === 'company' && (
               <div className="space-y-8">
                 <div className="flex items-center gap-6">
-                  <div className="h-24 w-24 rounded-3xl bg-[#F5F5F5] border-2 border-dashed border-[#E5E5E5] flex flex-col items-center justify-center text-[#999999] cursor-pointer hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-all">
+                  <div className="h-24 w-24 rounded-3xl bg-[#F5F5F5] border-2 border-dashed border-[#E5E5E5] flex flex-col items-center justify-center text-[#999999] cursor-pointer hover:border-american-blue hover:text-american-blue transition-all">
                     <ImageIcon size={24} />
                     <span className="text-[10px] font-bold mt-1">Logo</span>
                   </div>
@@ -88,35 +88,35 @@ export default function Settings() {
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Company Name</label>
                     <div className="relative">
                       <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue="FencePro Solutions" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+                      <input type="text" defaultValue="Lone Star Fence Works" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Email</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="email" defaultValue="office@fencepro.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+                      <input type="email" defaultValue="office@lonestarfence.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Phone Number</label>
                     <div className="relative">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="tel" defaultValue="(555) 123-4567" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+                      <input type="tel" defaultValue="(555) 123-4567" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Website</label>
                     <div className="relative">
                       <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="url" defaultValue="https://fencepro.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+                      <input type="url" defaultValue="https://lonestarfence.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Address</label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue="123 Fencing Way, Austin, TX 78701" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+                      <input type="text" defaultValue="123 Fencing Way, Austin, TX 78701" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                 </div>
@@ -144,14 +144,14 @@ export default function Settings() {
                       <input 
                         type="url" 
                         placeholder="https://services.gohighlevel.com/webhook/..."
-                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-[#1A1A1A] focus:outline-none" 
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none" 
                       />
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between p-4 rounded-2xl border border-[#E5E5E5] bg-[#F9F9F9]">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-[#1A1A1A] shadow-sm">
+                      <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-american-blue shadow-sm">
                         <RefreshCw size={20} />
                       </div>
                       <div>
@@ -159,7 +159,7 @@ export default function Settings() {
                         <p className="text-[10px] text-[#666666]">Automatically send all new estimates to CRM</p>
                       </div>
                     </div>
-                    <button className="h-6 w-12 rounded-full bg-[#1A1A1A] relative transition-all">
+                    <button className="h-6 w-12 rounded-full bg-american-blue relative transition-all">
                       <div className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm" />
                     </button>
                   </div>
@@ -187,7 +187,7 @@ export default function Settings() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-8 right-8 bg-[#1A1A1A] text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50"
+          className="fixed bottom-8 right-8 bg-american-blue text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50"
         >
           <CheckCircle2 className="text-[#00FF00]" size={20} />
           <span className="font-bold">Settings saved successfully!</span>

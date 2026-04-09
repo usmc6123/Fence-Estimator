@@ -5,25 +5,25 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'w-post-4x4', name: '4x4-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 14.50, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
   { id: 'w-post-6x6', name: '6x6-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 32.00, description: 'Heavy duty pressure-treated', imageUrl: 'https://cdn.menardc.com/main/items/media/99998/ProductMedium/TreatedTimber_1_P_6x6_2.jpg' },
   { id: 'w-rail-2x4', name: '2x4-8\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 8.75, description: 'Horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
-  { id: 'w-picket-1x6', name: '1x6-6\' Cedar Picket', category: 'Picket', unit: 'each', cost: 3.50, description: 'Western Red Cedar', imageUrl: 'https://mobileimages.lowes.com/productimages/5a2ed726-4827-4cb7-aaed-9af12015f0eb/74277466.jpeg?size=pdhism' },
+  { id: 'w-picket-1x6', name: '1x6-6\' Cedar Picket', category: 'Picket', unit: 'each', cost: 3.50, description: 'Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
   { id: 'w-picket-1x4', name: '1x4-4\' Wood Picket', category: 'Picket', unit: 'each', cost: 2.10, description: 'Standard pine picket', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
   
   // Vinyl Structure
   { id: 'v-post-5x5', name: '5x5-8\' Vinyl Post', category: 'Post', unit: 'each', cost: 45.00, description: 'Hollow PVC post', imageUrl: 'https://pvcfencedepot.com/wp-content/uploads/2022/06/vinyl-end-post.png' },
   { id: 'v-post-4x4', name: '4x4-8\' Vinyl Post', category: 'Post', unit: 'each', cost: 38.00, description: 'Standard PVC post', imageUrl: 'https://cdn11.bigcommerce.com/s-0f3dd/images/stencil/original/products/682/15692/4x4_post_sleeve__38490.1675952057.png?c=2' },
   { id: 'v-insert-steel', name: 'Steel I-Beam Insert', category: 'Hardware', unit: 'each', cost: 55.00, description: 'Gate post reinforcement', imageUrl: 'https://vinylfencefittings.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/n/w/nw6351-096-1_1.jpg' },
-  { id: 'v-panel-tg', name: 'T&G Vinyl Panel Slats', category: 'Panel', unit: 'lf', cost: 12.00, description: 'Tongue & Groove vertical slats', imageUrl: 'https://alliancefencesupply.com/cdn/shop/files/blob-e232bbb_1.png?v=1736448404&width=1445' },
+  { id: 'v-panel-tg', name: 'T&G Vinyl Panel Slats', category: 'Panel', unit: 'lf', cost: 12.00, description: 'Tongue & Groove vertical slats', imageUrl: 'https://www.showtechfence.com/uploads/202025227/full-vinyl-privacy-fence49586825681.jpg' },
   
   // Chain Link Structure
   { id: 'cl-post-term', name: '2-3/8" Terminal Post', category: 'Post', unit: 'each', cost: 28.00, description: 'End/Corner/Gate post', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
   { id: 'cl-post-line', name: '1-5/8" Line Post', category: 'Post', unit: 'each', cost: 18.50, description: 'Intermediate post', imageUrl: 'https://images.thdstatic.com/productImages/697ae182-412a-4187-b72a-1547bd41ac71/svn/fencer-wire-chain-link-fence-accessories-lbp-10x1f58-64_600.jpg' },
   { id: 'cl-rail-top', name: '1-3/8" Top Rail', category: 'Rail', unit: 'lf', cost: 2.50, description: 'Horizontal top pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
-  { id: 'cl-mesh-galv', name: '9ga Galv Mesh 6\'', category: 'Picket', unit: 'lf', cost: 6.50, description: 'Standard chain link fabric', imageUrl: 'https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcS_kxrpO53NDOec7MCUt8vHTE6G6bZjiEq6XuqKPYN6NmqEsYr4DQfVxJMCzgp2m2JgLih0Wa9t-bBLVhe93fRwG6DSxSNCI6Qz7R3u2jltr3y0btVAwAM-76J_22EkU5j8ttwewZn1sg&usqp=CAc' },
+  { id: 'cl-mesh-galv', name: '9ga Galv Mesh 6\'', category: 'Picket', unit: 'lf', cost: 6.50, description: 'Standard chain link fabric', imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
   { id: 'cl-tension-wire', name: 'Bottom Tension Wire', category: 'Hardware', unit: 'lf', cost: 0.45, description: 'Prevents mesh lifting', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS_amSlsfxUJJ0Uvy1zk-95EIbBcJb3FEuDHQ&s' },
   
   // Metal Structure
   { id: 'm-post-2x2', name: '2x2 Aluminum Post', category: 'Post', unit: 'each', cost: 35.00, description: 'Powder coated black', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
-  { id: 'm-panel-std', name: '6x8 Aluminum Panel', category: 'Panel', unit: 'each', cost: 185.00, description: 'Pre-welded section', imageUrl: 'https://images.thdstatic.com/productImages/0e3555f0-a4b8-409e-be64-fbc3e4c16c28/svn/metal-fence-panels-73008983-64_600.jpg' },
+  { id: 'm-panel-std', name: '6x8 Aluminum Panel', category: 'Panel', unit: 'each', cost: 185.00, description: 'Pre-welded section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
   
   // Farm Structure
   { id: 'f-post-t', name: '6\' Steel T-Post', category: 'Post', unit: 'each', cost: 7.50, description: 'Agricultural steel post', imageUrl: 'https://d2j6dbq0eux0bg.cloudfront.net/images/96378769/4289817609.jpg' },
@@ -79,9 +79,9 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [8],
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [
-      { id: 'w-std', name: "1x6-6' Cedar Picket", priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1505330622279-bf7d7fc918f4?q=80&w=800&auto=format&fit=crop' },
-      { id: 'w-cap', name: 'Cap & Trim', priceModifier: 4.50, imageUrl: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?q=80&w=800&auto=format&fit=crop' },
-      { id: 'w-shadow', name: 'Shadowbox', priceModifier: 6.00, imageUrl: 'https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?q=80&w=800&auto=format&fit=crop' },
+      { id: 'w-std', name: "1x6-6' Cedar Picket", priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+      { id: 'w-cap', name: 'Cap & Trim', priceModifier: 4.50, imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
+      { id: 'w-shadow', name: 'Shadowbox', priceModifier: 6.00, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0.375, picketsPerLF: 2.1, concretePerPost: 1.5 },
     baseLaborRate: 12.00,
@@ -95,8 +95,8 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['White', 'Tan', 'Gray'],
     visualStyles: [
-      { id: 'v-bryce', name: 'T&G Vinyl Panel Slats', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?q=80&w=800&auto=format&fit=crop' },
-      { id: 'v-lattice', name: 'Lattice Top', priceModifier: 8.50, imageUrl: 'https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?q=80&w=800&auto=format&fit=crop' },
+      { id: 'v-bryce', name: 'T&G Vinyl Panel Slats', priceModifier: 0, imageUrl: 'https://www.showtechfence.com/uploads/202025227/full-vinyl-privacy-fence49586825681.jpg' },
+      { id: 'v-lattice', name: 'Lattice Top', priceModifier: 8.50, imageUrl: 'https://fenceanddecksupply.com/wp-content/uploads/2016/06/lattice6.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0.25, picketsPerLF: 0, concretePerPost: 2 },
     baseLaborRate: 15.00,
@@ -110,8 +110,8 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [10],
     availableColors: ['Galvanized', 'Black Vinyl', 'Green Vinyl'],
     visualStyles: [
-      { id: 'cl-std', name: "9ga Galv Mesh 6'", priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?q=80&w=800&auto=format&fit=crop' },
-      { id: 'cl-slat', name: 'Privacy Slats', priceModifier: 12.00, imageUrl: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?q=80&w=800&auto=format&fit=crop' },
+      { id: 'cl-std', name: "9ga Galv Mesh 6'", priceModifier: 0, imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
+      { id: 'cl-slat', name: 'Privacy Slats', priceModifier: 12.00, imageUrl: 'https://www.hooverfence.com/mas_assets/cache/image/1/0/a/0/x600-68106.Jpg' },
     ],
     calcLogic: { postsPerLF: 0.1, railsPerLF: 0.1, picketsPerLF: 1, concretePerPost: 1.2 },
     baseLaborRate: 8.00,
@@ -125,8 +125,8 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['Black', 'Bronze', 'White'],
     visualStyles: [
-      { id: 'm-flat', name: '6x8 Aluminum Panel', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop' },
-      { id: 'm-spear', name: 'Spear Top', priceModifier: 5.00, imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop' },
+      { id: 'm-flat', name: '6x8 Aluminum Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+      { id: 'm-spear', name: 'Spear Top', priceModifier: 5.00, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },
     baseLaborRate: 18.00,
