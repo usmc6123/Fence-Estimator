@@ -312,245 +312,364 @@ export default function Estimator({ materials }: EstimatorProps) {
     { id: 6, label: 'Review & Total', icon: FileText },
   ];
 
+  const PatrioticDivider = () => (
+    <div className="relative py-10 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center">
+        <div className="w-full border-t-4 border-double border-american-blue/10"></div>
+      </div>
+      <div className="relative flex items-center gap-6 bg-[#F8F9FA] px-8">
+        <div className="w-6 h-6 bg-american-red american-star shadow-lg transform rotate-12" />
+        <div className="w-8 h-8 bg-american-blue american-star shadow-xl" />
+        <div className="w-6 h-6 bg-american-red american-star shadow-lg transform -rotate-12" />
+      </div>
+    </div>
+  );
+
   const renderSection = (sectionId: number) => {
     switch (sectionId) {
       case 1:
         return (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Customer Information Section */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5] space-y-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-10 w-10 rounded-xl bg-american-blue/10 flex items-center justify-center text-american-blue">
-                  <Share2 size={20} />
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-blue/10 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Share2 size={120} className="transform rotate-12" />
+              </div>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-14 w-14 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg shadow-american-blue/20">
+                  <Share2 size={28} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-[#1A1A1A]">Customer Information</h3>
-                  <p className="text-xs text-[#666666]">Details for the estimate and invoice.</p>
+                  <h3 className="text-xl font-black text-american-blue tracking-tight">CUSTOMER DOSSIER</h3>
+                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">Project Identification & Logistics</p>
                 </div>
               </div>
               
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Customer Name</label>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Customer Full Name</label>
                   <input 
                     type="text" 
                     value={estimate.customerName} 
                     onChange={(e) => setEstimate({...estimate, customerName: e.target.value})} 
-                    placeholder="John Doe"
-                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                    placeholder="Enter Name"
+                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Email Address</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Email Address</label>
                   <input 
                     type="email" 
                     value={estimate.customerEmail} 
                     onChange={(e) => setEstimate({...estimate, customerEmail: e.target.value})} 
-                    placeholder="john@example.com"
-                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                    placeholder="email@domain.com"
+                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Phone Number</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Phone Number</label>
                   <input 
                     type="tel" 
                     value={estimate.customerPhone} 
                     onChange={(e) => setEstimate({...estimate, customerPhone: e.target.value})} 
                     placeholder="(555) 000-0000"
-                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#999999]">Project Address</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Project Site Address</label>
                   <input 
                     type="text" 
                     value={estimate.customerAddress} 
                     onChange={(e) => setEstimate({...estimate, customerAddress: e.target.value})} 
-                    placeholder="123 Fencing St, Austin, TX"
-                    className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2.5 text-sm focus:border-american-blue focus:outline-none transition-all" 
+                    placeholder="Street, City, State, Zip"
+                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
-                <Ruler size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">Measurements</h2>
-                <p className="text-sm text-[#666666]">Define the perimeter and layout.</p>
-              </div>
-            </div>
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="space-y-2 relative">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Perimeter (LF)</label>
-                <input 
-                  type="number" 
-                  value={estimate.linearFeet} 
-                  onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
-                  disabled={estimate.runs && estimate.runs.length > 0}
-                  className={`w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-lg font-bold focus:border-[#1A1A1A] focus:outline-none ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                />
-                {estimate.runs && estimate.runs.length > 0 && (
-                  <p className="text-[10px] text-american-red font-bold mt-1">Overridden by Fence Runs below</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Corners</label>
-                <input type="number" value={estimate.corners} onChange={(e) => setEstimate({...estimate, corners: Number(e.target.value)})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-lg font-bold focus:border-[#1A1A1A] focus:outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Gates</label>
-                <input type="number" value={estimate.gateCount} onChange={(e) => setEstimate({...estimate, gateCount: Number(e.target.value)})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-lg font-bold focus:border-[#1A1A1A] focus:outline-none" />
-              </div>
-            </div>
-
-            {/* Fence Runs Section */}
-            <div className="pt-8 border-t border-[#F5F5F5] space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold">Fence Runs</h3>
-                  <p className="text-xs text-[#666666]">Break down your project into specific sections for run-based costing.</p>
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-14 w-14 rounded-2xl bg-american-red flex items-center justify-center text-white shadow-lg shadow-american-red/20">
+                  <Ruler size={28} />
                 </div>
-                <button 
-                  onClick={() => {
-                    const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
-                    setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-american-blue text-white text-xs font-bold hover:bg-american-blue/90 transition-all shadow-sm"
-                >
-                  <Plus size={14} />
-                  Add Run
-                </button>
+                <div>
+                  <h2 className="text-xl font-black text-american-red tracking-tight uppercase">Strategic Measurements</h2>
+                  <p className="text-xs font-bold text-american-blue uppercase tracking-widest">Perimeter & Boundary Specifications</p>
+                </div>
               </div>
-              
-              <div className="space-y-4">
-                {estimate.runs?.map((run, idx) => (
-                  <div key={run.id} className="grid gap-4 md:grid-cols-5 items-end p-4 rounded-2xl bg-[#F9F9F9] border border-[#E5E5E5]">
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-[#999999]">Run Name</label>
-                      <input 
-                        type="text" 
-                        value={run.name} 
-                        onChange={(e) => {
-                          const newRuns = [...estimate.runs!];
-                          newRuns[idx].name = e.target.value;
-                          setEstimate({ ...estimate, runs: newRuns });
-                        }}
-                        className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm focus:border-[#1A1A1A] focus:outline-none"
-                      />
+
+              <div className="grid gap-8 md:grid-cols-3">
+                <div className="space-y-3 relative">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Total Perimeter (LF)</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={estimate.linearFeet} 
+                      onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
+                      disabled={estimate.runs && estimate.runs.length > 0}
+                      className={`w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed bg-[#F5F5F5]' : ''}`} 
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">FEET</div>
+                  </div>
+                  {estimate.runs && estimate.runs.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-american-red/5 rounded-lg border border-american-red/20">
+                      <Info size={12} className="text-american-red" />
+                      <p className="text-[9px] text-american-red font-black uppercase tracking-tighter">Overridden by Sectional Data</p>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-[#999999]">LF</label>
-                      <input 
-                        type="number" 
-                        value={run.linearFeet} 
-                        onChange={(e) => {
-                          const newRuns = [...estimate.runs!];
-                          newRuns[idx].linearFeet = Number(e.target.value);
-                          setEstimate({ ...estimate, runs: newRuns });
-                        }}
-                        className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm focus:border-[#1A1A1A] focus:outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-[#999999]">Corners</label>
-                      <input 
-                        type="number" 
-                        value={run.corners} 
-                        onChange={(e) => {
-                          const newRuns = [...estimate.runs!];
-                          newRuns[idx].corners = Number(e.target.value);
-                          setEstimate({ ...estimate, runs: newRuns });
-                        }}
-                        className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm focus:border-[#1A1A1A] focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 space-y-2">
-                        <label className="text-[10px] font-bold uppercase text-[#999999]">Gates</label>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Structural Corners</label>
+                  <div className="relative">
+                    <input type="number" value={estimate.corners} onChange={(e) => setEstimate({...estimate, corners: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Access Gates</label>
+                  <div className="relative">
+                    <input type="number" value={estimate.gateCount} onChange={(e) => setEstimate({...estimate, gateCount: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fence Runs Section */}
+              <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Runs</h3>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Individual Fence Run Specifications</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
+                      setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
+                    }}
+                    className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
+                  >
+                    <Plus size={16} />
+                    Add Run
+                  </button>
+                </div>
+                
+                <div className="space-y-6">
+                  {estimate.runs?.map((run, idx) => (
+                    <div key={run.id} className="grid gap-6 md:grid-cols-5 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
+                      <div className="md:col-span-2 space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
                         <input 
-                          type="number" 
-                          value={run.gates} 
+                          type="text" 
+                          value={run.name} 
                           onChange={(e) => {
                             const newRuns = [...estimate.runs!];
-                            newRuns[idx].gates = Number(e.target.value);
+                            newRuns[idx].name = e.target.value;
                             setEstimate({ ...estimate, runs: newRuns });
                           }}
-                          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-sm focus:border-[#1A1A1A] focus:outline-none"
+                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
                         />
                       </div>
-                      <button 
-                        onClick={() => {
-                          const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                          setEstimate({ ...estimate, runs: newRuns });
-                        }}
-                        className="p-2 text-[#FF4D4D] hover:bg-[#FF4D4D]/10 rounded-lg transition-all"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
+                        <input 
+                          type="number" 
+                          value={run.linearFeet} 
+                          onChange={(e) => {
+                            const newRuns = [...estimate.runs!];
+                            newRuns[idx].linearFeet = Number(e.target.value);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Corners</label>
+                        <input 
+                          type="number" 
+                          value={run.corners} 
+                          onChange={(e) => {
+                            const newRuns = [...estimate.runs!];
+                            newRuns[idx].corners = Number(e.target.value);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates</label>
+                          <input 
+                            type="number" 
+                            value={run.gates} 
+                            onChange={(e) => {
+                              const newRuns = [...estimate.runs!];
+                              newRuns[idx].gates = Number(e.target.value);
+                              setEstimate({ ...estimate, runs: newRuns });
+                            }}
+                            className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="p-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {(!estimate.runs || estimate.runs.length === 0) && (
-                  <div className="text-center py-8 border-2 border-dashed border-[#E5E5E5] rounded-2xl">
-                    <p className="text-sm text-[#999999]">No fence runs added. Using global measurements above.</p>
-                  </div>
-                )}
+                  ))}
+                  {(!estimate.runs || estimate.runs.length === 0) && (
+                    <div className="text-center py-12 border-4 border-dashed border-[#F0F0F0] rounded-[40px] bg-[#F9F9F9]/50">
+                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                        <Ruler className="text-[#CCCCCC]" size={24} />
+                      </div>
+                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Global Measurements Active</p>
+                      <p className="text-[10px] text-[#BBBBBB] mt-1">Add runs for detailed run-based estimation</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         );
       case 2:
         return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
-                <Palette size={24} />
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
+              <div className="flex items-center gap-5 mb-10">
+                <div className="h-16 w-16 rounded-3xl bg-american-blue flex items-center justify-center text-white shadow-xl shadow-american-blue/20">
+                  <Palette size={32} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Style Selection</h2>
+                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">Choose Your American Standard</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">Style & Options</h2>
-                <p className="text-sm text-[#666666]">Select material and visual style.</p>
+
+              <div className="flex flex-wrap gap-3 mb-10">
+                {FENCE_STYLES.map(style => (
+                  <button 
+                    key={style.id} 
+                    onClick={() => setEstimate({...estimate, styleId: style.id, visualStyleId: style.visualStyles[0].id})} 
+                    className={cn(
+                      "group relative px-6 py-3 rounded-full border-2 transition-all text-left overflow-hidden", 
+                      estimate.styleId === style.id 
+                        ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
+                        : "border-[#F5F5F5] bg-white hover:border-american-blue/20 text-american-blue"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-black uppercase tracking-widest">{style.name}</p>
+                      {estimate.styleId === style.id && (
+                        <div className="w-3 h-3 bg-white american-star" />
+                      )}
+                    </div>
+                  </button>
+                ))}
               </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-              {FENCE_STYLES.map(style => (
-                <button key={style.id} onClick={() => setEstimate({...estimate, styleId: style.id, visualStyleId: style.visualStyles[0].id})} className={cn("p-4 rounded-2xl border transition-all text-left", estimate.styleId === style.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
-                  <p className="text-sm font-bold">{style.name}</p>
-                  <p className="text-[10px] text-[#666666]">{style.type}</p>
-                </button>
-              ))}
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-              {selectedStyle.visualStyles.map(vs => (
-                <button key={vs.id} onClick={() => setEstimate({...estimate, visualStyleId: vs.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.visualStyleId === vs.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
-                  <img src={vs.imageUrl} alt={vs.name} className="w-full aspect-video object-cover rounded-lg mb-2" referrerPolicy="no-referrer" />
-                  <p className="text-xs font-bold">{vs.name}</p>
-                </button>
-              ))}
+
+              <PatrioticDivider />
+
+              <div className="space-y-8">
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Visual Aesthetics</h3>
+                  <div className="flex gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="w-2 h-2 bg-american-red american-star opacity-20" />
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
+                  {selectedStyle.visualStyles.map(vs => (
+                    <button 
+                      key={vs.id} 
+                      onClick={() => setEstimate({...estimate, visualStyleId: vs.id})} 
+                      className={cn(
+                        "group p-4 rounded-[32px] border-2 transition-all text-center relative overflow-hidden flex flex-col gap-4 items-center", 
+                        estimate.visualStyleId === vs.id 
+                          ? "border-american-red bg-american-red/5 shadow-xl" 
+                          : "border-[#F0F0F0] bg-white hover:border-american-red/20 hover:shadow-lg"
+                      )}
+                    >
+                      <div className="relative w-full aspect-video rounded-[24px] overflow-hidden border-2 border-white shadow-md">
+                        <img src={vs.imageUrl} alt={vs.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
+                        {estimate.visualStyleId === vs.id && (
+                          <div className="absolute inset-0 bg-american-red/5 flex items-center justify-center">
+                            <div className="w-12 h-12 bg-white/95 rounded-full flex items-center justify-center shadow-lg scale-100">
+                              <CheckCircle2 className="text-american-red" size={24} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-full pb-2">
+                        <h4 className={cn("text-xl font-black transition-colors mb-1 tracking-tight uppercase", estimate.visualStyleId === vs.id ? "text-american-red" : "text-american-blue")}>
+                          {vs.name}
+                        </h4>
+                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em]">American Standard</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         );
       case 3:
         return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
-                <Box size={24} />
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
+              <div className="flex items-center gap-5 mb-10">
+                <div className="h-16 w-16 rounded-3xl bg-american-blue flex items-center justify-center text-white shadow-xl shadow-american-blue/20">
+                  <Box size={32} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Accessories & Hardware</h2>
+                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">The Finishing Touches of Quality</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">Accessories</h2>
-                <p className="text-sm text-[#666666]">Caps and gate hardware.</p>
+
+              <div className="space-y-8">
+                <div className="flex items-center gap-4 px-2">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-american-blue/10 to-transparent" />
+                  <h3 className="text-sm font-black text-american-blue/40 uppercase tracking-[0.3em]">Post Cap Selection</h3>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-american-blue/10 to-transparent" />
+                </div>
+
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {materials.filter(m => m.category === 'PostCap').map(cap => (
+                    <button 
+                      key={cap.id} 
+                      onClick={() => setEstimate({...estimate, postCapId: cap.id})} 
+                      className={cn(
+                        "group p-5 rounded-[32px] border-2 transition-all text-center relative flex flex-col items-center gap-4", 
+                        estimate.postCapId === cap.id 
+                          ? "border-american-blue bg-american-blue/5 shadow-xl" 
+                          : "border-[#F0F0F0] bg-white hover:border-american-blue/20 hover:shadow-lg"
+                      )}
+                    >
+                      <div className="relative w-full aspect-square rounded-[24px] overflow-hidden border-2 border-white shadow-md bg-[#F9F9F9]">
+                        <img src={cap.imageUrl} alt={cap.name} className="w-full h-full object-contain p-4 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
+                        {estimate.postCapId === cap.id && (
+                          <div className="absolute top-3 right-3 w-6 h-6 bg-american-blue american-star shadow-lg flex items-center justify-center">
+                            <div className="w-3 h-3 bg-white american-star scale-50" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-full pb-1">
+                        <h4 className={cn("text-lg font-black leading-tight transition-colors mb-1 tracking-tight uppercase", estimate.postCapId === cap.id ? "text-american-blue" : "text-[#1A1A1A]")}>
+                          {cap.name}
+                        </h4>
+                        <p className="text-[9px] font-bold text-[#999999] uppercase tracking-[0.2em]">Premium Component</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-5">
-              {materials.filter(m => m.category === 'PostCap').map(cap => (
-                <button key={cap.id} onClick={() => setEstimate({...estimate, postCapId: cap.id})} className={cn("p-3 rounded-2xl border transition-all text-center", estimate.postCapId === cap.id ? "border-american-blue bg-american-blue/5" : "border-[#E5E5E5] hover:border-american-blue")}>
-                  <img src={cap.imageUrl} alt={cap.name} className="w-full aspect-square object-cover rounded-lg mb-2" referrerPolicy="no-referrer" />
-                  <p className="text-[10px] font-bold">{cap.name}</p>
-                </button>
-              ))}
             </div>
           </div>
         );
