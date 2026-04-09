@@ -46,7 +46,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     includeStain: false,
     
     markupPercentage: 30,
-    taxPercentage: 8,
+    taxPercentage: 8.25,
     manualQuantities: {},
     manualPrices: {},
   });
@@ -620,7 +620,7 @@ export default function Estimator({ materials }: EstimatorProps) {
   return (
     <div className="space-y-8">
       <div className="grid gap-8 lg:grid-cols-12">
-        {/* Left Column: Editor */}
+      {/* Left Column: Editor */}
       <div className="lg:col-span-7 space-y-8">
         {/* Navigation & View Toggle */}
         <div className="flex items-center justify-between gap-4">
@@ -784,102 +784,98 @@ export default function Estimator({ materials }: EstimatorProps) {
               </motion.div>
             )}
           </section>
-        </div>
-      </div>
-    </div>
 
-    {/* Material Breakdown - Full Width */}
-    <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-xl font-bold text-[#1A1A1A]">Material Breakdown</h3>
-            <p className="text-sm text-[#666666]">Detailed list of all components and estimated costs.</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="px-4 py-2 bg-[#F5F5F5] rounded-xl text-xs font-bold text-[#666666]">
-              {results.items.length} Items
+          {/* Material Breakdown - Right Column */}
+          <section className="bg-white rounded-3xl shadow-sm border border-[#E5E5E5] overflow-hidden flex flex-col max-h-[600px]">
+            <div className="p-5 patriotic-gradient text-white relative overflow-hidden shrink-0">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <div className="american-star w-16 h-16 bg-white" />
+              </div>
+              <div className="flex items-center justify-between relative z-10">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-widest">Material Breakdown</h3>
+                  <p className="text-[10px] text-white/70">Texas-Based Estimates</p>
+                </div>
+                <div className="px-3 py-1 bg-white/20 rounded-lg text-[10px] font-bold">
+                  {results.items.length} Items
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {results.items.map((item, idx) => {
-            const material = materials.find(m => m.name === item.name || item.name.startsWith(m.name));
-            return (
-              <div key={idx} className="bg-[#F9F9F9] rounded-2xl p-5 border border-[#E5E5E5] hover:border-american-blue transition-all group">
-                <div className="flex items-start gap-4">
-                  {material?.imageUrl ? (
-                    <div className="h-16 w-16 rounded-xl overflow-hidden bg-white border border-[#E5E5E5] shrink-0 shadow-sm">
-                      <img src={material.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                  ) : (
-                    <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center text-[#999999] shrink-0 border border-[#E5E5E5] shadow-sm">
-                      <Box size={24} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-american-blue">{item.category}</span>
-                      <span className="text-sm font-bold text-[#1A1A1A]">{formatCurrency(item.total)}</span>
-                    </div>
-                    <h4 className="text-sm font-bold text-[#1A1A1A] mb-4 line-clamp-1">{item.name}</h4>
-                    
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#999999]">Quantity</label>
-                        <input 
-                          type="number" 
-                          value={item.qty} 
-                          onChange={(e) => {
-                            const newQty = Number(e.target.value);
-                            setEstimate({
-                              ...estimate,
-                              manualQuantities: {
-                                ...(estimate.manualQuantities || {}),
-                                [item.name]: newQty
-                              }
-                            });
-                          }}
-                          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-1.5 text-xs font-bold focus:border-american-blue focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#999999]">Unit Price</label>
-                        <div className="relative">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#999999]">$</span>
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value={item.unitCost} 
-                            onChange={(e) => {
-                              const newPrice = Number(e.target.value);
-                              setEstimate({
-                                ...estimate,
-                                manualPrices: {
-                                  ...(estimate.manualPrices || {}),
-                                  [item.name]: newPrice
-                                }
-                              });
-                            }}
-                            className="w-full rounded-lg border border-[#E5E5E5] bg-white pl-5 pr-2 py-1.5 text-xs font-bold focus:border-american-blue focus:outline-none"
-                          />
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {results.items.map((item, idx) => {
+                const material = materials.find(m => m.name === item.name || item.name.startsWith(m.name));
+                return (
+                  <div key={idx} className="bg-[#F9F9F9] rounded-xl p-3 border border-[#E5E5E5] hover:border-american-blue transition-all group">
+                    <div className="flex items-start gap-3">
+                      {material?.imageUrl ? (
+                        <div className="h-10 w-10 rounded-lg overflow-hidden bg-white border border-[#E5E5E5] shrink-0 shadow-sm">
+                          <img src={material.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center text-[#999999] shrink-0 border border-[#E5E5E5] shadow-sm">
+                          <Box size={16} />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-american-blue">{item.category}</span>
+                          <span className="text-xs font-bold text-[#1A1A1A]">{formatCurrency(item.total)}</span>
+                        </div>
+                        <h4 className="text-[11px] font-bold text-[#1A1A1A] mb-2 line-clamp-1">{item.name}</h4>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 space-y-0.5">
+                            <label className="text-[8px] font-bold uppercase tracking-wider text-[#999999]">Qty</label>
+                            <input 
+                              type="number" 
+                              value={item.qty} 
+                              onChange={(e) => {
+                                const newQty = Number(e.target.value);
+                                setEstimate({
+                                  ...estimate,
+                                  manualQuantities: {
+                                    ...(estimate.manualQuantities || {}),
+                                    [item.name]: newQty
+                                  }
+                                });
+                              }}
+                              className="w-full rounded-md border border-[#E5E5E5] bg-white px-2 py-1 text-[10px] font-bold focus:border-american-blue focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex-1 space-y-0.5">
+                            <label className="text-[8px] font-bold uppercase tracking-wider text-[#999999]">Price</label>
+                            <div className="relative">
+                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] text-[#999999]">$</span>
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                value={item.unitCost} 
+                                onChange={(e) => {
+                                  const newPrice = Number(e.target.value);
+                                  setEstimate({
+                                    ...estimate,
+                                    manualPrices: {
+                                      ...(estimate.manualPrices || {}),
+                                      [item.name]: newPrice
+                                    }
+                                  });
+                                }}
+                                className="w-full rounded-md border border-[#E5E5E5] bg-white pl-4 pr-2 py-1 text-[10px] font-bold focus:border-american-blue focus:outline-none"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </section>
         </div>
-
-        <div className="mt-8 p-4 rounded-2xl bg-orange-50 border border-orange-100 flex items-start gap-3">
-          <HardHat size={16} className="text-orange-600 mt-0.5" />
-          <p className="text-[10px] text-orange-800 leading-relaxed">
-            <strong>Pro Tip:</strong> Don't forget to check for underground utilities before digging. Call 811 at least 48 hours before starting.
-          </p>
-        </div>
-      </section>
+      </div>
+    </div>
 
       {/* Invoice Modal */}
       <AnimatePresence>
