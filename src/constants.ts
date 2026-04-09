@@ -79,7 +79,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [8],
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [
-      { id: 'w-std', name: 'Standard Dog-Ear', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1505330622279-bf7d7fc918f4?q=80&w=800&auto=format&fit=crop' },
+      { id: 'w-std', name: "1x6-6' Cedar Picket", priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1505330622279-bf7d7fc918f4?q=80&w=800&auto=format&fit=crop' },
       { id: 'w-cap', name: 'Cap & Trim', priceModifier: 4.50, imageUrl: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?q=80&w=800&auto=format&fit=crop' },
       { id: 'w-shadow', name: 'Shadowbox', priceModifier: 6.00, imageUrl: 'https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?q=80&w=800&auto=format&fit=crop' },
     ],
@@ -95,7 +95,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['White', 'Tan', 'Gray'],
     visualStyles: [
-      { id: 'v-bryce', name: 'Bryce (Solid)', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?q=80&w=800&auto=format&fit=crop' },
+      { id: 'v-bryce', name: 'T&G Vinyl Panel Slats', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?q=80&w=800&auto=format&fit=crop' },
       { id: 'v-lattice', name: 'Lattice Top', priceModifier: 8.50, imageUrl: 'https://images.unsplash.com/photo-1628744448840-55bdb2497bd4?q=80&w=800&auto=format&fit=crop' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0.25, picketsPerLF: 0, concretePerPost: 2 },
@@ -110,7 +110,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [10],
     availableColors: ['Galvanized', 'Black Vinyl', 'Green Vinyl'],
     visualStyles: [
-      { id: 'cl-std', name: 'Standard Mesh', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?q=80&w=800&auto=format&fit=crop' },
+      { id: 'cl-std', name: "9ga Galv Mesh 6'", priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?q=80&w=800&auto=format&fit=crop' },
       { id: 'cl-slat', name: 'Privacy Slats', priceModifier: 12.00, imageUrl: 'https://images.unsplash.com/photo-1558449028-b53a39d100fc?q=80&w=800&auto=format&fit=crop' },
     ],
     calcLogic: { postsPerLF: 0.1, railsPerLF: 0.1, picketsPerLF: 1, concretePerPost: 1.2 },
@@ -125,7 +125,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['Black', 'Bronze', 'White'],
     visualStyles: [
-      { id: 'm-flat', name: 'Flat Top', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop' },
+      { id: 'm-flat', name: '6x8 Aluminum Panel', priceModifier: 0, imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop' },
       { id: 'm-spear', name: 'Spear Top', priceModifier: 5.00, imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },

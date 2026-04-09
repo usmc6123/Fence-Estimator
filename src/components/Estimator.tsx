@@ -47,6 +47,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     markupPercentage: 30,
     taxPercentage: 8,
     manualQuantities: {},
+    manualPrices: {},
   });
 
   const [isFullView, setIsFullView] = React.useState(false);
@@ -73,7 +74,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     const postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
     const postQty = Math.ceil(postCount * wasteFactor);
     rawItems.push({ 
-      name: `${postMat.name} (incl. waste)`, 
+      name: postMat.name, 
       qty: postQty, 
       unitCost: postMat.cost, 
       total: postQty * postMat.cost,
@@ -86,7 +87,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     const panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
     const panelQty = Math.ceil(panelCount * wasteFactor);
     rawItems.push({ 
-      name: `${selectedVisualStyle.name} Panels (incl. waste)`, 
+      name: panelMat.name, 
       qty: panelQty, 
       unitCost: panelMat.cost + visualStyleModifier, 
       total: panelQty * (panelMat.cost + visualStyleModifier),
@@ -97,7 +98,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     const capMat = materials.find(m => m.id === estimate.postCapId);
     if (capMat) {
       rawItems.push({ 
-        name: `${capMat.name} Caps`, 
+        name: capMat.name, 
         qty: postCount, 
         unitCost: capMat.cost, 
         total: postCount * capMat.cost,
@@ -109,15 +110,58 @@ export default function Estimator({ materials }: EstimatorProps) {
     const gateMat = materials.find(m => m.id === estimate.gateStyleId);
     if (gateMat && gates > 0) {
       rawItems.push({ 
-        name: `${gateMat.name} Gate Kit`, 
+        name: gateMat.name, 
         qty: gates, 
         unitCost: gateMat.cost, 
         total: gates * gateMat.cost,
         category: 'Gate'
       });
+      
+      // Add Latch if not included in kit
+      const latchMat = materials.find(m => m.id === 'g-latch-grav');
+      if (latchMat) {
+        rawItems.push({
+          name: latchMat.name,
+          qty: gates,
+          unitCost: latchMat.cost,
+          total: gates * latchMat.cost,
+          category: 'Gate'
+        });
+      }
     }
 
-    // 5. Concrete & Gravel
+    // 5. Fasteners & Hardware
+    if (selectedStyle.type === 'Wood') {
+      const fastenerMat = materials.find(m => m.id === 'h-nail-galv')!;
+      const fastenerQty = Math.ceil(lf / 20); // 1 box per 20LF
+      rawItems.push({ name: fastenerMat.name, qty: fastenerQty, unitCost: fastenerMat.cost, total: fastenerQty * fastenerMat.cost, category: 'Hardware' });
+      
+      const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+      const bracketQty = Math.ceil(lf * logic.railsPerLF);
+      rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
+    }
+
+    if (selectedStyle.type === 'Chain Link') {
+      const tieMat = materials.find(m => m.id === 'h-cl-tie')!;
+      const tieQty = Math.ceil(lf / 50); // 1 box per 50LF
+      rawItems.push({ name: tieMat.name, qty: tieQty, unitCost: tieMat.cost, total: tieQty * tieMat.cost, category: 'Hardware' });
+      
+      const tensionBandMat = materials.find(m => m.id === 'h-cl-band-tens')!;
+      const tensionBandQty = corners * 3 + gates * 3;
+      rawItems.push({ name: tensionBandMat.name, qty: tensionBandQty, unitCost: tensionBandMat.cost, total: tensionBandQty * tensionBandMat.cost, category: 'Hardware' });
+      
+      const braceBandMat = materials.find(m => m.id === 'h-cl-band-brace')!;
+      const braceBandQty = corners * 2 + gates * 2;
+      rawItems.push({ name: braceBandMat.name, qty: braceBandQty, unitCost: braceBandMat.cost, total: braceBandQty * braceBandMat.cost, category: 'Hardware' });
+    }
+
+    if (selectedStyle.type === 'Vinyl') {
+      const screwMat = materials.find(m => m.id === 'h-screw-v')!;
+      const screwQty = Math.ceil(lf / 10);
+      rawItems.push({ name: screwMat.name, qty: screwQty, unitCost: screwMat.cost, total: screwQty * screwMat.cost, category: 'Hardware' });
+    }
+
+    // 6. Concrete & Gravel
     const concreteBags = Math.ceil(postCount * logic.concretePerPost);
     const concreteMat = materials.find(m => m.id === 'i-concrete-80') || materials.find(m => m.category === 'Concrete')!;
     rawItems.push({ 
@@ -132,7 +176,7 @@ export default function Estimator({ materials }: EstimatorProps) {
       const gravelMat = materials.find(m => m.id === 'i-gravel')!;
       const gravelQty = postCount * 0.5 / 27; // 0.5 cu ft per hole, convert to cu yd
       rawItems.push({ 
-        name: 'Drainage Gravel', 
+        name: gravelMat.name, 
         qty: Number(gravelQty.toFixed(2)), 
         unitCost: gravelMat.cost, 
         total: gravelQty * gravelMat.cost,
@@ -140,17 +184,7 @@ export default function Estimator({ materials }: EstimatorProps) {
       });
     }
 
-    // Apply manual overrides
-    const items = rawItems.map(item => {
-      const manualQty = estimate.manualQuantities?.[item.name];
-      if (manualQty !== undefined) {
-        return { ...item, qty: manualQty, total: manualQty * item.unitCost };
-      }
-      return item;
-    });
-
-    // 6. Demolition
-    let demoCost = 0;
+    // 7. Demolition
     if (estimate.hasDemolition) {
       const dLF = estimate.demoLinearFeet || lf;
       const weightPerLF = estimate.demoType === 'Wood' ? 18 : (estimate.demoType === 'Chain Link' ? 8 : 12);
@@ -161,44 +195,58 @@ export default function Estimator({ materials }: EstimatorProps) {
       const dumpsterMat = materials.find(m => m.id === 'd-dumpster')!;
       const haulingMat = materials.find(m => m.id === 'd-hauling')!;
       const bladeMat = materials.find(m => m.id === 'd-blade')!;
+      const laborMat = materials.find(m => m.id === 'd-labor')!;
       
       const dumpstersNeeded = Math.ceil(totalWeight / 6000); // Assume 3 tons per dumpster
       const bladesNeeded = Math.ceil(dLF / 50);
       
-      const dItems = [
-        { name: 'Dumpster Fee', qty: dumpstersNeeded, unitCost: dumpsterMat.cost, total: dumpstersNeeded * dumpsterMat.cost, category: 'Demolition' },
-        { name: 'Hauling Trips', qty: dumpstersNeeded, unitCost: haulingMat.cost, total: dumpstersNeeded * haulingMat.cost, category: 'Demolition' },
-        { name: 'Demo Blades', qty: bladesNeeded, unitCost: bladeMat.cost, total: bladesNeeded * bladeMat.cost, category: 'Demolition' },
-        { name: 'Demo Labor', qty: Math.ceil(dLF / 10), unitCost: 45, total: Math.ceil(dLF / 10) * 45, category: 'Demolition' }
-      ];
-      
-      items.push(...dItems);
-      demoCost = dItems.reduce((sum, i) => sum + i.total, 0);
+      rawItems.push(
+        { name: dumpsterMat.name, qty: dumpstersNeeded, unitCost: dumpsterMat.cost, total: dumpstersNeeded * dumpsterMat.cost, category: 'Demolition' },
+        { name: haulingMat.name, qty: dumpstersNeeded, unitCost: haulingMat.cost, total: dumpstersNeeded * haulingMat.cost, category: 'Demolition' },
+        { name: bladeMat.name, qty: bladesNeeded, unitCost: bladeMat.cost, total: bladesNeeded * bladeMat.cost, category: 'Demolition' },
+        { name: laborMat.name, qty: Math.ceil(dLF / 10), unitCost: laborMat.cost, total: Math.ceil(dLF / 10) * laborMat.cost, category: 'Demolition' }
+      );
     }
 
-    // 7. Site Prep
-    let sitePrepCost = 0;
+    // 8. Site Prep
     if (estimate.hasSitePrep) {
       if (estimate.needsMarking) {
         const markingMat = materials.find(m => m.id === 's-marking')!;
-        items.push({ name: markingMat.name, qty: 1, unitCost: markingMat.cost, total: markingMat.cost, category: 'SitePrep' });
+        rawItems.push({ name: markingMat.name, qty: 1, unitCost: markingMat.cost, total: markingMat.cost, category: 'SitePrep' });
       }
       if (estimate.needsClearing) {
         const clearingMat = materials.find(m => m.id === 's-clearing')!;
         const clearingHours = Math.ceil(lf / 20);
-        items.push({ name: 'Vegetation Clearing', qty: clearingHours, unitCost: clearingMat.cost, total: clearingHours * clearingMat.cost, category: 'SitePrep' });
+        rawItems.push({ name: clearingMat.name, qty: clearingHours, unitCost: clearingMat.cost, total: clearingHours * clearingMat.cost, category: 'SitePrep' });
       }
-      sitePrepCost = items.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
     }
 
-    // 8. Finishing
+    // 9. Finishing
     if (estimate.includeStain && selectedStyle.type === 'Wood') {
       const stainMat = materials.find(m => m.id === 'f-stain')!;
       const sqFt = lf * (estimate.height || 6) * 2; // Two sides
       const gallons = Math.ceil(sqFt / 175);
-      items.push({ name: 'Sealant/Stain', qty: gallons, unitCost: stainMat.cost, total: gallons * stainMat.cost, category: 'Finishing' });
+      rawItems.push({ name: stainMat.name, qty: gallons, unitCost: stainMat.cost, total: gallons * stainMat.cost, category: 'Finishing' });
     }
 
+    // Apply manual overrides
+    const items = rawItems.map(item => {
+      const manualQty = estimate.manualQuantities?.[item.name];
+      const manualPrice = estimate.manualPrices?.[item.name];
+      
+      const qty = manualQty !== undefined ? manualQty : item.qty;
+      const unitCost = manualPrice !== undefined ? manualPrice : item.unitCost;
+      
+      return { 
+        ...item, 
+        qty, 
+        unitCost, 
+        total: qty * unitCost 
+      };
+    });
+
+    const demoCost = items.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
+    const sitePrepCost = items.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
     const materialSubtotal = items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, item) => sum + item.total, 0);
     const laborCost = lf * selectedStyle.baseLaborRate;
     const subtotal = materialSubtotal + laborCost + demoCost + sitePrepCost;
@@ -566,7 +614,7 @@ export default function Estimator({ materials }: EstimatorProps) {
   return (
     <div className="grid gap-8 lg:grid-cols-12">
       {/* Left Column: Editor */}
-      <div className="lg:col-span-8 space-y-8">
+      <div className="lg:col-span-7 space-y-8">
         {/* Navigation & View Toggle */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-[#E5E5E5] shadow-sm overflow-x-auto no-scrollbar flex-1">
@@ -650,9 +698,9 @@ export default function Estimator({ materials }: EstimatorProps) {
       </div>
 
       {/* Right Column: Live Summary */}
-      <div className="lg:col-span-4">
+      <div className="lg:col-span-5">
         <div className="sticky top-8 space-y-6">
-          <section className="bg-[#1A1A1A] text-white rounded-3xl p-8 shadow-2xl overflow-hidden relative">
+          <section className="bg-[#1A1A1A] text-white rounded-3xl p-6 shadow-2xl overflow-hidden relative">
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <Calculator size={120} />
             </div>
@@ -724,7 +772,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             )}
           </section>
 
-          <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
+          <section className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#666666] mb-6">Material Breakdown</h3>
             <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {results.items.map((item, idx) => {
@@ -742,7 +790,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                         </div>
                       )}
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-semibold text-[#1A1A1A] truncate">{item.name}</span>
+                        <span className="text-sm font-semibold text-[#1A1A1A]">{item.name}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-[#999999] uppercase tracking-wider">Qty:</span>
                           <input 
@@ -760,7 +808,26 @@ export default function Estimator({ materials }: EstimatorProps) {
                             }}
                             className="w-16 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
                           />
-                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">× {formatCurrency(item.unitCost)}</span>
+                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">×</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-[#999999]">$</span>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={item.unitCost} 
+                              onChange={(e) => {
+                                const newPrice = Number(e.target.value);
+                                setEstimate({
+                                  ...estimate,
+                                  manualPrices: {
+                                    ...(estimate.manualPrices || {}),
+                                    [item.name]: newPrice
+                                  }
+                                });
+                              }}
+                              className="w-20 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>

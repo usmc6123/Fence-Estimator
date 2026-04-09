@@ -88,5 +88,6 @@ export interface Estimate {
   markupPercentage: number;
   taxPercentage: number;
   manualQuantities: Record<string, number>; // itemId -> qty
+  manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;
 }
