@@ -73,9 +73,9 @@ export default function Estimator({ materials }: EstimatorProps) {
     const rawItems: { name: string; qty: number; unitCost: number; total: number; category: string }[] = [];
 
     // 1. Posts
-    const postCount = Math.ceil(lf * logic.postsPerLF) + 1 + corners + gates;
+    const postCount = Math.ceil(lf / 8) + 1 + corners;
     const postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
-    const postQty = Math.ceil(postCount * wasteFactor);
+    const postQty = postCount; // No waste factor on posts per request
     rawItems.push({ 
       name: postMat.name, 
       qty: postQty, 
@@ -85,10 +85,18 @@ export default function Estimator({ materials }: EstimatorProps) {
     });
 
     // 2. Main Panels/Pickets
-    const panelCount = Math.ceil(lf / (estimate.width || 8));
+    let panelQty = 0;
+    if (selectedStyle.type === 'Wood') {
+      // 5.5 inches = 0.458ft
+      panelQty = Math.ceil((lf / 0.458) * wasteFactor);
+    } else {
+      const panelCount = Math.ceil(lf / (estimate.width || 8));
+      panelQty = Math.ceil(panelCount * wasteFactor);
+    }
+    
     const visualStyleModifier = selectedVisualStyle.priceModifier;
     const panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
-    const panelQty = Math.ceil(panelCount * wasteFactor);
+    
     rawItems.push({ 
       name: panelMat.name, 
       qty: panelQty, 
@@ -136,7 +144,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     // 5. Fasteners & Hardware
     if (selectedStyle.type === 'Wood') {
       const fastenerMat = materials.find(m => m.id === 'h-nail-galv')!;
-      const fastenerQty = Math.ceil(lf / 20); // 1 box per 20LF
+      const fastenerQty = Math.ceil(lf / 50); // 1 box per 50LF
       rawItems.push({ name: fastenerMat.name, qty: fastenerQty, unitCost: fastenerMat.cost, total: fastenerQty * fastenerMat.cost, category: 'Hardware' });
       
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
@@ -177,10 +185,10 @@ export default function Estimator({ materials }: EstimatorProps) {
 
     if (estimate.includeGravel) {
       const gravelMat = materials.find(m => m.id === 'i-gravel')!;
-      const gravelQty = postCount * 0.5 / 27; // 0.5 cu ft per hole, convert to cu yd
+      const gravelQty = Math.ceil(postCount * 0.5 / 27); // 0.5 cu ft per hole, convert to cu yd and round up
       rawItems.push({ 
         name: gravelMat.name, 
-        qty: Number(gravelQty.toFixed(2)), 
+        qty: gravelQty, 
         unitCost: gravelMat.cost, 
         total: gravelQty * gravelMat.cost,
         category: 'Installation'
@@ -315,9 +323,18 @@ export default function Estimator({ materials }: EstimatorProps) {
               </div>
             </div>
             <div className="grid gap-6 md:grid-cols-3">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Perimeter (LF)</label>
-                <input type="number" value={estimate.linearFeet} onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-lg font-bold focus:border-[#1A1A1A] focus:outline-none" />
+                <input 
+                  type="number" 
+                  value={estimate.linearFeet} 
+                  onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
+                  disabled={estimate.runs && estimate.runs.length > 0}
+                  className={`w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-lg font-bold focus:border-[#1A1A1A] focus:outline-none ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                />
+                {estimate.runs && estimate.runs.length > 0 && (
+                  <p className="text-[10px] text-american-red font-bold mt-1">Overridden by Fence Runs below</p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Corners</label>
@@ -1040,7 +1057,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                       estimate.runs.map((run, idx) => {
                         const x1 = 100 + (idx * 150);
                         const y1 = 100 + (idx * 50);
-                        const length = run.linearFeet * 2;
+                        const length = Math.min(run.linearFeet * 2, 600);
                         return (
                           <g key={run.id}>
                             <line x1={x1} y1={y1} x2={x1 + length} y2={y1} stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
@@ -1054,12 +1071,86 @@ export default function Estimator({ materials }: EstimatorProps) {
                         );
                       })
                     ) : (
-                      <g>
-                        <line x1="200" y1="225" x2="600" y2="225" stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
-                        <circle cx="200" cy="225" r="6" fill="#B22234" />
-                        <circle cx="600" cy="225" r="6" fill="#B22234" />
-                        <text x="400" y="210" textAnchor="middle" className="text-sm font-bold fill-american-blue">Main Run ({results.lf}')</text>
-                      </g>
+                      (() => {
+                        const corners = estimate.corners || 0;
+                        const centerX = 400;
+                        const centerY = 225;
+                        const radius = 150;
+                        
+                        if (corners >= 3) {
+                          const points: [number, number][] = [];
+                          for (let i = 0; i < corners; i++) {
+                            const angle = (i * 2 * Math.PI) / corners - Math.PI / 2;
+                            points.push([
+                              centerX + radius * Math.cos(angle),
+                              centerY + radius * Math.sin(angle)
+                            ]);
+                          }
+                          
+                          const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ') + ' Z';
+                          
+                          return (
+                            <g>
+                              <path d={pathData} fill="none" stroke="#3C3B6E" strokeWidth="8" strokeLinejoin="round" />
+                              {points.map((p, i) => (
+                                <g key={i}>
+                                  <circle cx={p[0]} cy={p[1]} r="6" fill="#B22234" />
+                                  <text 
+                                    x={p[0] + (p[0] > centerX ? 15 : -15)} 
+                                    y={p[1] + (p[1] > centerY ? 15 : -15)} 
+                                    textAnchor={p[0] > centerX ? "start" : "end"}
+                                    className="text-[10px] font-bold fill-[#666666]"
+                                  >
+                                    C{i + 1}
+                                  </text>
+                                </g>
+                              ))}
+                              <text x={centerX} y={centerY} textAnchor="middle" className="text-sm font-bold fill-american-blue">
+                                {results.lf} LF Total Perimeter
+                              </text>
+                              {estimate.gateCount > 0 && (
+                                <g transform={`translate(${points[0][0]}, ${points[0][1]}) rotate(${(360/corners)/2})`}>
+                                   <rect x={radius/2 - 10} y="-4" width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
+                                </g>
+                              )}
+                            </g>
+                          );
+                        } else if (corners === 1) {
+                          return (
+                            <g>
+                              <polyline points="250,150 550,150 550,300" fill="none" stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                              <circle cx="250" cy="150" r="6" fill="#B22234" />
+                              <circle cx="550" cy="150" r="6" fill="#B22234" />
+                              <circle cx="550" cy="300" r="6" fill="#B22234" />
+                              <text x="400" y="135" textAnchor="middle" className="text-sm font-bold fill-american-blue">Side A</text>
+                              <text x="570" y="225" textAnchor="start" className="text-sm font-bold fill-american-blue">Side B</text>
+                            </g>
+                          );
+                        } else if (corners === 2) {
+                          return (
+                            <g>
+                              <polyline points="250,300 250,150 550,150 550,300" fill="none" stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                              <circle cx="250" cy="300" r="6" fill="#B22234" />
+                              <circle cx="250" cy="150" r="6" fill="#B22234" />
+                              <circle cx="550" cy="150" r="6" fill="#B22234" />
+                              <circle cx="550" cy="300" r="6" fill="#B22234" />
+                              <text x="400" y="135" textAnchor="middle" className="text-sm font-bold fill-american-blue">Main Run</text>
+                            </g>
+                          );
+                        } else {
+                          return (
+                            <g>
+                              <line x1="200" y1="225" x2="600" y2="225" stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
+                              <circle cx="200" cy="225" r="6" fill="#B22234" />
+                              <circle cx="600" cy="225" r="6" fill="#B22234" />
+                              <text x="400" y="210" textAnchor="middle" className="text-sm font-bold fill-american-blue">Main Run ({results.lf}')</text>
+                              {estimate.gateCount > 0 && (
+                                <rect x="390" y="221" width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
+                              )}
+                            </g>
+                          );
+                        }
+                      })()
                     )}
                   </svg>
                   
