@@ -618,8 +618,9 @@ export default function Estimator({ materials }: EstimatorProps) {
   };
 
   return (
-    <div className="grid gap-8 lg:grid-cols-12">
-      {/* Left Column: Editor */}
+    <div className="space-y-8">
+      <div className="grid gap-8 lg:grid-cols-12">
+        {/* Left Column: Editor */}
       <div className="lg:col-span-7 space-y-8">
         {/* Navigation & View Toggle */}
         <div className="flex items-center justify-between gap-4">
@@ -785,9 +786,10 @@ export default function Estimator({ materials }: EstimatorProps) {
           </section>
         </div>
       </div>
+    </div>
 
-      {/* Material Breakdown - Full Width */}
-      <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
+    {/* Material Breakdown - Full Width */}
+    <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-xl font-bold text-[#1A1A1A]">Material Breakdown</h3>
