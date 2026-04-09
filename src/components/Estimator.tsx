@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
-  Layers, HardHat, FileText, Map
+  Layers, HardHat, FileText, Map, X, Printer, Share2
 } from 'lucide-react';
 import { FENCE_STYLES } from '../constants';
 import { MaterialItem, FenceStyle, Estimate } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
+import { COMPANY_INFO } from '../constants';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -52,6 +53,8 @@ export default function Estimator({ materials }: EstimatorProps) {
 
   const [isFullView, setIsFullView] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);
+  const [showInvoice, setShowInvoice] = React.useState(false);
+  const [showDiagram, setShowDiagram] = React.useState(false);
 
   const selectedStyle = FENCE_STYLES.find(s => s.id === estimate.styleId) || FENCE_STYLES[0];
   const selectedVisualStyle = selectedStyle.visualStyles.find(vs => vs.id === estimate.visualStyleId) || selectedStyle.visualStyles[0];
@@ -273,7 +276,7 @@ export default function Estimator({ materials }: EstimatorProps) {
       };
     });
 
-    return { items, materialSubtotal, laborCost, demoCost, sitePrepCost, subtotal, markup, tax, total, runBreakdown };
+    return { items, materialSubtotal, laborCost, demoCost, sitePrepCost, subtotal, markup, tax, total, runBreakdown, lf, postCount, gateCount: gates };
   };
 
   const results = calculateCosts();
@@ -753,11 +756,17 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
 
             <div className="mt-8 grid grid-cols-2 gap-3">
-              <button className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10">
+              <button 
+                onClick={() => setShowInvoice(true)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
+              >
                 <Download size={16} />
                 Invoice
               </button>
-              <button className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10">
+              <button 
+                onClick={() => setShowDiagram(true)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
+              >
                 <Map size={16} />
                 Diagram
               </button>
@@ -774,81 +783,328 @@ export default function Estimator({ materials }: EstimatorProps) {
               </motion.div>
             )}
           </section>
+        </div>
+      </div>
 
-          <section className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#666666] mb-6">Material Breakdown</h3>
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {results.items.map((item, idx) => {
-                const material = materials.find(m => m.name === item.name || item.name.startsWith(m.name));
-                return (
-                  <div key={idx} className="flex items-center justify-between group gap-4">
-                    <div className="flex items-center gap-3 flex-1">
-                      {material?.imageUrl ? (
-                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-[#F9F9F9] border border-[#E5E5E5] shrink-0">
-                          <img src={material.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                      ) : (
-                        <div className="h-12 w-12 rounded-lg bg-[#F5F5F5] flex items-center justify-center text-[#999999] shrink-0">
-                          <Box size={20} />
-                        </div>
-                      )}
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-semibold text-[#1A1A1A]">{item.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">Qty:</span>
+      {/* Material Breakdown - Full Width */}
+      <section className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-bold text-[#1A1A1A]">Material Breakdown</h3>
+            <p className="text-sm text-[#666666]">Detailed list of all components and estimated costs.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="px-4 py-2 bg-[#F5F5F5] rounded-xl text-xs font-bold text-[#666666]">
+              {results.items.length} Items
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {results.items.map((item, idx) => {
+            const material = materials.find(m => m.name === item.name || item.name.startsWith(m.name));
+            return (
+              <div key={idx} className="bg-[#F9F9F9] rounded-2xl p-5 border border-[#E5E5E5] hover:border-american-blue transition-all group">
+                <div className="flex items-start gap-4">
+                  {material?.imageUrl ? (
+                    <div className="h-16 w-16 rounded-xl overflow-hidden bg-white border border-[#E5E5E5] shrink-0 shadow-sm">
+                      <img src={material.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center text-[#999999] shrink-0 border border-[#E5E5E5] shadow-sm">
+                      <Box size={24} />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-american-blue">{item.category}</span>
+                      <span className="text-sm font-bold text-[#1A1A1A]">{formatCurrency(item.total)}</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-[#1A1A1A] mb-4 line-clamp-1">{item.name}</h4>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#999999]">Quantity</label>
+                        <input 
+                          type="number" 
+                          value={item.qty} 
+                          onChange={(e) => {
+                            const newQty = Number(e.target.value);
+                            setEstimate({
+                              ...estimate,
+                              manualQuantities: {
+                                ...(estimate.manualQuantities || {}),
+                                [item.name]: newQty
+                              }
+                            });
+                          }}
+                          className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-1.5 text-xs font-bold focus:border-american-blue focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#999999]">Unit Price</label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#999999]">$</span>
                           <input 
                             type="number" 
-                            value={item.qty} 
+                            step="0.01"
+                            value={item.unitCost} 
                             onChange={(e) => {
-                              const newQty = Number(e.target.value);
+                              const newPrice = Number(e.target.value);
                               setEstimate({
                                 ...estimate,
-                                manualQuantities: {
-                                  ...(estimate.manualQuantities || {}),
-                                  [item.name]: newQty
+                                manualPrices: {
+                                  ...(estimate.manualPrices || {}),
+                                  [item.name]: newPrice
                                 }
                               });
                             }}
-                            className="w-16 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
+                            className="w-full rounded-lg border border-[#E5E5E5] bg-white pl-5 pr-2 py-1.5 text-xs font-bold focus:border-american-blue focus:outline-none"
                           />
-                          <span className="text-[10px] text-[#999999] uppercase tracking-wider">×</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-[#999999]">$</span>
-                            <input 
-                              type="number" 
-                              step="0.01"
-                              value={item.unitCost} 
-                              onChange={(e) => {
-                                const newPrice = Number(e.target.value);
-                                setEstimate({
-                                  ...estimate,
-                                  manualPrices: {
-                                    ...(estimate.manualPrices || {}),
-                                    [item.name]: newPrice
-                                  }
-                                });
-                              }}
-                              className="w-20 rounded border border-[#E5E5E5] bg-[#F9F9F9] px-1 py-0.5 text-[10px] font-bold focus:border-[#1A1A1A] focus:outline-none"
-                            />
-                          </div>
                         </div>
                       </div>
                     </div>
-                    <span className="text-sm font-mono font-medium shrink-0">{formatCurrency(item.total)}</span>
                   </div>
-                );
-              })}
-            </div>
-            
-            <div className="mt-8 p-4 rounded-2xl bg-orange-50 border border-orange-100 flex items-start gap-3">
-              <HardHat size={16} className="text-orange-600 mt-0.5" />
-              <p className="text-[10px] text-orange-800 leading-relaxed">
-                <strong>Pro Tip:</strong> Don't forget to check for underground utilities before digging. Call 811 at least 48 hours before starting.
-              </p>
-            </div>
-          </section>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
+
+        <div className="mt-8 p-4 rounded-2xl bg-orange-50 border border-orange-100 flex items-start gap-3">
+          <HardHat size={16} className="text-orange-600 mt-0.5" />
+          <p className="text-[10px] text-orange-800 leading-relaxed">
+            <strong>Pro Tip:</strong> Don't forget to check for underground utilities before digging. Call 811 at least 48 hours before starting.
+          </p>
+        </div>
+      </section>
+
+      {/* Invoice Modal */}
+      <AnimatePresence>
+        {showInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowInvoice(false)}
+              className="absolute inset-0 bg-[#1A1A1A]/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-blue text-white">
+                <div className="flex items-center gap-3">
+                  <FileText size={24} />
+                  <h2 className="text-xl font-bold">Estimate Invoice</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => window.print()} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                    <Printer size={20} />
+                  </button>
+                  <button onClick={() => setShowInvoice(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 print:p-0">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start gap-6">
+                    {COMPANY_INFO.logo && (
+                      <img src={COMPANY_INFO.logo} alt="Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
+                    )}
+                    <div>
+                      <h1 className="text-3xl font-black tracking-tighter text-american-blue uppercase">{COMPANY_INFO.name}</h1>
+                      <p className="text-sm text-[#666666]">{COMPANY_INFO.address}</p>
+                      <p className="text-sm text-[#666666]">{COMPANY_INFO.phone} | {COMPANY_INFO.email}</p>
+                      <p className="text-sm text-american-blue font-bold">{COMPANY_INFO.website}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#999999]">Estimate Date</p>
+                    <p className="text-lg font-bold">{new Date().toLocaleDateString()}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8 py-8 border-y border-[#F5F5F5]">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-2">Customer Details</p>
+                    <p className="text-lg font-bold">{estimate.customerName || 'Valued Customer'}</p>
+                    <p className="text-sm text-[#666666]">{estimate.customerEmail || 'No email provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-2">Project Scope</p>
+                    <p className="text-sm font-bold">{selectedStyle.name} - {selectedVisualStyle.name}</p>
+                    <p className="text-sm text-[#666666]">{results.lf} Linear Feet | {results.postCount} Posts | {results.gateCount} Gates</p>
+                  </div>
+                </div>
+
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b-2 border-american-blue/10">
+                      <th className="py-4 text-xs font-bold uppercase tracking-wider text-[#999999]">Description</th>
+                      <th className="py-4 text-xs font-bold uppercase tracking-wider text-[#999999] text-center">Qty</th>
+                      <th className="py-4 text-xs font-bold uppercase tracking-wider text-[#999999] text-right">Unit Price</th>
+                      <th className="py-4 text-xs font-bold uppercase tracking-wider text-[#999999] text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F5F5F5]">
+                    {results.items.map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="py-4">
+                          <p className="font-bold text-sm">{item.name}</p>
+                          <p className="text-[10px] text-[#999999] uppercase">{item.category}</p>
+                        </td>
+                        <td className="py-4 text-center text-sm">{item.qty}</td>
+                        <td className="py-4 text-right text-sm font-mono">{formatCurrency(item.unitCost)}</td>
+                        <td className="py-4 text-right text-sm font-bold font-mono">{formatCurrency(item.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="flex justify-end pt-8">
+                  <div className="w-64 space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#666666]">Subtotal</span>
+                      <span className="font-mono">{formatCurrency(results.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#666666]">Tax ({estimate.taxPercentage}%)</span>
+                      <span className="font-mono">{formatCurrency(results.tax)}</span>
+                    </div>
+                    <div className="flex justify-between pt-3 border-t-2 border-american-blue text-xl font-bold">
+                      <span>Total</span>
+                      <span className="text-american-blue">{formatCurrency(results.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex justify-between items-center">
+                <p className="text-[10px] text-[#999999] font-bold uppercase tracking-widest">Generated by {COMPANY_INFO.name} Estimator</p>
+                <button 
+                  onClick={() => setShowInvoice(false)}
+                  className="px-8 py-3 bg-american-blue text-white rounded-xl font-bold text-sm hover:bg-american-blue/90 transition-all"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Diagram Modal */}
+      <AnimatePresence>
+        {showDiagram && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDiagram(false)}
+              className="absolute inset-0 bg-[#1A1A1A]/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-red text-white">
+                <div className="flex items-center gap-3">
+                  <Map size={24} />
+                  <h2 className="text-xl font-bold">Fence Layout Diagram</h2>
+                </div>
+                <button onClick={() => setShowDiagram(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="p-8">
+                <div className="aspect-video bg-[#F5F5F5] rounded-2xl border-2 border-dashed border-[#E5E5E5] relative overflow-hidden flex items-center justify-center">
+                  {/* Simple SVG Diagram */}
+                  <svg width="100%" height="100%" viewBox="0 0 800 450" className="max-w-full">
+                    <defs>
+                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E0E0E0" strokeWidth="1"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                    
+                    {/* Render Runs */}
+                    {estimate.runs && estimate.runs.length > 0 ? (
+                      estimate.runs.map((run, idx) => {
+                        const x1 = 100 + (idx * 150);
+                        const y1 = 100 + (idx * 50);
+                        const length = run.linearFeet * 2;
+                        return (
+                          <g key={run.id}>
+                            <line x1={x1} y1={y1} x2={x1 + length} y2={y1} stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
+                            <circle cx={x1} cy={y1} r="6" fill="#B22234" />
+                            <circle cx={x1 + length} cy={y1} r="6" fill="#B22234" />
+                            <text x={x1 + length/2} y={y1 - 15} textAnchor="middle" className="text-[12px] font-bold fill-american-blue">{run.name} ({run.linearFeet}')</text>
+                            {run.gates > 0 && (
+                              <rect x={x1 + length/2 - 10} y={y1 - 4} width="20" height="8" fill="#FFFFFF" stroke="#3C3B6E" strokeWidth="2" />
+                            )}
+                          </g>
+                        );
+                      })
+                    ) : (
+                      <g>
+                        <line x1="200" y1="225" x2="600" y2="225" stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
+                        <circle cx="200" cy="225" r="6" fill="#B22234" />
+                        <circle cx="600" cy="225" r="6" fill="#B22234" />
+                        <text x="400" y="210" textAnchor="middle" className="text-sm font-bold fill-american-blue">Main Run ({results.lf}')</text>
+                      </g>
+                    )}
+                  </svg>
+                  
+                  <div className="absolute bottom-6 left-6 flex gap-4">
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                      <div className="w-4 h-1 bg-american-blue rounded-full" />
+                      <span className="text-[10px] font-bold uppercase">Fence Run</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                      <div className="w-3 h-3 bg-american-red rounded-full" />
+                      <span className="text-[10px] font-bold uppercase">Post/Corner</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 grid grid-cols-3 gap-6">
+                  <div className="p-4 rounded-2xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#999999] mb-1">Total Length</p>
+                    <p className="text-xl font-bold">{results.lf} LF</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#999999] mb-1">Total Posts</p>
+                    <p className="text-xl font-bold">{results.postCount}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#999999] mb-1">Total Gates</p>
+                    <p className="text-xl font-bold">{results.gateCount}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex justify-end gap-3">
+                <button 
+                  onClick={() => setShowDiagram(false)}
+                  className="px-8 py-3 bg-american-blue text-white rounded-xl font-bold text-sm hover:bg-american-blue/90 transition-all"
+                >
+                  Close Diagram
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

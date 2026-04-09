@@ -2,6 +2,7 @@ import React from 'react';
 import { Hammer, Calculator, Book, Settings, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { COMPANY_INFO } from '../constants';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,12 +25,14 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       <aside className="fixed left-0 top-0 hidden h-full w-64 border-r border-[#E5E5E5] bg-white lg:block">
         <div className="flex h-24 items-center border-b border-[#E5E5E5] px-6">
           <div className="flex items-center gap-3">
-            <img 
-              src="https://images.squarespace-cdn.com/content/v1/68b74932e2866a1b202275b6/c7fad08c-3a80-4620-9f80-d0ae036895f0/Revised+LOGO.png?format=1500w" 
-              alt="Lone Star Fence Works" 
-              className="h-12 w-auto object-contain"
-              referrerPolicy="no-referrer"
-            />
+            {COMPANY_INFO.logo && (
+              <img 
+                src={COMPANY_INFO.logo} 
+                alt={COMPANY_INFO.name} 
+                className="h-12 w-auto object-contain"
+                referrerPolicy="no-referrer"
+              />
+            )}
             <div className="flex flex-col">
               <span className="text-sm font-black uppercase leading-none tracking-tighter text-american-blue">Lone Star</span>
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-american-red">Fence Works</span>
@@ -74,12 +77,14 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Header - Mobile */}
       <header className="sticky top-0 z-50 flex h-20 items-center justify-between border-b border-[#E5E5E5] bg-white px-4 lg:hidden">
         <div className="flex items-center gap-3">
-          <img 
-            src="https://images.squarespace-cdn.com/content/v1/68b74932e2866a1b202275b6/c7fad08c-3a80-4620-9f80-d0ae036895f0/Revised+LOGO.png?format=1500w" 
-            alt="Lone Star Fence Works" 
-            className="h-10 w-auto object-contain"
-            referrerPolicy="no-referrer"
-          />
+          {COMPANY_INFO.logo && (
+            <img 
+              src={COMPANY_INFO.logo} 
+              alt={COMPANY_INFO.name} 
+              className="h-10 w-auto object-contain"
+              referrerPolicy="no-referrer"
+            />
+          )}
           <div className="flex flex-col">
             <span className="text-xs font-black uppercase leading-none tracking-tighter text-american-blue">Lone Star</span>
             <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-american-red">Fence Works</span>

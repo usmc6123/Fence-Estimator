@@ -91,3 +91,12 @@ export interface Estimate {
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;
 }
+
+export interface CompanyInfo {
+  name: string;
+  logo: string;
+  phone: string;
+  email: string;
+  website: string;
+  address: string;
+}

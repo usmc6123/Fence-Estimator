@@ -6,6 +6,7 @@ import {
   ImageIcon
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { COMPANY_INFO } from '../constants';
 
 export default function Settings() {
   const [isSaving, setIsSaving] = React.useState(false);
@@ -73,9 +74,15 @@ export default function Settings() {
             {activeSection === 'company' && (
               <div className="space-y-8">
                 <div className="flex items-center gap-6">
-                  <div className="h-24 w-24 rounded-3xl bg-[#F5F5F5] border-2 border-dashed border-[#E5E5E5] flex flex-col items-center justify-center text-[#999999] cursor-pointer hover:border-american-blue hover:text-american-blue transition-all">
-                    <ImageIcon size={24} />
-                    <span className="text-[10px] font-bold mt-1">Logo</span>
+                  <div className="h-24 w-24 rounded-3xl bg-white border-2 border-american-blue/20 flex flex-col items-center justify-center text-[#999999] cursor-pointer hover:border-american-blue transition-all overflow-hidden shadow-sm">
+                    {COMPANY_INFO.logo ? (
+                      <img src={COMPANY_INFO.logo} alt="Logo" className="w-full h-full object-contain p-2" referrerPolicy="no-referrer" />
+                    ) : (
+                      <>
+                        <ImageIcon size={24} />
+                        <span className="text-[10px] font-bold mt-1">Logo</span>
+                      </>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-lg font-bold">Company Branding</h3>
@@ -88,35 +95,35 @@ export default function Settings() {
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Company Name</label>
                     <div className="relative">
                       <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue="Lone Star Fence Works" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input type="text" defaultValue={COMPANY_INFO.name} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Email</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="email" defaultValue="office@lonestarfence.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input type="email" defaultValue={COMPANY_INFO.email} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Phone Number</label>
                     <div className="relative">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="tel" defaultValue="(555) 123-4567" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input type="tel" defaultValue={COMPANY_INFO.phone} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Website</label>
                     <div className="relative">
                       <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="url" defaultValue="https://lonestarfence.com" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input type="url" defaultValue={COMPANY_INFO.website} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Address</label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue="123 Fencing Way, Austin, TX 78701" className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input type="text" defaultValue={COMPANY_INFO.address} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
                     </div>
                   </div>
                 </div>

@@ -1,11 +1,20 @@
-import { MaterialItem, FenceStyle } from './types';
+import { MaterialItem, FenceStyle, CompanyInfo } from './types';
+
+export const COMPANY_INFO: CompanyInfo = {
+  name: 'Lone Star Fence Works',
+  logo: 'https://images.squarespace-cdn.com/content/v1/68b74932e2866a1b202275b6/c7fad08c-3a80-4620-9f80-d0ae036895f0/Revised+LOGO.png?format=1500w',
+  phone: '(469) 560-6269',
+  email: 'BradenS@LoneStarFenceWorks.com',
+  website: 'https://www.lonestarfenceworks.com/',
+  address: '123 Fencing Way, Austin, TX 78701'
+};
 
 export const MATERIALS: MaterialItem[] = [
   // Wood Structure
   { id: 'w-post-4x4', name: '4x4-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 14.50, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
   { id: 'w-post-6x6', name: '6x6-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 32.00, description: 'Heavy duty pressure-treated', imageUrl: 'https://cdn.menardc.com/main/items/media/99998/ProductMedium/TreatedTimber_1_P_6x6_2.jpg' },
   { id: 'w-rail-2x4', name: '2x4-8\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 8.75, description: 'Horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
-  { id: 'w-picket-1x6', name: '1x6-6\' Cedar Picket', category: 'Picket', unit: 'each', cost: 3.50, description: 'Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+  { id: 'w-picket-1x6', name: '1x6-6\' Cedar Dog-Ear Picket', category: 'Picket', unit: 'each', cost: 3.50, description: 'Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
   { id: 'w-picket-1x4', name: '1x4-4\' Wood Picket', category: 'Picket', unit: 'each', cost: 2.10, description: 'Standard pine picket', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
   
   // Vinyl Structure
@@ -45,7 +54,7 @@ export const MATERIALS: MaterialItem[] = [
   // Installation
   { id: 'i-concrete-80', name: '80lb Concrete Mix', category: 'Concrete', unit: 'bag', cost: 6.25, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },
   { id: 'i-concrete-fast', name: 'Fast-Set Concrete', category: 'Concrete', unit: 'bag', cost: 8.50, description: 'Quikrete Red Bag', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
-  { id: 'i-gravel', name: 'Crushed Stone (Gravel)', category: 'Concrete', unit: 'cu yd', cost: 45.00, description: 'For post drainage', imageUrl: 'https://vanputte.com/wp-content/uploads/2021/06/Washed-1-Crushed-Bulk-Stone-1000x1000-2.jpg' },
+  { id: 'i-gravel', name: 'Crushed Stone', category: 'Concrete', unit: 'cu yd', cost: 45.00, description: 'For post drainage', imageUrl: 'https://vanputte.com/wp-content/uploads/2021/06/Washed-1-Crushed-Bulk-Stone-1000x1000-2.jpg' },
   { id: 'i-foam', name: 'Post-Setting Foam', category: 'Concrete', unit: 'each', cost: 15.00, description: '2-part expanding foam', imageUrl: 'https://images.thdstatic.com/productImages/bc70eb23-9f73-4ce7-95b4-b048b422ee33/svn/sika-deck-parts-accessories-7116170-c3_600.jpg' },
   
   // Demolition
@@ -79,7 +88,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [8],
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [
-      { id: 'w-std', name: "1x6-6' Cedar Picket", priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+      { id: 'w-std', name: "1x6-6' Cedar Dog-Ear Picket", priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
       { id: 'w-cap', name: 'Cap & Trim', priceModifier: 4.50, imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
       { id: 'w-shadow', name: 'Shadowbox', priceModifier: 6.00, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
     ],
