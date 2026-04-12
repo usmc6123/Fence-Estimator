@@ -89,6 +89,8 @@ export interface Estimate {
   // Financials
   markupPercentage: number;
   taxPercentage: number;
+  manualLaborRatePerLF: number;
+  manualLaborRatePerGate: number;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;

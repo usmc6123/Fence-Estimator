@@ -51,6 +51,8 @@ export default function Estimator({ materials }: EstimatorProps) {
     
     markupPercentage: 30,
     taxPercentage: 8.25,
+    manualLaborRatePerLF: 15,
+    manualLaborRatePerGate: 150,
     manualQuantities: {},
     manualPrices: {},
   });
@@ -263,7 +265,12 @@ export default function Estimator({ materials }: EstimatorProps) {
     const demoCost = items.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
     const sitePrepCost = items.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
     const materialSubtotal = items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, item) => sum + item.total, 0);
-    const laborCost = lf * selectedStyle.baseLaborRate;
+    
+    // Manual Labor Calculation
+    const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
+    const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
+    const laborCost = (lf * laborRateLF) + (gates * laborRateGate);
+    
     const subtotal = materialSubtotal + laborCost + demoCost + sitePrepCost;
     const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
     const tax = (subtotal + markup) * ((estimate.taxPercentage || 0) / 100);
@@ -279,7 +286,10 @@ export default function Estimator({ materials }: EstimatorProps) {
       const runPanelCount = Math.ceil(runLF / (estimate.width || 8));
       
       const runMatCost = (runPostCount * postMat.cost) + (runPanelCount * (panelMat.cost + visualStyleModifier));
-      const runLaborCost = runLF * selectedStyle.baseLaborRate;
+      
+      const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
+      const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
+      const runLaborCost = (runLF * laborRateLF) + (runGates * laborRateGate);
       
       return {
         id: run.id,
@@ -749,6 +759,36 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-6">
+                <div className="p-6 rounded-2xl border-2 border-american-blue/10 bg-white space-y-6">
+                  <h3 className="text-sm font-black text-american-blue uppercase tracking-widest flex items-center gap-2">
+                    <HardHat size={16} className="text-american-red" />
+                    Manual Labor Rates
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-[#999999] ml-1 whitespace-nowrap">Labor per LF ($)</label>
+                      <input 
+                        type="number" 
+                        value={estimate.manualLaborRatePerLF} 
+                        onChange={(e) => setEstimate({...estimate, manualLaborRatePerLF: Number(e.target.value)})} 
+                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-[#999999] ml-1 whitespace-nowrap">Labor per Gate ($)</label>
+                      <input 
+                        type="number" 
+                        value={estimate.manualLaborRatePerGate} 
+                        onChange={(e) => setEstimate({...estimate, manualLaborRatePerGate: Number(e.target.value)})} 
+                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[9px] font-bold text-american-red/60 uppercase tracking-widest italic leading-relaxed">
+                    * These rates will override the default style labor calculation.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Waste Allowance (%)</label>
                   <input type="range" min="0" max="25" step="1" value={estimate.wastePercentage} onChange={(e) => setEstimate({...estimate, wastePercentage: Number(e.target.value)})} className="w-full h-2 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-blue" />
