@@ -31,8 +31,8 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'cl-tension-wire', name: 'Bottom Tension Wire', category: 'Hardware', unit: 'lf', cost: 0.65, description: 'Prevents mesh lifting', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS_amSlsfxUJJ0Uvy1zk-95EIbBcJb3FEuDHQ&s' },
   
   // Metal Structure
-  { id: 'm-post-2x2', name: '2x2 Aluminum Post', category: 'Post', unit: 'each', cost: 38.00, description: 'Powder coated black', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
-  { id: 'm-panel-std', name: '6x8 Aluminum Panel', category: 'Panel', unit: 'each', cost: 195.00, description: 'Pre-welded section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-post-2x2', name: '2x2 Wrought Iron Post', category: 'Post', unit: 'each', cost: 38.00, description: 'Powder coated black', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
+  { id: 'm-panel-std', name: '6x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 195.00, description: 'Pre-welded section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
   
   // Farm Structure
   { id: 'f-post-t', name: '6\' Steel T-Post', category: 'Post', unit: 'each', cost: 8.25, description: 'Agricultural steel post', imageUrl: 'https://d2j6dbq0eux0bg.cloudfront.net/images/96378769/4289817609.jpg' },
@@ -112,14 +112,14 @@ export const FENCE_STYLES: FenceStyle[] = [
   },
   {
     id: 'aluminum-ornamental',
-    name: 'Aluminum Ornamental',
+    name: 'Wrought Iron',
     type: 'Metal',
-    description: 'Elegant powder-coated aluminum panels for a classic look.',
+    description: 'Elegant wrought iron panels for a classic, durable look.',
     availableHeights: [4, 5, 6],
     availableWidths: [6, 8],
     availableColors: ['Black', 'Bronze', 'White'],
     visualStyles: [
-      { id: 'm-flat', name: '6x8 Aluminum Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+      { id: 'm-flat', name: '6x8 Wrought Iron Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
       { id: 'm-spear', name: 'Spear Top', priceModifier: 6.50, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },
