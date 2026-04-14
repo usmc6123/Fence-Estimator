@@ -96,21 +96,6 @@ export const FENCE_STYLES: FenceStyle[] = [
     baseLaborRate: 14.50,
   },
   {
-    id: 'vinyl-privacy',
-    name: 'Vinyl Privacy',
-    type: 'Vinyl',
-    description: 'Low-maintenance PVC privacy fence with interlocking panels.',
-    availableHeights: [4, 6],
-    availableWidths: [6, 8],
-    availableColors: ['White', 'Tan', 'Gray'],
-    visualStyles: [
-      { id: 'v-bryce', name: 'T&G Vinyl Panel Slats', priceModifier: 0, imageUrl: 'https://www.showtechfence.com/uploads/202025227/full-vinyl-privacy-fence49586825681.jpg' },
-      { id: 'v-lattice', name: 'Lattice Top', priceModifier: 9.50, imageUrl: 'https://fenceanddecksupply.com/wp-content/uploads/2016/06/lattice6.jpg' },
-    ],
-    calcLogic: { postsPerLF: 0.125, railsPerLF: 0.25, picketsPerLF: 0, concretePerPost: 2 },
-    baseLaborRate: 16.50,
-  },
-  {
     id: 'chain-link',
     name: 'Chain Link',
     type: 'Chain Link',
