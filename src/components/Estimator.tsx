@@ -70,7 +70,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     const hasRuns = runs.length > 0;
     
     const lf = hasRuns ? runs.reduce((sum, r) => sum + r.linearFeet, 0) : (estimate.linearFeet || 0);
-    const gates = hasRuns ? runs.reduce((sum, r) => sum + r.gates, 0) : (estimate.gateCount || 0);
+    const gates = hasRuns ? runs.reduce((sum, r) => sum + (r.gateDetails?.length || r.gates || 0), 0) : (estimate.gateCount || 0);
     
     // Auto-calculate corners based on runs
     const corners = hasRuns ? Math.max(0, runs.length - 1) : (estimate.corners || 0);
@@ -81,7 +81,24 @@ export default function Estimator({ materials }: EstimatorProps) {
     const rawItems: { name: string; qty: number; unitCost: number; total: number; category: string }[] = [];
 
     // 1. Posts
-    let endPostCount = 2 + (gates * 2);
+    let endPostCount = 2; // Start and end of the fence
+    let doubleGateCount = 0;
+    
+    if (hasRuns) {
+      runs.forEach(run => {
+        if (run.gateDetails && run.gateDetails.length > 0) {
+          run.gateDetails.forEach(gate => {
+            endPostCount += gate.type === 'Double' ? 2 : 1;
+            if (gate.type === 'Double') doubleGateCount++;
+          });
+        } else {
+          endPostCount += (run.gates || 0) * 2;
+        }
+      });
+    } else {
+      endPostCount += (estimate.gateCount || 0) * 2;
+    }
+    
     let cornerPostCount = corners;
     let linePostCount = 0;
     
@@ -156,6 +173,20 @@ export default function Estimator({ materials }: EstimatorProps) {
           total: gates * latchMat.cost,
           category: 'Gate'
         });
+      }
+      
+      // Add Shark Hinge Kit for Double Gates
+      if (doubleGateCount > 0) {
+        const sharkKit = materials.find(m => m.id === 'g-kit-shark');
+        if (sharkKit) {
+          rawItems.push({
+            name: sharkKit.name,
+            qty: doubleGateCount,
+            unitCost: sharkKit.cost,
+            total: doubleGateCount * sharkKit.cost,
+            category: 'Gate'
+          });
+        }
       }
     }
 
@@ -291,10 +322,20 @@ export default function Estimator({ materials }: EstimatorProps) {
     // Cost per run
     const runBreakdown = runs.map((run, idx) => {
       const runLF = run.linearFeet;
-      const runGates = run.gates;
+      const runGates = run.gateDetails?.length || run.gates || 0;
       
       const runLinePosts = Math.max(0, Math.ceil(runLF / 8) - 1);
-      const runPostCount = runLinePosts + 1 + (idx === runs.length - 1 ? 1 : 0) + (runGates * 2);
+      
+      let runGatePosts = 0;
+      if (run.gateDetails && run.gateDetails.length > 0) {
+        run.gateDetails.forEach(gate => {
+          runGatePosts += gate.type === 'Double' ? 2 : 1;
+        });
+      } else {
+        runGatePosts = runGates * 2;
+      }
+      
+      const runPostCount = runLinePosts + 1 + (idx === runs.length - 1 ? 1 : 0) + runGatePosts;
       
       const runPanelCount = Math.ceil(runLF / (estimate.width || 8));
       
@@ -507,28 +548,85 @@ export default function Estimator({ materials }: EstimatorProps) {
                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
                         />
                       </div>
-                      <div className="md:col-span-4 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates</label>
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="number" 
-                            value={run.gates} 
-                            onChange={(e) => {
-                              const newRuns = [...estimate.runs!];
-                              newRuns[idx].gates = Number(e.target.value);
-                              setEstimate({ ...estimate, runs: newRuns });
-                            }}
-                            className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all"
-                          />
-                          <button 
+                      <div className="md:col-span-4 flex justify-end items-center">
+                        <button 
+                          onClick={() => {
+                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="flex items-center gap-2 px-4 py-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all font-bold text-xs uppercase tracking-widest"
+                        >
+                          <Trash2 size={16} /> Remove Run
+                        </button>
+                      </div>
+                      
+                      {/* Gates Section for this Run */}
+                      <div className="md:col-span-12 space-y-4 mt-2 pt-4 border-t-2 border-dashed border-[#F0F0F0]">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates in this Run</label>
+                          <button
                             onClick={() => {
-                              const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                              const newRuns = [...estimate.runs!];
+                              if (!newRuns[idx].gateDetails) newRuns[idx].gateDetails = [];
+                              newRuns[idx].gateDetails!.push({ id: Math.random().toString(36).substr(2, 9), type: 'Single', width: 4 });
+                              newRuns[idx].gates = newRuns[idx].gateDetails!.length;
                               setEstimate({ ...estimate, runs: newRuns });
                             }}
-                            className="p-2 text-american-red hover:bg-american-red/10 rounded-lg transition-all flex-shrink-0"
+                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#F0F0F0] text-american-blue text-[10px] font-black uppercase tracking-widest hover:bg-[#E5E5E5] transition-all"
                           >
-                            <Trash2 size={18} />
+                            <Plus size={12} /> Add Gate
                           </button>
+                        </div>
+                        
+                        <div className="grid gap-3">
+                          {run.gateDetails?.map((gate, gIdx) => (
+                            <div key={gate.id} className="flex items-center gap-4 bg-[#F9F9F9] p-3 rounded-xl border border-[#E5E5E5]">
+                              <div className="flex-1">
+                                <select
+                                  value={gate.type}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails![gIdx].type = e.target.value as 'Single' | 'Double';
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
+                                >
+                                  <option value="Single">Single Gate</option>
+                                  <option value="Double">Double Gate</option>
+                                </select>
+                              </div>
+                              <div className="flex-1 flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={gate.width}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails![gIdx].width = Number(e.target.value);
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
+                                  placeholder="Width"
+                                />
+                                <span className="text-[10px] font-bold text-american-blue/40">FT</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const newRuns = [...estimate.runs!];
+                                  newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                  newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="p-2 text-american-red hover:bg-american-red/10 rounded-md transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          {(!run.gateDetails || run.gateDetails.length === 0) && (
+                            <div className="text-center py-4 text-[10px] font-bold text-[#BBBBBB] uppercase tracking-widest">
+                              No gates added to this run
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1382,16 +1480,20 @@ export default function Estimator({ materials }: EstimatorProps) {
                           
                           {/* Draw Gates for each run */}
                           {runsData.map((run, rIdx) => {
-                            if (!run.gates) return null;
+                            const gatesToDraw = run.gateDetails || Array.from({ length: run.gates || 0 }).map((_, i) => ({ id: `old-${i}`, type: 'Single', width: 4 }));
+                            if (gatesToDraw.length === 0) return null;
+                            
                             const p1 = scaledPoints[rIdx];
                             const p2 = scaledPoints[rIdx + 1];
                             const dirIndex = rIdx % 4;
                             const isHorizontal = dirIndex % 2 === 0;
                             
-                            return Array.from({ length: run.gates }).map((_, gIdx) => {
-                              const fraction = (gIdx + 1) / (run.gates + 1);
+                            return gatesToDraw.map((gate, gIdx) => {
+                              const fraction = (gIdx + 1) / (gatesToDraw.length + 1);
                               const x = p1[0] + (p2[0] - p1[0]) * fraction;
                               const y = p1[1] + (p2[1] - p1[1]) * fraction;
+                              
+                              const gateLabel = `${gate.type === 'Double' ? 'DBL ' : ''}GATE (${gate.width}')`;
                               
                               return (
                                 <g key={`g-${rIdx}-${gIdx}`} transform={`translate(${x}, ${y})`}>
@@ -1401,7 +1503,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                                       <line x1="-15" y1="0" x2="15" y2="0" stroke="#B22234" strokeWidth="4" />
                                       <circle cx="-15" cy="0" r="8" fill="#B22234" />
                                       <circle cx="15" cy="0" r="8" fill="#B22234" />
-                                      <text y="20" textAnchor="middle" className="text-[10px] font-bold fill-american-red">GATE</text>
+                                      {gate.type === 'Double' && <circle cx="0" cy="0" r="4" fill="#B22234" />}
+                                      <text y="20" textAnchor="middle" className="text-[10px] font-bold fill-american-red">{gateLabel}</text>
                                     </>
                                   ) : (
                                     <>
@@ -1409,7 +1512,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                                       <line x1="0" y1="-15" x2="0" y2="15" stroke="#B22234" strokeWidth="4" />
                                       <circle cx="0" cy="-15" r="8" fill="#B22234" />
                                       <circle cx="0" cy="15" r="8" fill="#B22234" />
-                                      <text x="20" y="3" textAnchor="start" className="text-[10px] font-bold fill-american-red">GATE</text>
+                                      {gate.type === 'Double' && <circle cx="0" cy="0" r="4" fill="#B22234" />}
+                                      <text x="20" y="3" textAnchor="start" className="text-[10px] font-bold fill-american-red">{gateLabel}</text>
                                     </>
                                   )}
                                 </g>

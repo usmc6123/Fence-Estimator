@@ -33,12 +33,19 @@ export interface FenceStyle {
   baseLaborRate: number;
 }
 
+export interface GateDetail {
+  id: string;
+  type: 'Single' | 'Double';
+  width: number;
+}
+
 export interface FenceRun {
   id: string;
   name: string;
   linearFeet: number;
   corners: number;
   gates: number;
+  gateDetails?: GateDetail[];
 }
 
 export interface Estimate {
