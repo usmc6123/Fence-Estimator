@@ -14,7 +14,9 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'w-post-4x4', name: '4x4-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 16.75, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
   { id: 'w-post-6x6', name: '6x6-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 38.50, description: 'Heavy duty pressure-treated', imageUrl: 'https://cdn.menardc.com/main/items/media/99998/ProductMedium/TreatedTimber_1_P_6x6_2.jpg' },
   { id: 'w-rail-2x4', name: '2x4-8\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 9.25, description: 'Horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
-  { id: 'w-picket-1x6', name: '1x6-6\' Cedar Dog-Ear Picket', category: 'Picket', unit: 'each', cost: 4.25, description: 'Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+  { id: 'w-picket-pine', name: '1x6-6\' Pine Picket', category: 'Picket', unit: 'each', cost: 2.85, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
+  { id: 'w-picket-w-cedar', name: '1x6-6\' Western Red Cedar Picket', category: 'Picket', unit: 'each', cost: 4.25, description: 'Premium Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+  { id: 'w-picket-j-cedar', name: '1x6-6\' Japanese Cedar Picket', category: 'Picket', unit: 'each', cost: 3.75, description: 'Japanese Cedar (Sugi)', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
   { id: 'w-picket-1x4', name: '1x4-4\' Wood Picket', category: 'Picket', unit: 'each', cost: 2.45, description: 'Standard pine picket', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
   
   // Vinyl Structure
@@ -71,6 +73,7 @@ export const MATERIALS: MaterialItem[] = [
   
   // Finishing
   { id: 'f-stain', name: 'Wood Sealant/Stain', category: 'Finishing', unit: 'gallon', cost: 52.00, description: 'Premium protection', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
+  { id: 'f-pre-stain', name: 'Factory Pre-Staining Service', category: 'Finishing', unit: 'lf', cost: 4.50, description: 'Factory applied finish per LF', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
   { id: 'f-shims', name: 'Leveling Shims', category: 'Consumable', unit: 'box', cost: 9.50, description: 'For rail alignment', imageUrl: 'https://i.ebayimg.com/images/g/SAcAAOSwTc5b6aQR/s-l1200.jpg' },
   
   // Post Caps

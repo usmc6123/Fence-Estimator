@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
-  Layers, HardHat, FileText, Map, X, Printer, Share2
+  Layers, HardHat, FileText, Map, X, Printer, Share2, Trees, Droplets
 } from 'lucide-react';
 import { FENCE_STYLES } from '../constants';
 import { MaterialItem, FenceStyle, Estimate } from '../types';
@@ -55,6 +55,9 @@ export default function Estimator({ materials }: EstimatorProps) {
     manualLaborRatePerGate: 150,
     manualQuantities: {},
     manualPrices: {},
+    woodType: 'Pine',
+    topStyle: 'Dog Ear',
+    isPreStained: false,
   });
 
   const [isFullView, setIsFullView] = React.useState(false);
@@ -121,24 +124,52 @@ export default function Estimator({ materials }: EstimatorProps) {
 
     // 2. Main Panels/Pickets
     let panelQty = 0;
+    let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
+
     if (selectedStyle.type === 'Wood') {
       // 5.5 inches = 0.458ft
       panelQty = Math.ceil((lf / 0.458) * wasteFactor);
+      
+      // Select specific wood type picket
+      if (estimate.woodType === 'Pine') {
+        panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
+      } else if (estimate.woodType === 'Japanese Cedar') {
+        panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
+      } else if (estimate.woodType === 'Western Cedar') {
+        panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
+      }
     } else {
       const panelCount = Math.ceil(lf / (estimate.width || 8));
       panelQty = Math.ceil(panelCount * wasteFactor);
     }
     
     const visualStyleModifier = selectedVisualStyle.priceModifier;
-    const panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
+    let picketDisplayName = panelMat.name;
+    if (selectedStyle.type === 'Wood' && estimate.topStyle) {
+      picketDisplayName = picketDisplayName.replace('Picket', `${estimate.topStyle} Picket`);
+    }
     
     rawItems.push({ 
-      name: panelMat.name, 
+      name: picketDisplayName, 
       qty: panelQty, 
       unitCost: panelMat.cost + visualStyleModifier, 
       total: panelQty * (panelMat.cost + visualStyleModifier),
       category: 'Infill'
     });
+
+    // 2.5 Pre-staining Service
+    if (selectedStyle.type === 'Wood' && estimate.isPreStained) {
+      const preStainMat = materials.find(m => m.id === 'f-pre-stain');
+      if (preStainMat) {
+        rawItems.push({
+          name: preStainMat.name,
+          qty: lf,
+          unitCost: preStainMat.cost,
+          total: lf * preStainMat.cost,
+          category: 'Finishing'
+        });
+      }
+    }
 
     // 3. Post Caps
     const capMat = materials.find(m => m.id === estimate.postCapId);
@@ -337,9 +368,18 @@ export default function Estimator({ materials }: EstimatorProps) {
       
       const runPostCount = runLinePosts + 1 + (idx === runs.length - 1 ? 1 : 0) + runGatePosts;
       
-      const runPanelCount = Math.ceil(runLF / (estimate.width || 8));
+      const runPanelCount = selectedStyle.type === 'Wood' 
+        ? Math.ceil(runLF / 0.458)
+        : Math.ceil(runLF / (estimate.width || 8));
       
-      const runMatCost = (runPostCount * postMat.cost) + (runPanelCount * (panelMat.cost + visualStyleModifier));
+      let runMatCost = (runPostCount * postMat.cost) + (runPanelCount * (panelMat.cost + visualStyleModifier));
+      
+      if (selectedStyle.type === 'Wood' && estimate.isPreStained) {
+        const preStainMat = materials.find(m => m.id === 'f-pre-stain');
+        if (preStainMat) {
+          runMatCost += runLF * preStainMat.cost;
+        }
+      }
       
       const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
       const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
@@ -723,6 +763,93 @@ export default function Estimator({ materials }: EstimatorProps) {
                     </button>
                   ))}
                 </div>
+
+                {/* Wood Specific Options */}
+                {selectedStyle.type === 'Wood' && (
+                  <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-10">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-american-blue/10 flex items-center justify-center text-american-blue">
+                        <Trees size={20} />
+                      </div>
+                      <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Wood Specifications</h3>
+                    </div>
+
+                    <div className="grid gap-8 md:grid-cols-3">
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Wood Species</label>
+                        <div className="grid gap-2">
+                          {['Pine', 'Western Cedar', 'Japanese Cedar'].map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setEstimate({ ...estimate, woodType: type as any })}
+                              className={cn(
+                                "px-4 py-3 rounded-xl border-2 text-xs font-bold uppercase tracking-widest transition-all text-left",
+                                estimate.woodType === type 
+                                  ? "border-american-blue bg-american-blue text-white shadow-md" 
+                                  : "border-[#F0F0F0] bg-[#F9F9F9] text-american-blue hover:border-american-blue/20"
+                              )}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Picket Top Style</label>
+                        <div className="grid gap-2">
+                          {['Dog Ear', 'Flat Top'].map((style) => (
+                            <button
+                              key={style}
+                              onClick={() => setEstimate({ ...estimate, topStyle: style as any })}
+                              className={cn(
+                                "px-4 py-3 rounded-xl border-2 text-xs font-bold uppercase tracking-widest transition-all text-left",
+                                estimate.topStyle === style 
+                                  ? "border-american-red bg-american-red text-white shadow-md" 
+                                  : "border-[#F0F0F0] bg-[#F9F9F9] text-american-blue hover:border-american-red/20"
+                              )}
+                            >
+                              {style}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Finish Option</label>
+                        <button
+                          onClick={() => setEstimate({ ...estimate, isPreStained: !estimate.isPreStained })}
+                          className={cn(
+                            "w-full p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center",
+                            estimate.isPreStained 
+                              ? "border-american-blue bg-american-blue/5 shadow-inner" 
+                              : "border-[#F0F0F0] bg-[#F9F9F9]"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-12 h-12 rounded-full flex items-center justify-center transition-all",
+                            estimate.isPreStained ? "bg-american-blue text-white" : "bg-white text-american-blue/20"
+                          )}>
+                            <Droplets size={24} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-american-blue">Pre-Stained</p>
+                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">Factory Applied Finish</p>
+                          </div>
+                          <div className={cn(
+                            "mt-2 h-6 w-12 rounded-full relative transition-all",
+                            estimate.isPreStained ? "bg-american-blue" : "bg-[#E5E5E5]"
+                          )}>
+                            <div className={cn(
+                              "absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                              estimate.isPreStained ? "right-1" : "left-1"
+                            )} />
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

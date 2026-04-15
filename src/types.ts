@@ -67,6 +67,9 @@ export interface Estimate {
   styleId: string;
   visualStyleId: string;
   color: string;
+  woodType?: 'Pine' | 'Western Cedar' | 'Japanese Cedar';
+  topStyle?: 'Dog Ear' | 'Flat Top';
+  isPreStained?: boolean;
   
   // Demolition
   hasDemolition: boolean;
