@@ -74,6 +74,7 @@ export const MATERIALS: MaterialItem[] = [
   // Finishing
   { id: 'f-stain', name: 'Wood Sealant/Stain', category: 'Finishing', unit: 'gallon', cost: 52.00, description: 'Premium protection', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
   { id: 'f-pre-stain', name: 'Factory Pre-Staining Service', category: 'Finishing', unit: 'lf', cost: 4.50, description: 'Factory applied finish per LF', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
+  { id: 'f-cap-trim', name: 'Cap & Trim Upgrade', category: 'Finishing', unit: 'lf', cost: 5.50, description: 'Top cap and trim boards', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
   { id: 'f-shims', name: 'Leveling Shims', category: 'Consumable', unit: 'box', cost: 9.50, description: 'For rail alignment', imageUrl: 'https://i.ebayimg.com/images/g/SAcAAOSwTc5b6aQR/s-l1200.jpg' },
   
   // Post Caps
@@ -92,9 +93,9 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [8],
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [
-      { id: 'w-std', name: "1x6-6' Cedar Dog-Ear Picket", priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
-      { id: 'w-cap', name: 'Cap & Trim', priceModifier: 5.50, imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
-      { id: 'w-shadow', name: 'Shadowbox', priceModifier: 7.50, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
+      { id: 'w-side', name: 'Side by Side', priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
+      { id: 'w-bob', name: 'Board on Board', priceModifier: 4.50, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
+      { id: 'w-horiz', name: 'Horizontal', priceModifier: 6.00, imageUrl: 'https://images.squarespace-cdn.com/content/v1/59df95b3f14aa1927776f821/1510695034637-67X6S6Y6Y6Y6Y6Y6Y6Y6/Horizontal+Fence+Austin' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0.375, picketsPerLF: 2.1, concretePerPost: 1.5 },
     baseLaborRate: 14.50,

@@ -85,6 +85,7 @@ export interface Estimate {
   
   // Accessories
   postCapId: string;
+  hasCapAndTrim: boolean;
   gateCount: number;
   gateStyleId: string;
   

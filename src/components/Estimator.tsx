@@ -30,6 +30,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     styleId: FENCE_STYLES[0].id,
     visualStyleId: FENCE_STYLES[0].visualStyles[0].id,
     postCapId: materials.find(m => m.category === 'PostCap')?.id || '',
+    hasCapAndTrim: false,
     gateCount: 1,
     gateStyleId: materials.find(m => m.category === 'Gate')?.id || '',
     footingType: 'Cuboid',
@@ -105,10 +106,12 @@ export default function Estimator({ materials }: EstimatorProps) {
     let cornerPostCount = corners;
     let linePostCount = 0;
     
+    const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
+    
     if (hasRuns) {
-      linePostCount = runs.reduce((sum, run) => sum + Math.max(0, Math.ceil(run.linearFeet / 8) - 1), 0);
+      linePostCount = runs.reduce((sum, run) => sum + Math.max(0, Math.ceil(run.linearFeet / maxSpacing) - 1), 0);
     } else {
-      linePostCount = Math.max(0, Math.ceil(lf / 8) - 1);
+      linePostCount = Math.max(0, Math.ceil(lf / maxSpacing) - 1);
     }
     
     const postCount = endPostCount + cornerPostCount + linePostCount;
@@ -166,6 +169,20 @@ export default function Estimator({ materials }: EstimatorProps) {
           qty: lf,
           unitCost: preStainMat.cost,
           total: lf * preStainMat.cost,
+          category: 'Finishing'
+        });
+      }
+    }
+
+    // 2.6 Cap & Trim Upgrade
+    if (selectedStyle.type === 'Wood' && estimate.hasCapAndTrim) {
+      const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
+      if (capTrimMat) {
+        rawItems.push({
+          name: capTrimMat.name,
+          qty: lf,
+          unitCost: capTrimMat.cost,
+          total: lf * capTrimMat.cost,
           category: 'Finishing'
         });
       }
@@ -355,7 +372,8 @@ export default function Estimator({ materials }: EstimatorProps) {
       const runLF = run.linearFeet;
       const runGates = run.gateDetails?.length || run.gates || 0;
       
-      const runLinePosts = Math.max(0, Math.ceil(runLF / 8) - 1);
+      const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
+      const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
       
       let runGatePosts = 0;
       if (run.gateDetails && run.gateDetails.length > 0) {
@@ -380,6 +398,13 @@ export default function Estimator({ materials }: EstimatorProps) {
           runMatCost += runLF * preStainMat.cost;
         }
       }
+
+      if (selectedStyle.type === 'Wood' && estimate.hasCapAndTrim) {
+        const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
+        if (capTrimMat) {
+          runMatCost += runLF * capTrimMat.cost;
+        }
+      }
       
       const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
       const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
@@ -397,7 +422,7 @@ export default function Estimator({ materials }: EstimatorProps) {
 
   const results = calculateCosts();
 
-  const handleNext = () => setStep(s => Math.min(s + 1, 6));
+  const handleNext = () => setStep(s => Math.min(s + 1, 5));
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
   const handleSave = () => {
@@ -410,10 +435,9 @@ export default function Estimator({ materials }: EstimatorProps) {
   const steps = [
     { id: 1, label: 'Measurements', icon: Ruler },
     { id: 2, label: 'Style & Options', icon: Palette },
-    { id: 3, label: 'Accessories', icon: Box },
-    { id: 4, label: 'Demo & Site Prep', icon: HardHat },
-    { id: 5, label: 'Advanced Specs', icon: Layers },
-    { id: 6, label: 'Review & Total', icon: FileText },
+    { id: 3, label: 'Demo & Site Prep', icon: HardHat },
+    { id: 4, label: 'Advanced Specs', icon: Layers },
+    { id: 5, label: 'Review & Total', icon: FileText },
   ];
 
   const PatrioticDivider = () => (
@@ -774,19 +798,47 @@ export default function Estimator({ materials }: EstimatorProps) {
                       <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Wood Specifications</h3>
                     </div>
 
-                    <div className="grid gap-8 md:grid-cols-3">
-                      <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Wood Species</label>
-                        <div className="grid gap-2">
+                    <div className="flex flex-wrap gap-6">
+                      {/* Height Selection */}
+                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Ruler size={14} className="text-american-blue/40" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Fence Height</label>
+                        </div>
+                        <div className="flex flex-col gap-2 flex-1">
+                          {[6, 8].map((h) => (
+                            <button
+                              key={h}
+                              onClick={() => setEstimate({ ...estimate, height: h })}
+                              className={cn(
+                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
+                                estimate.height === h 
+                                  ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
+                                  : "border-white bg-white text-american-blue hover:border-american-blue/20"
+                              )}
+                            >
+                              {h}' Height
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Wood Species */}
+                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Trees size={14} className="text-american-blue/40" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Wood Species</label>
+                        </div>
+                        <div className="flex flex-col gap-2 flex-1">
                           {['Pine', 'Western Cedar', 'Japanese Cedar'].map((type) => (
                             <button
                               key={type}
                               onClick={() => setEstimate({ ...estimate, woodType: type as any })}
                               className={cn(
-                                "px-4 py-3 rounded-xl border-2 text-xs font-bold uppercase tracking-widest transition-all text-left",
+                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
                                 estimate.woodType === type 
-                                  ? "border-american-blue bg-american-blue text-white shadow-md" 
-                                  : "border-[#F0F0F0] bg-[#F9F9F9] text-american-blue hover:border-american-blue/20"
+                                  ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
+                                  : "border-white bg-white text-american-blue hover:border-american-blue/20"
                               )}
                             >
                               {type}
@@ -795,18 +847,22 @@ export default function Estimator({ materials }: EstimatorProps) {
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Picket Top Style</label>
-                        <div className="grid gap-2">
+                      {/* Picket Top Style */}
+                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Palette size={14} className="text-american-red/40" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Picket Top Style</label>
+                        </div>
+                        <div className="flex flex-col gap-2 flex-1">
                           {['Dog Ear', 'Flat Top'].map((style) => (
                             <button
                               key={style}
                               onClick={() => setEstimate({ ...estimate, topStyle: style as any })}
                               className={cn(
-                                "px-4 py-3 rounded-xl border-2 text-xs font-bold uppercase tracking-widest transition-all text-left",
+                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
                                 estimate.topStyle === style 
-                                  ? "border-american-red bg-american-red text-white shadow-md" 
-                                  : "border-[#F0F0F0] bg-[#F9F9F9] text-american-blue hover:border-american-red/20"
+                                  ? "border-american-red bg-american-red text-white shadow-lg shadow-american-red/20" 
+                                  : "border-white bg-white text-american-blue hover:border-american-red/20"
                               )}
                             >
                               {style}
@@ -815,34 +871,75 @@ export default function Estimator({ materials }: EstimatorProps) {
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Finish Option</label>
+                      {/* Finish Option */}
+                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Droplets size={14} className="text-american-blue/40" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Finish Option</label>
+                        </div>
                         <button
                           onClick={() => setEstimate({ ...estimate, isPreStained: !estimate.isPreStained })}
                           className={cn(
-                            "w-full p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center",
+                            "flex-1 p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-3 text-center",
                             estimate.isPreStained 
-                              ? "border-american-blue bg-american-blue/5 shadow-inner" 
-                              : "border-[#F0F0F0] bg-[#F9F9F9]"
+                              ? "border-american-blue bg-white shadow-lg" 
+                              : "border-white bg-white"
                           )}
                         >
                           <div className={cn(
-                            "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-                            estimate.isPreStained ? "bg-american-blue text-white" : "bg-white text-american-blue/20"
+                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                            estimate.isPreStained ? "bg-american-blue text-white" : "bg-[#F0F0F0] text-american-blue/20"
                           )}>
-                            <Droplets size={24} />
+                            <Droplets size={20} />
                           </div>
                           <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-american-blue">Pre-Stained</p>
-                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">Factory Applied Finish</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">Pre-Stained</p>
+                            <p className="text-[8px] font-bold text-[#BBBBBB] uppercase mt-0.5">Factory Finish</p>
                           </div>
                           <div className={cn(
-                            "mt-2 h-6 w-12 rounded-full relative transition-all",
+                            "h-5 w-10 rounded-full relative transition-all",
                             estimate.isPreStained ? "bg-american-blue" : "bg-[#E5E5E5]"
                           )}>
                             <div className={cn(
-                              "absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
-                              estimate.isPreStained ? "right-1" : "left-1"
+                              "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                              estimate.isPreStained ? "right-0.5" : "left-0.5"
+                            )} />
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Structural Accessory */}
+                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Layers size={14} className="text-american-red/40" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Structural Accessory</label>
+                        </div>
+                        <button
+                          onClick={() => setEstimate({ ...estimate, hasCapAndTrim: !estimate.hasCapAndTrim })}
+                          className={cn(
+                            "flex-1 p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-3 text-center",
+                            estimate.hasCapAndTrim 
+                              ? "border-american-red bg-white shadow-lg" 
+                              : "border-white bg-white"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                            estimate.hasCapAndTrim ? "bg-american-red text-white" : "bg-[#F0F0F0] text-american-red/20"
+                          )}>
+                            <Layers size={20} />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">Cap & Trim</p>
+                            <p className="text-[8px] font-bold text-[#BBBBBB] uppercase mt-0.5">Premium Top</p>
+                          </div>
+                          <div className={cn(
+                            "h-5 w-10 rounded-full relative transition-all",
+                            estimate.hasCapAndTrim ? "bg-american-red" : "bg-[#E5E5E5]"
+                          )}>
+                            <div className={cn(
+                              "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                              estimate.hasCapAndTrim ? "right-0.5" : "left-0.5"
                             )} />
                           </div>
                         </button>
@@ -855,60 +952,6 @@ export default function Estimator({ materials }: EstimatorProps) {
           </div>
         );
       case 3:
-        return (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
-              <div className="flex items-center gap-5 mb-10">
-                <div className="h-16 w-16 rounded-3xl bg-american-blue flex items-center justify-center text-white shadow-xl shadow-american-blue/20">
-                  <Box size={32} />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Accessories & Hardware</h2>
-                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">The Finishing Touches of Quality</p>
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                <div className="flex items-center gap-4 px-2">
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-american-blue/10 to-transparent" />
-                  <h3 className="text-sm font-black text-american-blue/40 uppercase tracking-[0.3em]">Post Cap Selection</h3>
-                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-american-blue/10 to-transparent" />
-                </div>
-
-                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {materials.filter(m => m.category === 'PostCap').map(cap => (
-                    <button 
-                      key={cap.id} 
-                      onClick={() => setEstimate({...estimate, postCapId: cap.id})} 
-                      className={cn(
-                        "group p-5 rounded-[32px] border-2 transition-all text-center relative flex flex-col items-center gap-4", 
-                        estimate.postCapId === cap.id 
-                          ? "border-american-blue bg-american-blue/5 shadow-xl" 
-                          : "border-[#F0F0F0] bg-white hover:border-american-blue/20 hover:shadow-lg"
-                      )}
-                    >
-                      <div className="relative w-full aspect-square rounded-[24px] overflow-hidden border-2 border-white shadow-md bg-[#F9F9F9]">
-                        <img src={cap.imageUrl} alt={cap.name} className="w-full h-full object-contain p-4 transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
-                        {estimate.postCapId === cap.id && (
-                          <div className="absolute top-3 right-3 w-6 h-6 bg-american-blue american-star shadow-lg flex items-center justify-center">
-                            <div className="w-3 h-3 bg-white american-star scale-50" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="w-full pb-1">
-                        <h4 className={cn("text-lg font-black leading-tight transition-colors mb-1 tracking-tight uppercase", estimate.postCapId === cap.id ? "text-american-blue" : "text-[#1A1A1A]")}>
-                          {cap.name}
-                        </h4>
-                        <p className="text-[9px] font-bold text-[#999999] uppercase tracking-[0.2em]">Premium Component</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 4:
         return (
           <div className="space-y-8">
             <div className="flex items-center gap-4">
@@ -970,7 +1013,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
           </div>
         );
-      case 5:
+      case 4:
         return (
           <div className="space-y-8">
             <div className="flex items-center gap-4">
@@ -1055,7 +1098,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
           </div>
         );
-      case 6:
+      case 5:
         return (
           <div className="space-y-8">
             <div className="flex items-center gap-4">
@@ -1141,7 +1184,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                     Back
                   </button>
                   
-                  {step < 6 ? (
+                  {step < 5 ? (
                     <button 
                       onClick={handleNext}
                       className="flex items-center gap-2 rounded-xl bg-american-blue px-8 py-3 text-sm font-bold text-white hover:bg-american-blue/90 transition-all shadow-lg active:scale-95"
