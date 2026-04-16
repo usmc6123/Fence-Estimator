@@ -310,6 +310,33 @@ export default function Estimator({
            }
         }
 
+        if (runStyle.type === 'Pipe') {
+          const railMat = materials.find(m => m.id === 'p-rail-238')!;
+          rawItems.push({ name: railMat.name, qty: runLF, unitCost: railMat.cost, total: runLF * railMat.cost, category: 'Structure' });
+
+          const postCount = Math.ceil(runLF / 8) + 1;
+          const postMatId = run.height >= 6 ? 'p-post-238-10' : 'p-post-238-8';
+          const pMat = materials.find(m => m.id === postMatId)!;
+          rawItems.push({ name: pMat.name, qty: postCount, unitCost: pMat.cost, total: postCount * pMat.cost, category: 'Structure' });
+
+          const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
+          rawItems.push({ name: domeCapMat.name, qty: 1, unitCost: domeCapMat.cost, total: domeCapMat.cost, category: 'Hardware' });
+
+          const tieMat = materials.find(m => m.id === 'p-ez-tie')!;
+          const tieQty = Math.ceil((runLF / 8) * 12);
+          rawItems.push({ name: tieMat.name, qty: tieQty, unitCost: tieMat.cost, total: tieQty * tieMat.cost, category: 'Hardware' });
+
+          const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+          rawItems.push({ name: concreteMat.name, qty: 2, unitCost: concreteMat.cost, total: 2 * concreteMat.cost, category: 'Installation' });
+
+          const wireMat = materials.find(m => m.id === 'p-no-climb')!;
+          rawItems.push({ name: wireMat.name, qty: runLF, unitCost: wireMat.cost, total: runLF * wireMat.cost, category: 'Infill' });
+
+          const paintMat = materials.find(m => m.id === 'p-paint-pint')!;
+          const paintQty = Math.ceil(runLF / 50);
+          rawItems.push({ name: paintMat.name, qty: paintQty, unitCost: paintMat.cost, total: paintQty * paintMat.cost, category: 'Finishing' });
+        }
+
         // --- NEW LABOR CALCULATION ---
         let runLaborRate = 0;
         const rates = globalLaborRates;
@@ -369,6 +396,12 @@ export default function Estimator({
             rawItems.push({ name: 'Labor - Global Gates', qty: 1, unitCost: gateLabor, total: gateLabor, category: 'Labor' });
         }
       }
+    }
+
+    // Single extra dome cap for pipe projects overall
+    if (runs.some(r => FENCE_STYLES.find(s => s.id === r.styleId)?.type === 'Pipe')) {
+      const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
+      rawItems.push({ name: `${domeCapMat.name} (Global Extra)`, qty: 1, unitCost: domeCapMat.cost, total: domeCapMat.cost, category: 'Hardware' });
     }
 
     const lf = aggregatedData.lf || estimate.linearFeet || 0;

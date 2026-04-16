@@ -398,6 +398,96 @@ export function calculateDetailedTakeOff(
        }
     }
 
+    if (runStyle.type === 'Pipe') {
+      // 2 3/8" top rail- equal to overall length of fence
+      const railMat = materials.find(m => m.id === 'p-rail-238')!;
+      runItems.push({
+        id: railMat.id,
+        name: railMat.name,
+        qty: runLF,
+        unit: railMat.unit,
+        unitCost: railMat.cost,
+        total: runLF * railMat.cost,
+        category: 'Structure'
+      });
+
+      // 2 3/8" posts every 8'- length= Fence height+4'
+      const postCount = Math.ceil(runLF / 8) + 1;
+      const postMatId = run.height >= 6 ? 'p-post-238-10' : 'p-post-238-8';
+      const postMat = materials.find(m => m.id === postMatId)!;
+      runItems.push({
+        id: postMat.id,
+        name: postMat.name,
+        qty: postCount,
+        unit: postMat.unit,
+        unitCost: postMat.cost,
+        total: postCount * postMat.cost,
+        category: 'Structure'
+      });
+
+      // 2 3/8" dome caps- One for every fence run
+      const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
+      runItems.push({
+        id: domeCapMat.id,
+        name: domeCapMat.name,
+        qty: 1,
+        unit: domeCapMat.unit,
+        unitCost: domeCapMat.cost,
+        total: domeCapMat.cost,
+        category: 'Hardware'
+      });
+
+      // 2 3/8" EZ ties- 12 for every 8 linear feet of fence
+      const tieMat = materials.find(m => m.id === 'p-ez-tie')!;
+      const tieQty = Math.ceil((runLF / 8) * 12);
+      runItems.push({
+        id: tieMat.id,
+        name: tieMat.name,
+        qty: tieQty,
+        unit: tieMat.unit,
+        unitCost: tieMat.cost,
+        total: tieQty * tieMat.cost,
+        category: 'Hardware'
+      });
+
+      // (2) bags of concrete per fence run
+      const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+      runItems.push({
+        id: concreteMat.id,
+        name: concreteMat.name,
+        qty: 2,
+        unit: concreteMat.unit,
+        unitCost: concreteMat.cost,
+        total: 2 * concreteMat.cost,
+        category: 'Installation'
+      });
+
+      // No climb horse fence- Equal to the height and overall length of fence
+      const wireMat = materials.find(m => m.id === 'p-no-climb')!;
+      runItems.push({
+        id: wireMat.id,
+        name: wireMat.name,
+        qty: runLF,
+        unit: wireMat.unit,
+        unitCost: wireMat.cost,
+        total: runLF * wireMat.cost,
+        category: 'Infill'
+      });
+
+      // Paint- 1 pint for every 50 linear feet of fence
+      const paintMat = materials.find(m => m.id === 'p-paint-pint')!;
+      const paintQty = Math.ceil(runLF / 50);
+      runItems.push({
+        id: paintMat.id,
+        name: paintMat.name,
+        qty: paintQty,
+        unit: paintMat.unit,
+        unitCost: paintMat.cost,
+        total: paintQty * paintMat.cost,
+        category: 'Finishing'
+      });
+    }
+
     // Labor per run
     let runLaborRate = 0;
     if (runStyle.type === 'Wood') {
@@ -448,6 +538,22 @@ export function calculateDetailedTakeOff(
 
   // Global Items
   const totalLF = detailedRuns.reduce((sum, r) => sum + r.linearFeet, 0);
+
+  // Add one extra dome cap if there are any pipe fence runs
+  const hasPipeRun = detailedRuns.some(r => FENCE_STYLES.find(s => s.name === r.styleName)?.type === 'Pipe');
+  if (hasPipeRun) {
+    const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
+    addToSummary({
+      id: domeCapMat.id,
+      name: `${domeCapMat.name} (Project Extra)`,
+      qty: 1,
+      unit: domeCapMat.unit,
+      unitCost: domeCapMat.cost,
+      total: domeCapMat.cost,
+      category: 'Hardware'
+    });
+    totalMaterial += domeCapMat.cost;
+  }
 
   const globalItems: TakeOffItem[] = [];
 

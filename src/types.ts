@@ -4,7 +4,7 @@ export interface MaterialItem {
   id: string;
   name: string;
   category: MaterialCategory;
-  unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip';
+  unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip' | 'pint';
   cost: number;
   description?: string;
   imageUrl?: string;
@@ -13,7 +13,7 @@ export interface MaterialItem {
 export interface FenceStyle {
   id: string;
   name: string;
-  type: 'Wood' | 'Aluminum' | 'Chain Link' | 'Metal' | 'Farm';
+  type: 'Wood' | 'Aluminum' | 'Chain Link' | 'Metal' | 'Farm' | 'Pipe';
   description: string;
   availableHeights: number[];
   availableWidths: number[];

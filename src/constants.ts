@@ -75,6 +75,14 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'f-top-cap-2x6', name: 'Top Cap (2x6x12)', category: 'Finishing', unit: 'each', cost: 18.25, description: '2x6-12ft top cap rail', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
   { id: 'f-shims', name: 'Leveling Shims', category: 'Consumable', unit: 'box', cost: 9.50, description: 'For rail alignment', imageUrl: 'https://i.ebayimg.com/images/g/SAcAAOSwTc5b6aQR/s-l1200.jpg' },
   
+  // Pipe Fence (No-Climb)
+  { id: 'p-rail-238', name: '2-3/8" Sch 40 Top Rail Pipe', category: 'Rail', unit: 'lf', cost: 6.85, description: 'Structural galvanized pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'p-post-238-8', name: '2-3/8" x 8\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 42.00, description: 'Pipe for 4ft fence (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'p-post-238-10', name: '2-3/8" x 10\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 54.00, description: 'Pipe for 6ft fence (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'p-ez-tie', name: '2-3/8" EZ Tie', category: 'Hardware', unit: 'each', cost: 1.85, description: 'Wire-to-pipe fastener', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
+  { id: 'p-no-climb', name: 'No-Climb Horse Wire Mesh', category: 'Picket', unit: 'lf', cost: 4.25, description: '2"x4" galvanized mesh', imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
+  { id: 'p-paint-pint', name: 'Structural Pipe Paint (Pint)', category: 'Finishing', unit: 'pint', cost: 18.00, description: 'Black satin finish', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
+  
   // Post Caps
   { id: 'pc-flat', name: 'Flat Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },
   { id: 'pc-dome', name: 'Dome Cap', category: 'PostCap', unit: 'each', cost: 7.25, imageUrl: 'https://i5.walmartimages.com/seo/Universal-Forest-Products-106515-Gothic-Post-Top_430dfd8e-82a1-46c2-995e-13a418bab791.a479575ff19a8db23738c5346e194433.jpeg?odnHeight=2000&odnWidth=2000&odnBg=FFFFFF' },
@@ -146,5 +154,19 @@ export const FENCE_STYLES: FenceStyle[] = [
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },
     baseLaborRate: 19.50,
+  },
+  {
+    id: 'pipe-no-climb',
+    name: 'Pipe Fence',
+    type: 'Pipe',
+    description: 'Structural pipe with premium no-climb wire.',
+    availableHeights: [4, 5, 6],
+    availableWidths: [8],
+    availableColors: ['Black', 'Galvanized'],
+    visualStyles: [
+      { id: 'p-std', name: 'Standard No-Climb', priceModifier: 0, imageUrl: 'https://images.squarespace-cdn.com/content/v1/5c868019778897587747e4eb/1585257929424-C9D6W74ZJ8M9R7P6X0B3/Pipe+Fence+with+No+Climb+Wire' },
+    ],
+    calcLogic: { postsPerLF: 0.125, railsPerLF: 1, picketsPerLF: 1, concretePerPost: 2 },
+    baseLaborRate: 12.00,
   },
 ];
