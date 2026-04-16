@@ -76,6 +76,25 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'pc-solar', name: 'Solar LED Cap', category: 'PostCap', unit: 'each', cost: 22.00, imageUrl: 'https://s.turbifycdn.com/aah/yhst-99239380869547/classy-caps-kingsbridge-white-dual-lighted-solar-post-cap-442.png' },
 ];
 
+export const DEFAULT_LABOR_RATES = {
+  woodSideBySide6: 10,
+  woodBoardOnBoard6: 12,
+  woodSideBySide8: 12,
+  woodBoardOnBoard8: 14,
+  ironBoltUp: 8,
+  ironWeldUp: 10,
+  chainLink: 9,
+  pipeFence: 12,
+  topCap: 1,
+  additionalRailPipe: 2,
+  demo: 2,
+  washAndStain: 0.8, // per sq ft
+  gateWeldedFrame: 150,
+  gateWoodWalk: 100,
+  gateWoodDrive: 150,
+  gateHangPreMade: 50,
+};
+
 export const FENCE_STYLES: FenceStyle[] = [
   {
     id: 'wood-privacy',

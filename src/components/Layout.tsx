@@ -16,6 +16,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
     { id: 'library', label: 'Materials', icon: Book },
+    { id: 'labor', label: 'Labor Pricing', icon: Hammer },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

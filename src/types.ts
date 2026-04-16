@@ -53,6 +53,29 @@ export interface FenceRun {
   height: number;
   color: string;
   isPreStained?: boolean;
+  woodType?: 'Pine' | 'Western Red Cedar' | 'Japanese Cedar';
+  ironRails?: '2 rail' | '3 rail';
+  ironTop?: 'Flat top' | 'Pressed point top';
+  ironInstallType?: 'Bolt up' | 'Weld up';
+}
+
+export interface LaborRates {
+  woodSideBySide6: number;
+  woodBoardOnBoard6: number;
+  woodSideBySide8: number;
+  woodBoardOnBoard8: number;
+  ironBoltUp: number;
+  ironWeldUp: number;
+  chainLink: number;
+  pipeFence: number;
+  topCap: number;
+  additionalRailPipe: number;
+  demo: number;
+  washAndStain: number; // per sq ft
+  gateWeldedFrame: number;
+  gateWoodWalk: number;
+  gateWoodDrive: number;
+  gateHangPreMade: number;
 }
 
 export interface Estimate {
@@ -76,7 +99,10 @@ export interface Estimate {
   defaultHeight: number;
   defaultColor: string;
   
-  woodType?: 'Pine' | 'Western Cedar' | 'Japanese Cedar';
+  woodType?: 'Pine' | 'Western Red Cedar' | 'Japanese Cedar';
+  ironRails?: '2 rail' | '3 rail';
+  ironTop?: 'Flat top' | 'Pressed point top';
+  ironInstallType?: 'Bolt up' | 'Weld up';
   topStyle?: 'Dog Ear' | 'Flat Top';
   isPreStained?: boolean;
   
@@ -109,8 +135,7 @@ export interface Estimate {
   // Financials
   markupPercentage: number;
   taxPercentage: number;
-  manualLaborRatePerLF: number;
-  manualLaborRatePerGate: number;
+  laborRates: LaborRates;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;

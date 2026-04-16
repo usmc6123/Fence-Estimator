@@ -5,16 +5,16 @@ import {
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map, X, Printer, Share2, Trees, Droplets
 } from 'lucide-react';
-import { FENCE_STYLES } from '../constants';
-import { MaterialItem, FenceStyle, Estimate } from '../types';
+import { FENCE_STYLES, COMPANY_INFO } from '../constants';
+import { MaterialItem, FenceStyle, Estimate, LaborRates } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
-import { COMPANY_INFO } from '../constants';
 
 interface EstimatorProps {
   materials: MaterialItem[];
+  laborRates: LaborRates;
 }
 
-export default function Estimator({ materials }: EstimatorProps) {
+export default function Estimator({ materials, laborRates: globalLaborRates }: EstimatorProps) {
   const [step, setStep] = React.useState(1);
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
     customerName: '',
@@ -56,11 +56,11 @@ export default function Estimator({ materials }: EstimatorProps) {
     
     markupPercentage: 30,
     taxPercentage: 8.25,
-    manualLaborRatePerLF: 15,
-    manualLaborRatePerGate: 150,
     manualQuantities: {},
     manualPrices: {},
-    woodType: 'Pine',
+    woodType: 'PT Pine',
+    ironRails: '2 rail',
+    ironTop: 'Flat top',
     topStyle: 'Dog Ear',
     isPreStained: false,
   });
@@ -69,6 +69,7 @@ export default function Estimator({ materials }: EstimatorProps) {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [showInvoice, setShowInvoice] = React.useState(false);
   const [showDiagram, setShowDiagram] = React.useState(false);
+  const [leftTab, setLeftTab] = React.useState<'Dimensions' | 'Styles'>('Dimensions');
 
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
@@ -143,9 +144,10 @@ export default function Estimator({ materials }: EstimatorProps) {
 
         if (runStyle.type === 'Wood') {
           panelQty = Math.ceil((netLF / 0.458) * wasteFactor);
-          if (estimate.woodType === 'Pine') panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
-          else if (estimate.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
-          else if (estimate.woodType === 'Western Cedar') panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
+          const woodType = run.woodType || estimate.woodType;
+          if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
+          else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
+          else if (woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
         } else {
           panelQty = Math.ceil((netLF / 8) * wasteFactor);
         }
@@ -245,20 +247,61 @@ export default function Estimator({ materials }: EstimatorProps) {
         if (estimate.includeStain && !run.isPreStained && runStyle.type === 'Wood') {
            const stainMat = materials.find(m => m.id === 'f-stain');
            if (stainMat) {
-             const gallons = Math.ceil((runLF * run.height) / 175);
-             const total = gallons * stainMat.cost;
-             const existing = rawItems.find(i => i.name === stainMat.name);
-             if (existing) {
-               existing.qty += gallons;
-               existing.total += total;
+             const sqFt = runLF * run.height;
+             const gallons = Math.ceil(sqFt / 175);
+             const matTotal = gallons * stainMat.cost;
+             const existingMat = rawItems.find(i => i.name === stainMat.name);
+             if (existingMat) {
+               existingMat.qty += gallons;
+               existingMat.total += matTotal;
              } else {
-               rawItems.push({ name: stainMat.name, qty: gallons, unitCost: stainMat.cost, total: total, category: 'Finishing' });
+               rawItems.push({ name: stainMat.name, qty: gallons, unitCost: stainMat.cost, total: matTotal, category: 'Finishing' });
              }
+
+             // Labor for stain
+             const laborTotal = sqFt * globalLaborRates.washAndStain;
+             rawItems.push({ name: `Stain Labor (${run.name})`, qty: sqFt, unitCost: globalLaborRates.washAndStain, total: laborTotal, category: 'Labor' });
            }
         }
 
-        const runLaborCost = (runLF * (estimate.manualLaborRatePerLF ?? runStyle.baseLaborRate)) + (runGates * (estimate.manualLaborRatePerGate ?? 0));
-        aggregatedData.runBreakdown.push({ id: run.id, name: run.name, total: postCost + panelTotal + runLaborCost });
+        // --- NEW LABOR CALCULATION ---
+        let runLaborRate = 0;
+        const rates = globalLaborRates;
+        
+        if (runStyle.type === 'Wood') {
+          const is6ft = run.height <= 6;
+          const isSideBySide = run.visualStyleId === 'w-side';
+          if (is6ft) {
+            runLaborRate = isSideBySide ? rates.woodSideBySide6 : rates.woodBoardOnBoard6;
+          } else {
+            runLaborRate = isSideBySide ? rates.woodSideBySide8 : rates.woodBoardOnBoard8;
+          }
+          if (estimate.hasCapAndTrim) runLaborRate += rates.topCap;
+        } else if (runStyle.type === 'Metal') {
+          runLaborRate = (run.ironInstallType === 'Weld up') ? rates.ironWeldUp : rates.ironBoltUp;
+        } else if (runStyle.type === 'Chain Link') {
+          runLaborRate = rates.chainLink;
+        } else {
+          runLaborRate = rates.pipeFence;
+        }
+        
+        let runGateLaborCost = 0;
+        if (run.gateDetails && run.gateDetails.length > 0) {
+           run.gateDetails.forEach(gate => {
+             if (runStyle.type === 'Wood') {
+               runGateLaborCost += gate.type === 'Double' ? rates.gateWoodDrive : rates.gateWoodWalk;
+             } else {
+               runGateLaborCost += rates.gateWeldedFrame;
+             }
+           });
+        } else {
+          runGateLaborCost += runGates * (runStyle.type === 'Wood' ? rates.gateWoodWalk : rates.gateWeldedFrame);
+        }
+
+        const runLaborTotal = (runLF * runLaborRate) + runGateLaborCost;
+        rawItems.push({ name: `Labor - ${run.name}`, qty: 1, unitCost: runLaborTotal, total: runLaborTotal, category: 'Labor' });
+
+        aggregatedData.runBreakdown.push({ id: run.id, name: run.name, total: postCost + panelTotal + runLaborTotal });
       });
     }
 
@@ -297,7 +340,7 @@ export default function Estimator({ materials }: EstimatorProps) {
         { name: dumpsterMat.name, qty: 1, unitCost: dumpsterMat.cost, total: dumpsterMat.cost, category: 'Demolition' },
         { name: materials.find(m => m.id === 'd-hauling')!.name, qty: 1, unitCost: 145, total: 145, category: 'Demolition' },
         { name: materials.find(m => m.id === 'd-blade')!.name, qty: bladesNeeded, unitCost: 14, total: bladesNeeded * 14, category: 'Demolition' },
-        { name: materials.find(m => m.id === 'd-labor')!.name, qty: Math.ceil(dLF / 10), unitCost: 48, total: Math.ceil(dLF / 10) * 48, category: 'Demolition' }
+        { name: 'Demo Labor (Tear down & Haul)', qty: dLF, unitCost: globalLaborRates.demo, total: dLF * globalLaborRates.demo, category: 'Demolition' }
       );
     }
 
@@ -311,8 +354,7 @@ export default function Estimator({ materials }: EstimatorProps) {
     const demoCost = items.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
     const sitePrepCost = estimate.hasSitePrep ? (estimate.needsMarking ? 28 : 0) + (estimate.needsClearing ? (Math.ceil(lf / 20) * 58) : 0) : 0;
     const materialSubtotal = items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, item) => sum + item.total, 0);
-    
-    const laborCost = (lf * (estimate.manualLaborRatePerLF ?? 14.5)) + (gates * (estimate.manualLaborRatePerGate ?? 150));
+    const laborCost = items.filter(i => i.category === 'Labor').reduce((sum, item) => sum + item.total, 0);
     
     const subtotal = materialSubtotal + laborCost + demoCost + sitePrepCost;
     const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
@@ -422,7 +464,24 @@ export default function Estimator({ materials }: EstimatorProps) {
       case 2: // Consolidated Style & Measurements
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
+            {/* Tab navigation for Step 2 */}
+            <div className="flex bg-[#F0F0F0] p-1.5 rounded-2xl w-fit">
+               {(['Dimensions', 'Styles'] as const).map(tab => (
+                 <button
+                   key={tab}
+                   onClick={() => setLeftTab(tab)}
+                   className={cn(
+                     "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                     leftTab === tab ? "bg-white text-american-blue shadow-md" : "text-[#999999] hover:text-american-blue"
+                   )}
+                 >
+                   {tab}
+                 </button>
+               ))}
+            </div>
+
+            {leftTab === 'Styles' && (
+              <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
               <div className="flex items-center gap-5 mb-10">
                 <div className="h-16 w-16 rounded-3xl bg-american-blue flex items-center justify-center text-white shadow-xl shadow-american-blue/20">
                   <Palette size={32} />
@@ -470,6 +529,59 @@ export default function Estimator({ materials }: EstimatorProps) {
                       ))}
                     </select>
                  </div>
+
+                 {defaultStyle.type === 'Wood' && (
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Wood Species</label>
+                       <select 
+                         value={estimate.woodType}
+                         onChange={(e) => setEstimate({...estimate, woodType: e.target.value as any})}
+                         className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                       >
+                         <option value="PT Pine">PT Pine</option>
+                         <option value="Western Red Cedar">Western Red Cedar</option>
+                         <option value="Japanese Cedar">Japanese Cedar</option>
+                       </select>
+                    </div>
+                  )}
+
+                  {defaultStyle.type === 'Metal' && (
+                    <>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Install Type</label>
+                         <select 
+                           value={estimate.ironInstallType}
+                           onChange={(e) => setEstimate({...estimate, ironInstallType: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Bolt up">Bolt up</option>
+                           <option value="Weld up">Weld up</option>
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Rail Count</label>
+                         <select 
+                           value={estimate.ironRails}
+                           onChange={(e) => setEstimate({...estimate, ironRails: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="2 rail">2 rail</option>
+                           <option value="3 rail">3 rail</option>
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Top Finishing</label>
+                         <select 
+                           value={estimate.ironTop}
+                           onChange={(e) => setEstimate({...estimate, ironTop: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Flat top">Flat top</option>
+                           <option value="Pressed point top">Pressed point top</option>
+                         </select>
+                      </div>
+                    </>
+                  )}
                </div>
 
                <div className="mt-8 pt-6 border-t border-dashed border-american-blue/10 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -482,7 +594,10 @@ export default function Estimator({ materials }: EstimatorProps) {
                         styleId: estimate.defaultStyleId!,
                         visualStyleId: estimate.defaultVisualStyleId!,
                         height: estimate.defaultHeight!,
-                        color: estimate.defaultColor!
+                        color: estimate.defaultColor!,
+                        woodType: estimate.woodType,
+                        ironRails: estimate.ironRails,
+                        ironTop: estimate.ironTop
                       }));
                       setEstimate({...estimate, runs: newRuns});
                     }}
@@ -492,9 +607,10 @@ export default function Estimator({ materials }: EstimatorProps) {
                   </button>
                </div>
             </div>
+          )}
 
-            <PatrioticDivider />
-            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
+          {leftTab === 'Dimensions' && (
+              <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
               <div className="flex items-center gap-4 mb-8">
                 <div className="h-14 w-14 rounded-2xl bg-american-red flex items-center justify-center text-white shadow-lg shadow-american-red/20">
                   <Ruler size={28} />
@@ -660,6 +776,76 @@ export default function Estimator({ materials }: EstimatorProps) {
                                 {runStyle.visualStyles.map(vs => <option key={vs.id} value={vs.id}>{vs.name}</option>)}
                               </select>
                             </div>
+
+                            {runStyle.type === 'Wood' && (
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Wood Type</label>
+                                <select 
+                                  value={run.woodType || estimate.woodType}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].woodType = e.target.value as any;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                >
+                                  <option value="PT Pine">PT Pine</option>
+                                  <option value="Western Red Cedar">Western Red Cedar</option>
+                                  <option value="Japanese Cedar">Japanese Cedar</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {runStyle.type === 'Metal' && (
+                              <>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Install</label>
+                                  <select 
+                                    value={run.ironInstallType || estimate.ironInstallType}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].ironInstallType = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="Bolt up">Bolt up</option>
+                                    <option value="Weld up">Weld up</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Rails</label>
+                                  <select 
+                                    value={run.ironRails || estimate.ironRails}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].ironRails = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="2 rail">2 rail</option>
+                                    <option value="3 rail">3 rail</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Top</label>
+                                  <select 
+                                    value={run.ironTop || estimate.ironTop}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].ironTop = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="Flat top">Flat top</option>
+                                    <option value="Pressed point top">Pressed point top</option>
+                                  </select>
+                                </div>
+                              </>
+                            )}
+
                             <div className="space-y-2">
                               <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Height</label>
                               <select 
@@ -751,6 +937,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                 </div>
               </div>
             </div>
+            )}
           </div>
         );
       case 3:
@@ -816,36 +1003,6 @@ export default function Estimator({ materials }: EstimatorProps) {
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-6">
-                <div className="p-6 rounded-2xl border-2 border-american-blue/10 bg-white space-y-6">
-                  <h3 className="text-sm font-black text-american-blue uppercase tracking-widest flex items-center gap-2">
-                    <Calculator size={16} className="text-american-red" />
-                    Manual Labor Rates
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-[#999999] ml-1 whitespace-nowrap">Labor per LF ($)</label>
-                      <input 
-                        type="number" 
-                        value={estimate.manualLaborRatePerLF} 
-                        onChange={(e) => setEstimate({...estimate, manualLaborRatePerLF: Number(e.target.value)})} 
-                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-[#999999] ml-1 whitespace-nowrap">Labor per Gate ($)</label>
-                      <input 
-                        type="number" 
-                        value={estimate.manualLaborRatePerGate} 
-                        onChange={(e) => setEstimate({...estimate, manualLaborRatePerGate: Number(e.target.value)})} 
-                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[9px] font-bold text-american-red/60 uppercase tracking-widest italic leading-relaxed">
-                    * These rates will override the default style labor calculation.
-                  </p>
-                </div>
-
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Waste Allowance (%)</label>
                   <input type="range" min="0" max="25" step="1" value={estimate.wastePercentage} onChange={(e) => setEstimate({...estimate, wastePercentage: Number(e.target.value)})} className="w-full h-2 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-blue" />
@@ -1523,8 +1680,15 @@ export default function Estimator({ materials }: EstimatorProps) {
                                   style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px', strokeLinecap: 'round', strokeLinejoin: 'round' }}
                                 >
                                   <tspan x={midX + textOffsetX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
-                                  <tspan x={midX + textOffsetX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">{runStyle.name} - {runVisualStyle.name}</tspan>
-                                  <tspan x={midX + textOffsetX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
+                                  <tspan x={midX + textOffsetX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">
+                                    {runStyle.name}{runStyle.type === 'Wood' && ` (${run.woodType || estimate.woodType})`} - {runVisualStyle.name}
+                                  </tspan>
+                                  {runStyle.type === 'Metal' && (
+                                    <tspan x={midX + textOffsetX} dy="18" className="text-[12px] fill-american-blue/60 font-medium italic">
+                                      {run.ironRails || estimate.ironRails} | {run.ironTop || estimate.ironTop}
+                                    </tspan>
+                                  )}
+                                  <tspan x={midX + textOffsetX} dy={runStyle.type === 'Metal' ? "18" : "18"} className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
                                 </text>
                               </g>
                             );
