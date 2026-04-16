@@ -12,58 +12,17 @@ import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 interface EstimatorProps {
   materials: MaterialItem[];
   laborRates: LaborRates;
+  estimate: Partial<Estimate>;
+  setEstimate: (estimate: Partial<Estimate>) => void;
 }
 
-export default function Estimator({ materials, laborRates: globalLaborRates }: EstimatorProps) {
+export default function Estimator({ 
+  materials, 
+  laborRates: globalLaborRates, 
+  estimate, 
+  setEstimate 
+}: EstimatorProps) {
   const [step, setStep] = React.useState(1);
-  const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    customerAddress: '',
-    linearFeet: 100,
-    corners: 2,
-    height: 6,
-    width: 8,
-    runs: [],
-    
-    // Default Style (for new runs)
-    defaultStyleId: FENCE_STYLES[0].id,
-    defaultVisualStyleId: FENCE_STYLES[0].visualStyles[0].id,
-    defaultHeight: 6,
-    defaultColor: 'Natural',
-
-    postCapId: materials.find(m => m.category === 'PostCap')?.id || '',
-    hasCapAndTrim: false,
-    gateCount: 1,
-    gateStyleId: materials.find(m => m.category === 'Gate')?.id || '',
-    footingType: 'Cuboid',
-    postWidth: 6,
-    postThickness: 6,
-    
-    // New Fields
-    hasDemolition: false,
-    demoLinearFeet: 100,
-    demoType: 'Wood',
-    removeConcreteFootings: true,
-    hasSitePrep: false,
-    needsClearing: false,
-    needsMarking: true,
-    obstacleRemoval: false,
-    wastePercentage: 10,
-    includeGravel: true,
-    includeStain: false,
-    
-    markupPercentage: 30,
-    taxPercentage: 8.25,
-    manualQuantities: {},
-    manualPrices: {},
-    woodType: 'PT Pine',
-    ironRails: '2 rail',
-    ironTop: 'Flat top',
-    topStyle: 'Dog Ear',
-    isPreStained: false,
-  });
 
   const [isFullView, setIsFullView] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);

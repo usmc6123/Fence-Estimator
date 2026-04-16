@@ -1,0 +1,279 @@
+import React from 'react';
+import { Printer, Eye, EyeOff, FileText, ChevronDown, ChevronRight, Package, Hammer, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import { Estimate, MaterialItem, LaborRates } from '../types';
+import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
+import { cn, formatCurrency } from '../lib/utils';
+import { COMPANY_INFO } from '../constants';
+
+interface MaterialTakeOffProps {
+  estimate: Partial<Estimate>;
+  materials: MaterialItem[];
+  laborRates: LaborRates;
+}
+
+export default function MaterialTakeOff({ estimate, materials, laborRates }: MaterialTakeOffProps) {
+  const [showPrices, setShowPrices] = React.useState(true);
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
+  const [expandedRuns, setExpandedRuns] = React.useState<Record<string, boolean>>(
+    data.runs.reduce((acc, run) => ({ ...acc, [run.runId]: true }), {})
+  );
+
+  const toggleRun = (id: string) => {
+    setExpandedRuns(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700">
+      {/* Header Controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg">
+            <FileText size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-american-blue uppercase tracking-tight">Material Take-off</h1>
+            <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Detailed Inventory & Logistics</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPrices(!showPrices)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
+          >
+            {showPrices ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showPrices ? 'Hide Prices' : 'Show Prices'}
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-105 transition-transform active:scale-95"
+          >
+            <Printer size={16} />
+            Print Take-off
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content (Printable) */}
+      <div className="bg-white rounded-[40px] shadow-2xl border-2 border-american-blue/5 overflow-hidden print:border-0 print:shadow-none">
+        {/* Printable Header */}
+        <div className="p-10 border-b-4 border-american-blue/5 bg-[#FBFBFB]">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-8">
+            <div className="space-y-4">
+              <img src={COMPANY_INFO.logo} alt="Logo" className="h-20 object-contain" />
+              <div className="space-y-1">
+                <h2 className="text-2xl font-black text-american-blue uppercase tracking-tighter">{COMPANY_INFO.name}</h2>
+                <div className="text-[11px] font-bold text-[#666666] uppercase tracking-widest space-y-0.5">
+                  <p>{COMPANY_INFO.address}</p>
+                  <p>{COMPANY_INFO.phone} • {COMPANY_INFO.email}</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-right space-y-1">
+              <p className="text-[10px] font-black text-american-red uppercase tracking-widest">Document: Material Take-off</p>
+              <p className="text-3xl font-black text-american-blue uppercase tracking-tighter">#{Math.random().toString(36).substr(2, 6).toUpperCase()}</p>
+              <p className="text-sm font-bold text-[#999999]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <div className="mt-4 pt-4 border-t-2 border-dashed border-american-blue/10">
+                <p className="text-[10px] font-black text-american-blue uppercase tracking-widest">Customer</p>
+                <p className="text-lg font-black text-american-blue tracking-tight">{estimate.customerName || 'N/A'}</p>
+                <p className="text-xs font-medium text-[#666666]">{estimate.customerAddress || 'No address provided'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Breakdown */}
+        <div className="p-8 space-y-12">
+          {data.runs.map((run) => (
+            <div key={run.runId} className="space-y-4">
+              <div 
+                className="flex items-center justify-between bg-american-blue/5 p-4 rounded-2xl cursor-pointer hover:bg-american-blue/10 transition-colors print:bg-[#F5F5F5]"
+                onClick={() => toggleRun(run.runId)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-american-blue text-white flex items-center justify-center shadow-lg">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-american-blue uppercase tracking-tight">{run.runName}</h3>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">{run.linearFeet} LF • {run.styleName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                   {expandedRuns[run.runId] ? <ChevronDown size={20} className="text-american-blue/40" /> : <ChevronRight size={20} className="text-american-blue/40" />}
+                </div>
+              </div>
+
+              {expandedRuns[run.runId] && (
+                <div className="pl-4 sm:pl-14 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                  {/* Run Materials */}
+                  <div className="overflow-hidden rounded-2xl border-2 border-american-blue/5">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
+                          <th className="px-6 py-4">Item Specification</th>
+                          <th className="px-6 py-4 text-center">Quantity</th>
+                          <th className="px-6 py-4">Unit</th>
+                          {showPrices && <th className="px-6 py-4 text-right">Price</th>}
+                          {showPrices && <th className="px-6 py-4 text-right">Total</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y-2 divide-[#F8F9FA]">
+                        {run.items.map((item, i) => (
+                          <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
+                            <td className="px-6 py-4">{item.name}</td>
+                            <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                            <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
+                            {showPrices && <td className="px-6 py-4 text-right tabular-nums">{formatCurrency(item.unitCost)}</td>}
+                            {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(item.total)}</td>}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Gates Sub-items */}
+                  {run.gates.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-american-red ml-2">Sub-Items: Gates in this section</h4>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {run.gates.map((gate, gi) => (
+                          <div key={gi} className="bg-white rounded-2xl border-2 border-american-blue/5 p-5 space-y-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center gap-3 pb-3 border-b-2 border-dashed border-[#F0F0F0]">
+                              <div className="h-8 w-8 rounded-lg bg-american-red/10 text-american-red flex items-center justify-center">
+                                <Package size={16} />
+                              </div>
+                              <span className="text-xs font-black text-american-blue uppercase tracking-tight">{gate.type} Gate ({gate.width}')</span>
+                            </div>
+                            <ul className="space-y-2">
+                              {gate.items.map((gi, gii) => (
+                                <li key={gii} className="flex justify-between items-center group">
+                                  <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors">{gi.qty}x {gi.name}</span>
+                                  {showPrices && <span className="text-[11px] font-black text-american-blue">{formatCurrency(gi.total)}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Master Inventory Summary */}
+          <div className="pt-12 border-t-4 border-american-blue/5 space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-american-red text-white flex items-center justify-center shadow-lg">
+                <Package size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Master Inventory Summary</h2>
+                <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Aggregated Materials List</p>
+              </div>
+            </div>
+
+            <div className="bg-[#1A1A1A] rounded-[32px] p-1 overflow-hidden shadow-2xl">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                    <th className="px-8 py-6">Item Specification</th>
+                    <th className="px-8 py-6 text-center">Total Quantity</th>
+                    <th className="px-8 py-6">Category</th>
+                    {showPrices && <th className="px-8 py-6 text-right">Aggregated Cost</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.summary.map((item, i) => (
+                    <tr key={i} className="text-sm font-bold text-white/90 hover:bg-white/5 transition-colors">
+                      <td className="px-8 py-5 flex items-center gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
+                        {item.name}
+                      </td>
+                      <td className="px-8 py-5 text-center">
+                        <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/30">{item.category}</span>
+                      </td>
+                      {showPrices && <td className="px-8 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Financial Totals */}
+          {showPrices && (
+            <div className="bg-[#F8F9FA] rounded-[32px] p-10 flex flex-col md:flex-row justify-between gap-12 border-2 border-[#EEEEEE]">
+               <div className="space-y-6 flex-1">
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-american-blue/30 border-b-2 border-american-blue/5 pb-2">Analysis Summary</h4>
+                 <div className="grid gap-6 sm:grid-cols-2">
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Materials Total</p>
+                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.material)}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Labor Install</p>
+                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.labor)}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Logistics & Demo</p>
+                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.demo)}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Subtotal</p>
+                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.subtotal)}</p>
+                   </div>
+                 </div>
+               </div>
+               
+               <div className="bg-american-blue rounded-3xl p-8 text-white min-w-[300px] shadow-2xl shadow-american-blue/30 space-y-6">
+                 <div className="space-y-4">
+                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest opacity-60">
+                      <span>Markup ({estimate.markupPercentage}%)</span>
+                      <span>{formatCurrency(data.totals.markup)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest opacity-60">
+                      <span>Tax ({estimate.taxPercentage}%)</span>
+                      <span>{formatCurrency(data.totals.tax)}</span>
+                    </div>
+                    <div className="pt-4 border-t border-white/10 flex justify-between items-center">
+                       <span className="text-xs font-black uppercase tracking-[0.2em]">Grand Total</span>
+                       <span className="text-3xl font-black text-white">{formatCurrency(data.totals.grandTotal)}</span>
+                    </div>
+                 </div>
+                 <div className="text-[10px] font-bold text-center opacity-40 uppercase tracking-widest italic pt-4">
+                   * Values reflect active pricing legend
+                 </div>
+               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Branding */}
+        <div className="bg-[#1A1A1A] p-8 text-center border-t-8 border-american-red">
+          <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Lone Star Fence Works • Precision Manufacturing & Strategic Deployment</p>
+        </div>
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body { background: white !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:border-0 { border: 0 !important; }
+          .print\\:shadow-none { box-shadow: none !important; }
+          .print\\:p-10 { padding: 2.5rem !important; }
+          .print\\:bg-white { background: white !important; }
+          .print\\:bg-\\[\\#F5F5F5\\] { background: #F5F5F5 !important; }
+        }
+      `}} />
+    </div>
+  );
+}

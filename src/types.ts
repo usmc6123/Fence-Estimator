@@ -53,7 +53,7 @@ export interface FenceRun {
   height: number;
   color: string;
   isPreStained?: boolean;
-  woodType?: 'Pine' | 'Western Red Cedar' | 'Japanese Cedar';
+  woodType?: 'PT Pine' | 'Western Red Cedar' | 'Japanese Cedar';
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
@@ -99,7 +99,7 @@ export interface Estimate {
   defaultHeight: number;
   defaultColor: string;
   
-  woodType?: 'Pine' | 'Western Red Cedar' | 'Japanese Cedar';
+  woodType?: 'PT Pine' | 'Western Red Cedar' | 'Japanese Cedar';
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
