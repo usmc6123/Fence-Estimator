@@ -47,6 +47,12 @@ export interface FenceRun {
   corners: number;
   gates: number;
   gateDetails?: GateDetail[];
+  // Style per run
+  styleId: string;
+  visualStyleId: string;
+  height: number;
+  color: string;
+  isPreStained?: boolean;
 }
 
 export interface Estimate {
@@ -64,10 +70,12 @@ export interface Estimate {
   width: number;
   runs: FenceRun[];
   
-  // Style
-  styleId: string;
-  visualStyleId: string;
-  color: string;
+  // Default Settings (used for new runs or bulk apply)
+  defaultStyleId: string;
+  defaultVisualStyleId: string;
+  defaultHeight: number;
+  defaultColor: string;
+  
   woodType?: 'Pine' | 'Western Cedar' | 'Japanese Cedar';
   topStyle?: 'Dog Ear' | 'Flat Top';
   isPreStained?: boolean;

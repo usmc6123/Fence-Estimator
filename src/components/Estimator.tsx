@@ -26,9 +26,13 @@ export default function Estimator({ materials }: EstimatorProps) {
     height: 6,
     width: 8,
     runs: [],
-    color: 'White',
-    styleId: FENCE_STYLES[0].id,
-    visualStyleId: FENCE_STYLES[0].visualStyles[0].id,
+    
+    // Default Style (for new runs)
+    defaultStyleId: FENCE_STYLES[0].id,
+    defaultVisualStyleId: FENCE_STYLES[0].visualStyles[0].id,
+    defaultHeight: 6,
+    defaultColor: 'Natural',
+
     postCapId: materials.find(m => m.category === 'PostCap')?.id || '',
     hasCapAndTrim: false,
     gateCount: 1,
@@ -66,366 +70,261 @@ export default function Estimator({ materials }: EstimatorProps) {
   const [showInvoice, setShowInvoice] = React.useState(false);
   const [showDiagram, setShowDiagram] = React.useState(false);
 
-  const selectedStyle = FENCE_STYLES.find(s => s.id === estimate.styleId) || FENCE_STYLES[0];
-  const selectedVisualStyle = selectedStyle.visualStyles.find(vs => vs.id === estimate.visualStyleId) || selectedStyle.visualStyles[0];
+  const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
+  const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
 
   const calculateCosts = () => {
     const runs = estimate.runs || [];
     const hasRuns = runs.length > 0;
-    
-    const lf = hasRuns ? runs.reduce((sum, r) => sum + r.linearFeet, 0) : (estimate.linearFeet || 0);
-    const gates = hasRuns ? runs.reduce((sum, r) => sum + (r.gateDetails?.length || r.gates || 0), 0) : (estimate.gateCount || 0);
-    
-    // Auto-calculate corners based on runs
-    const corners = hasRuns ? Math.max(0, runs.length - 1) : (estimate.corners || 0);
-    
-    const logic = selectedStyle.calcLogic;
     const wasteFactor = 1 + (estimate.wastePercentage || 10) / 100;
-
     const rawItems: { name: string; qty: number; unitCost: number; total: number; category: string }[] = [];
-
-    // 1. Posts
-    let endPostCount = 2; // Start and end of the fence
-    let doubleGateCount = 0;
     
+    const aggregatedData = {
+      lf: 0,
+      gates: 0,
+      postCount: 0,
+      materialSubtotal: 0,
+      runBreakdown: [] as { id: string, name: string, total: number }[]
+    };
+
     if (hasRuns) {
-      runs.forEach(run => {
+      runs.forEach((run, idx) => {
+        const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || FENCE_STYLES[0];
+        const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
+        const logic = runStyle.calcLogic;
+        
+        const runLF = run.linearFeet;
+        const runGates = run.gateDetails?.length || run.gates || 0;
+        
+        aggregatedData.lf += runLF;
+        aggregatedData.gates += runGates;
+
+        // Posts calculation for this run
+        let runEndPosts = 0;
+        let runDoubleGates = 0;
         if (run.gateDetails && run.gateDetails.length > 0) {
           run.gateDetails.forEach(gate => {
-            endPostCount += gate.type === 'Double' ? 2 : 1;
-            if (gate.type === 'Double') doubleGateCount++;
+            runEndPosts += gate.type === 'Double' ? 2 : 1;
+            if (gate.type === 'Double') runDoubleGates++;
           });
         } else {
-          endPostCount += (run.gates || 0) * 2;
+          runEndPosts += runGates * 2;
         }
+
+        const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
+        const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
+        const runCornerPosts = (idx === runs.length - 1) ? 0 : 1; // Between runs
+        const startEndPosts = (idx === 0 ? 1 : 0) + (idx === runs.length - 1 ? 1 : 0);
+        
+        const runPostCount = runLinePosts + runEndPosts + runCornerPosts + startEndPosts;
+        aggregatedData.postCount += runPostCount;
+
+        // Post Material
+        let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
+        if (runStyle.type === 'Wood') {
+          postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+        }
+        
+        const postCost = runPostCount * postMat.cost;
+        const existingPost = rawItems.find(i => i.name === postMat.name);
+        if (existingPost) {
+          existingPost.qty += runPostCount;
+          existingPost.total += postCost;
+        } else {
+          rawItems.push({ name: postMat.name, qty: runPostCount, unitCost: postMat.cost, total: postCost, category: 'Structure' });
+        }
+
+        // Pickets / Panels
+        let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
+        let panelQty = 0;
+        
+        const runGateWidth = (run.gateDetails || []).reduce((sum, g) => sum + (g.width || 0), 0) || (runGates * 4);
+        const netLF = Math.max(0, runLF - runGateWidth);
+
+        if (runStyle.type === 'Wood') {
+          panelQty = Math.ceil((netLF / 0.458) * wasteFactor);
+          if (estimate.woodType === 'Pine') panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
+          else if (estimate.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
+          else if (estimate.woodType === 'Western Cedar') panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
+        } else {
+          panelQty = Math.ceil((netLF / 8) * wasteFactor);
+        }
+
+        let picketDisplayName = panelMat.name;
+        if (runStyle.type === 'Wood' && estimate.topStyle) picketDisplayName = picketDisplayName.replace('Picket', `${estimate.topStyle} Picket`);
+        
+        const panelUnitCost = panelMat.cost + runVisualStyle.priceModifier;
+        const panelTotal = panelQty * panelUnitCost;
+        const existingPanel = rawItems.find(i => i.name === picketDisplayName && i.unitCost === panelUnitCost);
+        if (existingPanel) {
+          existingPanel.qty += panelQty;
+          existingPanel.total += panelTotal;
+        } else {
+          rawItems.push({ name: picketDisplayName, qty: panelQty, unitCost: panelUnitCost, total: panelTotal, category: 'Infill' });
+        }
+
+        // Gates
+        if (runGates > 0) {
+          const gateMat = materials.find(m => m.id === estimate.gateStyleId) || materials[0];
+          const gateTotal = runGates * gateMat.cost;
+          const existingGate = rawItems.find(i => i.name === gateMat.name);
+          if (existingGate) {
+            existingGate.qty += runGates;
+            existingGate.total += gateTotal;
+          } else {
+            rawItems.push({ name: gateMat.name, qty: runGates, unitCost: gateMat.cost, total: gateTotal, category: 'Gate' });
+          }
+          
+          const latchMat = materials.find(m => m.id === 'g-latch-grav');
+          if (latchMat) {
+            const existingLatch = rawItems.find(i => i.name === latchMat.name);
+            if (existingLatch) {
+              existingLatch.qty += runGates;
+              existingLatch.total += runGates * latchMat.cost;
+            } else {
+              rawItems.push({ name: latchMat.name, qty: runGates, unitCost: latchMat.cost, total: runGates * latchMat.cost, category: 'Gate' });
+            }
+          }
+
+          if (runDoubleGates > 0) {
+            const sharkKit = materials.find(m => m.id === 'g-kit-shark');
+            if (sharkKit) {
+              const existingShark = rawItems.find(i => i.name === sharkKit.name);
+              if (existingShark) {
+                existingShark.qty += runDoubleGates;
+                existingShark.total += runDoubleGates * sharkKit.cost;
+              } else {
+                rawItems.push({ name: sharkKit.name, qty: runDoubleGates, unitCost: sharkKit.cost, total: runDoubleGates * sharkKit.cost, category: 'Gate' });
+              }
+            }
+          }
+        }
+
+        // Hardware (Rails/Brackets)
+        if (runStyle.type === 'Wood') {
+          const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+          const bracketQty = Math.ceil(netLF * logic.railsPerLF);
+          const existingBracket = rawItems.find(i => i.name === bracketMat.name);
+          if (existingBracket) {
+            existingBracket.qty += bracketQty;
+            existingBracket.total += bracketQty * bracketMat.cost;
+          } else {
+            rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
+          }
+        }
+
+        // Add-ons per run
+        if (run.isPreStained && runStyle.type === 'Wood') {
+          const preStainMat = materials.find(m => m.id === 'f-pre-stain');
+          if (preStainMat) {
+            const total = runLF * preStainMat.cost;
+            const existing = rawItems.find(i => i.name === preStainMat.name);
+            if (existing) {
+              existing.qty += runLF;
+              existing.total += total;
+            } else {
+              rawItems.push({ name: preStainMat.name, qty: runLF, unitCost: preStainMat.cost, total: total, category: 'Finishing' });
+            }
+          }
+        }
+
+        if (estimate.hasCapAndTrim && runStyle.type === 'Wood') {
+          const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
+          if (capTrimMat) {
+            const total = runLF * capTrimMat.cost;
+            const existing = rawItems.find(i => i.name === capTrimMat.name);
+            if (existing) {
+              existing.qty += runLF;
+              existing.total += total;
+            } else {
+              rawItems.push({ name: capTrimMat.name, qty: runLF, unitCost: capTrimMat.cost, total: total, category: 'Finishing' });
+            }
+          }
+        }
+
+        if (estimate.includeStain && !run.isPreStained && runStyle.type === 'Wood') {
+           const stainMat = materials.find(m => m.id === 'f-stain');
+           if (stainMat) {
+             const gallons = Math.ceil((runLF * run.height) / 175);
+             const total = gallons * stainMat.cost;
+             const existing = rawItems.find(i => i.name === stainMat.name);
+             if (existing) {
+               existing.qty += gallons;
+               existing.total += total;
+             } else {
+               rawItems.push({ name: stainMat.name, qty: gallons, unitCost: stainMat.cost, total: total, category: 'Finishing' });
+             }
+           }
+        }
+
+        const runLaborCost = (runLF * (estimate.manualLaborRatePerLF ?? runStyle.baseLaborRate)) + (runGates * (estimate.manualLaborRatePerGate ?? 0));
+        aggregatedData.runBreakdown.push({ id: run.id, name: run.name, total: postCost + panelTotal + runLaborCost });
       });
-    } else {
-      endPostCount += (estimate.gateCount || 0) * 2;
-    }
-    
-    let cornerPostCount = corners;
-    let linePostCount = 0;
-    
-    const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
-    
-    if (hasRuns) {
-      linePostCount = runs.reduce((sum, run) => sum + Math.max(0, Math.ceil(run.linearFeet / maxSpacing) - 1), 0);
-    } else {
-      linePostCount = Math.max(0, Math.ceil(lf / maxSpacing) - 1);
-    }
-    
-    const postCount = endPostCount + cornerPostCount + linePostCount;
-    let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
-    
-    if (selectedStyle.type === 'Wood') {
-      if (estimate.height === 8) {
-        postMat = materials.find(m => m.id === 'w-post-metal-11') || postMat;
-      } else {
-        postMat = materials.find(m => m.id === 'w-post-metal-8') || postMat;
-      }
     }
 
-    const postQty = postCount; // No waste factor on posts per request
-    rawItems.push({ 
-      name: postMat.name, 
-      qty: postQty, 
-      unitCost: postMat.cost, 
-      total: postQty * postMat.cost,
-      category: 'Structure'
-    });
+    const lf = aggregatedData.lf || estimate.linearFeet || 0;
+    const gates = aggregatedData.gates || estimate.gateCount || 0;
+    const postCount = aggregatedData.postCount || Math.ceil(lf / 8) + 1;
 
-    // 2. Main Panels/Pickets
-    let panelQty = 0;
-    let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
+    // Fasteners and Generic Hardware (Aggregated)
+    const fastenerMat = materials.find(m => m.id === 'h-nail-galv')!;
+    const fastenerQty = Math.ceil(lf / 50);
+    rawItems.push({ name: fastenerMat.name, qty: fastenerQty, unitCost: fastenerMat.cost, total: fastenerQty * fastenerMat.cost, category: 'Hardware' });
 
-    if (selectedStyle.type === 'Wood') {
-      // 5.5 inches = 0.458ft
-      panelQty = Math.ceil((lf / 0.458) * wasteFactor);
-      
-      // Select specific wood type picket
-      if (estimate.woodType === 'Pine') {
-        panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
-      } else if (estimate.woodType === 'Japanese Cedar') {
-        panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
-      } else if (estimate.woodType === 'Western Cedar') {
-        panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
-      }
-    } else {
-      const panelCount = Math.ceil(lf / (estimate.width || 8));
-      panelQty = Math.ceil(panelCount * wasteFactor);
-    }
-    
-    const visualStyleModifier = selectedVisualStyle.priceModifier;
-    let picketDisplayName = panelMat.name;
-    if (selectedStyle.type === 'Wood' && estimate.topStyle) {
-      picketDisplayName = picketDisplayName.replace('Picket', `${estimate.topStyle} Picket`);
-    }
-    
-    rawItems.push({ 
-      name: picketDisplayName, 
-      qty: panelQty, 
-      unitCost: panelMat.cost + visualStyleModifier, 
-      total: panelQty * (panelMat.cost + visualStyleModifier),
-      category: 'Infill'
-    });
-
-    // 2.5 Pre-staining Service
-    if (selectedStyle.type === 'Wood' && estimate.isPreStained) {
-      const preStainMat = materials.find(m => m.id === 'f-pre-stain');
-      if (preStainMat) {
-        rawItems.push({
-          name: preStainMat.name,
-          qty: lf,
-          unitCost: preStainMat.cost,
-          total: lf * preStainMat.cost,
-          category: 'Finishing'
-        });
-      }
-    }
-
-    // 2.6 Cap & Trim Upgrade
-    if (selectedStyle.type === 'Wood' && estimate.hasCapAndTrim) {
-      const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
-      if (capTrimMat) {
-        rawItems.push({
-          name: capTrimMat.name,
-          qty: lf,
-          unitCost: capTrimMat.cost,
-          total: lf * capTrimMat.cost,
-          category: 'Finishing'
-        });
-      }
-    }
-
-    // 3. Post Caps
+    // Post Caps (Aggregated)
     const capMat = materials.find(m => m.id === estimate.postCapId);
     if (capMat) {
-      rawItems.push({ 
-        name: capMat.name, 
-        qty: postCount, 
-        unitCost: capMat.cost, 
-        total: postCount * capMat.cost,
-        category: 'Hardware'
-      });
+      rawItems.push({ name: capMat.name, qty: postCount, unitCost: capMat.cost, total: postCount * capMat.cost, category: 'Hardware' });
     }
 
-    // 4. Gates
-    const gateMat = materials.find(m => m.id === estimate.gateStyleId);
-    if (gateMat && gates > 0) {
-      rawItems.push({ 
-        name: gateMat.name, 
-        qty: gates, 
-        unitCost: gateMat.cost, 
-        total: gates * gateMat.cost,
-        category: 'Gate'
-      });
-      
-      // Add Latch if not included in kit
-      const latchMat = materials.find(m => m.id === 'g-latch-grav');
-      if (latchMat) {
-        rawItems.push({
-          name: latchMat.name,
-          qty: gates,
-          unitCost: latchMat.cost,
-          total: gates * latchMat.cost,
-          category: 'Gate'
-        });
-      }
-      
-      // Add Shark Hinge Kit for Double Gates
-      if (doubleGateCount > 0) {
-        const sharkKit = materials.find(m => m.id === 'g-kit-shark');
-        if (sharkKit) {
-          rawItems.push({
-            name: sharkKit.name,
-            qty: doubleGateCount,
-            unitCost: sharkKit.cost,
-            total: doubleGateCount * sharkKit.cost,
-            category: 'Gate'
-          });
-        }
-      }
-    }
-
-    // 5. Fasteners & Hardware
-    if (selectedStyle.type === 'Wood') {
-      const fastenerMat = materials.find(m => m.id === 'h-nail-galv')!;
-      const fastenerQty = Math.ceil(lf / 50); // 1 box per 50LF
-      rawItems.push({ name: fastenerMat.name, qty: fastenerQty, unitCost: fastenerMat.cost, total: fastenerQty * fastenerMat.cost, category: 'Hardware' });
-      
-      const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-      const bracketQty = Math.ceil(lf * logic.railsPerLF);
-      rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
-    }
-
-    if (selectedStyle.type === 'Chain Link') {
-      const tieMat = materials.find(m => m.id === 'h-cl-tie')!;
-      const tieQty = Math.ceil(lf / 50); // 1 box per 50LF
-      rawItems.push({ name: tieMat.name, qty: tieQty, unitCost: tieMat.cost, total: tieQty * tieMat.cost, category: 'Hardware' });
-      
-      const tensionBandMat = materials.find(m => m.id === 'h-cl-band-tens')!;
-      const tensionBandQty = corners * 3 + gates * 3;
-      rawItems.push({ name: tensionBandMat.name, qty: tensionBandQty, unitCost: tensionBandMat.cost, total: tensionBandQty * tensionBandMat.cost, category: 'Hardware' });
-      
-      const braceBandMat = materials.find(m => m.id === 'h-cl-band-brace')!;
-      const braceBandQty = corners * 2 + gates * 2;
-      rawItems.push({ name: braceBandMat.name, qty: braceBandQty, unitCost: braceBandMat.cost, total: braceBandQty * braceBandMat.cost, category: 'Hardware' });
-    }
-
-    // 6. Concrete & Gravel
-    const concreteBags = Math.ceil(postCount * logic.concretePerPost);
-    const concreteMat = materials.find(m => m.id === 'i-concrete-80') || materials.find(m => m.category === 'Concrete')!;
-    rawItems.push({ 
-      name: `${concreteMat.name}`, 
-      qty: concreteBags, 
-      unitCost: concreteMat.cost, 
-      total: concreteBags * concreteMat.cost,
-      category: 'Installation'
-    });
+    // Concrete & Gravel (Aggregated)
+    const concreteBags = Math.ceil(postCount * 1.5); // Default safety
+    const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+    rawItems.push({ name: concreteMat.name, qty: concreteBags, unitCost: concreteMat.cost, total: concreteBags * concreteMat.cost, category: 'Installation' });
 
     if (estimate.includeGravel) {
       const gravelMat = materials.find(m => m.id === 'i-gravel')!;
-      const gravelQty = Math.ceil(postCount * 0.5 / 27); // 0.5 cu ft per hole, convert to cu yd and round up
-      rawItems.push({ 
-        name: gravelMat.name, 
-        qty: gravelQty, 
-        unitCost: gravelMat.cost, 
-        total: gravelQty * gravelMat.cost,
-        category: 'Installation'
-      });
+      const gravelQty = Math.ceil(postCount * 0.5 / 27);
+      rawItems.push({ name: gravelMat.name, qty: gravelQty, unitCost: gravelMat.cost, total: gravelQty * gravelMat.cost, category: 'Installation' });
     }
 
-    // 7. Demolition
+    // Demolition (Aggregated)
     if (estimate.hasDemolition) {
       const dLF = estimate.demoLinearFeet || lf;
-      const weightPerLF = estimate.demoType === 'Wood' ? 18 : (estimate.demoType === 'Chain Link' ? 8 : 12);
-      const fenceWeight = dLF * weightPerLF;
-      const footingWeight = estimate.removeConcreteFootings ? (postCount * 225) : 0;
-      const totalWeight = fenceWeight + footingWeight;
-      
       const dumpsterMat = materials.find(m => m.id === 'd-dumpster')!;
-      const haulingMat = materials.find(m => m.id === 'd-hauling')!;
-      const bladeMat = materials.find(m => m.id === 'd-blade')!;
-      const laborMat = materials.find(m => m.id === 'd-labor')!;
-      
-      const dumpstersNeeded = Math.ceil(totalWeight / 6000); // Assume 3 tons per dumpster
       const bladesNeeded = Math.ceil(dLF / 50);
-      
       rawItems.push(
-        { name: dumpsterMat.name, qty: dumpstersNeeded, unitCost: dumpsterMat.cost, total: dumpstersNeeded * dumpsterMat.cost, category: 'Demolition' },
-        { name: haulingMat.name, qty: dumpstersNeeded, unitCost: haulingMat.cost, total: dumpstersNeeded * haulingMat.cost, category: 'Demolition' },
-        { name: bladeMat.name, qty: bladesNeeded, unitCost: bladeMat.cost, total: bladesNeeded * bladeMat.cost, category: 'Demolition' },
-        { name: laborMat.name, qty: Math.ceil(dLF / 10), unitCost: laborMat.cost, total: Math.ceil(dLF / 10) * laborMat.cost, category: 'Demolition' }
+        { name: dumpsterMat.name, qty: 1, unitCost: dumpsterMat.cost, total: dumpsterMat.cost, category: 'Demolition' },
+        { name: materials.find(m => m.id === 'd-hauling')!.name, qty: 1, unitCost: 145, total: 145, category: 'Demolition' },
+        { name: materials.find(m => m.id === 'd-blade')!.name, qty: bladesNeeded, unitCost: 14, total: bladesNeeded * 14, category: 'Demolition' },
+        { name: materials.find(m => m.id === 'd-labor')!.name, qty: Math.ceil(dLF / 10), unitCost: 48, total: Math.ceil(dLF / 10) * 48, category: 'Demolition' }
       );
-    }
-
-    // 8. Site Prep
-    if (estimate.hasSitePrep) {
-      if (estimate.needsMarking) {
-        const markingMat = materials.find(m => m.id === 's-marking')!;
-        rawItems.push({ name: markingMat.name, qty: 1, unitCost: markingMat.cost, total: markingMat.cost, category: 'SitePrep' });
-      }
-      if (estimate.needsClearing) {
-        const clearingMat = materials.find(m => m.id === 's-clearing')!;
-        const clearingHours = Math.ceil(lf / 20);
-        rawItems.push({ name: clearingMat.name, qty: clearingHours, unitCost: clearingMat.cost, total: clearingHours * clearingMat.cost, category: 'SitePrep' });
-      }
-    }
-
-    // 9. Finishing
-    if (estimate.includeStain && selectedStyle.type === 'Wood') {
-      const stainMat = materials.find(m => m.id === 'f-stain')!;
-      const sqFt = lf * (estimate.height || 6) * 2; // Two sides
-      const gallons = Math.ceil(sqFt / 175);
-      rawItems.push({ name: stainMat.name, qty: gallons, unitCost: stainMat.cost, total: gallons * stainMat.cost, category: 'Finishing' });
     }
 
     // Apply manual overrides
     const items = rawItems.map(item => {
-      const manualQty = estimate.manualQuantities?.[item.name];
-      const manualPrice = estimate.manualPrices?.[item.name];
-      
-      const qty = manualQty !== undefined ? manualQty : item.qty;
-      const unitCost = manualPrice !== undefined ? manualPrice : item.unitCost;
-      
-      return { 
-        ...item, 
-        qty, 
-        unitCost, 
-        total: qty * unitCost 
-      };
+      const qty = estimate.manualQuantities?.[item.name] ?? item.qty;
+      const unitCost = estimate.manualPrices?.[item.name] ?? item.unitCost;
+      return { ...item, qty, unitCost, total: qty * unitCost };
     });
 
     const demoCost = items.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
-    const sitePrepCost = items.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+    const sitePrepCost = estimate.hasSitePrep ? (estimate.needsMarking ? 28 : 0) + (estimate.needsClearing ? (Math.ceil(lf / 20) * 58) : 0) : 0;
     const materialSubtotal = items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, item) => sum + item.total, 0);
     
-    // Manual Labor Calculation
-    const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
-    const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
-    const laborCost = (lf * laborRateLF) + (gates * laborRateGate);
+    const laborCost = (lf * (estimate.manualLaborRatePerLF ?? 14.5)) + (gates * (estimate.manualLaborRatePerGate ?? 150));
     
     const subtotal = materialSubtotal + laborCost + demoCost + sitePrepCost;
     const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
     const tax = (subtotal + markup) * ((estimate.taxPercentage || 0) / 100);
     const total = subtotal + markup + tax;
 
-    // Cost per run
-    const runBreakdown = runs.map((run, idx) => {
-      const runLF = run.linearFeet;
-      const runGates = run.gateDetails?.length || run.gates || 0;
-      
-      const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
-      const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
-      
-      let runGatePosts = 0;
-      if (run.gateDetails && run.gateDetails.length > 0) {
-        run.gateDetails.forEach(gate => {
-          runGatePosts += gate.type === 'Double' ? 2 : 1;
-        });
-      } else {
-        runGatePosts = runGates * 2;
-      }
-      
-      const runPostCount = runLinePosts + 1 + (idx === runs.length - 1 ? 1 : 0) + runGatePosts;
-      
-      const runPanelCount = selectedStyle.type === 'Wood' 
-        ? Math.ceil(runLF / 0.458)
-        : Math.ceil(runLF / (estimate.width || 8));
-      
-      let runMatCost = (runPostCount * postMat.cost) + (runPanelCount * (panelMat.cost + visualStyleModifier));
-      
-      if (selectedStyle.type === 'Wood' && estimate.isPreStained) {
-        const preStainMat = materials.find(m => m.id === 'f-pre-stain');
-        if (preStainMat) {
-          runMatCost += runLF * preStainMat.cost;
-        }
-      }
-
-      if (selectedStyle.type === 'Wood' && estimate.hasCapAndTrim) {
-        const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
-        if (capTrimMat) {
-          runMatCost += runLF * capTrimMat.cost;
-        }
-      }
-      
-      const laborRateLF = estimate.manualLaborRatePerLF ?? selectedStyle.baseLaborRate;
-      const laborRateGate = estimate.manualLaborRatePerGate ?? 0;
-      const runLaborCost = (runLF * laborRateLF) + (runGates * laborRateGate);
-      
-      return {
-        id: run.id,
-        name: run.name,
-        total: runMatCost + runLaborCost
-      };
-    });
-
-    return { items, materialSubtotal, laborCost, demoCost, sitePrepCost, subtotal, markup, tax, total, runBreakdown, lf, postCount, gateCount: gates };
+    return { items, materialSubtotal, laborCost, demoCost, sitePrepCost, subtotal, markup, tax, total, runBreakdown: aggregatedData.runBreakdown, lf, postCount, gateCount: gates };
   };
 
   const results = calculateCosts();
 
-  const handleNext = () => setStep(s => Math.min(s + 1, 5));
+  const handleNext = () => setStep(s => Math.min(s + 1, 4));
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
   const handleSave = () => {
@@ -437,10 +336,9 @@ export default function Estimator({ materials }: EstimatorProps) {
 
   const steps = [
     { id: 1, label: 'Customer', icon: Share2 },
-    { id: 2, label: 'Style & Options', icon: Palette },
-    { id: 3, label: 'Measurements', icon: Ruler },
-    { id: 4, label: 'Add-ons & Specs', icon: HardHat },
-    { id: 5, label: 'Review & Send', icon: Send },
+    { id: 2, label: 'Measurements & Styling', icon: Ruler },
+    { id: 3, label: 'Add-ons & Specs', icon: HardHat },
+    { id: 4, label: 'Review & Send', icon: Send },
   ];
 
   const PatrioticDivider = () => (
@@ -521,265 +419,95 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
           </div>
         );
-      case 2:
+      case 2: // Consolidated Style & Measurements
         return (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-white rounded-[40px] p-10 shadow-2xl border-2 border-american-blue/5 relative overflow-hidden">
               <div className="flex items-center gap-5 mb-10">
                 <div className="h-16 w-16 rounded-3xl bg-american-blue flex items-center justify-center text-white shadow-xl shadow-american-blue/20">
                   <Palette size={32} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Style Selection</h2>
-                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">Select Your Fence Style</p>
+                  <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Project Default Style</h2>
+                  <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Baseline for new fence runs</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3 mb-10">
-                {FENCE_STYLES.map(style => (
-                  <button 
-                    key={style.id} 
-                    onClick={() => setEstimate({...estimate, styleId: style.id, visualStyleId: style.visualStyles[0].id})} 
-                    className={cn(
-                      "group relative px-6 py-3 rounded-full border-2 transition-all text-left overflow-hidden", 
-                      estimate.styleId === style.id 
-                        ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
-                        : "border-[#F5F5F5] bg-white hover:border-american-blue/20 text-american-blue"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-black uppercase tracking-widest">{style.name}</p>
-                      {estimate.styleId === style.id && (
-                        <div className="w-3 h-3 bg-white american-star" />
-                      )}
+              <div className="grid gap-6 md:grid-cols-2">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Default Material</label>
+                    <div className="flex flex-wrap gap-2">
+                      {FENCE_STYLES.map(style => (
+                        <button 
+                          key={style.id} 
+                          onClick={() => setEstimate({
+                            ...estimate, 
+                            defaultStyleId: style.id, 
+                            defaultVisualStyleId: style.visualStyles[0].id,
+                            defaultHeight: style.availableHeights[0]
+                          })} 
+                          className={cn(
+                            "px-4 py-2 rounded-xl border-2 transition-all text-xs font-black uppercase tracking-widest", 
+                            estimate.defaultStyleId === style.id 
+                              ? "border-american-blue bg-american-blue text-white shadow-md" 
+                              : "border-[#F5F5F5] bg-white hover:border-american-blue/20 text-american-blue"
+                          )}
+                        >
+                          {style.name}
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                ))}
-              </div>
-
-              <PatrioticDivider />
-
-              <div className="space-y-8">
-                <div className="flex items-center justify-between px-2">
-                  <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Visual Aesthetics</h3>
-                  <div className="flex gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="w-2 h-2 bg-american-red american-star opacity-20" />
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
-                  {selectedStyle.visualStyles.map(vs => (
-                    <button 
-                      key={vs.id} 
-                      onClick={() => setEstimate({...estimate, visualStyleId: vs.id})} 
-                      className={cn(
-                        "group p-4 rounded-[32px] border-2 transition-all text-center relative overflow-hidden flex flex-col gap-4 items-center", 
-                        estimate.visualStyleId === vs.id 
-                          ? "border-american-red bg-american-red/5 shadow-xl" 
-                          : "border-[#F0F0F0] bg-white hover:border-american-red/20 hover:shadow-lg"
-                      )}
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Default Pattern</label>
+                    <select 
+                      value={estimate.defaultVisualStyleId}
+                      onChange={(e) => setEstimate({...estimate, defaultVisualStyleId: e.target.value})}
+                      className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
                     >
-                      <div className="relative w-full aspect-video rounded-[24px] overflow-hidden border-2 border-white shadow-md">
-                        <img src={vs.imageUrl} alt={vs.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-                        {estimate.visualStyleId === vs.id && (
-                          <div className="absolute inset-0 bg-american-red/5 flex items-center justify-center">
-                            <div className="w-12 h-12 bg-white/95 rounded-full flex items-center justify-center shadow-lg scale-100">
-                              <CheckCircle2 className="text-american-red" size={24} />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="w-full pb-2">
-                        <h4 className={cn("text-xl font-black transition-colors mb-1 tracking-tight uppercase", estimate.visualStyleId === vs.id ? "text-american-red" : "text-american-blue")}>
-                          {vs.name}
-                        </h4>
-                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em]">Standard Selection</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      {defaultStyle.visualStyles.map(vs => (
+                        <option key={vs.id} value={vs.id}>{vs.name}</option>
+                      ))}
+                    </select>
+                 </div>
+               </div>
 
-                {/* Wood Specific Options */}
-                {selectedStyle.type === 'Wood' && (
-                  <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-10">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-american-blue/10 flex items-center justify-center text-american-blue">
-                        <Trees size={20} />
-                      </div>
-                      <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Wood Specifications</h3>
-                    </div>
-
-                    <div className="flex flex-wrap gap-6">
-                      {/* Height Selection */}
-                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Ruler size={14} className="text-american-blue/40" />
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Fence Height</label>
-                        </div>
-                        <div className="flex flex-col gap-2 flex-1">
-                          {[6, 8].map((h) => (
-                            <button
-                              key={h}
-                              onClick={() => setEstimate({ ...estimate, height: h })}
-                              className={cn(
-                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
-                                estimate.height === h 
-                                  ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
-                                  : "border-white bg-white text-american-blue hover:border-american-blue/20"
-                              )}
-                            >
-                              {h}' Height
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Wood Species */}
-                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Trees size={14} className="text-american-blue/40" />
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Wood Species</label>
-                        </div>
-                        <div className="flex flex-col gap-2 flex-1">
-                          {['Pine', 'Western Cedar', 'Japanese Cedar'].map((type) => (
-                            <button
-                              key={type}
-                              onClick={() => setEstimate({ ...estimate, woodType: type as any })}
-                              className={cn(
-                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
-                                estimate.woodType === type 
-                                  ? "border-american-blue bg-american-blue text-white shadow-lg shadow-american-blue/20" 
-                                  : "border-white bg-white text-american-blue hover:border-american-blue/20"
-                              )}
-                            >
-                              {type}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Picket Top Style */}
-                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Palette size={14} className="text-american-red/40" />
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Picket Top Style</label>
-                        </div>
-                        <div className="flex flex-col gap-2 flex-1">
-                          {['Dog Ear', 'Flat Top'].map((style) => (
-                            <button
-                              key={style}
-                              onClick={() => setEstimate({ ...estimate, topStyle: style as any })}
-                              className={cn(
-                                "w-full px-4 py-3 rounded-2xl border-2 text-xs font-black uppercase tracking-widest transition-all text-center",
-                                estimate.topStyle === style 
-                                  ? "border-american-red bg-american-red text-white shadow-lg shadow-american-red/20" 
-                                  : "border-white bg-white text-american-blue hover:border-american-red/20"
-                              )}
-                            >
-                              {style}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Finish Option */}
-                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Droplets size={14} className="text-american-blue/40" />
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Finish Option</label>
-                        </div>
-                        <button
-                          onClick={() => setEstimate({ ...estimate, isPreStained: !estimate.isPreStained })}
-                          className={cn(
-                            "flex-1 p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-3 text-center",
-                            estimate.isPreStained 
-                              ? "border-american-blue bg-white shadow-lg" 
-                              : "border-white bg-white"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                            estimate.isPreStained ? "bg-american-blue text-white" : "bg-[#F0F0F0] text-american-blue/20"
-                          )}>
-                            <Droplets size={20} />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">Pre-Stained</p>
-                            <p className="text-[8px] font-bold text-[#BBBBBB] uppercase mt-0.5">Factory Finish</p>
-                          </div>
-                          <div className={cn(
-                            "h-5 w-10 rounded-full relative transition-all",
-                            estimate.isPreStained ? "bg-american-blue" : "bg-[#E5E5E5]"
-                          )}>
-                            <div className={cn(
-                              "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
-                              estimate.isPreStained ? "right-0.5" : "left-0.5"
-                            )} />
-                          </div>
-                        </button>
-                      </div>
-
-                      {/* Structural Accessory */}
-                      <div className="flex-1 min-w-[200px] bg-[#F8F9FA] p-6 rounded-[32px] border-2 border-[#F0F0F0] space-y-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Layers size={14} className="text-american-red/40" />
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60">Structural Accessory</label>
-                        </div>
-                        <button
-                          onClick={() => setEstimate({ ...estimate, hasCapAndTrim: !estimate.hasCapAndTrim })}
-                          className={cn(
-                            "flex-1 p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-3 text-center",
-                            estimate.hasCapAndTrim 
-                              ? "border-american-red bg-white shadow-lg" 
-                              : "border-white bg-white"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                            estimate.hasCapAndTrim ? "bg-american-red text-white" : "bg-[#F0F0F0] text-american-red/20"
-                          )}>
-                            <Layers size={20} />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">Cap & Trim</p>
-                            <p className="text-[8px] font-bold text-[#BBBBBB] uppercase mt-0.5">Premium Top</p>
-                          </div>
-                          <div className={cn(
-                            "h-5 w-10 rounded-full relative transition-all",
-                            estimate.hasCapAndTrim ? "bg-american-red" : "bg-[#E5E5E5]"
-                          )}>
-                            <div className={cn(
-                              "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
-                              estimate.hasCapAndTrim ? "right-0.5" : "left-0.5"
-                            )} />
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+               <div className="mt-8 pt-6 border-t border-dashed border-american-blue/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-[10px] font-bold text-[#999999] uppercase italic">* New runs will inherit these settings.</p>
+                  <button 
+                    onClick={() => {
+                      if (!estimate.runs) return;
+                      const newRuns = estimate.runs.map(r => ({
+                        ...r,
+                        styleId: estimate.defaultStyleId!,
+                        visualStyleId: estimate.defaultVisualStyleId!,
+                        height: estimate.defaultHeight!,
+                        color: estimate.defaultColor!
+                      }));
+                      setEstimate({...estimate, runs: newRuns});
+                    }}
+                    className="text-[10px] font-black uppercase tracking-widest text-american-red hover:underline"
+                  >
+                    Apply selection to all existing runs
+                  </button>
+               </div>
             </div>
-          </div>
-        );
-      case 3:
-        return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+            <PatrioticDivider />
             <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
               <div className="flex items-center gap-4 mb-8">
                 <div className="h-14 w-14 rounded-2xl bg-american-red flex items-center justify-center text-white shadow-lg shadow-american-red/20">
                   <Ruler size={28} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-american-red tracking-tight uppercase">Strategic Measurements</h2>
-                  <p className="text-xs font-bold text-american-blue uppercase tracking-widest">Perimeter & Boundary Specifications</p>
+                  <h2 className="text-xl font-black text-american-red tracking-tight uppercase">Strategic Layout</h2>
+                  <p className="text-xs font-bold text-american-blue uppercase tracking-widest">Perimeter Specifications & Custom Runs</p>
                 </div>
               </div>
 
               <div className="grid gap-8 md:grid-cols-3">
                 <div className="space-y-3 relative">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Total Perimeter (LF)</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Total Project Perimeter (LF)</label>
                   <div className="relative">
                     <input 
                       type="number" 
@@ -798,14 +526,17 @@ export default function Estimator({ materials }: EstimatorProps) {
                   )}
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Structural Corners</label>
-                  <div className="relative">
-                    <input type="number" value={estimate.corners} onChange={(e) => setEstimate({...estimate, corners: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
-                  </div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Default Height</label>
+                  <select 
+                    value={estimate.defaultHeight} 
+                    onChange={(e) => setEstimate({...estimate, defaultHeight: Number(e.target.value)})}
+                    className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-sm font-black text-american-blue outline-none"
+                  >
+                    {defaultStyle.availableHeights.map(h => <option key={h} value={h}>{h} FT</option>)}
+                  </select>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Access Gates</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Global Access Gates</label>
                   <div className="relative">
                     <input type="number" value={estimate.gateCount} onChange={(e) => setEstimate({...estimate, gateCount: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
@@ -817,174 +548,204 @@ export default function Estimator({ materials }: EstimatorProps) {
               <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-8">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Runs</h3>
-                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Individual Fence Run Specifications</p>
+                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Sections</h3>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Mix & Match Styles per Run</p>
                   </div>
                   <button 
                     onClick={() => {
-                      const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
+                      const newRun = { 
+                        id: Math.random().toString(36).substr(2, 9), 
+                        name: `Run ${(estimate.runs?.length || 0) + 1}`, 
+                        linearFeet: 0, 
+                        corners: 0, 
+                        gates: 0,
+                        styleId: estimate.defaultStyleId!,
+                        visualStyleId: estimate.defaultVisualStyleId!,
+                        height: estimate.defaultHeight!,
+                        color: estimate.defaultColor!,
+                        isPreStained: estimate.isPreStained
+                      };
                       setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
                     }}
                     className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
                   >
                     <Plus size={16} />
-                    Add Run
+                    Add Section
                   </button>
                 </div>
                 
                 <div className="space-y-6">
-                  {estimate.runs?.map((run, idx) => (
-                    <div key={run.id} className="grid gap-6 md:grid-cols-12 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
-                      <div className="md:col-span-5 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
-                        <input 
-                          type="text" 
-                          value={run.name} 
-                          onChange={(e) => {
-                            const newRuns = [...estimate.runs!];
-                            newRuns[idx].name = e.target.value;
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                        />
-                      </div>
-                      <div className="md:col-span-3 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
-                        <input 
-                          type="number" 
-                          value={run.linearFeet} 
-                          onChange={(e) => {
-                            const newRuns = [...estimate.runs!];
-                            newRuns[idx].linearFeet = Number(e.target.value);
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                        />
-                      </div>
-                      <div className="md:col-span-4 flex justify-end items-center">
-                        <button 
-                          onClick={() => {
-                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="flex items-center gap-2 px-4 py-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all font-bold text-xs uppercase tracking-widest"
-                        >
-                          <Trash2 size={16} /> Remove Run
-                        </button>
-                      </div>
-                      
-                      {/* Gates Section for this Run */}
-                      <div className="md:col-span-12 space-y-4 mt-2 pt-4 border-t-2 border-dashed border-[#F0F0F0]">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates in this Run</label>
-                          <button
-                            onClick={() => {
-                              const newRuns = [...estimate.runs!];
-                              if (!newRuns[idx].gateDetails) newRuns[idx].gateDetails = [];
-                              newRuns[idx].gateDetails!.push({ 
-                                id: Math.random().toString(36).substr(2, 9), 
-                                type: 'Single', 
-                                width: 4,
-                                position: Math.max(0, (newRuns[idx].linearFeet - 4) / 2)
-                              });
-                              newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                              setEstimate({ ...estimate, runs: newRuns });
-                            }}
-                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#F0F0F0] text-american-blue text-[10px] font-black uppercase tracking-widest hover:bg-[#E5E5E5] transition-all"
-                          >
-                            <Plus size={12} /> Add Gate
-                          </button>
-                        </div>
-                        
-                        <div className="grid gap-3">
-                          {run.gateDetails?.map((gate, gIdx) => (
-                            <div key={gate.id} className="flex items-center gap-4 bg-[#F9F9F9] p-3 rounded-xl border border-[#E5E5E5]">
-                              <div className="flex-[1.5] grid grid-cols-3 gap-2 items-center">
-                                <div className="space-y-1">
-                                  <label className="text-[8px] font-black uppercase text-[#999999] block">Type</label>
-                                  <select
-                                    value={gate.type}
+                  {estimate.runs?.map((run, idx) => {
+                    const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || FENCE_STYLES[0];
+                    return (
+                      <div key={run.id} className="p-8 rounded-[32px] bg-[#F9F9FB] border-2 border-[#F0F0F0] shadow-sm hover:shadow-md transition-all relative group overflow-hidden">
+                        <div className="flex flex-col lg:flex-row gap-8">
+                          {/* Run Identifier & Length */}
+                          <div className="lg:w-1/3 space-y-6">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="px-3 py-1 rounded-full bg-american-blue/10 text-american-blue text-[10px] font-black uppercase tracking-widest">Section {idx + 1}</span>
+                              <button 
+                                onClick={() => {
+                                  const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="text-american-red hover:bg-american-red/10 p-2 rounded-xl transition-all"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
+                                <input 
+                                  type="text" 
+                                  value={run.name} 
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].name = e.target.value;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-xl border-2 border-white bg-white px-4 py-3 text-sm font-bold focus:border-american-blue outline-none transition-all shadow-sm"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
+                                <div className="relative">
+                                  <input 
+                                    type="number" 
+                                    value={run.linearFeet} 
                                     onChange={(e) => {
                                       const newRuns = [...estimate.runs!];
-                                      newRuns[idx].gateDetails![gIdx].type = e.target.value as 'Single' | 'Double';
+                                      newRuns[idx].linearFeet = Number(e.target.value);
                                       setEstimate({ ...estimate, runs: newRuns });
                                     }}
-                                    className="w-full rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-xs font-bold focus:border-american-blue outline-none"
-                                  >
-                                    <option value="Single">Single</option>
-                                    <option value="Double">Double</option>
-                                  </select>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[8px] font-black uppercase text-[#999999] block">Width</label>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={gate.width}
-                                      onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        const newRuns = [...estimate.runs!];
-                                        newRuns[idx].gateDetails![gIdx].width = val;
-                                        // Ensure position is still valid
-                                        if (newRuns[idx].gateDetails![gIdx].position! + val > newRuns[idx].linearFeet) {
-                                          newRuns[idx].gateDetails![gIdx].position = Math.max(0, newRuns[idx].linearFeet - val);
-                                        }
-                                        setEstimate({ ...estimate, runs: newRuns });
-                                      }}
-                                      className="w-full rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-xs font-bold focus:border-american-blue outline-none"
-                                    />
-                                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-bold text-american-blue/20">FT</span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[8px] font-black uppercase text-[#999999] block">Position</label>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      value={gate.position || 0}
-                                      min="0"
-                                      max={run.linearFeet - gate.width}
-                                      onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        const newRuns = [...estimate.runs!];
-                                        newRuns[idx].gateDetails![gIdx].position = Math.min(val, run.linearFeet - gate.width);
-                                        setEstimate({ ...estimate, runs: newRuns });
-                                      }}
-                                      className="w-full rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-xs font-bold focus:border-american-blue outline-none"
-                                    />
-                                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-bold text-american-blue/20">FT</span>
-                                  </div>
+                                    className="w-full rounded-xl border-2 border-white bg-white px-4 py-3 text-sm font-bold focus:border-american-blue outline-none transition-all shadow-sm"
+                                  />
+                                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#BBBBBB]">FT</span>
                                 </div>
                               </div>
+                            </div>
+                          </div>
+
+                          {/* Styling Overrides */}
+                          <div className="flex-1 grid gap-4 grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Material</label>
+                              <select 
+                                value={run.styleId}
+                                onChange={(e) => {
+                                  const newRuns = [...estimate.runs!];
+                                  const newStyle = FENCE_STYLES.find(s => s.id === e.target.value)!;
+                                  newRuns[idx].styleId = e.target.value;
+                                  newRuns[idx].visualStyleId = newStyle.visualStyles[0].id;
+                                  newRuns[idx].height = newStyle.availableHeights[0];
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                              >
+                                {FENCE_STYLES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Pattern</label>
+                              <select 
+                                value={run.visualStyleId}
+                                onChange={(e) => {
+                                  const newRuns = [...estimate.runs!];
+                                  newRuns[idx].visualStyleId = e.target.value;
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                              >
+                                {runStyle.visualStyles.map(vs => <option key={vs.id} value={vs.id}>{vs.name}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Height</label>
+                              <select 
+                                value={run.height}
+                                onChange={(e) => {
+                                  const newRuns = [...estimate.runs!];
+                                  newRuns[idx].height = Number(e.target.value);
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                              >
+                                {runStyle.availableHeights.map(h => <option key={h} value={h}>{h} FT</option>)}
+                              </select>
+                            </div>
+                            <div className="pt-6">
                               <button
                                 onClick={() => {
                                   const newRuns = [...estimate.runs!];
-                                  newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
-                                  newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                  newRuns[idx].isPreStained = !newRuns[idx].isPreStained;
                                   setEstimate({ ...estimate, runs: newRuns });
                                 }}
-                                className="p-2 text-american-red hover:bg-american-red/10 rounded-md transition-all"
+                                className={cn(
+                                  "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                  run.isPreStained 
+                                    ? "border-american-blue bg-american-blue text-white" 
+                                    : "border-white bg-white text-[#BBBBBB]"
+                                )}
                               >
-                                <Trash2 size={16} />
+                                {run.isPreStained ? "Pre-Stained Active" : "Add Factory Finish"}
                               </button>
                             </div>
-                          ))}
-                          {(!run.gateDetails || run.gateDetails.length === 0) && (
-                            <div className="text-center py-4 text-[10px] font-bold text-[#BBBBBB] uppercase tracking-widest">
-                              No gates added to this run
-                            </div>
-                          )}
+                          </div>
+                        </div>
+
+                        {/* Gates Section for this Run */}
+                        <div className="mt-8 pt-6 border-t-2 border-dashed border-[#F0F0F0]">
+                          <div className="flex items-center justify-between mb-4">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Access Gates</label>
+                            <button
+                              onClick={() => {
+                                const newRuns = [...estimate.runs!];
+                                if (!newRuns[idx].gateDetails) newRuns[idx].gateDetails = [];
+                                newRuns[idx].gateDetails!.push({ 
+                                  id: Math.random().toString(36).substr(2, 9), 
+                                  type: 'Single', 
+                                  width: 4,
+                                  position: 0
+                                });
+                                newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                setEstimate({ ...estimate, runs: newRuns });
+                              }}
+                              className="text-[10px] font-black uppercase text-american-red hover:underline"
+                            >
+                              + Add Gate
+                            </button>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-3">
+                            {run.gateDetails?.map((gate, gIdx) => (
+                              <div key={gate.id} className="flex items-center gap-3 bg-white p-2 px-3 rounded-xl border border-[#F0F0F0] shadow-sm">
+                                <span className="text-[10px] font-black uppercase text-american-blue">{gate.type} {gate.width}' Gate</span>
+                                <button
+                                  onClick={() => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                    newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="text-[#CCCCCC] hover:text-american-red"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {(!estimate.runs || estimate.runs.length === 0) && (
-                    <div className="text-center py-12 border-4 border-dashed border-[#F0F0F0] rounded-[40px] bg-[#F9F9F9]/50">
+                    <div className="text-center py-12 border-4 border-dashed border-[#F0F0F0] rounded-[40px] bg-[#F9F9FB]/50">
                       <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                         <Ruler className="text-[#CCCCCC]" size={24} />
                       </div>
-                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Global Measurements Active</p>
-                      <p className="text-[10px] text-[#BBBBBB] mt-1">Add runs for detailed run-based estimation</p>
+                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Global measurements Active</p>
+                      <p className="text-[10px] text-[#BBBBBB] mt-1 italic">Add sections to specify unique runs and styles</p>
                     </div>
                   )}
                 </div>
@@ -992,7 +753,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
           </div>
         );
-      case 4:
+      case 3:
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4">
@@ -1099,7 +860,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                     <input type="checkbox" checked={estimate.includeGravel} onChange={(e) => setEstimate({...estimate, includeGravel: e.target.checked})} className="rounded border-[#E5E5E5]" />
                     <span className="text-sm">Include Drainage Gravel (0.5 cu ft/hole)</span>
                   </label>
-                  {selectedStyle.type === 'Wood' && (
+                  {defaultStyle.type === 'Wood' && (
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={estimate.includeStain} onChange={(e) => setEstimate({...estimate, includeStain: e.target.checked})} className="rounded border-[#E5E5E5]" />
                       <span className="text-sm">Include Sealant/Stain (1 gal / 175 sq ft)</span>
@@ -1120,7 +881,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                   <div className="space-y-1">
                     <p className="text-[10px] text-[#999999]">Post Size</p>
                     <p className="text-sm font-bold">
-                      {selectedStyle.type === 'Wood' ? '2-3/8" Round' : `${estimate.postWidth}" x ${estimate.postThickness}"`}
+                      {defaultStyle.type === 'Wood' ? '2-3/8" Round' : `${estimate.postWidth}" x ${estimate.postThickness}"`}
                     </p>
                   </div>
                 </div>
@@ -1128,7 +889,7 @@ export default function Estimator({ materials }: EstimatorProps) {
             </div>
           </div>
         );
-      case 5:
+      case 4:
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4">
@@ -1159,7 +920,9 @@ export default function Estimator({ materials }: EstimatorProps) {
                  <div className="pt-6 border-t border-white/10">
                    <h3 className="text-sm font-black uppercase tracking-widest text-white/60 mb-2">Project Scope</h3>
                    <p className="text-4xl font-black tracking-tighter">{results.lf} <span className="text-lg opacity-40">LF</span></p>
-                   <p className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">{selectedStyle.name} • {estimate.height}' Height</p>
+                   <p className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">
+                      {estimate.runs && estimate.runs.length > 0 ? 'Multiple Sections' : `${defaultStyle.name} • ${estimate.defaultHeight}' Height`}
+                    </p>
                  </div>
                </div>
             </div>
@@ -1250,7 +1013,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                     Back
                   </button>
                   
-                  {step < 5 ? (
+                  {step < 4 ? (
                     <button 
                       onClick={handleNext}
                       className="flex items-center gap-2 rounded-xl bg-american-blue px-8 py-3 text-sm font-bold text-white hover:bg-american-blue/90 transition-all shadow-lg active:scale-95"
@@ -1508,7 +1271,14 @@ export default function Estimator({ materials }: EstimatorProps) {
                   </div>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-[#999999] mb-2">Project Scope</p>
-                    <p className="text-sm font-bold">{selectedStyle.name} - {selectedVisualStyle.name}</p>
+                    <p className="text-sm font-bold">
+                      {(() => {
+                        const styleNames = Array.from(new Set(estimate.runs?.map(r => FENCE_STYLES.find(s => s.id === r.styleId)?.name).filter(Boolean)));
+                        if (styleNames.length === 0) return `${defaultStyle.name} - ${defaultVisualStyle.name}`;
+                        if (styleNames.length === 1) return styleNames[0];
+                        return "Multi-Style Project";
+                      })()}
+                    </p>
                     <p className="text-sm text-[#666666]">{results.lf} Linear Feet | {results.postCount} Posts | {results.gateCount} Gates</p>
                   </div>
                 </div>
@@ -1611,9 +1381,19 @@ export default function Estimator({ materials }: EstimatorProps) {
                     {(() => {
                       const runsData = estimate.runs && estimate.runs.length > 0 
                         ? estimate.runs 
-                        : [{ id: 'default', linearFeet: estimate.linearFeet || 100, gates: estimate.gateCount || 0, name: 'Main Run', corners: 0 }];
+                        : [{ 
+                            id: 'default', 
+                            linearFeet: estimate.linearFeet || 100, 
+                            gates: estimate.gateCount || 0, 
+                            name: 'Main Run', 
+                            corners: 0,
+                            styleId: estimate.defaultStyleId!,
+                            visualStyleId: estimate.defaultVisualStyleId!,
+                            height: estimate.defaultHeight!,
+                            color: estimate.defaultColor!
+                          }];
                       
-                      const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
+                      const maxSpacing = (defaultStyle.type === 'Wood' && (estimate.defaultHeight || 6) === 8) ? 6 : 8;
                       
                       // 1. Calculate raw points based on directions
                       const rawPoints: [number, number][] = [[0, 0]];
@@ -1646,8 +1426,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                       
                       // 3. Scale and offset to fit SVG viewBox (1100x850 - Landscape Letter)
                       // Internal padding to ensure labels (which are offset from lines) don't get cut off
-                      const paddingX = 70;
-                      const paddingY = 90;
+                      const paddingX = 100;
+                      const paddingY = 120;
                       const availWidth = 1100 - paddingX * 2;
                       const availHeight = 850 - paddingY * 2;
                       
@@ -1686,9 +1466,13 @@ export default function Estimator({ materials }: EstimatorProps) {
                             const midX = p[0] + (nextP[0] - p[0]) / 2;
                             const midY = p[1] + (nextP[1] - p[1]) / 2;
                             
+                            const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || defaultStyle;
+                            const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
+
                             const runGateWidth = (run.gateDetails || []).reduce((sum: number, g: any) => sum + (g.width || 0), 0) || ((run.gates || 0) * 4);
                             const fenceLinearFeet = Math.max(0, run.linearFeet - runGateWidth);
-                            const sections = Math.max(1, Math.ceil(fenceLinearFeet / maxSpacing));
+                            const spacingLimit = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
+                            const sections = Math.max(1, Math.ceil(fenceLinearFeet / spacingLimit));
                             const spacing = fenceLinearFeet / sections;
                             
                             const linePostsCoords = [];
@@ -1714,14 +1498,14 @@ export default function Estimator({ materials }: EstimatorProps) {
                             let textAnchor = "middle";
                             
                             if (dirIndex === 0) { // Right
-                              textOffsetY = -35;
+                              textOffsetY = -50;
                             } else if (dirIndex === 1) { // Down
-                              textOffsetX = 35;
+                              textOffsetX = 50;
                               textAnchor = "start";
                             } else if (dirIndex === 2) { // Left
-                              textOffsetY = 50;
+                              textOffsetY = 65;
                             } else if (dirIndex === 3) { // Up
-                              textOffsetX = -35;
+                              textOffsetX = -50;
                               textAnchor = "end";
                             }
                             
@@ -1738,8 +1522,9 @@ export default function Estimator({ materials }: EstimatorProps) {
                                   className="text-[16px] font-bold fill-american-blue"
                                   style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px', strokeLinecap: 'round', strokeLinejoin: 'round' }}
                                 >
-                                  <tspan x={midX + textOffsetX} dy="0">{run?.name} ({run?.linearFeet}')</tspan>
-                                  <tspan x={midX + textOffsetX} dy="18" className="text-[13px] fill-american-red font-black uppercase tracking-tighter">Spacing: {formatFeetInches(spacing)} OC</tspan>
+                                  <tspan x={midX + textOffsetX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
+                                  <tspan x={midX + textOffsetX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">{runStyle.name} - {runVisualStyle.name}</tspan>
+                                  <tspan x={midX + textOffsetX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
                                 </text>
                               </g>
                             );
