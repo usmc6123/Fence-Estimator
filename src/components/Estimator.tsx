@@ -115,7 +115,16 @@ export default function Estimator({ materials }: EstimatorProps) {
     }
     
     const postCount = endPostCount + cornerPostCount + linePostCount;
-    const postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
+    let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(selectedStyle.type.toLowerCase().charAt(0))) || materials[0];
+    
+    if (selectedStyle.type === 'Wood') {
+      if (estimate.height === 8) {
+        postMat = materials.find(m => m.id === 'w-post-metal-11') || postMat;
+      } else {
+        postMat = materials.find(m => m.id === 'w-post-metal-8') || postMat;
+      }
+    }
+
     const postQty = postCount; // No waste factor on posts per request
     rawItems.push({ 
       name: postMat.name, 
@@ -261,12 +270,6 @@ export default function Estimator({ materials }: EstimatorProps) {
       const braceBandMat = materials.find(m => m.id === 'h-cl-band-brace')!;
       const braceBandQty = corners * 2 + gates * 2;
       rawItems.push({ name: braceBandMat.name, qty: braceBandQty, unitCost: braceBandMat.cost, total: braceBandQty * braceBandMat.cost, category: 'Hardware' });
-    }
-
-    if (selectedStyle.type === 'Vinyl') {
-      const screwMat = materials.find(m => m.id === 'h-screw-v')!;
-      const screwQty = Math.ceil(lf / 10);
-      rawItems.push({ name: screwMat.name, qty: screwQty, unitCost: screwMat.cost, total: screwQty * screwMat.cost, category: 'Hardware' });
     }
 
     // 6. Concrete & Gravel
@@ -433,11 +436,11 @@ export default function Estimator({ materials }: EstimatorProps) {
   };
 
   const steps = [
-    { id: 1, label: 'Measurements', icon: Ruler },
+    { id: 1, label: 'Customer', icon: Share2 },
     { id: 2, label: 'Style & Options', icon: Palette },
-    { id: 3, label: 'Demo & Site Prep', icon: HardHat },
-    { id: 4, label: 'Advanced Specs', icon: Layers },
-    { id: 5, label: 'Review & Total', icon: FileText },
+    { id: 3, label: 'Measurements', icon: Ruler },
+    { id: 4, label: 'Add-ons & Specs', icon: HardHat },
+    { id: 5, label: 'Review & Send', icon: Send },
   ];
 
   const PatrioticDivider = () => (
@@ -468,7 +471,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                   <Share2 size={28} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-american-blue tracking-tight">CUSTOMER DOSSIER</h3>
+                  <h3 className="text-xl font-black text-american-blue tracking-tight uppercase">Customer Dossier</h3>
                   <p className="text-xs font-bold text-american-red uppercase tracking-widest">Project Identification & Logistics</p>
                 </div>
               </div>
@@ -513,197 +516,6 @@ export default function Estimator({ materials }: EstimatorProps) {
                     placeholder="Street, City, State, Zip"
                     className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="h-14 w-14 rounded-2xl bg-american-red flex items-center justify-center text-white shadow-lg shadow-american-red/20">
-                  <Ruler size={28} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-american-red tracking-tight uppercase">Strategic Measurements</h2>
-                  <p className="text-xs font-bold text-american-blue uppercase tracking-widest">Perimeter & Boundary Specifications</p>
-                </div>
-              </div>
-
-              <div className="grid gap-8 md:grid-cols-3">
-                <div className="space-y-3 relative">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Total Perimeter (LF)</label>
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      value={estimate.linearFeet} 
-                      onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
-                      disabled={estimate.runs && estimate.runs.length > 0}
-                      className={`w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed bg-[#F5F5F5]' : ''}`} 
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">FEET</div>
-                  </div>
-                  {estimate.runs && estimate.runs.length > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-american-red/5 rounded-lg border border-american-red/20">
-                      <Info size={12} className="text-american-red" />
-                      <p className="text-[9px] text-american-red font-black uppercase tracking-tighter">Overridden by Sectional Data</p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Structural Corners</label>
-                  <div className="relative">
-                    <input type="number" value={estimate.corners} onChange={(e) => setEstimate({...estimate, corners: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Access Gates</label>
-                  <div className="relative">
-                    <input type="number" value={estimate.gateCount} onChange={(e) => setEstimate({...estimate, gateCount: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fence Runs Section */}
-              <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-8">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Runs</h3>
-                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Individual Fence Run Specifications</p>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
-                      setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
-                    }}
-                    className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
-                  >
-                    <Plus size={16} />
-                    Add Run
-                  </button>
-                </div>
-                
-                <div className="space-y-6">
-                  {estimate.runs?.map((run, idx) => (
-                    <div key={run.id} className="grid gap-6 md:grid-cols-12 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
-                      <div className="md:col-span-5 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
-                        <input 
-                          type="text" 
-                          value={run.name} 
-                          onChange={(e) => {
-                            const newRuns = [...estimate.runs!];
-                            newRuns[idx].name = e.target.value;
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                        />
-                      </div>
-                      <div className="md:col-span-3 space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
-                        <input 
-                          type="number" 
-                          value={run.linearFeet} 
-                          onChange={(e) => {
-                            const newRuns = [...estimate.runs!];
-                            newRuns[idx].linearFeet = Number(e.target.value);
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
-                        />
-                      </div>
-                      <div className="md:col-span-4 flex justify-end items-center">
-                        <button 
-                          onClick={() => {
-                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                            setEstimate({ ...estimate, runs: newRuns });
-                          }}
-                          className="flex items-center gap-2 px-4 py-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all font-bold text-xs uppercase tracking-widest"
-                        >
-                          <Trash2 size={16} /> Remove Run
-                        </button>
-                      </div>
-                      
-                      {/* Gates Section for this Run */}
-                      <div className="md:col-span-12 space-y-4 mt-2 pt-4 border-t-2 border-dashed border-[#F0F0F0]">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates in this Run</label>
-                          <button
-                            onClick={() => {
-                              const newRuns = [...estimate.runs!];
-                              if (!newRuns[idx].gateDetails) newRuns[idx].gateDetails = [];
-                              newRuns[idx].gateDetails!.push({ id: Math.random().toString(36).substr(2, 9), type: 'Single', width: 4 });
-                              newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                              setEstimate({ ...estimate, runs: newRuns });
-                            }}
-                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#F0F0F0] text-american-blue text-[10px] font-black uppercase tracking-widest hover:bg-[#E5E5E5] transition-all"
-                          >
-                            <Plus size={12} /> Add Gate
-                          </button>
-                        </div>
-                        
-                        <div className="grid gap-3">
-                          {run.gateDetails?.map((gate, gIdx) => (
-                            <div key={gate.id} className="flex items-center gap-4 bg-[#F9F9F9] p-3 rounded-xl border border-[#E5E5E5]">
-                              <div className="flex-1">
-                                <select
-                                  value={gate.type}
-                                  onChange={(e) => {
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].gateDetails![gIdx].type = e.target.value as 'Single' | 'Double';
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
-                                >
-                                  <option value="Single">Single Gate</option>
-                                  <option value="Double">Double Gate</option>
-                                </select>
-                              </div>
-                              <div className="flex-1 flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  value={gate.width}
-                                  onChange={(e) => {
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].gateDetails![gIdx].width = Number(e.target.value);
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
-                                  placeholder="Width"
-                                />
-                                <span className="text-[10px] font-bold text-american-blue/40">FT</span>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  const newRuns = [...estimate.runs!];
-                                  newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
-                                  newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                                  setEstimate({ ...estimate, runs: newRuns });
-                                }}
-                                className="p-2 text-american-red hover:bg-american-red/10 rounded-md transition-all"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          ))}
-                          {(!run.gateDetails || run.gateDetails.length === 0) && (
-                            <div className="text-center py-4 text-[10px] font-bold text-[#BBBBBB] uppercase tracking-widest">
-                              No gates added to this run
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(!estimate.runs || estimate.runs.length === 0) && (
-                    <div className="text-center py-12 border-4 border-dashed border-[#F0F0F0] rounded-[40px] bg-[#F9F9F9]/50">
-                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                        <Ruler className="text-[#CCCCCC]" size={24} />
-                      </div>
-                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Global Measurements Active</p>
-                      <p className="text-[10px] text-[#BBBBBB] mt-1">Add runs for detailed run-based estimation</p>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -953,16 +765,212 @@ export default function Estimator({ materials }: EstimatorProps) {
         );
       case 3:
         return (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-red/10 relative overflow-hidden">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-14 w-14 rounded-2xl bg-american-red flex items-center justify-center text-white shadow-lg shadow-american-red/20">
+                  <Ruler size={28} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-american-red tracking-tight uppercase">Strategic Measurements</h2>
+                  <p className="text-xs font-bold text-american-blue uppercase tracking-widest">Perimeter & Boundary Specifications</p>
+                </div>
+              </div>
+
+              <div className="grid gap-8 md:grid-cols-3">
+                <div className="space-y-3 relative">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Total Perimeter (LF)</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={estimate.linearFeet} 
+                      onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
+                      disabled={estimate.runs && estimate.runs.length > 0}
+                      className={`w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed bg-[#F5F5F5]' : ''}`} 
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">FEET</div>
+                  </div>
+                  {estimate.runs && estimate.runs.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-american-red/5 rounded-lg border border-american-red/20">
+                      <Info size={12} className="text-american-red" />
+                      <p className="text-[9px] text-american-red font-black uppercase tracking-tighter">Overridden by Sectional Data</p>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Structural Corners</label>
+                  <div className="relative">
+                    <input type="number" value={estimate.corners} onChange={(e) => setEstimate({...estimate, corners: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Access Gates</label>
+                  <div className="relative">
+                    <input type="number" value={estimate.gateCount} onChange={(e) => setEstimate({...estimate, gateCount: Number(e.target.value)})} className="w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all" />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-american-blue/30">UNITS</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fence Runs Section */}
+              <div className="mt-12 pt-10 border-t-2 border-dashed border-[#F0F0F0] space-y-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Runs</h3>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Individual Fence Run Specifications</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const newRun = { id: Math.random().toString(36).substr(2, 9), name: `Run ${(estimate.runs?.length || 0) + 1}`, linearFeet: 0, corners: 0, gates: 0 };
+                      setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
+                    }}
+                    className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
+                  >
+                    <Plus size={16} />
+                    Add Run
+                  </button>
+                </div>
+                
+                <div className="space-y-6">
+                  {estimate.runs?.map((run, idx) => (
+                    <div key={run.id} className="grid gap-6 md:grid-cols-12 items-end p-6 rounded-3xl bg-white border-2 border-[#F0F0F0] shadow-sm hover:shadow-md hover:border-american-blue/20 transition-all relative group">
+                      <div className="md:col-span-5 space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
+                        <input 
+                          type="text" 
+                          value={run.name} 
+                          onChange={(e) => {
+                            const newRuns = [...estimate.runs!];
+                            newRuns[idx].name = e.target.value;
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                        />
+                      </div>
+                      <div className="md:col-span-3 space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
+                        <input 
+                          type="number" 
+                          value={run.linearFeet} 
+                          onChange={(e) => {
+                            const newRuns = [...estimate.runs!];
+                            newRuns[idx].linearFeet = Number(e.target.value);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue focus:bg-white outline-none transition-all"
+                        />
+                      </div>
+                      <div className="md:col-span-4 flex justify-end items-center">
+                        <button 
+                          onClick={() => {
+                            const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                            setEstimate({ ...estimate, runs: newRuns });
+                          }}
+                          className="flex items-center gap-2 px-4 py-3 text-american-red hover:bg-american-red/10 rounded-xl transition-all font-bold text-xs uppercase tracking-widest"
+                        >
+                          <Trash2 size={16} /> Remove Run
+                        </button>
+                      </div>
+                      
+                      {/* Gates Section for this Run */}
+                      <div className="md:col-span-12 space-y-4 mt-2 pt-4 border-t-2 border-dashed border-[#F0F0F0]">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Gates in this Run</label>
+                          <button
+                            onClick={() => {
+                              const newRuns = [...estimate.runs!];
+                              if (!newRuns[idx].gateDetails) newRuns[idx].gateDetails = [];
+                              newRuns[idx].gateDetails!.push({ id: Math.random().toString(36).substr(2, 9), type: 'Single', width: 4 });
+                              newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                              setEstimate({ ...estimate, runs: newRuns });
+                            }}
+                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#F0F0F0] text-american-blue text-[10px] font-black uppercase tracking-widest hover:bg-[#E5E5E5] transition-all"
+                          >
+                            <Plus size={12} /> Add Gate
+                          </button>
+                        </div>
+                        
+                        <div className="grid gap-3">
+                          {run.gateDetails?.map((gate, gIdx) => (
+                            <div key={gate.id} className="flex items-center gap-4 bg-[#F9F9F9] p-3 rounded-xl border border-[#E5E5E5]">
+                              <div className="flex-1">
+                                <select
+                                  value={gate.type}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails![gIdx].type = e.target.value as 'Single' | 'Double';
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
+                                >
+                                  <option value="Single">Single Gate</option>
+                                  <option value="Double">Double Gate</option>
+                                </select>
+                              </div>
+                              <div className="flex-1 flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={gate.width}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails![gIdx].width = Number(e.target.value);
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-bold focus:border-american-blue outline-none"
+                                  placeholder="Width"
+                                />
+                                <span className="text-[10px] font-bold text-american-blue/40">FT</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const newRuns = [...estimate.runs!];
+                                  newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                  newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="p-2 text-american-red hover:bg-american-red/10 rounded-md transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          {(!run.gateDetails || run.gateDetails.length === 0) && (
+                            <div className="text-center py-4 text-[10px] font-bold text-[#BBBBBB] uppercase tracking-widest">
+                              No gates added to this run
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {(!estimate.runs || estimate.runs.length === 0) && (
+                    <div className="text-center py-12 border-4 border-dashed border-[#F0F0F0] rounded-[40px] bg-[#F9F9F9]/50">
+                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                        <Ruler className="text-[#CCCCCC]" size={24} />
+                      </div>
+                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Global Measurements Active</p>
+                      <p className="text-[10px] text-[#BBBBBB] mt-1">Add runs for detailed run-based estimation</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      case 4:
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
                 <HardHat size={24} />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">Demo & Site Prep</h2>
-                <p className="text-sm text-[#666666]">Removal of old fence and line preparation.</p>
+                <h2 className="text-2xl font-bold tracking-tight">Add-ons & Specs</h2>
+                <p className="text-sm text-[#666666]">Demo, site prep, and technical specifics.</p>
               </div>
             </div>
+
             <div className="grid gap-6 md:grid-cols-2">
               <div className="p-6 rounded-2xl border border-[#E5E5E5] space-y-4">
                 <div className="flex items-center justify-between">
@@ -978,7 +986,6 @@ export default function Estimator({ materials }: EstimatorProps) {
                       <select value={estimate.demoType} onChange={(e) => setEstimate({...estimate, demoType: e.target.value as any})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-2 text-sm">
                         <option value="Wood">Wood (18 lbs/LF)</option>
                         <option value="Chain Link">Chain Link (8 lbs/LF)</option>
-                        <option value="Vinyl">Vinyl (12 lbs/LF)</option>
                       </select>
                     </div>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -1011,25 +1018,12 @@ export default function Estimator({ materials }: EstimatorProps) {
                 )}
               </div>
             </div>
-          </div>
-        );
-      case 4:
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
-                <Layers size={24} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">Advanced Specs</h2>
-                <p className="text-sm text-[#666666]">Waste, drainage, and finishing.</p>
-              </div>
-            </div>
+
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-6">
                 <div className="p-6 rounded-2xl border-2 border-american-blue/10 bg-white space-y-6">
                   <h3 className="text-sm font-black text-american-blue uppercase tracking-widest flex items-center gap-2">
-                    <HardHat size={16} className="text-american-red" />
+                    <Calculator size={16} className="text-american-red" />
                     Manual Labor Rates
                   </h3>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1091,7 +1085,9 @@ export default function Estimator({ materials }: EstimatorProps) {
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] text-[#999999]">Post Size</p>
-                    <p className="text-sm font-bold">{estimate.postWidth}" x {estimate.postThickness}"</p>
+                    <p className="text-sm font-bold">
+                      {selectedStyle.type === 'Wood' ? '2-3/8" Round' : `${estimate.postWidth}" x ${estimate.postThickness}"`}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1100,19 +1096,55 @@ export default function Estimator({ materials }: EstimatorProps) {
         );
       case 5:
         return (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center text-[#1A1A1A]">
-                <FileText size={24} />
+              <div className="h-14 w-14 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg shadow-american-blue/20">
+                <Send size={28} />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">Review & Customer</h2>
-                <p className="text-sm text-[#666666]">Finalize details and send.</p>
+                <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Ready to Finalize?</h2>
+                <p className="text-xs font-bold text-american-red uppercase tracking-widest">Review your dossier and send to headquarters.</p>
               </div>
             </div>
-            <div className="grid gap-4">
-              <input type="text" placeholder="Customer Name" value={estimate.customerName} onChange={(e) => setEstimate({...estimate, customerName: e.target.value})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
-              <input type="email" placeholder="Customer Email" value={estimate.customerEmail} onChange={(e) => setEstimate({...estimate, customerEmail: e.target.value})} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none" />
+            
+            <div className="p-8 rounded-[40px] bg-american-blue text-white shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-8 opacity-10">
+                 <div className="american-star w-32 h-32 bg-white" />
+               </div>
+               <div className="relative z-10 space-y-6">
+                 <div>
+                   <h3 className="text-sm font-black uppercase tracking-widest text-white/60 mb-2">Customer Summary</h3>
+                   <div className="grid gap-2">
+                     <p className="text-2xl font-black italic">"{estimate.customerName || 'No Name Provided'}"</p>
+                     <p className="text-sm font-bold opacity-80">{estimate.customerEmail || 'No Email'}</p>
+                     <p className="text-sm font-bold opacity-80">{estimate.customerPhone || 'No Phone'}</p>
+                     <p className="text-xs font-bold opacity-60 mt-2">{estimate.customerAddress || 'No Address'}</p>
+                   </div>
+                 </div>
+                 
+                 <div className="pt-6 border-t border-white/10">
+                   <h3 className="text-sm font-black uppercase tracking-widest text-white/60 mb-2">Project Scope</h3>
+                   <p className="text-4xl font-black tracking-tighter">{results.lf} <span className="text-lg opacity-40">LF</span></p>
+                   <p className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">{selectedStyle.name} • {estimate.height}' Height</p>
+                 </div>
+               </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <button 
+                onClick={handleSave}
+                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-american-red text-white text-sm font-black uppercase tracking-widest hover:bg-american-red/90 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-american-red/20 outline-none"
+              >
+                <Send size={20} />
+                Submit Dossier
+              </button>
+              <button 
+                onClick={() => setShowInvoice(true)}
+                className="flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-white border-4 border-american-blue text-american-blue text-sm font-black uppercase tracking-widest hover:bg-american-blue/5 hover:scale-[1.02] active:scale-[0.98] transition-all outline-none"
+              >
+                <FileText size={20} />
+                Detailed View
+              </button>
             </div>
           </div>
         );
@@ -1547,6 +1579,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                         ? estimate.runs 
                         : [{ id: 'default', linearFeet: estimate.linearFeet || 100, gates: estimate.gateCount || 0, name: 'Main Run', corners: 0 }];
                       
+                      const maxSpacing = (selectedStyle.type === 'Wood' && estimate.height === 8) ? 6 : 8;
+                      
                       // 1. Calculate raw points based on directions
                       const rawPoints: [number, number][] = [[0, 0]];
                       let currentX = 0;
@@ -1617,6 +1651,17 @@ export default function Estimator({ materials }: EstimatorProps) {
                             const midX = p[0] + (nextP[0] - p[0]) / 2;
                             const midY = p[1] + (nextP[1] - p[1]) / 2;
                             
+                            const sections = Math.max(1, Math.ceil(run.linearFeet / maxSpacing));
+                            const spacing = run.linearFeet / sections;
+                            const linePostsCoords = [];
+                            for (let j = 1; j < sections; j++) {
+                              const fraction = j / sections;
+                              linePostsCoords.push([
+                                p[0] + (nextP[0] - p[0]) * fraction,
+                                p[1] + (nextP[1] - p[1]) * fraction
+                              ]);
+                            }
+                            
                             let textOffsetX = 0;
                             let textOffsetY = 0;
                             let textAnchor = "middle";
@@ -1636,13 +1681,17 @@ export default function Estimator({ materials }: EstimatorProps) {
                             return (
                               <g key={`l-${i}`}>
                                 <line x1={p[0]} y1={p[1]} x2={nextP[0]} y2={nextP[1]} stroke="#3C3B6E" strokeWidth="8" strokeLinecap="round" />
+                                {linePostsCoords.map((pc, pIdx) => (
+                                  <circle key={`lp-${i}-${pIdx}`} cx={pc[0]} cy={pc[1]} r="6" fill="#A5A5A5" stroke="#FFFFFF" strokeWidth="2" />
+                                ))}
                                 <text 
                                   x={midX + textOffsetX} 
                                   y={midY + textOffsetY} 
                                   textAnchor={textAnchor as any} 
                                   className="text-[12px] font-bold fill-american-blue"
                                 >
-                                  {run?.name} ({run?.linearFeet}')
+                                  <tspan x={midX + textOffsetX} dy="0">{run?.name} ({run?.linearFeet}')</tspan>
+                                  <tspan x={midX + textOffsetX} dy="12" className="text-[9px] fill-[#666666] font-medium">Spacing: {spacing.toFixed(2)}' OC</tspan>
                                 </text>
                               </g>
                             );
@@ -1708,16 +1757,20 @@ export default function Estimator({ materials }: EstimatorProps) {
                     })()}
                   </svg>
                   
-                  <div className="absolute bottom-6 left-6 flex gap-4">
-                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                      <div className="w-3 h-3 bg-american-red rounded-full" />
-                      <span className="text-[10px] font-bold uppercase">End Post</span>
+                    <div className="absolute bottom-6 left-6 flex gap-4">
+                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                        <div className="w-3 h-3 bg-american-red rounded-full" />
+                        <span className="text-[10px] font-bold uppercase">End Post</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                        <div className="w-3 h-3 bg-american-blue rounded-sm" />
+                        <span className="text-[10px] font-bold uppercase">Corner Post</span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                        <div className="w-3 h-3 bg-[#A5A5A5] rounded-full border border-white" />
+                        <span className="text-[10px] font-bold uppercase">Line Post</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                      <div className="w-3 h-3 bg-american-blue rounded-sm" />
-                      <span className="text-[10px] font-bold uppercase">Corner Post</span>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-8 grid grid-cols-3 gap-6">

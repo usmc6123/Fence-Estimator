@@ -11,19 +11,13 @@ export const COMPANY_INFO: CompanyInfo = {
 
 export const MATERIALS: MaterialItem[] = [
   // Wood Structure
-  { id: 'w-post-4x4', name: '4x4-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 16.75, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
-  { id: 'w-post-6x6', name: '6x6-8\' PT Wood Post', category: 'Post', unit: 'each', cost: 38.50, description: 'Heavy duty pressure-treated', imageUrl: 'https://cdn.menardc.com/main/items/media/99998/ProductMedium/TreatedTimber_1_P_6x6_2.jpg' },
+  { id: 'w-post-metal-8', name: '2-3/8" x 8\' Sch 20 Metal Post', category: 'Post', unit: 'each', cost: 28.50, description: '.090 wall thickness galvanized', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'w-post-metal-11', name: '2-3/8" x 11\' Sch 20 Metal Post', category: 'Post', unit: 'each', cost: 38.75, description: '.090 wall thickness galvanized', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
   { id: 'w-rail-2x4', name: '2x4-8\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 9.25, description: 'Horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
   { id: 'w-picket-pine', name: '1x6-6\' Pine Picket', category: 'Picket', unit: 'each', cost: 2.85, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
   { id: 'w-picket-w-cedar', name: '1x6-6\' Western Red Cedar Picket', category: 'Picket', unit: 'each', cost: 4.25, description: 'Premium Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
   { id: 'w-picket-j-cedar', name: '1x6-6\' Japanese Cedar Picket', category: 'Picket', unit: 'each', cost: 3.75, description: 'Japanese Cedar (Sugi)', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
   { id: 'w-picket-1x4', name: '1x4-4\' Wood Picket', category: 'Picket', unit: 'each', cost: 2.45, description: 'Standard pine picket', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
-  
-  // Vinyl Structure
-  { id: 'v-post-5x5', name: '5x5-8\' Vinyl Post', category: 'Post', unit: 'each', cost: 48.00, description: 'Hollow PVC post', imageUrl: 'https://pvcfencedepot.com/wp-content/uploads/2022/06/vinyl-end-post.png' },
-  { id: 'v-post-4x4', name: '4x4-8\' Vinyl Post', category: 'Post', unit: 'each', cost: 42.00, description: 'Standard PVC post', imageUrl: 'https://cdn11.bigcommerce.com/s-0f3dd/images/stencil/original/products/682/15692/4x4_post_sleeve__38490.1675952057.png?c=2' },
-  { id: 'v-insert-steel', name: 'Steel I-Beam Insert', category: 'Hardware', unit: 'each', cost: 58.00, description: 'Gate post reinforcement', imageUrl: 'https://vinylfencefittings.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/n/w/nw6351-096-1_1.jpg' },
-  { id: 'v-panel-tg', name: 'T&G Vinyl Panel Slats', category: 'Panel', unit: 'lf', cost: 14.50, description: 'Tongue & Groove vertical slats', imageUrl: 'https://www.showtechfence.com/uploads/202025227/full-vinyl-privacy-fence49586825681.jpg' },
   
   // Chain Link Structure
   { id: 'cl-post-term', name: '2-3/8" Terminal Post', category: 'Post', unit: 'each', cost: 32.00, description: 'End/Corner/Gate post', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
@@ -44,7 +38,6 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'h-bracket-w', name: 'Wood Fence Bracket', category: 'Hardware', unit: 'each', cost: 1.45, description: 'Simpson Strong-Tie', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
   { id: 'h-screw-3', name: '3" Exterior Screws', category: 'Fastener', unit: 'box', cost: 28.00, description: '5lb box, deck rated', imageUrl: 'https://m.media-amazon.com/images/I/61ygv314ECL.jpg' },
   { id: 'h-nail-galv', name: 'Galv Ring-Shank Nails', category: 'Fastener', unit: 'box', cost: 12.50, description: '2" nails, 5lb box', imageUrl: 'https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcT3jXZREnFZgyniF8VdaLdhA9sn2VkSBBtvBDCISL30fG7dvZ3RtpeX5XBRadvkVk2asLsqNDqysLTBkhrSfNDoo-rjbbkBiM5u_rS6xL2C_NfAfHRHCQ8QCvlTIcOjsks9mI2x4FdUlQ&usqp=CAc' },
-  { id: 'h-screw-v', name: 'Vinyl Self-Drilling', category: 'Fastener', unit: 'box', cost: 22.00, description: 'White capped screws', imageUrl: 'https://mobileimages.lowes.com/productimages/3d9dd19e-b914-49f0-8215-9ad09f9e22c0/61389870.jpg?size=pdhism' },
   { id: 'h-cl-band-tens', name: 'Tension Band', category: 'Hardware', unit: 'each', cost: 1.15, description: 'For terminal posts', imageUrl: 'https://www.thetoolsman.com/cdn/shop/files/Grainger_328521C.jpg?v=1713447124' },
   { id: 'h-cl-band-brace', name: 'Brace Band', category: 'Hardware', unit: 'each', cost: 1.25, description: 'For rail ends', imageUrl: 'https://images.thdstatic.com/productImages/a9846dc8-ac20-42cb-83d5-896a93dc00b6/svn/everbilt-chain-link-fence-accessories-328528eb-64_600.jpg' },
   { id: 'h-cl-tie', name: 'Aluminum Fence Ties', category: 'Hardware', unit: 'box', cost: 14.50, description: '100 count', imageUrl: 'https://fencesupplyinc.com/wp-content/uploads/2023/12/fence-ties-9-ga-aluminum-8-1_2-inch_1.jpg' },
@@ -107,7 +100,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     description: 'Durable and affordable galvanized steel mesh fence.',
     availableHeights: [4, 5, 6],
     availableWidths: [10],
-    availableColors: ['Galvanized', 'Black Vinyl', 'Green Vinyl'],
+    availableColors: ['Galvanized'],
     visualStyles: [
       { id: 'cl-std', name: "9ga Galv Mesh 6'", priceModifier: 0, imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
       { id: 'cl-slat', name: 'Privacy Slats', priceModifier: 14.00, imageUrl: 'https://www.hooverfence.com/mas_assets/cache/image/1/0/a/0/x600-68106.Jpg' },

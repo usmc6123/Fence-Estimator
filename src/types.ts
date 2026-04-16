@@ -13,7 +13,7 @@ export interface MaterialItem {
 export interface FenceStyle {
   id: string;
   name: string;
-  type: 'Wood' | 'Vinyl' | 'Aluminum' | 'Chain Link' | 'Metal' | 'Farm';
+  type: 'Wood' | 'Aluminum' | 'Chain Link' | 'Metal' | 'Farm';
   description: string;
   availableHeights: number[];
   availableWidths: number[];
@@ -74,7 +74,7 @@ export interface Estimate {
   // Demolition
   hasDemolition: boolean;
   demoLinearFeet: number;
-  demoType: 'Wood' | 'Chain Link' | 'Metal' | 'Vinyl';
+  demoType: 'Wood' | 'Chain Link' | 'Metal';
   removeConcreteFootings: boolean;
   
   // Site Prep
