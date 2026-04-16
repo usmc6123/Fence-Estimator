@@ -57,3 +57,24 @@ input[type=number] {
   background: #D1D1D1;
 }
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-area, #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  @page {
+    size: landscape;
+    margin: 0.5in;
+  }
+}
+
