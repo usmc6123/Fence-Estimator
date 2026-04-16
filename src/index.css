@@ -58,23 +58,68 @@ input[type=number] {
 }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  #print-area, #print-area * {
-    visibility: visible;
-  }
-  #print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
   @page {
     size: landscape;
-    margin: 0.5in;
+    margin: 0;
+  }
+  
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    background: white !important;
+  }
+
+  /* Use visibility instead of display:none to allow selective appearance */
+  body {
+    visibility: hidden !important;
+  }
+
+  /* Force print area and all its children to be visible */
+  #print-area, #print-area * {
+    visibility: visible !important;
+  }
+
+  /* Position the print area to fill the whole page */
+  #print-area {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure the SVG itself behaves well in print */
+  #print-area svg {
+    width: 96% !important;
+    height: 88% !important;
+    margin-top: 40px !important;
+  }
+
+  /* Header inside the diagram area with correct branding */
+  #print-area::before {
+    content: "Lone Star Fence Works - Layout Diagram";
+    position: absolute;
+    top: 30px;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-family: sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: #002868;
+    visibility: visible !important;
   }
 }
 

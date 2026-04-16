@@ -531,7 +531,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Style Selection</h2>
-                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">Choose Your American Standard</p>
+                  <p className="text-xs font-bold text-american-red uppercase tracking-widest">Select Your Fence Style</p>
                 </div>
               </div>
 
@@ -594,7 +594,7 @@ export default function Estimator({ materials }: EstimatorProps) {
                         <h4 className={cn("text-xl font-black transition-colors mb-1 tracking-tight uppercase", estimate.visualStyleId === vs.id ? "text-american-red" : "text-american-blue")}>
                           {vs.name}
                         </h4>
-                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em]">American Standard</p>
+                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em]">Standard Selection</p>
                       </div>
                     </button>
                   ))}
@@ -1645,8 +1645,9 @@ export default function Estimator({ materials }: EstimatorProps) {
                       const rawHeight = maxY - minY;
                       
                       // 3. Scale and offset to fit SVG viewBox (1100x850 - Landscape Letter)
-                      const paddingX = 80;
-                      const paddingY = 80;
+                      // Internal padding to ensure labels (which are offset from lines) don't get cut off
+                      const paddingX = 70;
+                      const paddingY = 90;
                       const availWidth = 1100 - paddingX * 2;
                       const availHeight = 850 - paddingY * 2;
                       
@@ -1659,8 +1660,8 @@ export default function Estimator({ materials }: EstimatorProps) {
                         scale = availHeight / rawHeight;
                       }
                       
-                      // Cap scale to prevent tiny fences from looking gigantic
-                      scale = Math.min(scale, 15);
+                      // Cap scale to prevent tiny fences from looking gigantic, but allow it to be larger for better fit
+                      scale = Math.min(scale, 25);
                       
                       const scaledWidth = rawWidth * scale;
                       const scaledHeight = rawHeight * scale;
@@ -1713,14 +1714,14 @@ export default function Estimator({ materials }: EstimatorProps) {
                             let textAnchor = "middle";
                             
                             if (dirIndex === 0) { // Right
-                              textOffsetY = -45;
+                              textOffsetY = -35;
                             } else if (dirIndex === 1) { // Down
-                              textOffsetX = 45;
+                              textOffsetX = 35;
                               textAnchor = "start";
                             } else if (dirIndex === 2) { // Left
-                              textOffsetY = 65;
+                              textOffsetY = 50;
                             } else if (dirIndex === 3) { // Up
-                              textOffsetX = -45;
+                              textOffsetX = -35;
                               textAnchor = "end";
                             }
                             
@@ -1840,20 +1841,40 @@ export default function Estimator({ materials }: EstimatorProps) {
                 </div>
               </div>
               
-              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex justify-end gap-3">
-                <button 
-                  onClick={() => window.print()}
-                  className="px-6 py-3 bg-white border-2 border-american-blue text-american-blue rounded-xl font-bold text-sm hover:bg-american-blue/5 transition-all flex items-center gap-2"
-                >
-                  <Printer size={18} />
-                  Print Diagram
-                </button>
-                <button 
-                  onClick={() => setShowDiagram(false)}
-                  className="px-8 py-3 bg-american-blue text-white rounded-xl font-bold text-sm hover:bg-american-blue/90 transition-all"
-                >
-                  Close Diagram
-                </button>
+              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] text-american-red font-bold uppercase tracking-widest">Printing Issue?</p>
+                  <p className="text-[9px] text-[#999999] max-w-[200px] leading-tight italic">
+                    The browser blocks printing inside this preview window. Use the red button to open the app in a new tab where printing is enabled.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <a 
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3 bg-white border-2 border-american-red text-american-red rounded-xl font-bold text-sm hover:bg-american-red/5 transition-all flex items-center gap-2 shadow-sm"
+                  >
+                    <Share2 size={18} />
+                    Open in New Tab
+                  </a>
+                  <button 
+                    onClick={() => {
+                      window.focus();
+                      window.print();
+                    }}
+                    className="px-6 py-3 bg-white border-2 border-american-blue text-american-blue rounded-xl font-bold text-sm hover:bg-american-blue/5 transition-all flex items-center gap-2 shadow-sm"
+                  >
+                    <Printer size={18} />
+                    Print Diagram
+                  </button>
+                  <button 
+                    onClick={() => setShowDiagram(false)}
+                    className="px-8 py-3 bg-american-blue text-white rounded-xl font-bold text-sm hover:bg-american-blue/90 transition-all shadow-md"
+                  >
+                    Close Diagram
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
