@@ -178,28 +178,28 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] rounded-[32px] p-1 overflow-hidden shadow-2xl">
+            <div className="bg-white rounded-[32px] p-1 overflow-hidden border-2 border-american-blue/5 shadow-lg">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
                     <th className="px-8 py-6">Item Specification</th>
                     <th className="px-8 py-6 text-center">Total Quantity</th>
                     <th className="px-8 py-6">Category</th>
                     {showPrices && <th className="px-8 py-6 text-right">Aggregated Cost</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y-2 divide-[#F8F9FA]">
                   {data.summary.map((item, i) => (
-                    <tr key={i} className="text-sm font-bold text-white/90 hover:bg-white/5 transition-colors">
+                    <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
                       <td className="px-8 py-5 flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
                         {item.name}
                       </td>
                       <td className="px-8 py-5 text-center">
-                        <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                        <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black">{item.qty} {item.unit}</span>
                       </td>
                       <td className="px-8 py-5">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/30">{item.category}</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
                       </td>
                       {showPrices && <td className="px-8 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>}
                     </tr>

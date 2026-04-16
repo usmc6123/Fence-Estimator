@@ -121,6 +121,8 @@ export interface Estimate {
   // Accessories
   postCapId: string;
   hasCapAndTrim: boolean;
+  hasDoubleTrim?: boolean;
+  hasTopCap?: boolean;
   gateCount: number;
   gateStyleId: string;
   

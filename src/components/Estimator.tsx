@@ -59,6 +59,10 @@ export default function Estimator({
         aggregatedData.lf += runLF;
         aggregatedData.gates += runGates;
 
+        // 6' Wood Fence Specific Logic
+        const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
+        const maxSpacing = is6ftWood ? 6 : ((runStyle.type === 'Wood' && run.height === 8) ? 6 : 8);
+
         // Posts calculation for this run
         let runEndPosts = 0;
         let runDoubleGates = 0;
@@ -71,7 +75,6 @@ export default function Estimator({
           runEndPosts += runGates * 2;
         }
 
-        const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
         const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
         const runCornerPosts = (idx === runs.length - 1) ? 0 : 1; // Between runs
         const startEndPosts = (idx === 0 ? 1 : 0) + (idx === runs.length - 1 ? 1 : 0);
@@ -94,6 +97,13 @@ export default function Estimator({
           rawItems.push({ name: postMat.name, qty: runPostCount, unitCost: postMat.cost, total: postCost, category: 'Structure' });
         }
 
+        // Add Post Caps for Wood
+        if (runStyle.type === 'Wood') {
+          const capId = estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome';
+          const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+          rawItems.push({ name: capMat.name, qty: runPostCount, unitCost: capMat.cost, total: runPostCount * capMat.cost, category: 'Hardware' });
+        }
+
         // Pickets / Panels
         let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
         let panelQty = 0;
@@ -102,7 +112,9 @@ export default function Estimator({
         const netLF = Math.max(0, runLF - runGateWidth);
 
         if (runStyle.type === 'Wood') {
-          panelQty = Math.ceil((netLF / 0.458) * wasteFactor);
+          const isBob = run.visualStyleId === 'w-bob';
+          const picketsPerFoot = isBob ? 2.6 : 2.0;
+          panelQty = Math.ceil((netLF * picketsPerFoot) * wasteFactor);
           const woodType = run.woodType || estimate.woodType;
           if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
           else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
@@ -125,52 +137,123 @@ export default function Estimator({
         }
 
         // Gates
-        if (runGates > 0) {
-          const gateMat = materials.find(m => m.id === estimate.gateStyleId) || materials[0];
-          const gateTotal = runGates * gateMat.cost;
-          const existingGate = rawItems.find(i => i.name === gateMat.name);
-          if (existingGate) {
-            existingGate.qty += runGates;
-            existingGate.total += gateTotal;
-          } else {
-            rawItems.push({ name: gateMat.name, qty: runGates, unitCost: gateMat.cost, total: gateTotal, category: 'Gate' });
-          }
-          
-          const latchMat = materials.find(m => m.id === 'g-latch-grav');
-          if (latchMat) {
-            const existingLatch = rawItems.find(i => i.name === latchMat.name);
-            if (existingLatch) {
-              existingLatch.qty += runGates;
-              existingLatch.total += runGates * latchMat.cost;
-            } else {
-              rawItems.push({ name: latchMat.name, qty: runGates, unitCost: latchMat.cost, total: runGates * latchMat.cost, category: 'Gate' });
-            }
-          }
-
-          if (runDoubleGates > 0) {
-            const sharkKit = materials.find(m => m.id === 'g-kit-shark');
-            if (sharkKit) {
-              const existingShark = rawItems.find(i => i.name === sharkKit.name);
-              if (existingShark) {
-                existingShark.qty += runDoubleGates;
-                existingShark.total += runDoubleGates * sharkKit.cost;
+        if (run.gateDetails && run.gateDetails.length > 0) {
+          run.gateDetails.forEach(gate => {
+            if (runStyle.type === 'Wood') {
+              if (gate.type === 'Double') {
+                // Shark Kit ONLY
+                const sharkKit = materials.find(m => m.id === 'g-kit-shark')!;
+                const existing = rawItems.find(i => i.name === sharkKit.name);
+                if (existing) {
+                  existing.qty += 1;
+                  existing.total += sharkKit.cost;
+                } else {
+                  rawItems.push({ name: sharkKit.name, qty: 1, unitCost: sharkKit.cost, total: sharkKit.cost, category: 'Gate' });
+                }
               } else {
-                rawItems.push({ name: sharkKit.name, qty: runDoubleGates, unitCost: sharkKit.cost, total: runDoubleGates * sharkKit.cost, category: 'Gate' });
+                // 3-Hinge Kit + 2x4x12s
+                const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge')!;
+                const existingKit = rawItems.find(i => i.name === hingeKit.name);
+                if (existingKit) {
+                  existingKit.qty += 1;
+                  existingKit.total += hingeKit.cost;
+                } else {
+                  rawItems.push({ name: hingeKit.name, qty: 1, unitCost: hingeKit.cost, total: hingeKit.cost, category: 'Gate' });
+                }
+
+                // Determine rail material for gate bracing
+                let rId = 'w-rail-pine-12';
+                if (run.woodType === 'Japanese Cedar') rId = 'w-rail-j-cedar-12';
+                else if (run.woodType === 'Western Red Cedar') rId = 'w-rail-w-cedar-12';
+                const rMat = materials.find(m => m.id === rId)!;
+                const gateBracingName = `${rMat.name} (Gate Bracing)`;
+                const existingRails = rawItems.find(i => i.name === gateBracingName);
+                if (existingRails) {
+                  existingRails.qty += 2;
+                  existingRails.total += 2 * rMat.cost;
+                } else {
+                  rawItems.push({ name: gateBracingName, qty: 2, unitCost: rMat.cost, total: 2 * rMat.cost, category: 'Structure' });
+                }
+              }
+            } else {
+              // Non-wood logic
+              const gateMat = materials.find(m => m.category === 'Gate' && (m.id === estimate.gateStyleId || m.id === 'g-kit-wood')) || materials.find(m => m.category === 'Gate')!;
+              const existingGate = rawItems.find(i => i.name === gateMat.name);
+              if (existingGate) {
+                existingGate.qty += 1;
+                existingGate.total += gateMat.cost;
+              } else {
+                rawItems.push({ name: gateMat.name, qty: 1, unitCost: gateMat.cost, total: gateMat.cost, category: 'Gate' });
+              }
+              
+              const latchMat = materials.find(m => m.id === 'g-latch-grav');
+              if (latchMat) {
+                const existingLatch = rawItems.find(i => i.name === latchMat.name);
+                if (existingLatch) {
+                  existingLatch.qty += 1;
+                  existingLatch.total += latchMat.cost;
+                } else {
+                  rawItems.push({ name: latchMat.name, qty: 1, unitCost: latchMat.cost, total: latchMat.cost, category: 'Gate' });
+                }
+              }
+
+              if (gate.type === 'Double') {
+                const sharkKit = materials.find(m => m.id === 'g-kit-shark');
+                if (sharkKit) {
+                  const existingShark = rawItems.find(i => i.name === sharkKit.name);
+                  if (existingShark) {
+                    existingShark.qty += 1;
+                    existingShark.total += sharkKit.cost;
+                  } else {
+                    rawItems.push({ name: sharkKit.name, qty: 1, unitCost: sharkKit.cost, total: sharkKit.cost, category: 'Gate' });
+                  }
+                }
               }
             }
-          }
+          });
         }
 
         // Hardware (Rails/Brackets)
         if (runStyle.type === 'Wood') {
-          const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-          const bracketQty = Math.ceil(netLF * logic.railsPerLF);
-          const existingBracket = rawItems.find(i => i.name === bracketMat.name);
-          if (existingBracket) {
-            existingBracket.qty += bracketQty;
-            existingBracket.total += bracketQty * bracketMat.cost;
+          if (is6ftWood) {
+             // Brackets for 6' wood
+             const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+             const bracketQty = runPostCount * 4;
+             rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
+
+             // Lags for 6' wood
+             const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+             const lagQty = bracketQty * 4;
+             rawItems.push({ name: lagMat.name, qty: lagQty, unitCost: lagMat.cost, total: lagQty * lagMat.cost, category: 'Hardware' });
+
+             // Rails for 6' wood (12ft sections)
+             const sectionCount12 = Math.ceil(runLF / 12);
+             let railId = 'w-rail-pine-12';
+             if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-12';
+             else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-12';
+             
+             const railMat = materials.find(m => m.id === railId)!;
+             const railQty = sectionCount12 * 3;
+             rawItems.push({ name: railMat.name, qty: railQty, unitCost: railMat.cost, total: railQty * railMat.cost, category: 'Structure' });
+
+             // Rot board for 6' wood
+             const rotBoardMat = materials.find(m => m.id === 'w-rot-board-12')!;
+             rawItems.push({ name: rotBoardMat.name, qty: sectionCount12, unitCost: rotBoardMat.cost, total: sectionCount12 * rotBoardMat.cost, category: 'Structure' });
+
+             // Concrete for this run
+             const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+             const runConcreteBags = Math.ceil(runPostCount * 0.7);
+             rawItems.push({ name: concreteMat.name, qty: runConcreteBags, unitCost: concreteMat.cost, total: runConcreteBags * concreteMat.cost, category: 'Installation' });
+
+             // Nails for this run
+             const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
+             const nailQty = Number(((panelQty * 6) / 2500).toFixed(2));
+             rawItems.push({ name: nailsMat.name, qty: Math.max(0.1, nailQty), unitCost: nailsMat.cost, total: Math.max(0.1, nailQty) * nailsMat.cost, category: 'Hardware' });
           } else {
-            rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
+             // Generic wood logic
+             const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+             const bracketQty = Math.ceil(netLF * logic.railsPerLF);
+             rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
           }
         }
 
@@ -189,18 +272,22 @@ export default function Estimator({
           }
         }
 
-        if (estimate.hasCapAndTrim && runStyle.type === 'Wood') {
-          const capTrimMat = materials.find(m => m.id === 'f-cap-trim');
-          if (capTrimMat) {
-            const total = runLF * capTrimMat.cost;
-            const existing = rawItems.find(i => i.name === capTrimMat.name);
-            if (existing) {
-              existing.qty += runLF;
-              existing.total += total;
-            } else {
-              rawItems.push({ name: capTrimMat.name, qty: runLF, unitCost: capTrimMat.cost, total: total, category: 'Finishing' });
-            }
-          }
+        if (is6ftWood) {
+           if (estimate.hasCapAndTrim) {
+              const trimMat = materials.find(m => m.id === 'f-cap-trim')!;
+              const trimQty = Math.ceil(runLF / 8);
+              rawItems.push({ name: trimMat.name, qty: trimQty, unitCost: trimMat.cost, total: trimQty * trimMat.cost, category: 'Finishing' });
+           }
+           if (estimate.hasDoubleTrim) {
+              const doubleTrimMat = materials.find(m => m.id === 'f-double-trim-1x2')!;
+              const trimQty = Math.ceil(runLF / 8);
+              rawItems.push({ name: doubleTrimMat.name, qty: trimQty, unitCost: doubleTrimMat.cost, total: trimQty * doubleTrimMat.cost, category: 'Finishing' });
+           }
+           if (estimate.hasTopCap) {
+              const topCapMat = materials.find(m => m.id === 'f-top-cap-2x6')!;
+              const topCapQty = Math.ceil(runLF / 12);
+              rawItems.push({ name: topCapMat.name, qty: topCapQty, unitCost: topCapMat.cost, total: topCapQty * topCapMat.cost, category: 'Finishing' });
+           }
         }
 
         if (estimate.includeStain && !run.isPreStained && runStyle.type === 'Wood') {
@@ -262,33 +349,31 @@ export default function Estimator({
 
         aggregatedData.runBreakdown.push({ id: run.id, name: run.name, total: postCost + panelTotal + runLaborTotal });
       });
+    } else {
+      // Global Gates Fallback logic if no runs defined
+      if (estimate.gateCount && estimate.gateCount > 0) {
+        if (defaultStyle.type === 'Wood') {
+            const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge')!;
+            rawItems.push({ name: hingeKit.name, qty: estimate.gateCount, unitCost: hingeKit.cost, total: estimate.gateCount * hingeKit.cost, category: 'Gate' });
+            
+            const rMat = materials.find(m => m.id === 'w-rail-pine-12')!;
+            rawItems.push({ name: `${rMat.name} (Gate Bracing)`, qty: estimate.gateCount * 2, unitCost: rMat.cost, total: estimate.gateCount * 2 * rMat.cost, category: 'Structure' });
+
+            const gateLabor = estimate.gateCount * globalLaborRates.gateWoodWalk;
+            rawItems.push({ name: 'Labor - Global Gates', qty: 1, unitCost: gateLabor, total: gateLabor, category: 'Labor' });
+        } else {
+            const gateMat = materials.find(m => m.category === 'Gate')!;
+            rawItems.push({ name: gateMat.name, qty: estimate.gateCount, unitCost: gateMat.cost, total: estimate.gateCount * gateMat.cost, category: 'Gate' });
+            
+            const gateLabor = estimate.gateCount * globalLaborRates.gateWeldedFrame;
+            rawItems.push({ name: 'Labor - Global Gates', qty: 1, unitCost: gateLabor, total: gateLabor, category: 'Labor' });
+        }
+      }
     }
 
     const lf = aggregatedData.lf || estimate.linearFeet || 0;
     const gates = aggregatedData.gates || estimate.gateCount || 0;
     const postCount = aggregatedData.postCount || Math.ceil(lf / 8) + 1;
-
-    // Fasteners and Generic Hardware (Aggregated)
-    const fastenerMat = materials.find(m => m.id === 'h-nail-galv')!;
-    const fastenerQty = Math.ceil(lf / 50);
-    rawItems.push({ name: fastenerMat.name, qty: fastenerQty, unitCost: fastenerMat.cost, total: fastenerQty * fastenerMat.cost, category: 'Hardware' });
-
-    // Post Caps (Aggregated)
-    const capMat = materials.find(m => m.id === estimate.postCapId);
-    if (capMat) {
-      rawItems.push({ name: capMat.name, qty: postCount, unitCost: capMat.cost, total: postCount * capMat.cost, category: 'Hardware' });
-    }
-
-    // Concrete & Gravel (Aggregated)
-    const concreteBags = Math.ceil(postCount * 1.5); // Default safety
-    const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-    rawItems.push({ name: concreteMat.name, qty: concreteBags, unitCost: concreteMat.cost, total: concreteBags * concreteMat.cost, category: 'Installation' });
-
-    if (estimate.includeGravel) {
-      const gravelMat = materials.find(m => m.id === 'i-gravel')!;
-      const gravelQty = Math.ceil(postCount * 0.5 / 27);
-      rawItems.push({ name: gravelMat.name, qty: gravelQty, unitCost: gravelMat.cost, total: gravelQty * gravelMat.cost, category: 'Installation' });
-    }
 
     // Demolition (Aggregated)
     if (estimate.hasDemolition) {
@@ -865,7 +950,20 @@ export default function Estimator({
                           <div className="flex flex-wrap gap-3">
                             {run.gateDetails?.map((gate, gIdx) => (
                               <div key={gate.id} className="flex items-center gap-3 bg-white p-2 px-3 rounded-xl border border-[#F0F0F0] shadow-sm">
-                                <span className="text-[10px] font-black uppercase text-american-blue">{gate.type} {gate.width}' Gate</span>
+                                <select 
+                                  value={`${gate.type}-${gate.width}`}
+                                  onChange={(e) => {
+                                    const [gType, gWidth] = e.target.value.split('-');
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
+                                    newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer pr-4"
+                                >
+                                  <option value="Single-4">4' Walk Gate</option>
+                                  <option value="Double-12">Double 6' Drive Gate</option>
+                                </select>
                                 <button
                                   onClick={() => {
                                     const newRuns = [...estimate.runs!];
@@ -977,10 +1075,24 @@ export default function Estimator({
                     <span className="text-sm">Include Drainage Gravel (0.5 cu ft/hole)</span>
                   </label>
                   {defaultStyle.type === 'Wood' && (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={estimate.includeStain} onChange={(e) => setEstimate({...estimate, includeStain: e.target.checked})} className="rounded border-[#E5E5E5]" />
-                      <span className="text-sm">Include Sealant/Stain (1 gal / 175 sq ft)</span>
-                    </label>
+                    <div className="space-y-3 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={estimate.includeStain} onChange={(e) => setEstimate({...estimate, includeStain: e.target.checked})} className="rounded border-[#E5E5E5]" />
+                        <span className="text-sm">Include Sealant/Stain</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={estimate.hasCapAndTrim} onChange={(e) => setEstimate({...estimate, hasCapAndTrim: e.target.checked})} className="rounded border-[#E5E5E5]" />
+                        <span className="text-sm">Top Trim (1x4)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={estimate.hasDoubleTrim} onChange={(e) => setEstimate({...estimate, hasDoubleTrim: e.target.checked})} className="rounded border-[#E5E5E5]" />
+                        <span className="text-sm">Double Trim (1x2)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={estimate.hasTopCap} onChange={(e) => setEstimate({...estimate, hasTopCap: e.target.checked})} className="rounded border-[#E5E5E5]" />
+                        <span className="text-sm">Top Cap (2x6)</span>
+                      </label>
+                    </div>
                   )}
                 </div>
               </div>

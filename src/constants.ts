@@ -13,7 +13,10 @@ export const MATERIALS: MaterialItem[] = [
   // Wood Structure
   { id: 'w-post-metal-8', name: '2-3/8" x 8\' Sch 20 Metal Post', category: 'Post', unit: 'each', cost: 28.50, description: '.090 wall thickness galvanized', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
   { id: 'w-post-metal-11', name: '2-3/8" x 11\' Sch 20 Metal Post', category: 'Post', unit: 'each', cost: 38.75, description: '.090 wall thickness galvanized', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
-  { id: 'w-rail-2x4', name: '2x4-8\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 9.25, description: 'Horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
+  { id: 'w-rail-pine-12', name: '2x4-12\' PT Wood Rail', category: 'Rail', unit: 'each', cost: 13.50, description: '12ft PT Pine horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
+  { id: 'w-rail-w-cedar-12', name: '2x4-12\' Western Red Cedar Rail', category: 'Rail', unit: 'each', cost: 24.75, description: '12ft Western Red Cedar horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
+  { id: 'w-rail-j-cedar-12', name: '2x4-12\' Japanese Cedar Rail', category: 'Rail', unit: 'each', cost: 19.50, description: '12ft Japanese Cedar horizontal support', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
+  { id: 'w-rot-board-12', name: '2x6-12\' PT Pine Rot Board', category: 'Rail', unit: 'each', cost: 16.50, description: '2x6-12ft Bottom PT Pine rot board', imageUrl: 'https://mobileimages.lowes.com/productimages/99ab7dc6-bf36-4121-9665-15b150f372a2/65213111.jpg' },
   { id: 'w-picket-pine', name: '1x6-6\' Pine Picket', category: 'Picket', unit: 'each', cost: 2.85, description: 'Pressure-treated pine', imageUrl: 'https://images.thdstatic.com/productImages/1ba2667d-0dc4-4b85-b047-7a4660cfe8a7/svn/pressure-treated-lumber-194354-64_1000.jpg' },
   { id: 'w-picket-w-cedar', name: '1x6-6\' Western Red Cedar Picket', category: 'Picket', unit: 'each', cost: 4.25, description: 'Premium Western Red Cedar', imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
   { id: 'w-picket-j-cedar', name: '1x6-6\' Japanese Cedar Picket', category: 'Picket', unit: 'each', cost: 3.75, description: 'Japanese Cedar (Sugi)', imageUrl: 'https://m.media-amazon.com/images/I/41b0RJrZRKL.jpg' },
@@ -36,6 +39,7 @@ export const MATERIALS: MaterialItem[] = [
   
   // Hardware & Fasteners
   { id: 'h-bracket-w', name: 'Wood Fence Bracket', category: 'Hardware', unit: 'each', cost: 1.45, description: 'Simpson Strong-Tie', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
+  { id: 'h-lag-14', name: '1/4" Lag Screws (for brackets)', category: 'Fastener', unit: 'each', cost: 0.35, description: '1/4" galvanized lag', imageUrl: 'https://m.media-amazon.com/images/I/61ygv314ECL.jpg' },
   { id: 'h-screw-3', name: '3" Exterior Screws', category: 'Fastener', unit: 'box', cost: 28.00, description: '5lb box, deck rated', imageUrl: 'https://m.media-amazon.com/images/I/61ygv314ECL.jpg' },
   { id: 'h-nail-galv', name: 'Galv Ring-Shank Nails', category: 'Fastener', unit: 'box', cost: 12.50, description: '2" nails, 5lb box', imageUrl: 'https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcT3jXZREnFZgyniF8VdaLdhA9sn2VkSBBtvBDCISL30fG7dvZ3RtpeX5XBRadvkVk2asLsqNDqysLTBkhrSfNDoo-rjbbkBiM5u_rS6xL2C_NfAfHRHCQ8QCvlTIcOjsks9mI2x4FdUlQ&usqp=CAc' },
   { id: 'h-cl-band-tens', name: 'Tension Band', category: 'Hardware', unit: 'each', cost: 1.15, description: 'For terminal posts', imageUrl: 'https://www.thetoolsman.com/cdn/shop/files/Grainger_328521C.jpg?v=1713447124' },
@@ -43,14 +47,13 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'h-cl-tie', name: 'Aluminum Fence Ties', category: 'Hardware', unit: 'box', cost: 14.50, description: '100 count', imageUrl: 'https://fencesupplyinc.com/wp-content/uploads/2023/12/fence-ties-9-ga-aluminum-8-1_2-inch_1.jpg' },
   
   // Gates
-  { id: 'g-kit-wood', name: 'Heavy Duty Gate Kit', category: 'Gate', unit: 'each', cost: 72.00, description: 'Hinges, latch, anti-sag', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
+  { id: 'g-kit-3-hinge', name: '3-Hinge Wood Gate Kit', category: 'Gate', unit: 'each', cost: 42.00, description: 'Three heavy duty hinges specifically for wood walk gates', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
   { id: 'g-kit-shark', name: 'Metal Frame Shark Hinge Gate Kit', category: 'Gate', unit: 'each', cost: 145.00, description: 'Heavy duty double gate kit', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
   { id: 'g-latch-grav', name: 'Gravity Latch', category: 'Gate', unit: 'each', cost: 26.50, description: 'Pool-safe closure', imageUrl: 'https://static.grainger.com/rp/s/is/image/Grainger/1XMP1_AS01?$adapimg$&hei=536&wid=536' },
   
   // Installation
   { id: 'i-concrete-80', name: '80lb Concrete Mix', category: 'Concrete', unit: 'bag', cost: 6.75, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },
   { id: 'i-concrete-fast', name: 'Fast-Set Concrete', category: 'Concrete', unit: 'bag', cost: 9.25, description: 'Quikrete Red Bag', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
-  { id: 'i-gravel', name: 'Crushed Stone', category: 'Concrete', unit: 'cu yd', cost: 48.00, description: 'For post drainage', imageUrl: 'https://vanputte.com/wp-content/uploads/2021/06/Washed-1-Crushed-Bulk-Stone-1000x1000-2.jpg' },
   { id: 'i-foam', name: 'Post-Setting Foam', category: 'Concrete', unit: 'each', cost: 18.50, description: '2-part expanding foam', imageUrl: 'https://images.thdstatic.com/productImages/bc70eb23-9f73-4ce7-95b4-b048b422ee33/svn/sika-deck-parts-accessories-7116170-c3_600.jpg' },
   
   // Demolition
@@ -67,12 +70,14 @@ export const MATERIALS: MaterialItem[] = [
   // Finishing
   { id: 'f-stain', name: 'Wood Sealant/Stain', category: 'Finishing', unit: 'gallon', cost: 52.00, description: 'Premium protection', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
   { id: 'f-pre-stain', name: 'Factory Pre-Staining Service', category: 'Finishing', unit: 'lf', cost: 4.50, description: 'Factory applied finish per LF', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
-  { id: 'f-cap-trim', name: 'Cap & Trim Upgrade', category: 'Finishing', unit: 'lf', cost: 5.50, description: 'Top cap and trim boards', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
+  { id: 'f-cap-trim', name: 'Top Trim (1x4x8)', category: 'Finishing', unit: 'each', cost: 6.50, description: '1x4-8ft top trim board', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
+  { id: 'f-double-trim-1x2', name: 'Double Trim (1x2x8)', category: 'Finishing', unit: 'each', cost: 4.25, description: '1x2-8ft trim for double trim application', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
+  { id: 'f-top-cap-2x6', name: 'Top Cap (2x6x12)', category: 'Finishing', unit: 'each', cost: 18.25, description: '2x6-12ft top cap rail', imageUrl: 'https://cedarcreekfences.com/wp-content/uploads/2020/01/11-Boxed-Posts-1024x768.jpg' },
   { id: 'f-shims', name: 'Leveling Shims', category: 'Consumable', unit: 'box', cost: 9.50, description: 'For rail alignment', imageUrl: 'https://i.ebayimg.com/images/g/SAcAAOSwTc5b6aQR/s-l1200.jpg' },
   
   // Post Caps
-  { id: 'pc-pyramid', name: 'Pyramid Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },
-  { id: 'pc-gothic', name: 'Gothic Cap', category: 'PostCap', unit: 'each', cost: 7.25, imageUrl: 'https://i5.walmartimages.com/seo/Universal-Forest-Products-106515-Gothic-Post-Top_430dfd8e-82a1-46c2-995e-13a418bab791.a479575ff19a8db23738c5346e194433.jpeg?odnHeight=2000&odnWidth=2000&odnBg=FFFFFF' },
+  { id: 'pc-flat', name: 'Flat Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },
+  { id: 'pc-dome', name: 'Dome Cap', category: 'PostCap', unit: 'each', cost: 7.25, imageUrl: 'https://i5.walmartimages.com/seo/Universal-Forest-Products-106515-Gothic-Post-Top_430dfd8e-82a1-46c2-995e-13a418bab791.a479575ff19a8db23738c5346e194433.jpeg?odnHeight=2000&odnWidth=2000&odnBg=FFFFFF' },
   { id: 'pc-solar', name: 'Solar LED Cap', category: 'PostCap', unit: 'each', cost: 22.00, imageUrl: 'https://s.turbifycdn.com/aah/yhst-99239380869547/classy-caps-kingsbridge-white-dual-lighted-solar-post-cap-442.png' },
 ];
 
@@ -109,7 +114,7 @@ export const FENCE_STYLES: FenceStyle[] = [
       { id: 'w-bob', name: 'Board on Board', priceModifier: 4.50, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
       { id: 'w-horiz', name: 'Horizontal', priceModifier: 6.00, imageUrl: 'https://images.squarespace-cdn.com/content/v1/59df95b3f14aa1927776f821/1510695034637-67X6S6Y6Y6Y6Y6Y6Y6Y6/Horizontal+Fence+Austin' },
     ],
-    calcLogic: { postsPerLF: 0.125, railsPerLF: 0.375, picketsPerLF: 2.1, concretePerPost: 1.5 },
+    calcLogic: { postsPerLF: 0.167, railsPerLF: 0.25, picketsPerLF: 2.0, concretePerPost: 0.7 },
     baseLaborRate: 14.50,
   },
   {
