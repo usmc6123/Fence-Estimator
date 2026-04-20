@@ -61,7 +61,7 @@ export default function Estimator({
 
         // 6' Wood Fence Specific Logic
         const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
-        const maxSpacing = is6ftWood ? 6 : ((runStyle.type === 'Wood' && run.height === 8) ? 6 : 8);
+        const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
 
         // Posts calculation for this run
         let runEndPosts = 0;
@@ -247,19 +247,19 @@ export default function Estimator({
              const lagQty = bracketQty * 4;
              rawItems.push({ name: lagMat.name, qty: lagQty, unitCost: lagMat.cost, total: lagQty * lagMat.cost, category: 'Hardware' });
 
-             // Rails for 6' wood (12ft sections)
-             const sectionCount12 = Math.ceil(runLF / 12);
-             let railId = 'w-rail-pine-12';
-             if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-12';
-             else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-12';
+             // Rails for 6' wood (16ft sections)
+             const sectionCount16 = Math.ceil(runLF / 16);
+             let railId = 'w-rail-pine-16';
+             if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-16';
+             else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-16';
              
              const railMat = materials.find(m => m.id === railId)!;
-             const railQty = sectionCount12 * 3;
+             const railQty = sectionCount16 * 3;
              rawItems.push({ name: railMat.name, qty: railQty, unitCost: railMat.cost, total: railQty * railMat.cost, category: 'Structure' });
 
              // Rot board for 6' wood
-             const rotBoardMat = materials.find(m => m.id === 'w-rot-board-12')!;
-             rawItems.push({ name: rotBoardMat.name, qty: sectionCount12, unitCost: rotBoardMat.cost, total: sectionCount12 * rotBoardMat.cost, category: 'Structure' });
+             const rotBoardMat = materials.find(m => m.id === 'w-rot-board-16')!;
+             rawItems.push({ name: rotBoardMat.name, qty: sectionCount16, unitCost: rotBoardMat.cost, total: sectionCount16 * rotBoardMat.cost, category: 'Structure' });
 
              // Nails for this run
              const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;

@@ -192,7 +192,7 @@ export function calculateDetailedTakeOff(
     
     // 6' Wood Fence Specific Logic
     const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
-    const maxSpacing = is6ftWood ? 6 : ((runStyle.type === 'Wood' && run.height === 8) ? 6 : 8);
+    const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
     
     const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
     const runCornerPosts = (idx === runs.length - 1) ? 0 : 1;
@@ -303,14 +303,14 @@ export function calculateDetailedTakeOff(
         category: 'Hardware'
       });
 
-      // Rails and Rot Board (12ft sections)
-      const sectionCount12 = Math.ceil(runLF / 12);
-      let railId = 'w-rail-pine-12';
-      if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-12';
-      else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-12';
+      // Rails and Rot Board (16ft sections for 6ft Wood)
+      const sectionCount16 = Math.ceil(runLF / 16);
+      let railId = 'w-rail-pine-16';
+      if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-16';
+      else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-16';
       
       const railMat = materials.find(m => m.id === railId)!;
-      const railQty = sectionCount12 * 3;
+      const railQty = sectionCount16 * 3;
       runItems.push({
         id: railMat.id,
         name: railMat.name,
@@ -321,14 +321,14 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      const rotBoardMat = materials.find(m => m.id === 'w-rot-board-12')!;
+      const rotBoardMat = materials.find(m => m.id === 'w-rot-board-16')!;
       runItems.push({
         id: rotBoardMat.id,
         name: rotBoardMat.name,
-        qty: sectionCount12,
+        qty: sectionCount16,
         unit: rotBoardMat.unit,
         unitCost: rotBoardMat.cost,
-        total: sectionCount12 * rotBoardMat.cost,
+        total: sectionCount16 * rotBoardMat.cost,
         category: 'Structure'
       });
 
