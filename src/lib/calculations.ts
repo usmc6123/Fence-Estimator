@@ -200,6 +200,8 @@ export function calculateDetailedTakeOff(
     let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
     if (runStyle.type === 'Wood') {
       postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+    } else if (runStyle.type === 'Pipe') {
+      postMat = materials.find(m => m.id === (run.height >= 5 ? 'p-post-238-10' : 'p-post-238-8')) || postMat;
     }
 
     runItems.push({
@@ -212,20 +214,31 @@ export function calculateDetailedTakeOff(
       category: 'Structure'
     });
 
-    // Post Caps for Wood Fence
-    if (runStyle.type === 'Wood') {
-      const capId = estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome';
-      const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
-      runItems.push({
-        id: capMat.id,
-        name: capMat.name,
-        qty: runPostCount,
-        unit: capMat.unit,
-        unitCost: capMat.cost,
-        total: runPostCount * capMat.cost,
-        category: 'Hardware'
-      });
-    }
+    // Post Caps (One for every post)
+    const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
+    const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+    runItems.push({
+      id: capMat.id,
+      name: capMat.name,
+      qty: runPostCount,
+      unit: capMat.unit,
+      unitCost: capMat.cost,
+      total: runPostCount * capMat.cost,
+      category: 'Hardware'
+    });
+
+    // Concrete (.7 Bags per post)
+    const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+    const concreteQty = Math.ceil(runPostCount * 0.7);
+    runItems.push({
+      id: concreteMat.id,
+      name: concreteMat.name,
+      qty: concreteQty,
+      unit: concreteMat.unit,
+      unitCost: concreteMat.cost,
+      total: concreteQty * concreteMat.cost,
+      category: 'Installation'
+    });
 
     // Pickets
     let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
@@ -240,6 +253,11 @@ export function calculateDetailedTakeOff(
       else if (run.woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
+      if (runStyle.type === 'Metal') {
+        if (run.height === 4) panelMat = materials.find(m => m.id === 'm-panel-4x8') || panelMat;
+        else if (run.height === 5) panelMat = materials.find(m => m.id === 'm-panel-5x8') || panelMat;
+        else panelMat = materials.find(m => m.id === 'm-panel-std') || panelMat;
+      }
     }
     
     const panelUnitCost = panelMat.cost + runVisualStyle.priceModifier;
@@ -306,19 +324,6 @@ export function calculateDetailedTakeOff(
         unitCost: rotBoardMat.cost,
         total: sectionCount12 * rotBoardMat.cost,
         category: 'Structure'
-      });
-
-      // Concrete for this run
-      const concreteBags = Math.ceil(runPostCount * 0.7);
-      const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-      runItems.push({
-        id: concreteMat.id,
-        name: concreteMat.name,
-        qty: concreteBags,
-        unit: concreteMat.unit,
-        unitCost: concreteMat.cost,
-        total: concreteBags * concreteMat.cost,
-        category: 'Installation'
       });
 
       // Nails for this run
@@ -411,32 +416,6 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      // 2 3/8" posts every 8'- length= Fence height+4'
-      const postCount = Math.ceil(runLF / 8) + 1;
-      const postMatId = run.height >= 6 ? 'p-post-238-10' : 'p-post-238-8';
-      const postMat = materials.find(m => m.id === postMatId)!;
-      runItems.push({
-        id: postMat.id,
-        name: postMat.name,
-        qty: postCount,
-        unit: postMat.unit,
-        unitCost: postMat.cost,
-        total: postCount * postMat.cost,
-        category: 'Structure'
-      });
-
-      // 2 3/8" dome caps- One for every fence run
-      const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
-      runItems.push({
-        id: domeCapMat.id,
-        name: domeCapMat.name,
-        qty: 1,
-        unit: domeCapMat.unit,
-        unitCost: domeCapMat.cost,
-        total: domeCapMat.cost,
-        category: 'Hardware'
-      });
-
       // 2 3/8" EZ ties- 12 for every 8 linear feet of fence
       const tieMat = materials.find(m => m.id === 'p-ez-tie')!;
       const tieQty = Math.ceil((runLF / 8) * 12);
@@ -448,18 +427,6 @@ export function calculateDetailedTakeOff(
         unitCost: tieMat.cost,
         total: tieQty * tieMat.cost,
         category: 'Hardware'
-      });
-
-      // (2) bags of concrete per fence run
-      const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-      runItems.push({
-        id: concreteMat.id,
-        name: concreteMat.name,
-        qty: 2,
-        unit: concreteMat.unit,
-        unitCost: concreteMat.cost,
-        total: 2 * concreteMat.cost,
-        category: 'Installation'
       });
 
       // No climb horse fence- Equal to the height and overall length of fence

@@ -31,7 +31,9 @@ export const MATERIALS: MaterialItem[] = [
   
   // Metal Structure
   { id: 'm-post-2x2', name: '2x2 Wrought Iron Post', category: 'Post', unit: 'each', cost: 38.00, description: 'Powder coated black', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
-  { id: 'm-panel-std', name: '6x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 195.00, description: 'Pre-welded section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-4x8', name: '4x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 165.00, description: 'Pre-welded 4ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-5x8', name: '5x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 180.00, description: 'Pre-welded 5ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-std', name: '6x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 195.00, description: 'Pre-welded 6ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
   
   // Farm Structure
   { id: 'f-post-t', name: '6\' Steel T-Post', category: 'Post', unit: 'each', cost: 8.25, description: 'Agricultural steel post', imageUrl: 'https://d2j6dbq0eux0bg.cloudfront.net/images/96378769/4289817609.jpg' },

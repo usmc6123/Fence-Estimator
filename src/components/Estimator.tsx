@@ -86,6 +86,8 @@ export default function Estimator({
         let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
         if (runStyle.type === 'Wood') {
           postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+        } else if (runStyle.type === 'Pipe') {
+          postMat = materials.find(m => m.id === (run.height >= 5 ? 'p-post-238-10' : 'p-post-238-8')) || postMat;
         }
         
         const postCost = runPostCount * postMat.cost;
@@ -97,11 +99,26 @@ export default function Estimator({
           rawItems.push({ name: postMat.name, qty: runPostCount, unitCost: postMat.cost, total: postCost, category: 'Structure' });
         }
 
-        // Add Post Caps for Wood
-        if (runStyle.type === 'Wood') {
-          const capId = estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome';
-          const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+        // Post Caps (One for every post)
+        const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
+        const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+        const existingCap = rawItems.find(i => i.name === capMat.name);
+        if (existingCap) {
+          existingCap.qty += runPostCount;
+          existingCap.total += runPostCount * capMat.cost;
+        } else {
           rawItems.push({ name: capMat.name, qty: runPostCount, unitCost: capMat.cost, total: runPostCount * capMat.cost, category: 'Hardware' });
+        }
+
+        // Concrete (.7 Bags per post)
+        const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+        const runConcreteBags = Math.ceil(runPostCount * 0.7);
+        const existingConcrete = rawItems.find(i => i.name === concreteMat.name);
+        if (existingConcrete) {
+          existingConcrete.qty += runConcreteBags;
+          existingConcrete.total += runConcreteBags * concreteMat.cost;
+        } else {
+          rawItems.push({ name: concreteMat.name, qty: runConcreteBags, unitCost: concreteMat.cost, total: runConcreteBags * concreteMat.cost, category: 'Installation' });
         }
 
         // Pickets / Panels
@@ -240,11 +257,6 @@ export default function Estimator({
              const rotBoardMat = materials.find(m => m.id === 'w-rot-board-12')!;
              rawItems.push({ name: rotBoardMat.name, qty: sectionCount12, unitCost: rotBoardMat.cost, total: sectionCount12 * rotBoardMat.cost, category: 'Structure' });
 
-             // Concrete for this run
-             const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-             const runConcreteBags = Math.ceil(runPostCount * 0.7);
-             rawItems.push({ name: concreteMat.name, qty: runConcreteBags, unitCost: concreteMat.cost, total: runConcreteBags * concreteMat.cost, category: 'Installation' });
-
              // Nails for this run
              const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
              const nailQty = Number(((panelQty * 6) / 2500).toFixed(2));
@@ -314,20 +326,9 @@ export default function Estimator({
           const railMat = materials.find(m => m.id === 'p-rail-238')!;
           rawItems.push({ name: railMat.name, qty: runLF, unitCost: railMat.cost, total: runLF * railMat.cost, category: 'Structure' });
 
-          const postCount = Math.ceil(runLF / 8) + 1;
-          const postMatId = run.height >= 6 ? 'p-post-238-10' : 'p-post-238-8';
-          const pMat = materials.find(m => m.id === postMatId)!;
-          rawItems.push({ name: pMat.name, qty: postCount, unitCost: pMat.cost, total: postCount * pMat.cost, category: 'Structure' });
-
-          const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
-          rawItems.push({ name: domeCapMat.name, qty: 1, unitCost: domeCapMat.cost, total: domeCapMat.cost, category: 'Hardware' });
-
           const tieMat = materials.find(m => m.id === 'p-ez-tie')!;
           const tieQty = Math.ceil((runLF / 8) * 12);
           rawItems.push({ name: tieMat.name, qty: tieQty, unitCost: tieMat.cost, total: tieQty * tieMat.cost, category: 'Hardware' });
-
-          const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-          rawItems.push({ name: concreteMat.name, qty: 2, unitCost: concreteMat.cost, total: 2 * concreteMat.cost, category: 'Installation' });
 
           const wireMat = materials.find(m => m.id === 'p-no-climb')!;
           rawItems.push({ name: wireMat.name, qty: runLF, unitCost: wireMat.cost, total: runLF * wireMat.cost, category: 'Infill' });
@@ -352,6 +353,12 @@ export default function Estimator({
           if (estimate.hasCapAndTrim) runLaborRate += rates.topCap;
         } else if (runStyle.type === 'Metal') {
           runLaborRate = (run.ironInstallType === 'Weld up') ? rates.ironWeldUp : rates.ironBoltUp;
+          // Update panel for height
+          if (run.height === 4) panelMat = materials.find(m => m.id === 'm-panel-4x8') || panelMat;
+          else if (run.height === 5) panelMat = materials.find(m => m.id === 'm-panel-5x8') || panelMat;
+          else panelMat = materials.find(m => m.id === 'm-panel-std') || panelMat;
+          
+          picketDisplayName = panelMat.name;
         } else if (runStyle.type === 'Chain Link') {
           runLaborRate = rates.chainLink;
         } else {
@@ -1759,14 +1766,14 @@ export default function Estimator({
                             let textAnchor = "middle";
                             
                             if (dirIndex === 0) { // Right
-                              textOffsetY = -50;
+                              textOffsetY = -80;
                             } else if (dirIndex === 1) { // Down
-                              textOffsetX = 50;
+                              textOffsetX = 80;
                               textAnchor = "start";
                             } else if (dirIndex === 2) { // Left
-                              textOffsetY = 65;
+                              textOffsetY = 95;
                             } else if (dirIndex === 3) { // Up
-                              textOffsetX = -50;
+                              textOffsetX = -80;
                               textAnchor = "end";
                             }
                             
