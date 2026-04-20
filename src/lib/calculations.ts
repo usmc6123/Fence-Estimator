@@ -87,7 +87,9 @@ export function calculateDetailedTakeOff(
 
     if (run.gateDetails && run.gateDetails.length > 0) {
       run.gateDetails.forEach(gate => {
-        runEndPosts += gate.type === 'Double' ? 2 : 1;
+        if (runStyle.type !== 'Metal') {
+          runEndPosts += gate.type === 'Double' ? 2 : 1;
+        }
         gateLF += gate.width || 4;
         
         // Gate specific items
@@ -261,9 +263,13 @@ export function calculateDetailedTakeOff(
     }
     
     const panelUnitCost = panelMat.cost + runVisualStyle.priceModifier;
+    const panelName = runStyle.type === 'Metal' 
+      ? `${run.height}'x8' Wrought Iron ${runVisualStyle.name}` 
+      : panelMat.name;
+
     runItems.push({
       id: panelMat.id,
-      name: panelMat.name,
+      name: panelName,
       qty: panelQty,
       unit: panelMat.unit,
       unitCost: panelUnitCost,

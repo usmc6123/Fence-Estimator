@@ -68,11 +68,15 @@ export default function Estimator({
         let runDoubleGates = 0;
         if (run.gateDetails && run.gateDetails.length > 0) {
           run.gateDetails.forEach(gate => {
-            runEndPosts += gate.type === 'Double' ? 2 : 1;
+            if (runStyle.type !== 'Metal') {
+              runEndPosts += gate.type === 'Double' ? 2 : 1;
+            }
             if (gate.type === 'Double') runDoubleGates++;
           });
         } else {
-          runEndPosts += runGates * 2;
+          if (runStyle.type !== 'Metal') {
+            runEndPosts += runGates * 2;
+          }
         }
 
         const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
@@ -358,7 +362,7 @@ export default function Estimator({
           else if (run.height === 5) panelMat = materials.find(m => m.id === 'm-panel-5x8') || panelMat;
           else panelMat = materials.find(m => m.id === 'm-panel-std') || panelMat;
           
-          picketDisplayName = panelMat.name;
+          picketDisplayName = `${run.height}'x8' Wrought Iron ${runVisualStyle.name}`;
         } else if (runStyle.type === 'Chain Link') {
           runLaborRate = rates.chainLink;
         } else {
@@ -987,34 +991,54 @@ export default function Estimator({
                             </button>
                           </div>
                           
-                          <div className="flex flex-wrap gap-3">
+                          <div className="space-y-3">
                             {run.gateDetails?.map((gate, gIdx) => (
-                              <div key={gate.id} className="flex items-center gap-3 bg-white p-2 px-3 rounded-xl border border-[#F0F0F0] shadow-sm">
-                                <select 
-                                  value={`${gate.type}-${gate.width}`}
-                                  onChange={(e) => {
-                                    const [gType, gWidth] = e.target.value.split('-');
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
-                                    newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer pr-4"
-                                >
-                                  <option value="Single-4">4' Walk Gate</option>
-                                  <option value="Double-12">Double 6' Drive Gate</option>
-                                </select>
-                                <button
-                                  onClick={() => {
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
-                                    newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className="text-[#CCCCCC] hover:text-american-red"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                              <div key={gate.id} className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-[#F0F0F0] shadow-sm">
+                                <div className="flex items-center justify-between">
+                                  <select 
+                                    value={`${gate.type}-${gate.width}`}
+                                    onChange={(e) => {
+                                      const [gType, gWidth] = e.target.value.split('-');
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
+                                      newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer"
+                                  >
+                                    <option value="Single-4">4' Walk Gate</option>
+                                    <option value="Double-12">Double 6' Drive Gate</option>
+                                  </select>
+                                  <button
+                                    onClick={() => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                      newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="text-[#CCCCCC] hover:text-american-red"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-[8px] font-black uppercase text-[#BBBBBB]">
+                                    <span>Location on Run</span>
+                                    <span>{gate.position || 0} FT</span>
+                                  </div>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max={Math.max(0, run.linearFeet - gate.width)}
+                                    value={gate.position || 0}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].gateDetails![gIdx].position = Number(e.target.value);
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full h-1 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-red"
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>

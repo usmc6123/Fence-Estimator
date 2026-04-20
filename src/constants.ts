@@ -151,8 +151,8 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['Black', 'Bronze', 'White'],
     visualStyles: [
-      { id: 'm-flat', name: '6x8 Wrought Iron Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-      { id: 'm-spear', name: 'Spear Top', priceModifier: 6.50, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+      { id: 'm-flat', name: 'Standard Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+      { id: 'm-spear', name: 'Spear Top Panel', priceModifier: 6.50, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },
     baseLaborRate: 19.50,
