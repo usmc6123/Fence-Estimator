@@ -81,10 +81,11 @@ export function calculateDetailedTakeOff(
     let hingePostCount = 0;
 
     // Resolve rail material early for gates
-    const isStained = run.isPreStained;
+    const isStained = run.isPreStained || estimate.isPreStained;
+    const woodType = run.woodType || estimate.woodType;
     let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
-    if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
-    else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
+    if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+    else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
     const railMat = materials.find(m => m.id === railId)!;
 
     if (run.gateDetails && run.gateDetails.length > 0) {
@@ -277,9 +278,9 @@ export function calculateDetailedTakeOff(
       const divisor = isBob ? 4.5 : 5.5; // BoB: 5.5" board + 3.5" gap = 9" for 2 boards (4.5" avg)
       panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
       
-      if (run.woodType === 'PT Pine') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
-      else if (run.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
-      else if (run.woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
+      if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
+      else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
+      else if (woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
       if (runStyle.type === 'Metal') {
@@ -305,7 +306,7 @@ export function calculateDetailedTakeOff(
     });
 
     // Brackets and Lags for 6' Wood
-    if (is6ftWood && !run.reusePosts) {
+    if (is6ftWood) {
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
       const bracketQty = runPostCount * 4;
       runItems.push({
@@ -334,8 +335,8 @@ export function calculateDetailedTakeOff(
       const sectionCount8 = Math.ceil(runLF / 8);
       const sectionCount16 = Math.ceil(runLF / 16);
       let railId = isStained ? 'w-rail-pine-8-stained' : 'w-rail-pine-8';
-      if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
-      else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
+      if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
+      else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
       
       const railMat = materials.find(m => m.id === railId)!;
       const railQty = sectionCount8 * 3;
@@ -376,7 +377,7 @@ export function calculateDetailedTakeOff(
     }
 
     // Brackets and Rails (Fallback for non-6ft Wood)
-    if (runStyle.type === 'Wood' && !is6ftWood && !run.reusePosts) {
+    if (runStyle.type === 'Wood' && !is6ftWood) {
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
       const railsCount = run.height > 6 ? 4 : 3;
       const bracketQty = runPostCount * railsCount;
@@ -395,8 +396,8 @@ export function calculateDetailedTakeOff(
       const sectionCount16 = Math.ceil(runLF / 16);
       
       let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
-      if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
-      else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
+      if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+      else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
       
       const railMat = materials.find(m => m.id === railId)!;
       const railQty = sectionCount12 * railsCount;
@@ -420,6 +421,31 @@ export function calculateDetailedTakeOff(
         unitCost: rotBoardMat.cost,
         total: sectionCount16 * rotBoardMat.cost,
         category: 'Structure'
+      });
+
+      // Lags and Nails for non-6ft Wood
+      const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+      const lagQty = bracketQty * 4;
+      runItems.push({
+        id: lagMat.id,
+        name: lagMat.name,
+        qty: lagQty,
+        unit: lagMat.unit,
+        unitCost: lagMat.cost,
+        total: lagQty * lagMat.cost,
+        category: 'Hardware'
+      });
+
+      const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
+      const nailQty = Number(((panelQty * 6) / 2500).toFixed(2));
+      runItems.push({
+        id: nailsMat.id,
+        name: nailsMat.name,
+        qty: Math.max(0.1, nailQty),
+        unit: nailsMat.unit,
+        unitCost: nailsMat.cost,
+        total: Math.max(0.1, nailQty) * nailsMat.cost,
+        category: 'Hardware'
       });
     }
 

@@ -169,7 +169,7 @@ export default function Estimator({
           const divisor = isBob ? 4.5 : 5.5; 
           panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
           const woodType = run.woodType || estimate.woodType;
-          const isStained = run.isPreStained;
+          const isStained = run.isPreStained || estimate.isPreStained;
           if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
           else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
           else if (woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
@@ -216,10 +216,11 @@ export default function Estimator({
                 }
 
                 // Determine rail material for gate bracing
-                const isStained = run.isPreStained;
+                const isStained = run.isPreStained || estimate.isPreStained;
+                const woodType = run.woodType || estimate.woodType;
                 let rId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
-                if (run.woodType === 'Japanese Cedar') rId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
-                else if (run.woodType === 'Western Red Cedar') rId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
+                if (woodType === 'Japanese Cedar') rId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+                else if (woodType === 'Western Red Cedar') rId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
                 const rMat = materials.find(m => m.id === rId)!;
                 const gateBracingName = `${rMat.name} (Gate Bracing)`;
                 const existingRails = rawItems.find(i => i.name === gateBracingName);
@@ -269,7 +270,7 @@ export default function Estimator({
         }
 
         // Hardware (Rails/Brackets)
-        if (runStyle.type === 'Wood' && !run.reusePosts) {
+        if (runStyle.type === 'Wood') {
           if (is6ftWood) {
              // Brackets for 6' wood
              const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
@@ -282,11 +283,12 @@ export default function Estimator({
              rawItems.push({ name: lagMat.name, qty: lagQty, unitCost: lagMat.cost, total: lagQty * lagMat.cost, category: 'Hardware' });
 
              // Rails for 6' wood (8ft sections)
-             const isStained = run.isPreStained;
+             const isStained = run.isPreStained || estimate.isPreStained;
+             const woodType = run.woodType || estimate.woodType;
              const sectionCount8 = Math.ceil(runLF / 8);
              let railId = isStained ? 'w-rail-pine-8-stained' : 'w-rail-pine-8';
-             if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
-             else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
+             if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
+             else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
              
              const railMat = materials.find(m => m.id === railId)!;
              const railQty = sectionCount8 * 3;
@@ -309,13 +311,14 @@ export default function Estimator({
              const bracketQty = runPostCount * railsCount;
              rawItems.push({ name: bracketMat.name, qty: bracketQty, unitCost: bracketMat.cost, total: bracketQty * bracketMat.cost, category: 'Hardware' });
 
-             const isStained = run.isPreStained;
+             const isStained = run.isPreStained || estimate.isPreStained;
+             const woodType = run.woodType || estimate.woodType;
              const sectionCount12 = Math.ceil(runLF / 12);
              const sectionCount16 = Math.ceil(runLF / 16);
              
              let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
-             if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
-             else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
+             if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+             else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
              
              const railMat = materials.find(m => m.id === railId)!;
              const railQty = sectionCount12 * railsCount;
@@ -324,6 +327,15 @@ export default function Estimator({
              const rotBoardId = isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16';
              const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
              rawItems.push({ name: rotBoardMat.name, qty: sectionCount16, unitCost: rotBoardMat.cost, total: sectionCount16 * rotBoardMat.cost, category: 'Structure' });
+
+             // Lags and Nails for non-6ft Wood
+             const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+             const lagQty = bracketQty * 4;
+             rawItems.push({ name: lagMat.name, qty: lagQty, unitCost: lagMat.cost, total: lagQty * lagMat.cost, category: 'Hardware' });
+
+             const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
+             const nailQty = Number(((panelQty * 6) / 2500).toFixed(2));
+             rawItems.push({ name: nailsMat.name, qty: Math.max(0.1, nailQty), unitCost: nailsMat.cost, total: Math.max(0.1, nailQty) * nailsMat.cost, category: 'Hardware' });
           }
         }
 
