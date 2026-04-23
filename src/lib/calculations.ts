@@ -78,6 +78,7 @@ export function calculateDetailedTakeOff(
     // Posts for run
     let runEndPosts = 0;
     let gateLF = 0;
+    let hingePostCount = 0;
 
     // Resolve rail material early for gates
     let railId = 'w-rail-pine-12';
@@ -89,6 +90,9 @@ export function calculateDetailedTakeOff(
       run.gateDetails.forEach(gate => {
         if (runStyle.type !== 'Metal') {
           runEndPosts += gate.type === 'Double' ? 2 : 1;
+        }
+        if (runStyle.type === 'Wood') {
+          hingePostCount += (gate.type === 'Double' ? 2 : 1);
         }
         gateLF += gate.width || 4;
         
@@ -198,49 +202,70 @@ export function calculateDetailedTakeOff(
     const runCornerPosts = (idx === runs.length - 1) ? 0 : 1;
     const startEndPosts = (idx === 0 ? 1 : 0) + (idx === runs.length - 1 ? 1 : 0);
     const runPostCount = runLinePosts + runEndPosts + runCornerPosts + startEndPosts;
+    const stdPostCount = Math.max(0, runPostCount - hingePostCount);
 
-    let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
-    if (runStyle.type === 'Wood') {
-      postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
-    } else if (runStyle.type === 'Pipe') {
-      postMat = materials.find(m => m.id === (run.height >= 5 ? 'p-post-238-10' : 'p-post-238-8')) || postMat;
+    if (!run.reusePosts) {
+      // Standard Posts
+      if (stdPostCount > 0) {
+        let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
+        if (runStyle.type === 'Wood') {
+          postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+        } else if (runStyle.type === 'Pipe') {
+          postMat = materials.find(m => m.id === (run.height >= 5 ? 'p-post-238-10' : 'p-post-238-8')) || postMat;
+        }
+
+        runItems.push({
+          id: postMat.id,
+          name: postMat.name,
+          qty: stdPostCount,
+          unit: postMat.unit,
+          unitCost: postMat.cost,
+          total: stdPostCount * postMat.cost,
+          category: 'Structure'
+        });
+      }
+
+      // Hinge Posts (1' deeper)
+      if (hingePostCount > 0 && runStyle.type === 'Wood') {
+        const hingeId = run.height === 8 ? 'w-post-metal-12' : 'w-post-metal-9';
+        const hingeMat = materials.find(m => m.id === hingeId)!;
+        runItems.push({
+          id: hingeMat.id,
+          name: `${hingeMat.name} (Gate Hinge)`,
+          qty: hingePostCount,
+          unit: hingeMat.unit,
+          unitCost: hingeMat.cost,
+          total: hingePostCount * hingeMat.cost,
+          category: 'Structure'
+        });
+      }
+
+      // Post Caps (One for every post)
+      const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
+      const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+      runItems.push({
+        id: capMat.id,
+        name: capMat.name,
+        qty: runPostCount,
+        unit: capMat.unit,
+        unitCost: capMat.cost,
+        total: runPostCount * capMat.cost,
+        category: 'Hardware'
+      });
+
+      // Concrete (.7 Bags per post)
+      const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
+      const concreteQty = Math.ceil(runPostCount * 0.7);
+      runItems.push({
+        id: concreteMat.id,
+        name: concreteMat.name,
+        qty: concreteQty,
+        unit: concreteMat.unit,
+        unitCost: concreteMat.cost,
+        total: concreteQty * concreteMat.cost,
+        category: 'Installation'
+      });
     }
-
-    runItems.push({
-      id: postMat.id,
-      name: postMat.name,
-      qty: runPostCount,
-      unit: postMat.unit,
-      unitCost: postMat.cost,
-      total: runPostCount * postMat.cost,
-      category: 'Structure'
-    });
-
-    // Post Caps (One for every post)
-    const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
-    const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
-    runItems.push({
-      id: capMat.id,
-      name: capMat.name,
-      qty: runPostCount,
-      unit: capMat.unit,
-      unitCost: capMat.cost,
-      total: runPostCount * capMat.cost,
-      category: 'Hardware'
-    });
-
-    // Concrete (.7 Bags per post)
-    const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-    const concreteQty = Math.ceil(runPostCount * 0.7);
-    runItems.push({
-      id: concreteMat.id,
-      name: concreteMat.name,
-      qty: concreteQty,
-      unit: concreteMat.unit,
-      unitCost: concreteMat.cost,
-      total: concreteQty * concreteMat.cost,
-      category: 'Installation'
-    });
 
     // Pickets
     let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
@@ -250,9 +275,9 @@ export function calculateDetailedTakeOff(
       const picketsPerFoot = isBob ? 2.6 : 2.0;
       panelQty = Math.ceil((netLF * picketsPerFoot) * wasteFactor);
       
-      if (run.woodType === 'PT Pine') panelMat = materials.find(m => m.id === 'w-picket-pine') || panelMat;
-      else if (run.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === 'w-picket-j-cedar') || panelMat;
-      else if (run.woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === 'w-picket-w-cedar') || panelMat;
+      if (run.woodType === 'PT Pine') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
+      else if (run.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
+      else if (run.woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
       if (runStyle.type === 'Metal') {
@@ -278,7 +303,7 @@ export function calculateDetailedTakeOff(
     });
 
     // Brackets and Lags for 6' Wood
-    if (is6ftWood) {
+    if (is6ftWood && !run.reusePosts) {
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
       const bracketQty = runPostCount * 4;
       runItems.push({
@@ -303,14 +328,15 @@ export function calculateDetailedTakeOff(
         category: 'Hardware'
       });
 
-      // Rails and Rot Board (16ft sections for 6ft Wood)
+      // Rails and Rot Board (8ft rails, 16ft rot board for 6ft Wood)
+      const sectionCount8 = Math.ceil(runLF / 8);
       const sectionCount16 = Math.ceil(runLF / 16);
-      let railId = 'w-rail-pine-16';
-      if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-16';
-      else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-16';
+      let railId = 'w-rail-pine-8';
+      if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-8';
+      else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-8';
       
       const railMat = materials.find(m => m.id === railId)!;
-      const railQty = sectionCount16 * 3;
+      const railQty = sectionCount8 * 3;
       runItems.push({
         id: railMat.id,
         name: railMat.name,
@@ -347,7 +373,7 @@ export function calculateDetailedTakeOff(
     }
 
     // Brackets (Fallback for non-6ft)
-    if (runStyle.type === 'Wood' && !is6ftWood) {
+    if (runStyle.type === 'Wood' && !is6ftWood && !run.reusePosts) {
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
       const bracketQty = Math.ceil(netLF * logic.railsPerLF);
       runItems.push({

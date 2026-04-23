@@ -53,6 +53,7 @@ export interface FenceRun {
   height: number;
   color: string;
   isPreStained?: boolean;
+  reusePosts?: boolean;
   woodType?: 'PT Pine' | 'Western Red Cedar' | 'Japanese Cedar';
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
