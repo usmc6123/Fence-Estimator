@@ -143,7 +143,7 @@ export const FENCE_STYLES: FenceStyle[] = [
       { id: 'w-bob', name: 'Board on Board', priceModifier: 4.50, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
       { id: 'w-horiz', name: 'Horizontal', priceModifier: 6.00, imageUrl: 'https://images.squarespace-cdn.com/content/v1/59df95b3f14aa1927776f821/1510695034637-67X6S6Y6Y6Y6Y6Y6Y6Y6/Horizontal+Fence+Austin' },
     ],
-    calcLogic: { postsPerLF: 0.167, railsPerLF: 0.25, picketsPerLF: 2.0, concretePerPost: 0.7 },
+    calcLogic: { postsPerLF: 0.167, railsPerLF: 0.25, picketsPerLF: 2.2, concretePerPost: 0.7 },
     baseLaborRate: 14.50,
   },
   {

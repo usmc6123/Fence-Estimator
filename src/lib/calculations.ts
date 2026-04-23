@@ -272,9 +272,10 @@ export function calculateDetailedTakeOff(
     let panelMat = materials.find(m => (m.category === 'Panel' || m.category === 'Picket') && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
     let panelQty = 0;
     if (runStyle.type === 'Wood') {
+      const totalInches = netLF * 12;
       const isBob = run.visualStyleId === 'w-bob';
-      const picketsPerFoot = isBob ? 2.6 : 2.0;
-      panelQty = Math.ceil((netLF * picketsPerFoot) * wasteFactor);
+      const divisor = isBob ? 4.5 : 5.5; // BoB: 5.5" board + 3.5" gap = 9" for 2 boards (4.5" avg)
+      panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
       
       if (run.woodType === 'PT Pine') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
       else if (run.woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (run.isPreStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;

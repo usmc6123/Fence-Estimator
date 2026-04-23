@@ -164,9 +164,10 @@ export default function Estimator({
         const netLF = Math.max(0, runLF - runGateWidth);
 
         if (runStyle.type === 'Wood') {
+          const totalInches = netLF * 12;
           const isBob = run.visualStyleId === 'w-bob';
-          const picketsPerFoot = isBob ? 2.6 : 2.0;
-          panelQty = Math.ceil((netLF * picketsPerFoot) * wasteFactor);
+          const divisor = isBob ? 4.5 : 5.5; 
+          panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
           const woodType = run.woodType || estimate.woodType;
           const isStained = run.isPreStained;
           if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
