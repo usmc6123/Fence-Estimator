@@ -81,9 +81,10 @@ export function calculateDetailedTakeOff(
     let hingePostCount = 0;
 
     // Resolve rail material early for gates
-    let railId = 'w-rail-pine-12';
-    if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-12';
-    else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-12';
+    const isStained = run.isPreStained;
+    let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
+    if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+    else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
     const railMat = materials.find(m => m.id === railId)!;
 
     if (run.gateDetails && run.gateDetails.length > 0) {
@@ -331,9 +332,9 @@ export function calculateDetailedTakeOff(
       // Rails and Rot Board (8ft rails, 16ft rot board for 6ft Wood)
       const sectionCount8 = Math.ceil(runLF / 8);
       const sectionCount16 = Math.ceil(runLF / 16);
-      let railId = 'w-rail-pine-8';
-      if (run.woodType === 'Japanese Cedar') railId = 'w-rail-j-cedar-8';
-      else if (run.woodType === 'Western Red Cedar') railId = 'w-rail-w-cedar-8';
+      let railId = isStained ? 'w-rail-pine-8-stained' : 'w-rail-pine-8';
+      if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
+      else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
       
       const railMat = materials.find(m => m.id === railId)!;
       const railQty = sectionCount8 * 3;
@@ -347,7 +348,8 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      const rotBoardMat = materials.find(m => m.id === 'w-rot-board-16')!;
+      const rotBoardId = isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16';
+      const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
       runItems.push({
         id: rotBoardMat.id,
         name: rotBoardMat.name,
@@ -372,10 +374,11 @@ export function calculateDetailedTakeOff(
       });
     }
 
-    // Brackets (Fallback for non-6ft)
+    // Brackets and Rails (Fallback for non-6ft Wood)
     if (runStyle.type === 'Wood' && !is6ftWood && !run.reusePosts) {
       const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-      const bracketQty = Math.ceil(netLF * logic.railsPerLF);
+      const railsCount = run.height > 6 ? 4 : 3;
+      const bracketQty = runPostCount * railsCount;
       runItems.push({
         id: bracketMat.id,
         name: bracketMat.name,
@@ -384,6 +387,38 @@ export function calculateDetailedTakeOff(
         unitCost: bracketMat.cost,
         total: bracketQty * bracketMat.cost,
         category: 'Hardware'
+      });
+
+      // Rails and Rot Boards for non-6ft
+      const sectionCount12 = Math.ceil(runLF / 12);
+      const sectionCount16 = Math.ceil(runLF / 16);
+      
+      let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
+      if (run.woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
+      else if (run.woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
+      
+      const railMat = materials.find(m => m.id === railId)!;
+      const railQty = sectionCount12 * railsCount;
+      runItems.push({
+        id: railMat.id,
+        name: railMat.name,
+        qty: railQty,
+        unit: railMat.unit,
+        unitCost: railMat.cost,
+        total: railQty * railMat.cost,
+        category: 'Structure'
+      });
+
+      const rotBoardId = isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16';
+      const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
+      runItems.push({
+        id: rotBoardMat.id,
+        name: rotBoardMat.name,
+        qty: sectionCount16,
+        unit: rotBoardMat.unit,
+        unitCost: rotBoardMat.cost,
+        total: sectionCount16 * rotBoardMat.cost,
+        category: 'Structure'
       });
     }
 
