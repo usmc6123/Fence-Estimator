@@ -9,13 +9,15 @@ import Estimator from './components/Estimator';
 import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
 import MaterialTakeOff from './components/MaterialTakeOff';
+import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES } from './constants';
-import { MaterialItem, LaborRates, Estimate } from './types';
+import { MaterialItem, LaborRates, Estimate, SupplierQuote } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('estimator');
   const [materials, setMaterials] = React.useState<MaterialItem[]>(MATERIALS);
+  const [quotes, setQuotes] = React.useState<SupplierQuote[]>([]);
   const [laborRates, setLaborRates] = React.useState<LaborRates>(DEFAULT_LABOR_RATES);
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
     customerName: '',
@@ -78,6 +80,14 @@ export default function App() {
       )}
       {activeTab === 'takeoff' && (
         <MaterialTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
+      )}
+      {activeTab === 'quotes' && (
+        <QuoteManager 
+          materials={materials} 
+          setMaterials={setMaterials} 
+          quotes={quotes} 
+          setQuotes={setQuotes} 
+        />
       )}
       {activeTab === 'settings' && <Settings />}
     </Layout>

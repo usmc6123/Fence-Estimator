@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hammer, Calculator, Book, Settings, Menu, X, FileText } from 'lucide-react';
+import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -16,6 +16,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
     { id: 'takeoff', label: 'Material Take-off', icon: FileText },
+    { id: 'quotes', label: 'Supplier Quotes', icon: TrendingUp },
     { id: 'library', label: 'Materials', icon: Book },
     { id: 'labor', label: 'Labor Pricing', icon: Hammer },
     { id: 'settings', label: 'Settings', icon: Settings },

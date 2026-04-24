@@ -79,6 +79,27 @@ export interface LaborRates {
   gateHangPreMade: number;
 }
 
+export interface QuoteItem {
+  id: string;
+  materialName: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  mappedMaterialId?: string; // Links to our MaterialLibrary
+}
+
+export interface SupplierQuote {
+  id: string;
+  supplierName: string;
+  date: string;
+  items: QuoteItem[];
+  totalAmount: number;
+  fileUrl?: string; // For the "uploaded" visual
+  fileName?: string;
+  fileType?: string;
+}
+
 export interface Estimate {
   id: string;
   customerName: string;
@@ -142,6 +163,9 @@ export interface Estimate {
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;
+
+  // Supplier Quotes
+  quotes?: SupplierQuote[];
 }
 
 export interface CompanyInfo {
