@@ -186,6 +186,28 @@ export default function Settings() {
                 </button>
               </div>
             )}
+
+            {/* Danger Zone */}
+            <div className="pt-8 mt-8 border-t border-red-100 space-y-4">
+              <h3 className="text-sm font-black text-american-red uppercase tracking-widest">Danger Zone</h3>
+              <div className="p-6 rounded-2xl bg-red-50 border border-red-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div>
+                  <h4 className="text-sm font-bold text-red-900 line-clamp-1">Reset Application Data</h4>
+                  <p className="text-xs text-red-700 mt-1">This will permanently delete all custom materials, quotes, and saved estimates from this device.</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    if (confirm('Are you absolutely sure? This cannot be undone.')) {
+                      localStorage.clear();
+                      window.location.reload();
+                    }
+                  }}
+                  className="shrink-0 px-6 py-3 bg-white border-2 border-red-200 text-red-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
+                >
+                  Clear All Data
+                </button>
+              </div>
+            </div>
           </motion.div>
         </div>
       </div>

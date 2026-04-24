@@ -8,6 +8,7 @@ export interface MaterialItem {
   cost: number;
   description?: string;
   imageUrl?: string;
+  aliases?: string[]; // Remembered naming conventions from supplier quotes
 }
 
 export interface FenceStyle {

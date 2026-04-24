@@ -313,6 +313,18 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
                 </button>
               </div>
               <form onSubmit={handleSave} className="p-8 space-y-6">
+                {formData.aliases && formData.aliases.length > 0 && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-2">
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Remembered Supplier Names</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.aliases.map((alias, i) => (
+                        <span key={i} className="px-2 py-1 bg-white border border-emerald-200 rounded-md text-[10px] font-bold text-emerald-700">
+                          {alias}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Material Name</label>

@@ -16,51 +16,104 @@ import { MaterialItem, LaborRates, Estimate, SupplierQuote } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('estimator');
-  const [materials, setMaterials] = React.useState<MaterialItem[]>(MATERIALS);
-  const [quotes, setQuotes] = React.useState<SupplierQuote[]>([]);
-  const [laborRates, setLaborRates] = React.useState<LaborRates>(DEFAULT_LABOR_RATES);
-  const [estimate, setEstimate] = React.useState<Partial<Estimate>>({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    customerAddress: '',
-    linearFeet: 100,
-    corners: 2,
-    height: 6,
-    width: 8,
-    runs: [],
-    defaultStyleId: FENCE_STYLES[0].id,
-    defaultVisualStyleId: FENCE_STYLES[0].visualStyles[0].id,
-    defaultHeight: 6,
-    defaultColor: 'Natural',
-    postCapId: MATERIALS.find(m => m.category === 'PostCap')?.id || '',
-    hasCapAndTrim: false,
-    gateCount: 1,
-    gateStyleId: MATERIALS.find(m => m.category === 'Gate')?.id || '',
-    footingType: 'Cuboid',
-    postWidth: 6,
-    postThickness: 6,
-    hasDemolition: false,
-    demoLinearFeet: 100,
-    demoType: 'Wood',
-    removeConcreteFootings: true,
-    hasSitePrep: false,
-    needsClearing: false,
-    needsMarking: true,
-    obstacleRemoval: false,
-    wastePercentage: 10,
-    includeGravel: true,
-    includeStain: false,
-    markupPercentage: 30,
-    taxPercentage: 8.25,
-    manualQuantities: {},
-    manualPrices: {},
-    woodType: 'PT Pine',
-    ironRails: '2 rail',
-    ironTop: 'Flat top',
-    topStyle: 'Dog Ear',
-    isPreStained: false,
+  // Persistence Logic
+  const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('fence_pro_materials');
+      return saved ? JSON.parse(saved) : MATERIALS;
+    } catch (e) {
+      console.error('Error loading materials:', e);
+      return MATERIALS;
+    }
   });
+
+  const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
+    try {
+      const saved = localStorage.getItem('fence_pro_quotes');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error loading quotes:', e);
+      return [];
+    }
+  });
+
+  const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
+    try {
+      const saved = localStorage.getItem('fence_pro_labor_rates');
+      return saved ? JSON.parse(saved) : DEFAULT_LABOR_RATES;
+    } catch (e) {
+      console.error('Error loading labor rates:', e);
+      return DEFAULT_LABOR_RATES;
+    }
+  });
+
+  const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
+    try {
+      const saved = localStorage.getItem('fence_pro_estimate');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Error loading estimate:', e);
+    }
+    return {
+      customerName: '',
+      customerEmail: '',
+      customerPhone: '',
+      customerAddress: '',
+      linearFeet: 100,
+      corners: 2,
+      height: 6,
+      width: 8,
+      runs: [],
+      defaultStyleId: FENCE_STYLES[0].id,
+      defaultVisualStyleId: FENCE_STYLES[0].visualStyles[0].id,
+      defaultHeight: 6,
+      defaultColor: 'Natural',
+      postCapId: MATERIALS.find(m => m.category === 'PostCap')?.id || '',
+      hasCapAndTrim: false,
+      gateCount: 1,
+      gateStyleId: MATERIALS.find(m => m.category === 'Gate')?.id || '',
+      footingType: 'Cuboid',
+      postWidth: 6,
+      postThickness: 6,
+      hasDemolition: false,
+      demoLinearFeet: 100,
+      demoType: 'Wood',
+      removeConcreteFootings: true,
+      hasSitePrep: false,
+      needsClearing: false,
+      needsMarking: true,
+      obstacleRemoval: false,
+      wastePercentage: 10,
+      includeGravel: true,
+      includeStain: false,
+      markupPercentage: 30,
+      taxPercentage: 8.25,
+      manualQuantities: {},
+      manualPrices: {},
+      woodType: 'PT Pine',
+      ironRails: '2 rail',
+      ironTop: 'Flat top',
+      topStyle: 'Dog Ear',
+      isPreStained: false,
+    };
+  });
+
+  // Save to localStorage on changes
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
+  }, [materials]);
+
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+  }, [quotes]);
+
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
+  }, [laborRates]);
+
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
+  }, [estimate]);
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>

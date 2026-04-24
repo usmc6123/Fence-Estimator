@@ -13,7 +13,7 @@ interface QuoteManagerProps {
   materials: MaterialItem[];
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   quotes: SupplierQuote[];
-  setQuotes: (quotes: SupplierQuote[]) => void;
+  setQuotes: React.Dispatch<React.SetStateAction<SupplierQuote[]>>;
 }
 
 export default function QuoteManager({ materials, setMaterials, quotes, setQuotes }: QuoteManagerProps) {
@@ -21,6 +21,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const [error, setError] = React.useState<string | null>(null);
   const [activeView, setActiveView] = React.useState<'list' | 'compare'>('list');
   const [selectedQuote, setSelectedQuote] = React.useState<SupplierQuote | null>(null);
+  const [toast, setToast] = React.useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,15 +54,19 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         id: Math.random().toString(36).substr(2, 9),
         supplierName: extractedData.supplierName,
         date: new Date().toISOString(),
-        items: extractedData.items.map((item: any) => ({
-          ...item,
-          id: Math.random().toString(36).substr(2, 9),
-          // Try to fuzzy match to materials
-          mappedMaterialId: materials.find(m => 
-            m.name.toLowerCase().includes(item.materialName.toLowerCase()) ||
-            item.materialName.toLowerCase().includes(m.name.toLowerCase())
-          )?.id
-        })),
+        items: extractedData.items.map((item: any) => {
+          const itemNameLower = item.materialName.toLowerCase();
+          return {
+            ...item,
+            id: Math.random().toString(36).substr(2, 9),
+            // Improved fuzzy matching + alias lookup
+            mappedMaterialId: materials.find(m => 
+              m.name.toLowerCase().includes(itemNameLower) ||
+              itemNameLower.includes(m.name.toLowerCase()) ||
+              m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
+            )?.id
+          };
+        }),
         totalAmount: extractedData.totalAmount,
         fileName: file.name,
         fileType: file.type,
@@ -78,13 +88,33 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   };
 
   const updateMaterialPrice = (materialId: string, newPrice: number) => {
+    const mat = materials.find(m => m.id === materialId);
     setMaterials(prev => prev.map(m => 
       m.id === materialId ? { ...m, cost: newPrice } : m
     ));
-    // Brief toast-like feedback could be better than alert, but keeping it simple for now
+    showToast(`Updated ${mat?.name || 'Material'} price to ${formatCurrency(newPrice)}`);
   };
 
   const mapMaterialToItem = (quoteId: string, itemId: string, materialId: string) => {
+    // Save the mapping for future memory
+    if (materialId) {
+      const quote = quotes.find(q => q.id === quoteId);
+      const item = quote?.items.find(i => i.id === itemId);
+      
+      if (item) {
+        setMaterials(prev => prev.map(m => {
+          if (m.id === materialId) {
+            const currentAliases = m.aliases || [];
+            if (!currentAliases.includes(item.materialName)) {
+              return { ...m, aliases: [...currentAliases, item.materialName] };
+            }
+          }
+          return m;
+        }));
+        showToast(`Learned mapping: ${item.materialName} → ${materials.find(m => m.id === materialId)?.name}`);
+      }
+    }
+
     setQuotes(prev => prev.map(q => {
       if (q.id === quoteId) {
         return {
@@ -131,6 +161,20 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <AnimatePresence>
+        {toast && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-american-blue text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
+          >
+            <CheckCircle2 className="text-emerald-400" size={18} />
+            <span className="text-xs font-black uppercase tracking-widest">{toast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[40px] shadow-xl border-2 border-american-blue/5">
         <div>
           <h1 className="text-4xl font-black text-american-blue tracking-tighter uppercase leading-none">Supplier Intelligence</h1>
