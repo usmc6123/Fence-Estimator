@@ -20,7 +20,18 @@ export default function App() {
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
     try {
       const saved = localStorage.getItem('fence_pro_materials');
-      return saved ? JSON.parse(saved) : MATERIALS;
+      if (saved) {
+        const parsed = JSON.parse(saved) as MaterialItem[];
+        // Merge with current hardcoded constants to ensure new items appear
+        const merged = [...parsed];
+        MATERIALS.forEach(baseMat => {
+          if (!merged.find(m => m.id === baseMat.id)) {
+            merged.push(baseMat);
+          }
+        });
+        return merged;
+      }
+      return MATERIALS;
     } catch (e) {
       console.error('Error loading materials:', e);
       return MATERIALS;
@@ -73,6 +84,7 @@ export default function App() {
       gateCount: 1,
       gateStyleId: MATERIALS.find(m => m.category === 'Gate')?.id || '',
       footingType: 'Cuboid',
+      concreteType: 'Maximizer',
       postWidth: 6,
       postThickness: 6,
       hasDemolition: false,

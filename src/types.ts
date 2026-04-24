@@ -55,6 +55,7 @@ export interface FenceRun {
   color: string;
   isPreStained?: boolean;
   reusePosts?: boolean;
+  concreteType?: 'Maximizer' | 'Quickset';
   woodType?: 'PT Pine' | 'Western Red Cedar' | 'Japanese Cedar';
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
@@ -154,6 +155,7 @@ export interface Estimate {
   includeGravel: boolean;
   includeStain: boolean;
   footingType: 'Cuboid' | 'Cylindrical';
+  concreteType: 'Maximizer' | 'Quickset';
   postWidth: number;
   postThickness: number;
   

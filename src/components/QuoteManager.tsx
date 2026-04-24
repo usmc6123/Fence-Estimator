@@ -28,6 +28,25 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     setTimeout(() => setToast(null), 3000);
   };
 
+  const syncAllPrices = () => {
+    if (!selectedQuote) return;
+    const itemsToUpdate = selectedQuote.items.filter(item => {
+      const mat = materials.find(m => m.id === item.mappedMaterialId);
+      return mat && Math.abs(item.unitPrice - mat.cost) > 0.001;
+    });
+
+    if (itemsToUpdate.length === 0) {
+      showToast("All matched prices are already in sync");
+      return;
+    }
+
+    setMaterials(prev => prev.map(m => {
+      const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
+      return update ? { ...m, cost: update.unitPrice } : m;
+    }));
+    showToast(`Synchronized ${itemsToUpdate.length} prices from quote`);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -310,6 +329,18 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                         <p className="text-xs font-bold text-[#999999] uppercase tracking-widest">Processed on {new Date(selectedQuote.date).toLocaleString()}</p>
                       </div>
                       <div className="flex gap-2">
+                        {selectedQuote.items.some(item => {
+                          const mat = materials.find(m => m.id === item.mappedMaterialId);
+                          return mat && Math.abs(item.unitPrice - mat.cost) > 0.001;
+                        }) && (
+                          <button 
+                            onClick={syncAllPrices}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-xs font-black uppercase tracking-widest text-white transition-colors shadow-lg"
+                          >
+                            <TrendingUp size={16} />
+                            Sync All Prices
+                          </button>
+                        )}
                         {selectedQuote.fileUrl && (
                           <a 
                             href={selectedQuote.fileUrl} 

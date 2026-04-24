@@ -144,9 +144,13 @@ export default function Estimator({
             rawItems.push({ name: capMat.name, qty: runPostCount, unitCost: capMat.cost, total: runPostCount * capMat.cost, category: 'Hardware' });
           }
 
-          // Concrete (.7 Bags per post)
-          const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-          const runConcreteBags = Math.ceil(runPostCount * 0.7);
+          // Concrete (Quickset: 2 bags/post, Maximizer: 0.7 bags/post)
+          const runConcreteType = run.concreteType || estimate.concreteType || 'Maximizer';
+          const bagsPerPost = runConcreteType === 'Quickset' ? 2 : 0.7;
+          const concreteMatId = runConcreteType === 'Quickset' ? 'i-concrete-quickset' : 'i-concrete-maximizer';
+          const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80')!;
+          
+          const runConcreteBags = Math.ceil(runPostCount * bagsPerPost);
           const existingConcrete = rawItems.find(i => i.name === concreteMat.name);
           if (existingConcrete) {
             existingConcrete.qty += runConcreteBags;
@@ -1220,6 +1224,28 @@ export default function Estimator({
                   </div>
                 </div>
                 <div className="space-y-3">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Concrete Specification</label>
+                    <div className="flex gap-2">
+                      {(['Maximizer', 'Quickset'] as const).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setEstimate({ ...estimate, concreteType: type })}
+                          className={cn(
+                            "flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all",
+                            (estimate.concreteType || 'Maximizer') === type
+                              ? "bg-american-blue text-white border-american-blue shadow-lg"
+                              : "bg-white text-american-blue border-[#F0F0F0] hover:border-american-blue/20"
+                          )}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-[#BBBBBB] italic mt-1">
+                      {estimate.concreteType === 'Quickset' ? '2.0 Bags per post' : '0.7 Bags per post'}
+                    </p>
+                  </div>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={estimate.includeGravel} onChange={(e) => setEstimate({...estimate, includeGravel: e.target.checked})} className="rounded border-[#E5E5E5]" />
                     <span className="text-sm">Include Drainage Gravel (0.5 cu ft/hole)</span>
@@ -1253,11 +1279,11 @@ export default function Estimator({
                 <h4 className="text-xs font-bold uppercase tracking-widest text-white/60 mb-4">Structural Specs</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] text-[#999999]">Footing</p>
-                    <p className="text-sm font-bold">{estimate.footingType}</p>
+                    <p className="text-[10px] text-white/60">Concrete Type</p>
+                    <p className="text-sm font-bold">{estimate.concreteType || 'Maximizer'}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] text-[#999999]">Post Size</p>
+                    <p className="text-[10px] text-white/60">Post Size</p>
                     <p className="text-sm font-bold">
                       {defaultStyle.type === 'Wood' ? '2-3/8" Round' : `${estimate.postWidth}" x ${estimate.postThickness}"`}
                     </p>
@@ -1507,8 +1533,19 @@ export default function Estimator({
                   <h3 className="text-sm font-bold uppercase tracking-widest">Material Breakdown</h3>
                   <p className="text-[10px] text-white/70">Texas-Based Estimates</p>
                 </div>
-                <div className="px-3 py-1 bg-white/20 rounded-lg text-[10px] font-bold">
-                  {results.items.length} Items
+                <div className="flex items-center gap-2">
+                  {(Object.keys(estimate.manualQuantities || {}).length > 0 || Object.keys(estimate.manualPrices || {}).length > 0) && (
+                    <button 
+                      onClick={() => setEstimate({ ...estimate, manualQuantities: {}, manualPrices: {} })}
+                      className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[8px] font-black uppercase tracking-widest transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 size={10} />
+                      Reset Overrides
+                    </button>
+                  )}
+                  <div className="px-3 py-1 bg-white/20 rounded-lg text-[10px] font-bold">
+                    {results.items.length} Items
+                  </div>
                 </div>
               </div>
             </div>

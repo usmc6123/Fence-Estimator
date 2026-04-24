@@ -73,8 +73,9 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'g-latch-grav', name: 'Gravity Latch', category: 'Gate', unit: 'each', cost: 26.50, description: 'Pool-safe closure', imageUrl: 'https://static.grainger.com/rp/s/is/image/Grainger/1XMP1_AS01?$adapimg$&hei=536&wid=536' },
   
   // Installation
-  { id: 'i-concrete-80', name: '80lb Concrete Mix', category: 'Concrete', unit: 'bag', cost: 6.75, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },
-  { id: 'i-concrete-fast', name: 'Fast-Set Concrete', category: 'Concrete', unit: 'bag', cost: 9.25, description: 'Quikrete Red Bag', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
+  { id: 'i-concrete-80', name: '80lb Concrete Mix (Standard)', category: 'Concrete', unit: 'bag', cost: 6.75, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },
+  { id: 'i-concrete-maximizer', name: '80lb Maximizer Concrete', category: 'Concrete', unit: 'bag', cost: 8.50, description: 'High-yield concrete (.7 bags per post)', imageUrl: 'https://images.thdstatic.com/productImages/50170884-6014-4161-829d-486152a6547a/svn/sakrete-concrete-mix-100220671-64_1000.jpg' },
+  { id: 'i-concrete-quickset', name: '80lb Quickset Concrete', category: 'Concrete', unit: 'bag', cost: 9.75, description: 'Fast-setting concrete (2 bags per post)', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
   { id: 'i-foam', name: 'Post-Setting Foam', category: 'Concrete', unit: 'each', cost: 18.50, description: '2-part expanding foam', imageUrl: 'https://images.thdstatic.com/productImages/bc70eb23-9f73-4ce7-95b4-b048b422ee33/svn/sika-deck-parts-accessories-7116170-c3_600.jpg' },
   
   // Demolition

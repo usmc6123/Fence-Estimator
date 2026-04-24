@@ -255,9 +255,23 @@ export function calculateDetailedTakeOff(
         category: 'Hardware'
       });
 
-      // Concrete (.7 Bags per post)
-      const concreteMat = materials.find(m => m.id === 'i-concrete-80')!;
-      const concreteQty = Math.ceil(runPostCount * 0.7);
+      // Concrete (Quickset: 2 bags/post, Maximizer: 0.7 bags/post or style default)
+      const runConcreteType = run.concreteType || estimate.concreteType || 'Maximizer';
+      let bagsPerPost = 0.7; // Standard
+      let concreteMatId = 'i-concrete-80';
+
+      if (runConcreteType === 'Quickset') {
+        bagsPerPost = 2;
+        concreteMatId = 'i-concrete-quickset';
+      } else if (runConcreteType === 'Maximizer') {
+        bagsPerPost = 0.7;
+        concreteMatId = 'i-concrete-maximizer';
+      } else {
+        bagsPerPost = logic.concretePerPost;
+      }
+
+      const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80')!;
+      const concreteQty = Math.ceil(runPostCount * bagsPerPost);
       runItems.push({
         id: concreteMat.id,
         name: concreteMat.name,
