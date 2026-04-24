@@ -81,7 +81,21 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     setMaterials(prev => prev.map(m => 
       m.id === materialId ? { ...m, cost: newPrice } : m
     ));
-    alert("Price updated in Material Library!");
+    // Brief toast-like feedback could be better than alert, but keeping it simple for now
+  };
+
+  const mapMaterialToItem = (quoteId: string, itemId: string, materialId: string) => {
+    setQuotes(prev => prev.map(q => {
+      if (q.id === quoteId) {
+        return {
+          ...q,
+          items: q.items.map(item => 
+            item.id === itemId ? { ...item, mappedMaterialId: materialId } : item
+          )
+        };
+      }
+      return q;
+    }));
   };
 
   // Comparison Logic: Group by mapped materials
@@ -288,16 +302,40 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                               const mat = materials.find(m => m.id === item.mappedMaterialId);
                               const isHigher = mat && item.unitPrice > mat.cost;
                               const isLower = mat && item.unitPrice < mat.cost;
+                              const isDifferent = mat && Math.abs(item.unitPrice - mat.cost) > 0.001;
 
                               return (
                                 <tr key={item.id} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
                                   <td className="px-6 py-5">
                                     <div className="space-y-1">
                                       <p>{item.materialName}</p>
-                                      {mat && (
+                                      {mat ? (
                                         <div className="flex items-center gap-1.5 text-[10px] text-emerald-600">
                                           <CheckCircle2 size={12} />
                                           <span className="font-black uppercase tracking-widest">Matched: {mat.name}</span>
+                                          <button 
+                                            onClick={() => mapMaterialToItem(selectedQuote.id, item.id, '')}
+                                            className="ml-2 text-[8px] text-[#999999] hover:text-american-red uppercase font-black"
+                                          >
+                                            Unlink
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-1.5 text-[10px] text-american-red">
+                                            <AlertCircle size={12} />
+                                            <span className="font-black uppercase tracking-widest">Unlinked</span>
+                                          </div>
+                                          <select 
+                                            onChange={(e) => mapMaterialToItem(selectedQuote.id, item.id, e.target.value)}
+                                            className="text-[10px] bg-[#F5F5F7] border-none rounded-md px-2 py-1 font-bold focus:ring-1 focus:ring-american-blue"
+                                            value=""
+                                          >
+                                            <option value="" disabled>Link to Library...</option>
+                                            {materials.map(m => (
+                                              <option key={m.id} value={m.id}>{m.name}</option>
+                                            ))}
+                                          </select>
                                         </div>
                                       )}
                                     </div>
@@ -319,15 +357,20 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                     </div>
                                   </td>
                                   <td className="px-6 py-5 text-right">
-                                    {mat && item.unitPrice !== mat.cost && (
+                                    {mat && isDifferent ? (
                                       <button 
                                         onClick={() => updateMaterialPrice(mat.id, item.unitPrice)}
-                                        className="flex items-center gap-2 ml-auto px-4 py-2 bg-american-blue/5 text-american-blue hover:bg-american-blue hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                        className="flex items-center gap-2 ml-auto px-4 py-2 bg-american-blue text-white hover:bg-american-blue/90 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
                                       >
                                         <TrendingUp size={12} />
                                         Update Library
                                       </button>
-                                    )}
+                                    ) : mat ? (
+                                      <div className="flex items-center justify-end gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                                        <CheckCircle2 size={12} />
+                                        Price Synchronized
+                                      </div>
+                                    ) : null}
                                   </td>
                                 </tr>
                               );
@@ -412,7 +455,15 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                       Highest
                                     </div>
                                   )}
-                                  <p className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em] mb-1">{s.supplierName}</p>
+                                  <div className="flex justify-between items-start mb-1">
+                                    <p className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">{s.supplierName}</p>
+                                    <button 
+                                      onClick={() => updateMaterialPrice(item.id, s.price)}
+                                      className="text-[8px] font-black text-american-blue hover:text-american-red transition-colors uppercase tracking-widest"
+                                    >
+                                      Use Price
+                                    </button>
+                                  </div>
                                   <p className={cn(
                                     "text-xl font-black",
                                     isLowest ? "text-emerald-600" : isHighest ? "text-american-red" : "text-american-blue"
