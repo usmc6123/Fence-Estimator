@@ -20,8 +20,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeView, setActiveView] = React.useState<'list' | 'compare'>('list');
-  const [selectedQuote, setSelectedQuote] = React.useState<SupplierQuote | null>(null);
+  const [selectedQuoteId, setSelectedQuoteId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<string | null>(null);
+
+  const selectedQuote = React.useMemo(() => 
+    quotes.find(q => q.id === selectedQuoteId) || null
+  , [quotes, selectedQuoteId]);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -93,7 +97,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       };
 
       setQuotes([newQuote, ...quotes]);
-      setSelectedQuote(newQuote);
+      setSelectedQuoteId(newQuote.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process quote");
     } finally {
@@ -103,7 +107,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
   const deleteQuote = (id: string) => {
     setQuotes(quotes.filter(q => q.id !== id));
-    if (selectedQuote?.id === id) setSelectedQuote(null);
+    if (selectedQuoteId === id) setSelectedQuoteId(null);
   };
 
   const updateMaterialPrice = (materialId: string, newPrice: number) => {
@@ -279,16 +283,16 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                 quotes.map(quote => (
                   <button
                     key={quote.id}
-                    onClick={() => { setSelectedQuote(quote); setActiveView('list'); }}
+                    onClick={() => { setSelectedQuoteId(quote.id); setActiveView('list'); }}
                     className={cn(
                       "w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all group text-left",
-                      selectedQuote?.id === quote.id ? "bg-american-blue/5 border-american-blue" : "bg-white border-transparent hover:bg-[#FBFBFB]"
+                      selectedQuoteId === quote.id ? "bg-american-blue/5 border-american-blue" : "bg-white border-transparent hover:bg-[#FBFBFB]"
                     )}
                   >
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "h-10 w-10 rounded-xl flex items-center justify-center transition-colors shadow-sm",
-                        selectedQuote?.id === quote.id ? "bg-american-blue text-white" : "bg-[#F5F5F7] text-american-blue group-hover:bg-american-blue group-hover:text-white"
+                        selectedQuoteId === quote.id ? "bg-american-blue text-white" : "bg-[#F5F5F7] text-american-blue group-hover:bg-american-blue group-hover:text-white"
                       )}>
                         <FileText size={18} />
                       </div>
@@ -299,7 +303,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                         </p>
                       </div>
                     </div>
-                    <ChevronRight size={16} className={cn("transition-transform", selectedQuote?.id === quote.id ? "text-american-blue translate-x-1" : "text-[#CCCCCC]")} />
+                    <ChevronRight size={16} className={cn("transition-transform", selectedQuoteId === quote.id ? "text-american-blue translate-x-1" : "text-[#CCCCCC]")} />
                   </button>
                 ))
               )}

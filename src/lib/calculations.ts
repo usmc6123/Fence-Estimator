@@ -114,6 +114,20 @@ export function calculateDetailedTakeOff(
               total: sharkKit.cost,
               category: 'Gate'
             });
+
+            // Add (2) Cane Bolts for double gates
+            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+            if (caneBoltMat) {
+              gateItems.push({
+                id: caneBoltMat.id,
+                name: caneBoltMat.name,
+                qty: 2,
+                unit: caneBoltMat.unit,
+                unitCost: caneBoltMat.cost,
+                total: 2 * caneBoltMat.cost,
+                category: 'Hardware'
+              });
+            }
           } else {
             // 4' Walk Gate
             const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge')!;
@@ -174,6 +188,20 @@ export function calculateDetailedTakeOff(
                 unit: sharkKit.unit,
                 unitCost: sharkKit.cost,
                 total: sharkKit.cost,
+                category: 'Hardware'
+              });
+            }
+
+            // Add (2) Cane Bolts for double gates
+            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+            if (caneBoltMat) {
+              gateItems.push({
+                id: caneBoltMat.id,
+                name: caneBoltMat.name,
+                qty: 2,
+                unit: caneBoltMat.unit,
+                unitCost: caneBoltMat.cost,
+                total: 2 * caneBoltMat.cost,
                 category: 'Hardware'
               });
             }
@@ -292,9 +320,16 @@ export function calculateDetailedTakeOff(
       const divisor = isBob ? 4.5 : 5.5; // BoB: 5.5" board + 3.5" gap = 9" for 2 boards (4.5" avg)
       panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
       
-      if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
-      else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
-      else if (woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
+      if (woodType === 'PT Pine') {
+        const baseId = run.height === 8 ? 'w-picket-pine-8' : 'w-picket-pine';
+        panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+      } else if (woodType === 'Japanese Cedar') {
+        const baseId = run.height === 8 ? 'w-picket-j-cedar-8' : 'w-picket-j-cedar';
+        panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+      } else if (woodType === 'Western Red Cedar') {
+        const baseId = run.height === 8 ? 'w-picket-w-cedar-8' : 'w-picket-w-cedar';
+        panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+      }
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
       if (runStyle.type === 'Metal') {

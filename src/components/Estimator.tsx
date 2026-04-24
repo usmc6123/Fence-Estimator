@@ -174,9 +174,16 @@ export default function Estimator({
           panelQty = Math.ceil((totalInches / divisor) * wasteFactor);
           const woodType = run.woodType || estimate.woodType;
           const isStained = run.isPreStained || estimate.isPreStained;
-          if (woodType === 'PT Pine') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-pine-stained' : 'w-picket-pine')) || panelMat;
-          else if (woodType === 'Japanese Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-j-cedar-stained' : 'w-picket-j-cedar')) || panelMat;
-          else if (woodType === 'Western Red Cedar') panelMat = materials.find(m => m.id === (isStained ? 'w-picket-w-cedar-stained' : 'w-picket-w-cedar')) || panelMat;
+          if (woodType === 'PT Pine') {
+            const baseId = run.height === 8 ? 'w-picket-pine-8' : 'w-picket-pine';
+            panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+          } else if (woodType === 'Japanese Cedar') {
+            const baseId = run.height === 8 ? 'w-picket-j-cedar-8' : 'w-picket-j-cedar';
+            panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+          } else if (woodType === 'Western Red Cedar') {
+            const baseId = run.height === 8 ? 'w-picket-w-cedar-8' : 'w-picket-w-cedar';
+            panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+          }
         } else {
           panelQty = Math.ceil((netLF / 8) * wasteFactor);
         }
@@ -199,7 +206,7 @@ export default function Estimator({
           run.gateDetails.forEach(gate => {
             if (runStyle.type === 'Wood') {
               if (gate.type === 'Double') {
-                // Shark Kit ONLY
+                // Shark Kit + Cane Bolts
                 const sharkKit = materials.find(m => m.id === 'g-kit-shark')!;
                 const existing = rawItems.find(i => i.name === sharkKit.name);
                 if (existing) {
@@ -207,6 +214,18 @@ export default function Estimator({
                   existing.total += sharkKit.cost;
                 } else {
                   rawItems.push({ name: sharkKit.name, qty: 1, unitCost: sharkKit.cost, total: sharkKit.cost, category: 'Gate' });
+                }
+
+                // Add (2) Cane Bolts
+                const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+                if (caneBoltMat) {
+                  const existingCane = rawItems.find(i => i.name === caneBoltMat.name);
+                  if (existingCane) {
+                    existingCane.qty += 2;
+                    existingCane.total += 2 * caneBoltMat.cost;
+                  } else {
+                    rawItems.push({ name: caneBoltMat.name, qty: 2, unitCost: caneBoltMat.cost, total: 2 * caneBoltMat.cost, category: 'Hardware' });
+                  }
                 }
               } else {
                 // 3-Hinge Kit + 2x4x12s
@@ -266,6 +285,18 @@ export default function Estimator({
                     existingShark.total += sharkKit.cost;
                   } else {
                     rawItems.push({ name: sharkKit.name, qty: 1, unitCost: sharkKit.cost, total: sharkKit.cost, category: 'Gate' });
+                  }
+                }
+
+                // Add (2) Cane Bolts
+                const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+                if (caneBoltMat) {
+                  const existingCane = rawItems.find(i => i.name === caneBoltMat.name);
+                  if (existingCane) {
+                    existingCane.qty += 2;
+                    existingCane.total += 2 * caneBoltMat.cost;
+                  } else {
+                    rawItems.push({ name: caneBoltMat.name, qty: 2, unitCost: caneBoltMat.cost, total: 2 * caneBoltMat.cost, category: 'Hardware' });
                   }
                 }
               }
