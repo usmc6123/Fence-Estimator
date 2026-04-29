@@ -680,6 +680,40 @@ export function calculateDetailedTakeOff(
         total: concreteCost,
         category: 'Installation'
       });
+
+      // Brackets and Lags for Wood Fence (Moved inside !run.reusePosts)
+      if (runStyle.type === 'Wood') {
+        const is6ft = run.height === 6;
+        const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+        const bracketCount = is6ft ? 4 : (run.height === 8 ? 5 : (run.height > 6 ? 4 : 3));
+        
+        const bracketQty = runPostCount * bracketCount;
+        const bracketCost = bracketQty * bracketMat.cost;
+        runFenceMaterialCost += bracketCost;
+        runItems.push({
+          id: bracketMat.id,
+          name: bracketMat.name,
+          qty: bracketQty,
+          unit: bracketMat.unit,
+          unitCost: bracketMat.cost,
+          total: bracketCost,
+          category: 'Hardware'
+        });
+
+        const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+        const lagQty = bracketQty * 4;
+        const lagCost = lagQty * lagMat.cost;
+        runFenceMaterialCost += lagCost;
+        runItems.push({
+          id: lagMat.id,
+          name: lagMat.name,
+          qty: lagQty,
+          unit: lagMat.unit,
+          unitCost: lagMat.cost,
+          total: lagCost,
+          category: 'Hardware'
+        });
+      }
     }
 
     // Pickets
@@ -787,45 +821,34 @@ export function calculateDetailedTakeOff(
       }
     }
 
-    // Brackets and Lags for 6' Wood
-    if (is6ftWood) {
-      const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-      const bracketQty = runPostCount * 4;
-      const bracketCost = bracketQty * bracketMat.cost;
-      runFenceMaterialCost += bracketCost;
-      runItems.push({
-        id: bracketMat.id,
-        name: bracketMat.name,
-        qty: bracketQty,
-        unit: bracketMat.unit,
-        unitCost: bracketMat.cost,
-        total: bracketCost,
-        category: 'Hardware'
-      });
 
-      const lagMat = materials.find(m => m.id === 'h-lag-14')!;
-      const lagQty = bracketQty * 4;
-      const lagCost = lagQty * lagMat.cost;
-      runFenceMaterialCost += lagCost;
-      runItems.push({
-        id: lagMat.id,
-        name: lagMat.name,
-        qty: lagQty,
-        unit: lagMat.unit,
-        unitCost: lagMat.cost,
-        total: lagCost,
-        category: 'Hardware'
-      });
 
-      // Rails and Rot Board (8ft rails, 16ft rot board for 6ft Wood)
-      const sectionCount8 = Math.ceil(runLF / 8);
-      const sectionCount16 = Math.ceil(runLF / 16);
-      let railId = isStained ? 'w-rail-pine-8-stained' : 'w-rail-pine-8';
-      if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8';
-      else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8';
+    // Wood Components (Rails, Rot Board, Nails)
+    if (runStyle.type === 'Wood') {
+      const is6ft = run.height === 6;
+      const is8ft = run.height === 8;
+      
+      // Rails and Rot Board
+      const railsCount = is8ft ? 4 : (run.height > 6 ? 4 : 3);
+      const railLength = is6ft ? 8 : 12;
+      const sectionCount = Math.ceil(runLF / railLength);
+      
+      let railId = is6ft 
+        ? (isStained ? 'w-rail-pine-8-stained' : 'w-rail-pine-8')
+        : (isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12');
+        
+      if (woodType === 'Japanese Cedar') {
+        railId = is6ft 
+          ? (isStained ? 'w-rail-j-cedar-8-stained' : 'w-rail-j-cedar-8')
+          : (isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12');
+      } else if (woodType === 'Western Red Cedar') {
+        railId = is6ft 
+          ? (isStained ? 'w-rail-w-cedar-8-stained' : 'w-rail-w-cedar-8')
+          : (isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12');
+      }
       
       const railMat = materials.find(m => m.id === railId)!;
-      const railQty = sectionCount8 * 3;
+      const railQty = sectionCount * railsCount;
       const railCost = railQty * railMat.cost;
       runFenceMaterialCost += railCost;
       runItems.push({
@@ -838,82 +861,11 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      const rotBoardId = isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16';
-      const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
-      const rotBoardCost = sectionCount16 * rotBoardMat.cost;
-      runFenceMaterialCost += rotBoardCost;
-      runItems.push({
-        id: rotBoardMat.id,
-        name: rotBoardMat.name,
-        qty: sectionCount16,
-        unit: rotBoardMat.unit,
-        unitCost: rotBoardMat.cost,
-        total: rotBoardCost,
-        category: 'Structure'
-      });
-
-      // Nails for this run
-      const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
-      const nailCount = Math.ceil(panelQty * 6);
-      const nailCost = nailCount * nailsMat.cost;
-      runFenceMaterialCost += nailCost;
-      runItems.push({
-        id: nailsMat.id,
-        name: nailsMat.name,
-        qty: nailCount,
-        unit: 'nails',
-        unitCost: nailsMat.cost,
-        total: nailCost,
-        category: 'Hardware'
-      });
-    }
-
-    // Brackets and Rails (Fallback for non-6ft Wood)
-    if (runStyle.type === 'Wood' && !is6ftWood) {
-      const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-      const railsCount = run.height === 8 ? 4 : (run.height > 6 ? 4 : 3);
-      const bracketCount = run.height === 8 ? 5 : (run.height > 6 ? 4 : 3);
-      
-      const bracketQty = runPostCount * bracketCount;
-      const bracketCost = bracketQty * bracketMat.cost;
-      runFenceMaterialCost += bracketCost;
-      runItems.push({
-        id: bracketMat.id,
-        name: bracketMat.name,
-        qty: bracketQty,
-        unit: bracketMat.unit,
-        unitCost: bracketMat.cost,
-        total: bracketCost,
-        category: 'Hardware'
-      });
-
-      // Rails and Rot Boards for non-6ft
-      const sectionCount12 = Math.ceil(runLF / 12);
-      
-      let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
-      if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
-      else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
-      
-      const railMat = materials.find(m => m.id === railId)!;
-      const railQty = sectionCount12 * railsCount;
-      const railCost = railQty * railMat.cost;
-      runFenceMaterialCost += railCost;
-      runItems.push({
-        id: railMat.id,
-        name: railMat.name,
-        qty: railQty,
-        unit: railMat.unit,
-        unitCost: railMat.cost,
-        total: railCost,
-        category: 'Structure'
-      });
-
-      const is8ftWood = run.height === 8;
-      const rotBoardId = is8ftWood 
+      const rotBoardId = is8ft 
         ? (isStained ? 'w-rot-board-12-stained' : 'w-rot-board-12')
         : (isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16');
       const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
-      const rotBoardQty = is8ftWood ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
+      const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
       const rotBoardCost = rotBoardQty * rotBoardMat.cost;
       runFenceMaterialCost += rotBoardCost;
       runItems.push({
@@ -926,21 +878,7 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      // Lags and Nails for non-6ft Wood
-      const lagMat = materials.find(m => m.id === 'h-lag-14')!;
-      const lagQty = bracketQty * 4;
-      const lagCost = lagQty * lagMat.cost;
-      runFenceMaterialCost += lagCost;
-      runItems.push({
-        id: lagMat.id,
-        name: lagMat.name,
-        qty: lagQty,
-        unit: lagMat.unit,
-        unitCost: lagMat.cost,
-        total: lagCost,
-        category: 'Hardware'
-      });
-
+      // Nails
       const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
       const nailCount = Math.ceil(panelQty * 6);
       const nailCost = nailCount * nailsMat.cost;
