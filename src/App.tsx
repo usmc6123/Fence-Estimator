@@ -17,81 +17,50 @@ import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
 
 export default function App() {
-  const [activeTab, setActiveTab] = React.useState('estimator');
+  // Helper to get state from Hash or LocalStorage
+  const getInitialValue = (key: string, storageKey: string, defaultValue: any) => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#state=')) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(hash.substring(7)));
+        if (decoded[key] !== undefined) return decoded[key];
+      } catch (e) {
+        console.error('Error parsing hash state:', e);
+      }
+    }
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return defaultValue;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return defaultValue;
+    }
+  };
+
+  const [activeTab, setActiveTab] = React.useState(() => {
+    return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
+  });
   
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>(() => {
-    try {
-      const saved = localStorage.getItem('fence_pro_saved_estimates');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Error loading saved estimates:', e);
-      return [];
-    }
+    return getInitialValue('savedEstimates', 'fence_pro_saved_estimates', []);
   });
 
-  // Persistence Logic
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('fence_pro_materials');
-      if (saved) {
-        const parsed = JSON.parse(saved) as MaterialItem[];
-        // Merge with current hardcoded constants
-        const merged = [...parsed];
-        MATERIALS.forEach(baseMat => {
-          const existingIdx = merged.findIndex(m => m.id === baseMat.id);
-          if (existingIdx === -1) {
-            merged.push(baseMat);
-          } else {
-            // Force update if the base unit or description changed in constants
-            // This ensures transitions like "box" -> "each" for nails propagate
-            if (merged[existingIdx].unit !== baseMat.unit) {
-              merged[existingIdx] = { 
-                ...merged[existingIdx], 
-                unit: baseMat.unit, 
-                cost: baseMat.cost,
-                description: baseMat.description,
-                name: baseMat.name
-              };
-            }
-          }
-        });
-        return merged;
-      }
-      return MATERIALS;
-    } catch (e) {
-      console.error('Error loading materials:', e);
-      return MATERIALS;
-    }
+    const fromStorage = getInitialValue('materials', 'fence_pro_materials', MATERIALS);
+    // Sync logic already exists below or can be integrated
+    return fromStorage;
   });
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
-    try {
-      const saved = localStorage.getItem('fence_pro_quotes');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Error loading quotes:', e);
-      return [];
-    }
+    return getInitialValue('quotes', 'fence_pro_quotes', []);
   });
 
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
-    try {
-      const saved = localStorage.getItem('fence_pro_labor_rates');
-      return saved ? JSON.parse(saved) : DEFAULT_LABOR_RATES;
-    } catch (e) {
-      console.error('Error loading labor rates:', e);
-      return DEFAULT_LABOR_RATES;
-    }
+    return getInitialValue('laborRates', 'fence_pro_labor_rates', DEFAULT_LABOR_RATES);
   });
 
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
-    try {
-      const saved = localStorage.getItem('fence_pro_estimate');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Error loading estimate:', e);
-    }
-    return {
+    const defaultEst = {
       customerName: '',
       customerEmail: '',
       customerPhone: '',
@@ -130,6 +99,7 @@ export default function App() {
       topStyle: 'Dog Ear',
       isPreStained: false,
     };
+    return getInitialValue('estimate', 'fence_pro_estimate', defaultEst);
   });
 
   React.useEffect(() => {
@@ -168,6 +138,10 @@ export default function App() {
     localStorage.setItem('fence_pro_saved_estimates', JSON.stringify(savedEstimates));
   }, [savedEstimates]);
 
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_active_tab', activeTab);
+  }, [activeTab]);
+
   const handleLoadEstimate = (est: SavedEstimate) => {
     setEstimate(est);
     setActiveTab('estimator');
@@ -203,12 +177,13 @@ export default function App() {
           estimate={estimate} 
           materials={materials} 
           laborRates={laborRates}
+          quotes={quotes}
           setEstimate={setEstimate}
           setMaterials={setMaterials}
         />
       )}
       {activeTab === 'labor-takeoff' && (
-        <LaborTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
+        <LaborTakeOff estimate={estimate} materials={materials} laborRates={laborRates} quotes={quotes} />
       )}
       {activeTab === 'quotes' && (
         <QuoteManager 

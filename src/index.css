@@ -59,67 +59,120 @@ input[type=number] {
 
 @media print {
   @page {
-    size: landscape;
-    margin: 0;
+    size: portrait;
+    margin: 15mm;
   }
   
   html, body {
     margin: 0 !important;
     padding: 0 !important;
-    height: 100% !important;
+    height: auto !important;
     width: 100% !important;
     background: white !important;
-  }
-
-  /* Use visibility instead of display:none to allow selective appearance */
-  body {
-    visibility: hidden !important;
-  }
-
-  /* Force print area and all its children to be visible */
-  #print-area, #print-area * {
     visibility: visible !important;
+    font-size: 10pt !important;
+    -webkit-print-color-adjust: exact;
   }
 
-  /* Position the print area to fill the whole page */
-  #print-area {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    margin: 0 !important;
+  /* Reset all containers */
+  #root, main, .app-container {
     padding: 0 !important;
-    background: white !important;
-    z-index: 99999 !important;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    border: none !important;
-    border-radius: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* Force headers to be smaller and clearer */
+  h1 { font-size: 18pt !important; margin-bottom: 5mm !important; }
+  h2 { font-size: 14pt !important; margin-bottom: 3mm !important; }
+  h3 { font-size: 12pt !important; margin-bottom: 2mm !important; }
+
+  /* Takeoff specific print styling */
+  .takeoff-page {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .takeoff-card {
+    border: 1pt solid #E5E5E5 !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
+    break-inside: avoid;
+    margin-bottom: 10mm !important;
   }
 
-  /* Ensure the SVG itself behaves well in print */
-  #print-area svg {
-    width: 96% !important;
-    height: 88% !important;
-    margin-top: 40px !important;
+  /* Diagram specifically needs landscape and fixed centering */
+  .printing-diagram {
+    @page {
+      size: landscape;
+      margin: 0;
+    }
+
+    /* Hide UI elements but keep the container of the diagram */
+    header, aside, footer, nav, .print-hidden {
+      display: none !important;
+    }
+    
+    #print-area {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+      z-index: 99999 !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      visibility: visible !important;
+      overflow: hidden !important;
+    }
+
+    body, html, #root, main {
+      overflow: hidden !important;
+      height: 100vh !important;
+      width: 100vw !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    #print-area * {
+      visibility: visible !important;
+    }
+
+    /* Ensure the SVG itself behaves well in print */
+    #print-area svg {
+      width: 96% !important;
+      height: 88% !important;
+      margin-top: 40px !important;
+    }
+
+    /* Header inside the diagram area */
+    #print-area::before {
+      content: "Lone Star Fence Works - Layout Diagram";
+      position: absolute;
+      top: 30px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-family: sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: #002868;
+      visibility: visible !important;
+    }
   }
 
-  /* Header inside the diagram area with correct branding */
-  #print-area::before {
-    content: "Lone Star Fence Works - Layout Diagram";
-    position: absolute;
-    top: 30px;
-    left: 0;
-    width: 100%;
-    text-align: center;
-    font-family: sans-serif;
-    font-size: 28px;
-    font-weight: 800;
-    color: #002868;
-    visibility: visible !important;
+  /* General print helpers */
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Avoid breaking inside cards if possible */
+  .print-no-break {
+    break-inside: avoid;
   }
 }
 

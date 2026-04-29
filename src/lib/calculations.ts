@@ -681,38 +681,41 @@ export function calculateDetailedTakeOff(
         category: 'Installation'
       });
 
-      // Brackets and Lags for Wood Fence (Moved inside !run.reusePosts)
-      if (runStyle.type === 'Wood') {
+      // Brackets and Lags for Wood Fence
+      if (runStyle.type === 'Wood' && runPostCount > 0) {
         const is6ft = run.height === 6;
-        const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-        const bracketCount = is6ft ? 4 : (run.height === 8 ? 5 : (run.height > 6 ? 4 : 3));
+        const railsCount = run.height === 8 ? 4 : (run.height > 6 ? 4 : 3);
+        const sectionCount = runPostCount - 1;
         
-        const bracketQty = runPostCount * bracketCount;
-        const bracketCost = bracketQty * bracketMat.cost;
-        runFenceMaterialCost += bracketCost;
-        runItems.push({
-          id: bracketMat.id,
-          name: bracketMat.name,
-          qty: bracketQty,
-          unit: bracketMat.unit,
-          unitCost: bracketMat.cost,
-          total: bracketCost,
-          category: 'Hardware'
-        });
+        if (sectionCount > 0) {
+          const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+          const bracketQty = sectionCount * railsCount * 2; // 2 brackets per rail per section
+          const bracketCost = bracketQty * bracketMat.cost;
+          runFenceMaterialCost += bracketCost;
+          runItems.push({
+            id: bracketMat.id,
+            name: bracketMat.name,
+            qty: bracketQty,
+            unit: bracketMat.unit,
+            unitCost: bracketMat.cost,
+            total: bracketCost,
+            category: 'Hardware'
+          });
 
-        const lagMat = materials.find(m => m.id === 'h-lag-14')!;
-        const lagQty = bracketQty * 4;
-        const lagCost = lagQty * lagMat.cost;
-        runFenceMaterialCost += lagCost;
-        runItems.push({
-          id: lagMat.id,
-          name: lagMat.name,
-          qty: lagQty,
-          unit: lagMat.unit,
-          unitCost: lagMat.cost,
-          total: lagCost,
-          category: 'Hardware'
-        });
+          const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+          const lagQty = bracketQty * 4;
+          const lagCost = lagQty * lagMat.cost;
+          runFenceMaterialCost += lagCost;
+          runItems.push({
+            id: lagMat.id,
+            name: lagMat.name,
+            qty: lagQty,
+            unit: lagMat.unit,
+            unitCost: lagMat.cost,
+            total: lagCost,
+            category: 'Hardware'
+          });
+        }
       }
     }
 

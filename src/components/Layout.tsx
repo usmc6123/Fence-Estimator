@@ -27,7 +27,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#1A1A1A]">
       {/* Sidebar - Desktop */}
-      <aside className="fixed left-0 top-0 hidden h-full w-64 border-r border-[#E5E5E5] bg-white lg:block">
+      <aside className="fixed left-0 top-0 hidden h-full w-64 border-r border-[#E5E5E5] bg-white lg:block print:hidden">
         <div className="flex h-24 items-center border-b border-[#E5E5E5] px-6">
           <div className="flex items-center gap-3">
             {COMPANY_INFO.logo && (
@@ -80,7 +80,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       </aside>
 
       {/* Header - Mobile */}
-      <header className="sticky top-0 z-50 flex h-20 items-center justify-between border-b border-[#E5E5E5] bg-white px-4 lg:hidden">
+      <header className="sticky top-0 z-50 flex h-20 items-center justify-between border-b border-[#E5E5E5] bg-white px-4 lg:hidden print:hidden">
         <div className="flex items-center gap-3">
           {COMPANY_INFO.logo && (
             <img 
@@ -136,8 +136,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="lg:pl-64">
-        <div className="mx-auto max-w-7xl p-4 md:p-8 lg:p-12">
+      <main className="lg:pl-64 print:pl-0">
+        <div className="mx-auto max-w-7xl p-4 md:p-8 lg:p-12 print:p-0 print:max-w-none">
           {children}
         </div>
       </main>

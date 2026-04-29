@@ -28,7 +28,13 @@ export default function Estimator({
   savedEstimates,
   setSavedEstimates
 }: EstimatorProps) {
-  const [step, setStep] = React.useState(1);
+  const [step, setStep] = React.useState(() => {
+    return Number(localStorage.getItem('fence_pro_estimator_step')) || 1;
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_estimator_step', step.toString());
+  }, [step]);
 
   const [isFullView, setIsFullView] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);
@@ -1859,8 +1865,13 @@ export default function Estimator({
                   </a>
                   <button 
                     onClick={() => {
+                      document.body.classList.add('printing-diagram');
                       window.focus();
                       window.print();
+                      // Remove class after a delay to revert for UI
+                      setTimeout(() => {
+                        document.body.classList.remove('printing-diagram');
+                      }, 500);
                     }}
                     className="px-6 py-3 bg-white border-2 border-american-blue text-american-blue rounded-xl font-bold text-sm hover:bg-american-blue/5 transition-all flex items-center gap-2 shadow-sm"
                   >

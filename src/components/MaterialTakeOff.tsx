@@ -4,7 +4,7 @@ import {
   Package, Hammer, Trash2, Settings as SettingsIcon, ExternalLink,
   Plus, Search, X
 } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates } from '../types';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -13,11 +13,12 @@ interface MaterialTakeOffProps {
   estimate: Partial<Estimate>;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  quotes: SupplierQuote[];
   setEstimate: (estimate: Partial<Estimate>) => void;
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
 }
 
-export default function MaterialTakeOff({ estimate, materials, laborRates, setEstimate, setMaterials }: MaterialTakeOffProps) {
+export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
   const [newItem, setNewItem] = React.useState({
@@ -42,9 +43,21 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
   };
 
   const handleOpenNewTab = () => {
-    // Construct the URL. In this environment, we can just open current location
-    // and the system handles the auth/routing
-    window.open(window.location.href, '_blank');
+    // Collect all relevant state for bridging
+    const stateToBridge = {
+      estimate,
+      activeTab: 'takeoff',
+      materials,
+      laborRates,
+      quotes
+    };
+    
+    // Encode state into hash
+    const hashState = encodeURIComponent(JSON.stringify(stateToBridge));
+    const url = new URL(window.location.href);
+    url.hash = `state=${hashState}`;
+    
+    window.open(url.toString(), '_blank');
   };
 
   const handleAddManualItem = (e: React.FormEvent) => {
@@ -136,7 +149,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700 takeoff-page print:max-w-none print:p-0 print:m-0 print:space-y-4">
       {/* Header Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
         <div className="flex items-center gap-4">
@@ -350,7 +363,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
         {/* Detailed Breakdown */}
         <div className="p-8 space-y-12">
           {data.runs.map((run) => (
-            <div key={run.runId} className="space-y-4">
+            <div key={run.runId} className="space-y-4 takeoff-card">
               <div 
                 className="flex items-center justify-between bg-american-blue/5 p-4 rounded-2xl cursor-pointer hover:bg-american-blue/10 transition-colors print:bg-[#F5F5F5]"
                 onClick={() => toggleRun(run.runId)}
@@ -373,7 +386,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                 <div className="pl-4 sm:pl-14 space-y-6 animate-in slide-in-from-top-2 duration-300">
                   {/* Financial Breakdown per Run */}
                   {showPrices && (
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-4 print:hidden">
                       <div className="bg-[#F8F9FA] p-4 rounded-2xl border-2 border-american-blue/5">
                         <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Net Fence LF Cost</p>
                         <div className="flex items-baseline gap-1">
@@ -421,11 +434,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                               <th className="px-6 py-4">Item Specification</th>
                               <th className="px-6 py-4 text-center">Quantity</th>
                               <th className="px-6 py-4">Unit</th>
-                              {showPrices && <th className="px-6 py-4 text-right">Raw Cost</th>}
-                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Markup</th>}
-                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Tax</th>}
-                              {showPrices && <th className="px-6 py-4 text-right">Selling Price</th>}
-                              {showPrices && <th className="px-6 py-4 text-right">Line Total</th>}
+                              {showPrices && <th className="px-6 py-4 text-right print:hidden">Raw Cost</th>}
+                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap print:hidden">Markup</th>}
+                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap print:hidden">Tax</th>}
+                              {showPrices && <th className="px-6 py-4 text-right print:hidden">Selling Price</th>}
+                              {showPrices && <th className="px-6 py-4 text-right print:hidden">Line Total</th>}
                             </tr>
                           </thead>
                           <tbody className="divide-y-2 divide-[#F8F9FA]">
@@ -448,24 +461,24 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                                   <td className="px-6 py-4">{item.name}</td>
                                   <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup)}</td>}
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">+{formatCurrency(unitTax)}</td>}
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px] print:hidden">+{formatCurrency(unitTax)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue print:hidden">{formatCurrency(sellingPrice)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red print:hidden">{formatCurrency(lineTotal)}</td>}
                                 </tr>
                               );
                             })}
                             {/* Fence Labor Row */}
-                            <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
+                            <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors print:hidden">
                               <td className="px-6 py-4">Fence Installation Labor</td>
                               <td className="px-6 py-4 text-center font-black text-american-blue">1</td>
                               <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
-                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.fenceLaborCost)}</td>}
-                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.fenceLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
-                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">$0.00</td>}
-                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
-                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(run.fenceLaborCost)}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(run.fenceLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px] print:hidden">$0.00</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue print:hidden">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red print:hidden">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                             </tr>
 
                             {/* Gate Section */}
@@ -489,15 +502,15 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                                       <td className="px-6 py-4">{item.name}</td>
                                       <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                       <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup)}</td>}
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">+{formatCurrency(unitTax)}</td>}
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px] print:hidden">+{formatCurrency(unitTax)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue print:hidden">{formatCurrency(sellingPrice)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red print:hidden">{formatCurrency(lineTotal)}</td>}
                                     </tr>
                                   );
                                 })}
-                                <tr className="text-sm font-bold text-american-red hover:bg-[#FBFBFB] transition-colors">
+                                <tr className="text-sm font-bold text-american-red hover:bg-[#FBFBFB] transition-colors print:hidden">
                                   <td className="px-6 py-4">Gate Fabrication Labor & Setup</td>
                                   <td className="px-6 py-4 text-center font-black text-american-red">1</td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
@@ -513,12 +526,12 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                             {/* Demo Section */}
                             {run.demoCharge > 0 && (
                               <>
-                                <tr className="bg-american-red/[0.01]">
+                                <tr className="bg-american-red/[0.01] print:hidden">
                                   <td colSpan={showPrices ? 8 : 3} className="px-6 py-2 text-[9px] font-black text-[#666666] uppercase tracking-widest border-t border-american-blue/5">
                                     Demolition & Removal
                                   </td>
                                 </tr>
-                                <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
+                                <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors print:hidden">
                                   <td className="px-6 py-4">Demolition Labor & Disposal</td>
                                   <td className="px-6 py-4 text-center font-black text-american-blue">1</td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
@@ -566,7 +579,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
           ))}
 
           {/* Master Inventory Summary */}
-          <div className="pt-12 border-t-4 border-american-blue/5 space-y-8">
+          <div className="pt-12 border-t-4 border-american-blue/5 space-y-8 takeoff-card">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-american-red text-white flex items-center justify-center shadow-lg">
                 <Package size={24} />
@@ -584,7 +597,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                     <th className="px-8 py-6">Item Specification</th>
                     <th className="px-8 py-6 text-center">Calculated Qty</th>
                     <th className="px-8 py-6">Category</th>
-                    {showPrices && <th className="px-8 py-6 text-right">Calculated Cost</th>}
+                    {showPrices && <th className="px-8 py-6 text-right print:hidden">Calculated Cost</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
@@ -602,12 +615,12 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                           <span className="flex-1">{item.name}</span>
                         </td>
                         <td className="px-8 py-5 text-center">
-                          <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                          <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">{item.qty} {item.unit}</span>
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
                         </td>
-                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-blue/60">{formatCurrency(item.total)}</td>}
+                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-blue/60 print:hidden">{formatCurrency(item.total)}</td>}
                       </tr>
                     ))
                   )}
@@ -617,7 +630,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
           </div>
 
           {/* Manual Additions Section */}
-          <div className="pt-12 border-t-4 border-american-red/10 space-y-8">
+          <div className="pt-12 border-t-4 border-american-red/10 space-y-8 takeoff-card">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-american-blue text-white flex items-center justify-center shadow-lg">
                 <Plus size={24} />
@@ -635,7 +648,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                     <th className="px-8 py-6">Manual Addition Specification</th>
                     <th className="px-8 py-6 text-center">Extra Qty</th>
                     <th className="px-8 py-6">Category</th>
-                    {showPrices && <th className="px-8 py-6 text-right">Manual Cost</th>}
+                    {showPrices && <th className="px-8 py-6 text-right print:hidden">Manual Cost</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
@@ -653,10 +666,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                           <span className="flex-1">{item.name}</span>
                           <button 
                             onClick={() => removeItem(item.id)}
-                            className="p-1.5 bg-american-red/5 hover:bg-american-red hover:text-white text-american-red rounded-lg transition-all opacity-40 hover:opacity-100 print:hidden"
+                            className="p-1.5 bg-american-red/10 hover:bg-american-red hover:text-white text-american-red rounded-lg transition-all opacity-100 print:hidden"
                             title="Remove manual item"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                           </button>
                         </td>
                         <td className="px-8 py-5 text-center">
@@ -665,7 +678,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
                         </td>
-                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>}
+                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-red print:hidden">{formatCurrency(item.total)}</td>}
                       </tr>
                     ))
                   )}
@@ -676,7 +689,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
 
           {/* Financial Totals */}
           {showPrices && (
-            <div className="space-y-6">
+            <div className="space-y-6 takeoff-card print:hidden">
                <div className="space-y-6 flex-1">
                  {/* Detailed Cost Breakdown Table */}
                  <div className="bg-white rounded-[24px] overflow-hidden border-2 border-american-blue/5 shadow-md">
@@ -757,22 +770,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
         </div>
 
         {/* Footer Branding */}
-        <div className="bg-[#1A1A1A] p-8 text-center border-t-8 border-american-red">
+        <div className="bg-[#1A1A1A] p-8 text-center border-t-8 border-american-red print:hidden">
           <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Lone Star Fence Works • Precision Manufacturing & Strategic Deployment</p>
         </div>
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-          .print\\:border-0 { border: 0 !important; }
-          .print\\:shadow-none { box-shadow: none !important; }
-          .print\\:p-10 { padding: 2.5rem !important; }
-          .print\\:bg-white { background: white !important; }
-          .print\\:bg-\\[\\#F5F5F5\\] { background: #F5F5F5 !important; }
-        }
-      `}} />
     </div>
   );
 }
