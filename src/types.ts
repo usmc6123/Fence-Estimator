@@ -60,6 +60,9 @@ export interface FenceRun {
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
+  hasDemolition?: boolean;
+  demoLinearFeet?: number;
+  demoType?: 'Wood' | 'Chain Link' | 'Metal';
 }
 
 export interface LaborRates {
@@ -129,12 +132,6 @@ export interface Estimate {
   ironInstallType?: 'Bolt up' | 'Weld up';
   topStyle?: 'Dog Ear' | 'Flat Top';
   isPreStained?: boolean;
-  
-  // Demolition
-  hasDemolition: boolean;
-  demoLinearFeet: number;
-  demoType: 'Wood' | 'Chain Link' | 'Metal';
-  removeConcreteFootings: boolean;
   
   // Site Prep
   hasSitePrep: boolean;

@@ -109,31 +109,162 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
 
               {expandedRuns[run.runId] && (
                 <div className="pl-4 sm:pl-14 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                  {/* Financial Breakdown per Run */}
+                  {showPrices && (
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <div className="bg-[#F8F9FA] p-4 rounded-2xl border-2 border-american-blue/5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Net Fence LF Cost</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-black text-american-blue">{formatCurrency((run.fenceMaterialCost + run.fenceLaborCost) * (1 + (estimate.markupPercentage || 0) / 100) + (run.fenceMaterialCost * (estimate.taxPercentage || 0) / 100))}</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-[#666666] tracking-tight">{run.netLF.toFixed(1)} LF @ {formatCurrency(((run.fenceMaterialCost + run.fenceLaborCost) * (1 + (estimate.markupPercentage || 0) / 100) + (run.fenceMaterialCost * (estimate.taxPercentage || 0) / 100)) / (run.netLF || 1))}/FT</p>
+                      </div>
+                      <div className="bg-[#F8F9FA] p-4 rounded-2xl border-2 border-american-blue/5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Gate Logistics Cost</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-black text-american-red">
+                            {formatCurrency((run.gateMaterialCost + run.gateLaborCost) * (1 + (estimate.markupPercentage || 0) / 100) + (run.gateMaterialCost * (estimate.taxPercentage || 0) / 100))}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-bold text-[#666666] tracking-tight">{run.gates.length} Unit(s)</p>
+                      </div>
+                      <div className="bg-[#F8F9FA] p-4 rounded-2xl border-2 border-american-blue/5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Demolition Charge</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-black text-[#A5A5A5]">
+                            {formatCurrency(run.demoCharge * (1 + (estimate.markupPercentage || 0) / 100))}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-bold text-[#666666] tracking-tight">Demo & Removal</p>
+                      </div>
+                      <div className="bg-american-blue/10 p-4 rounded-2xl border-2 border-american-blue/20 flex flex-col justify-center">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-american-blue mb-1">Charge Total for Run</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl font-black text-american-blue">
+                            {formatCurrency(
+                              ((run.fenceMaterialCost + run.fenceLaborCost + run.gateMaterialCost + run.gateLaborCost + run.demoCharge) * (1 + (estimate.markupPercentage || 0) / 100)) + 
+                              ((run.fenceMaterialCost + run.gateMaterialCost) * (estimate.taxPercentage || 0) / 100)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Run Materials */}
-                  <div className="overflow-hidden rounded-2xl border-2 border-american-blue/5">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
-                          <th className="px-6 py-4">Item Specification</th>
-                          <th className="px-6 py-4 text-center">Quantity</th>
-                          <th className="px-6 py-4">Unit</th>
-                          {showPrices && <th className="px-6 py-4 text-right">Price</th>}
-                          {showPrices && <th className="px-6 py-4 text-right">Total</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y-2 divide-[#F8F9FA]">
-                        {run.items.map((item, i) => (
-                          <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
-                            <td className="px-6 py-4">{item.name}</td>
-                            <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
-                            <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
-                            {showPrices && <td className="px-6 py-4 text-right tabular-nums">{formatCurrency(item.unitCost)}</td>}
-                            {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(item.total)}</td>}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      <div className="overflow-hidden rounded-2xl border-2 border-american-blue/5">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
+                              <th className="px-6 py-4">Item Specification</th>
+                              <th className="px-6 py-4 text-center">Quantity</th>
+                              <th className="px-6 py-4">Unit</th>
+                              {showPrices && <th className="px-6 py-4 text-right">Raw Cost</th>}
+                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Markup & Tax</th>}
+                              {showPrices && <th className="px-6 py-4 text-right">Selling Price</th>}
+                              {showPrices && <th className="px-6 py-4 text-right">Line Total</th>}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y-2 divide-[#F8F9FA]">
+                            {/* Fence Section */}
+                            <tr className="bg-american-blue/[0.03]">
+                              <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-american-blue uppercase tracking-widest">
+                                Fence Components & Labor
+                              </td>
+                            </tr>
+                            {run.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'Gate').map((item, i) => {
+                              const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+                              const taxFactor = (estimate.taxPercentage || 0) / 100;
+                              const unitMarkup = item.unitCost * (markupFactor - 1);
+                              const unitTax = item.unitCost * taxFactor;
+                              const sellingPrice = item.unitCost + unitMarkup + unitTax;
+                              const lineTotal = item.total * markupFactor + item.total * taxFactor;
+
+                              return (
+                                <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
+                                  <td className="px-6 py-4">{item.name}</td>
+                                  <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                                  <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup + unitTax)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
+                                </tr>
+                              );
+                            })}
+                            {/* Fence Labor Row */}
+                            <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
+                              <td className="px-6 py-4">Fence Installation Labor</td>
+                              <td className="px-6 py-4 text-center font-black text-american-blue">1</td>
+                              <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.fenceLaborCost)}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.fenceLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                            </tr>
+
+                            {/* Gate Section */}
+                            {run.items.some(i => i.category === 'Gate') && (
+                              <>
+                                <tr className="bg-american-red/[0.03]">
+                                  <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-american-red uppercase tracking-widest border-t border-american-blue/5">
+                                    Gate Components & Logistics
+                                  </td>
+                                </tr>
+                                {run.items.filter(i => i.category === 'Gate' || (i.category !== 'Labor' && i.category !== 'Demolition' && i.id.startsWith('gate-'))).map((item, i) => {
+                                  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+                                  const taxFactor = (estimate.taxPercentage || 0) / 100;
+                                  const unitMarkup = item.unitCost * (markupFactor - 1);
+                                  const unitTax = item.unitCost * taxFactor;
+                                  const sellingPrice = item.unitCost + unitMarkup + unitTax;
+                                  const lineTotal = item.total * markupFactor + item.total * taxFactor;
+
+                                  return (
+                                    <tr key={`gate-${i}`} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
+                                      <td className="px-6 py-4">{item.name}</td>
+                                      <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                                      <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup + unitTax)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
+                                    </tr>
+                                  );
+                                })}
+                                <tr className="text-sm font-bold text-american-red hover:bg-[#FBFBFB] transition-colors">
+                                  <td className="px-6 py-4">Gate Fabrication Labor & Setup</td>
+                                  <td className="px-6 py-4 text-center font-black text-american-red">1</td>
+                                  <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.gateLaborCost)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.gateLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.gateLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.gateLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                                </tr>
+                              </>
+                            )}
+
+                            {/* Demo Section */}
+                            {run.demoCharge > 0 && (
+                              <>
+                                <tr className="bg-american-red/[0.01]">
+                                  <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-[#666666] uppercase tracking-widest border-t border-american-blue/5">
+                                    Demolition & Removal
+                                  </td>
+                                </tr>
+                                <tr className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
+                                  <td className="px-6 py-4">Demolition Labor & Disposal</td>
+                                  <td className="px-6 py-4 text-center font-black text-american-blue">1</td>
+                                  <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.demoCharge)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.demoCharge * (estimate.markupPercentage || 0) / 100)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(run.demoCharge * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.demoCharge * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
+                                </tr>
+                              </>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
 
                   {/* Gates Sub-items */}
                   {run.gates.length > 0 && (
@@ -149,7 +280,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                               <span className="text-xs font-black text-american-blue uppercase tracking-tight">{gate.type} Gate ({gate.width}')</span>
                             </div>
                             <ul className="space-y-2">
-                              {gate.items.map((gi, gii) => (
+                              {gate.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition').map((gi, gii) => (
                                 <li key={gii} className="flex justify-between items-center group">
                                   <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors">{gi.qty}x {gi.name}</span>
                                   {showPrices && <span className="text-[11px] font-black text-american-blue">{formatCurrency(gi.total)}</span>}
@@ -189,7 +320,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
-                  {data.summary.map((item, i) => (
+                  {data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => (
                     <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
                       <td className="px-8 py-5 flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
@@ -211,46 +342,68 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
 
           {/* Financial Totals */}
           {showPrices && (
-            <div className="bg-[#F8F9FA] rounded-[32px] p-10 flex flex-col md:flex-row justify-between gap-12 border-2 border-[#EEEEEE]">
+            <div className="space-y-6">
                <div className="space-y-6 flex-1">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-american-blue/30 border-b-2 border-american-blue/5 pb-2">Analysis Summary</h4>
-                 <div className="grid gap-6 sm:grid-cols-2">
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Materials Total</p>
-                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.material)}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Labor Install</p>
-                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.labor)}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Logistics & Demo</p>
-                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.demo)}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Subtotal</p>
-                     <p className="text-xl font-black text-american-blue">{formatCurrency(data.totals.subtotal)}</p>
-                   </div>
+                 {/* Detailed Cost Breakdown Table */}
+                 <div className="bg-white rounded-[24px] overflow-hidden border-2 border-american-blue/5 shadow-md">
+                   <table className="w-full text-left">
+                     <thead>
+                       <tr className="bg-american-blue/5 text-[10px] font-black uppercase tracking-widest text-american-blue">
+                         <th className="px-6 py-3">Cost Category</th>
+                         <th className="px-6 py-3 text-right">Raw Total</th>
+                         <th className="px-6 py-3 text-right text-american-red">Final Adjusted Total</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-[#F8F9FA]">
+                       <tr className="text-sm font-bold text-american-blue">
+                         <td className="px-6 py-4">Fence & Gate Materials</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.material)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums">
+                           {formatCurrency(data.totals.material * (1 + (estimate.markupPercentage || 0) / 100) + data.totals.tax)}
+                         </td>
+                       </tr>
+                       <tr className="text-sm font-bold text-american-blue">
+                         <td className="px-6 py-4">Installation Labor</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.labor)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums">
+                           {formatCurrency(data.totals.labor * (1 + (estimate.markupPercentage || 0) / 100))}
+                         </td>
+                       </tr>
+                       {(data.totals.demo > 0 || (data.totals.prep || 0) > 0) && (
+                         <tr className="text-sm font-bold text-american-blue">
+                           <td className="px-6 py-4">Prep, Demo & Logistics</td>
+                           <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.demo + (data.totals.prep || 0))}</td>
+                           <td className="px-6 py-4 text-right tabular-nums">
+                             {formatCurrency((data.totals.demo + (data.totals.prep || 0)) * (1 + (estimate.markupPercentage || 0) / 100))}
+                           </td>
+                         </tr>
+                       )}
+                     </tbody>
+                   </table>
                  </div>
                </div>
                
-               <div className="bg-american-blue rounded-3xl p-8 text-white min-w-[300px] shadow-2xl shadow-american-blue/30 space-y-6">
-                 <div className="space-y-4">
-                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest opacity-60">
-                      <span>Markup ({estimate.markupPercentage}%)</span>
-                      <span>{formatCurrency(data.totals.markup)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest opacity-60">
-                      <span>Tax ({estimate.taxPercentage}%)</span>
-                      <span>{formatCurrency(data.totals.tax)}</span>
-                    </div>
-                    <div className="pt-4 border-t border-white/10 flex justify-between items-center">
-                       <span className="text-xs font-black uppercase tracking-[0.2em]">Grand Total</span>
-                       <span className="text-3xl font-black text-white">{formatCurrency(data.totals.grandTotal)}</span>
-                    </div>
+               {/* Aggregated Totals Grid */}
+               <div className="bg-[#F8F9FA] rounded-[24px] p-8 flex flex-col md:flex-row justify-between gap-8 border-2 border-[#EEEEEE]">
+                 <div className="grid grid-cols-2 gap-8 flex-1">
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Gross Raw Cost</p>
+                     <p className="text-2xl font-black text-american-blue">{formatCurrency(data.totals.subtotal)}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red">Markup & Tax Total</p>
+                     <p className="text-2xl font-black text-american-red">{formatCurrency(data.totals.markup + data.totals.tax)}</p>
+                   </div>
                  </div>
-                 <div className="text-[10px] font-bold text-center opacity-40 uppercase tracking-widest italic pt-4">
-                   * Values reflect active pricing legend
+                 
+                 <div className="bg-american-blue rounded-2xl p-6 text-white min-w-[320px] shadow-xl shadow-american-blue/20 flex flex-col justify-center">
+                   <div className="flex justify-between items-baseline gap-4">
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Estimated Final Total</span>
+                     <span className="text-3xl font-black">{formatCurrency(data.totals.grandTotal)}</span>
+                   </div>
+                   <div className="mt-2 text-[8px] font-bold opacity-40 uppercase tracking-widest text-center border-t border-white/10 pt-2">
+                     Official Project Investment Analysis
+                   </div>
                  </div>
                </div>
             </div>

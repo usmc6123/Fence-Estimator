@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Plus, Filter, MoreVertical, Edit2, Trash2, 
   Package, Box, Layers, HardHat, Hammer, Ruler, 
-  Grid, List as ListIcon, ImageIcon
+  Grid, List as ListIcon, ImageIcon, RotateCcw
 } from 'lucide-react';
 import { MATERIALS } from '../constants';
 import { MaterialCategory, MaterialItem } from '../types';
@@ -99,6 +99,18 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-white rounded-xl border border-[#E5E5E5] p-1 shadow-sm">
+            <button 
+              onClick={() => {
+                if (confirm('Reset all materials to factory defaults? Your custom changes will be lost.')) {
+                  setMaterials(MATERIALS);
+                }
+              }}
+              className="p-2 rounded-lg text-[#999999] hover:text-red-500 transition-all"
+              title="Reset All Materials to Defaults"
+            >
+              <RotateCcw size={18} />
+            </button>
+            <div className="w-px h-4 bg-[#E5E5E5] self-center mx-1" />
             <button 
               onClick={() => setViewMode('grid')}
               className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-american-blue/10 text-american-blue" : "text-[#999999] hover:text-american-blue")}
@@ -365,7 +377,7 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
                     <input 
                       required
                       type="number" 
-                      step="0.01"
+                      step="0.001"
                       value={formData.cost}
                       onChange={(e) => setFormData({...formData, cost: Number(e.target.value)})}
                       className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none"

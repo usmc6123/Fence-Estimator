@@ -9,6 +9,7 @@ import Estimator from './components/Estimator';
 import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
 import MaterialTakeOff from './components/MaterialTakeOff';
+import LaborTakeOff from './components/LaborTakeOff';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES } from './constants';
@@ -22,11 +23,24 @@ export default function App() {
       const saved = localStorage.getItem('fence_pro_materials');
       if (saved) {
         const parsed = JSON.parse(saved) as MaterialItem[];
-        // Merge with current hardcoded constants to ensure new items appear
+        // Merge with current hardcoded constants
         const merged = [...parsed];
         MATERIALS.forEach(baseMat => {
-          if (!merged.find(m => m.id === baseMat.id)) {
+          const existingIdx = merged.findIndex(m => m.id === baseMat.id);
+          if (existingIdx === -1) {
             merged.push(baseMat);
+          } else {
+            // Force update if the base unit or description changed in constants
+            // This ensures transitions like "box" -> "each" for nails propagate
+            if (merged[existingIdx].unit !== baseMat.unit) {
+              merged[existingIdx] = { 
+                ...merged[existingIdx], 
+                unit: baseMat.unit, 
+                cost: baseMat.cost,
+                description: baseMat.description,
+                name: baseMat.name
+              };
+            }
           }
         });
         return merged;
@@ -87,10 +101,6 @@ export default function App() {
       concreteType: 'Maximizer',
       postWidth: 6,
       postThickness: 6,
-      hasDemolition: false,
-      demoLinearFeet: 100,
-      demoType: 'Wood',
-      removeConcreteFootings: true,
       hasSitePrep: false,
       needsClearing: false,
       needsMarking: true,
@@ -110,10 +120,25 @@ export default function App() {
     };
   });
 
-  // Save to localStorage on changes
   React.useEffect(() => {
     localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
   }, [materials]);
+
+  // Structural sync for existing items if they differ from constants in key ways
+  React.useEffect(() => {
+    let changed = false;
+    const syncedMaterials = materials.map(m => {
+      const base = MATERIALS.find(bm => bm.id === m.id);
+      if (base && base.unit !== m.unit) {
+        changed = true;
+        return { ...m, unit: base.unit, cost: base.cost, description: base.description, name: base.name };
+      }
+      return m;
+    });
+    if (changed) {
+      setMaterials(syncedMaterials);
+    }
+  }, []);
 
   React.useEffect(() => {
     localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
@@ -145,6 +170,9 @@ export default function App() {
       )}
       {activeTab === 'takeoff' && (
         <MaterialTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
+      )}
+      {activeTab === 'labor-takeoff' && (
+        <LaborTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
       )}
       {activeTab === 'quotes' && (
         <QuoteManager 

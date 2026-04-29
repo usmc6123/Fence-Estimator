@@ -71,7 +71,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'h-bracket-w', name: 'Wood Fence Bracket', category: 'Hardware', unit: 'each', cost: 1.45, description: 'Simpson Strong-Tie', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
   { id: 'h-lag-14', name: '1/4" Lag Screws (for brackets)', category: 'Fastener', unit: 'each', cost: 0.35, description: '1/4" galvanized lag', imageUrl: 'https://m.media-amazon.com/images/I/61ygv314ECL.jpg' },
   { id: 'h-screw-3', name: '3" Exterior Screws', category: 'Fastener', unit: 'box', cost: 28.00, description: '5lb box, deck rated', imageUrl: 'https://m.media-amazon.com/images/I/61ygv314ECL.jpg' },
-  { id: 'h-nail-galv', name: 'Galv Ring-Shank Nails', category: 'Fastener', unit: 'box', cost: 12.50, description: '2" nails, 5lb box', imageUrl: 'https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcT3jXZREnFZgyniF8VdaLdhA9sn2VkSBBtvBDCISL30fG7dvZ3RtpeX5XBRadvkVk2asLsqNDqysLTBkhrSfNDoo-rjbbkBiM5u_rS6xL2C_NfAfHRHCQ8QCvlTIcOjsks9mI2x4FdUlQ&usqp=CAc' },
+  { id: 'h-nail-galv', name: 'Galv Ring-Shank Nails', category: 'Fastener', unit: 'each', cost: 0.005, description: '2" nails, price per nail', imageUrl: 'https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcT3jXZREnFZgyniF8VdaLdhA9sn2VkSBBtvBDCISL30fG7dvZ3RtpeX5XBRadvkVk2asLsqNDqysLTBkhrSfNDoo-rjbbkBiM5u_rS6xL2C_NfAfHRHCQ8QCvlTIcOjsks9mI2x4FdUlQ&usqp=CAc' },
   { id: 'h-cl-band-tens', name: 'Tension Band', category: 'Hardware', unit: 'each', cost: 1.15, description: 'For terminal posts', imageUrl: 'https://www.thetoolsman.com/cdn/shop/files/Grainger_328521C.jpg?v=1713447124' },
   { id: 'h-cl-band-brace', name: 'Brace Band', category: 'Hardware', unit: 'each', cost: 1.25, description: 'For rail ends', imageUrl: 'https://images.thdstatic.com/productImages/a9846dc8-ac20-42cb-83d5-896a93dc00b6/svn/everbilt-chain-link-fence-accessories-328528eb-64_600.jpg' },
   { id: 'h-cl-tie', name: 'Aluminum Fence Ties', category: 'Hardware', unit: 'box', cost: 14.50, description: '100 count', imageUrl: 'https://fencesupplyinc.com/wp-content/uploads/2023/12/fence-ties-9-ga-aluminum-8-1_2-inch_1.jpg' },
@@ -87,13 +87,6 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'i-concrete-quickset', name: '80lb Quickset Concrete', category: 'Concrete', unit: 'bag', cost: 9.75, description: 'Fast-setting concrete (2 bags per post)', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
   { id: 'i-foam', name: 'Post-Setting Foam', category: 'Concrete', unit: 'each', cost: 18.50, description: '2-part expanding foam', imageUrl: 'https://images.thdstatic.com/productImages/bc70eb23-9f73-4ce7-95b4-b048b422ee33/svn/sika-deck-parts-accessories-7116170-c3_600.jpg' },
   
-  // Demolition
-  { id: 'd-labor', name: 'Demo Labor Rate', category: 'Labor', unit: 'hour', cost: 48.00, description: 'Removal and loading', imageUrl: 'https://junkrelief.com/wp-content/uploads/2022/04/fence-removal-services-chicago.jpg.webp' },
-  { id: 'd-dumpster', name: 'Dumpster Fee', category: 'Demolition', unit: 'each', cost: 485.00, description: '15-yard roll off', imageUrl: 'https://www.dumpsters.com/images/hero-demolition-dumpster-940x532.jpg' },
-  { id: 'd-hauling', name: 'Hauling Trip', category: 'Demolition', unit: 'trip', cost: 145.00, description: 'Truck trip to dump', imageUrl: 'https://cdn.prod.website-files.com/6697cd1e9427d86c4184a368/66c52265716d7c2c334be6b8_image%2040%20(1).png' },
-  { id: 'd-blade', name: 'Saw Blades (Carbide)', category: 'Consumable', unit: 'each', cost: 14.00, description: 'Reciprocating saw blades', imageUrl: 'https://images.thdstatic.com/productImages/05cd7e21-71a0-4234-8e39-1b34ba41bc85/svn/rockwell-circular-saw-blades-rw9281-64_1000.jpg' },
-  { id: 'd-ppe', name: 'Safety Gear Kit', category: 'Consumable', unit: 'each', cost: 18.00, description: 'Gloves, mask, goggles', imageUrl: 'https://static.grainger.com/rp/s/is/image/Grainger/TC-FENCE-orange-example1_7133__EDR3_v1?$adapimg$&hei=536&wid=536' },
-  
   // Site Prep
   { id: 's-marking', name: 'Marking Paint & Stakes', category: 'SitePrep', unit: 'each', cost: 28.00, description: 'Layout supplies', imageUrl: 'https://www.gmesupply.com/media/catalog/product/m/a/marking-paint-web.jpg' },
   { id: 's-clearing', name: 'Vegetation Clearing', category: 'Labor', unit: 'hour', cost: 58.00, description: 'Brush and root removal', imageUrl: 'https://wemulch.com/wp-content/uploads/2022/09/fence_line_clearing_rocky_road_excavation.webp' },
@@ -108,11 +101,30 @@ export const MATERIALS: MaterialItem[] = [
   
   // Pipe Fence (No-Climb)
   { id: 'p-rail-238', name: '2-3/8" Sch 40 Top Rail Pipe', category: 'Rail', unit: 'lf', cost: 6.85, description: 'Structural galvanized pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
-  { id: 'p-post-238-8', name: '2-3/8" x 8\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 42.00, description: 'Pipe for 4ft fence (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
-  { id: 'p-post-238-10', name: '2-3/8" x 10\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 54.00, description: 'Pipe for 6ft fence (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'p-post-238-6', name: '2-3/8" x 6\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 30.00, description: 'Pipe for 4ft fence (+2ft in ground)' },
+  { id: 'p-post-238-7', name: '2-3/8" x 7\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 36.00, description: 'Pipe for 5ft fence (+2ft in ground)' },
+  { id: 'p-post-238-8', name: '2-3/8" x 8\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 42.00, description: 'Pipe for 6ft fence (+2ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'p-post-238-9', name: '2-3/8" x 9\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 48.00, description: 'Gate post for 6ft fence (+3ft in ground)' },
+  { id: 'p-post-238-10', name: '2-3/8" x 10\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 54.00, description: 'Extra deep pipe (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
   { id: 'p-ez-tie', name: '2-3/8" EZ Tie', category: 'Hardware', unit: 'each', cost: 1.85, description: 'Wire-to-pipe fastener', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
-  { id: 'p-no-climb', name: 'No-Climb Horse Wire Mesh', category: 'Picket', unit: 'lf', cost: 4.25, description: '2"x4" galvanized mesh', imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
-  { id: 'p-paint-pint', name: 'Structural Pipe Paint (Pint)', category: 'Finishing', unit: 'pint', cost: 18.00, description: 'Black satin finish', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
+  
+  // No-Climb Wire Variations
+  { id: 'p-wire-4-100-galv', name: "4' x 100' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 195.00, description: 'Galvanized 100ft roll' },
+  { id: 'p-wire-4-200-galv', name: "4' x 200' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 375.00, description: 'Galvanized 200ft roll' },
+  { id: 'p-wire-4-100-black', name: "4' x 100' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 245.00, description: 'Black coated 100ft roll' },
+  { id: 'p-wire-4-200-black', name: "4' x 200' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 465.00, description: 'Black coated 200ft roll' },
+  
+  { id: 'p-wire-5-100-galv', name: "5' x 100' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 245.00, description: 'Galvanized 100ft roll' },
+  { id: 'p-wire-5-200-galv', name: "5' x 200' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 475.00, description: 'Galvanized 200ft roll' },
+  { id: 'p-wire-5-100-black', name: "5' x 100' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 295.00, description: 'Black coated 100ft roll' },
+  { id: 'p-wire-5-200-black', name: "5' x 200' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 565.00, description: 'Black coated 200ft roll' },
+  
+  { id: 'p-wire-6-100-galv', name: "6' x 100' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 295.00, description: 'Galvanized 100ft roll' },
+  { id: 'p-wire-6-200-galv', name: "6' x 200' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 575.00, description: 'Galvanized 200ft roll' },
+  { id: 'p-wire-6-100-black', name: "6' x 100' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 345.00, description: 'Black coated 100ft roll' },
+  { id: 'p-wire-6-200-black', name: "6' x 200' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 665.00, description: 'Black coated 200ft roll' },
+
+  { id: 'p-paint-gal', name: 'Structural Pipe Paint (Gallon)', category: 'Finishing', unit: 'gallon', cost: 72.00, description: 'Black satin finish', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
   
   // Post Caps
   { id: 'pc-flat', name: 'Flat Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },
@@ -151,7 +163,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [
       { id: 'w-side', name: 'Side by Side', priceModifier: 0, imageUrl: 'https://patriotfencekc.com/wp-content/gallery/aluminu/4-tall-solid-cedar-privacy-1x6x4.jpeg' },
-      { id: 'w-bob', name: 'Board on Board', priceModifier: 4.50, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
+      { id: 'w-bob', name: 'Board on Board', priceModifier: 0, imageUrl: 'https://atlantadecking.com/wp-content/uploads/2024/05/wood-fence-min-1024x680-1.jpg' },
       { id: 'w-horiz', name: 'Horizontal', priceModifier: 6.00, imageUrl: 'https://images.squarespace-cdn.com/content/v1/59df95b3f14aa1927776f821/1510695034637-67X6S6Y6Y6Y6Y6Y6Y6Y6/Horizontal+Fence+Austin' },
     ],
     calcLogic: { postsPerLF: 0.167, railsPerLF: 0.25, picketsPerLF: 2.2, concretePerPost: 0.7 },

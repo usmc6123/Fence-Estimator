@@ -19,8 +19,10 @@ interface QuoteManagerProps {
 export default function QuoteManager({ materials, setMaterials, quotes, setQuotes }: QuoteManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [activeView, setActiveView] = React.useState<'list' | 'compare'>('list');
+  const [activeView, setActiveView] = React.useState<'list' | 'compare' | 'history'>('list');
   const [selectedQuoteId, setSelectedQuoteId] = React.useState<string | null>(null);
+  const [selectedHistoryMaterialId, setSelectedHistoryMaterialId] = React.useState<string | null>(null);
+  const [selectedHistorySupplier, setSelectedHistorySupplier] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<string | null>(null);
 
   const selectedQuote = React.useMemo(() => 
@@ -182,6 +184,41 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     }));
   }, [quotes, materials]);
 
+  // History Logic: Group all instances of a material across time
+  const historyData = React.useMemo(() => {
+    const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId: string }[] }> = {};
+
+    quotes.forEach(quote => {
+      quote.items.forEach(item => {
+        if (item.mappedMaterialId) {
+          if (!history[item.mappedMaterialId]) {
+            const mat = materials.find(m => m.id === item.mappedMaterialId);
+            history[item.mappedMaterialId] = {
+              materialName: mat?.name || item.materialName,
+              entries: []
+            };
+          }
+          history[item.mappedMaterialId].entries.push({
+            supplierName: quote.supplierName,
+            price: item.unitPrice,
+            date: quote.date,
+            quoteId: quote.id
+          });
+        }
+      });
+    });
+
+    // Sort entries by date desc (newest first)
+    Object.values(history).forEach(h => {
+      h.entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    });
+
+    return Object.entries(history).map(([id, data]) => ({
+      id,
+      ...data
+    })).sort((a, b) => a.materialName.localeCompare(b.materialName));
+  }, [quotes, materials]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <AnimatePresence>
@@ -223,6 +260,16 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           >
             <Scale size={16} />
             Compare
+          </button>
+          <button 
+            onClick={() => setActiveView('history')}
+            className={cn(
+              "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2",
+              activeView === 'history' ? "bg-white text-american-blue shadow-sm" : "text-[#999999] hover:text-american-blue"
+            )}
+          >
+            <History size={16} />
+            History
           </button>
         </div>
       </div>
@@ -393,8 +440,11 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                           <CheckCircle2 size={12} />
                                           <span className="font-black uppercase tracking-widest">Matched: {mat.name}</span>
                                           <button 
-                                            onClick={() => mapMaterialToItem(selectedQuote.id, item.id, '')}
-                                            className="ml-2 text-[8px] text-[#999999] hover:text-american-red uppercase font-black"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              mapMaterialToItem(selectedQuote.id, item.id, '');
+                                            }}
+                                            className="ml-2 px-2 py-0.5 bg-american-blue/5 hover:bg-american-red/10 text-[8px] text-[#999999] hover:text-american-red uppercase font-black rounded transition-colors"
                                           >
                                             Unlink
                                           </button>
@@ -476,7 +526,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                   </div>
                 )}
               </motion.div>
-            ) : (
+            ) : activeView === 'compare' ? (
               <motion.div
                 key="compare"
                 initial={{ opacity: 0, x: 20 }}
@@ -557,6 +607,132 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                       ))
                     )}
                   </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="history"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <div className="bg-white rounded-[40px] shadow-xl border-2 border-american-blue/5 p-8">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="h-12 w-12 rounded-2xl bg-american-blue text-white flex items-center justify-center shadow-lg">
+                      <History size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Price Evolution Tracking</h2>
+                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Historical Price Points by Material</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-10">
+                    <div className="md:col-span-1 lg:col-span-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 mb-2 block ml-1">Filter by Supplier</label>
+                      <select 
+                        value={selectedHistorySupplier || ''}
+                        onChange={(e) => setSelectedHistorySupplier(e.target.value)}
+                        className="w-full px-4 py-4 bg-[#F5F5F7] border-2 border-transparent focus:border-american-blue/20 rounded-[20px] text-sm font-bold focus:ring-4 focus:ring-american-blue/5 transition-all outline-none"
+                      >
+                        <option value="">All Suppliers</option>
+                        {Array.from(new Set(quotes.map(q => q.supplierName))).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-1 lg:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 mb-2 block ml-1">Search Material History</label>
+                      <div className="relative">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-american-blue/40">
+                          <History size={20} />
+                        </div>
+                        <input 
+                          type="text" 
+                          placeholder="Type material name (e.g. 'Cedar Picket', 'Post', 'Rail')..." 
+                          value={selectedHistoryMaterialId || ''} 
+                          onChange={(e) => setSelectedHistoryMaterialId(e.target.value)}
+                          className="w-full pl-12 pr-4 py-4 bg-[#F5F5F7] border-2 border-transparent focus:border-american-blue/20 rounded-[20px] text-sm font-bold focus:ring-4 focus:ring-american-blue/5 transition-all outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {historyData.filter(h => 
+                    (!selectedHistoryMaterialId || h.materialName.toLowerCase().includes(selectedHistoryMaterialId.toLowerCase())) &&
+                    (!selectedHistorySupplier || h.supplierName === selectedHistorySupplier)
+                  ).length === 0 ? (
+                    <div className="py-20 text-center">
+                      <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
+                        {selectedHistoryMaterialId ? "No matching materials found" : "No historical data available. Map your quote items to build history."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-12">
+                      {historyData.filter(h => 
+                        !selectedHistoryMaterialId || h.materialName.toLowerCase().includes(selectedHistoryMaterialId.toLowerCase())
+                      ).map((material) => (
+                        <div key={material.id} className="space-y-6">
+                          <div className="flex items-center justify-between border-b border-[#F5F5F7] pb-4">
+                            <h3 className="text-sm font-black text-american-blue uppercase tracking-tight">{material.materialName}</h3>
+                            <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest bg-[#F5F5F7] px-3 py-1 rounded-full">
+                              {material.entries.length} Price Points
+                            </span>
+                          </div>
+                          
+                          <div className="grid gap-4">
+                            {material.entries.map((entry, idx) => {
+                              const isNewest = idx === 0;
+                              return (
+                                <div key={`${entry.quoteId}-${idx}`} className={cn(
+                                  "flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-3xl border-2 transition-all",
+                                  isNewest ? "bg-american-blue/5 border-american-blue/10" : "bg-white border-[#F8F9FA]"
+                                )}>
+                                  <div className="flex items-center gap-4">
+                                    <div className={cn(
+                                      "h-10 w-10 rounded-xl flex items-center justify-center",
+                                      isNewest ? "bg-american-blue text-white" : "bg-[#F5F5F7] text-american-blue"
+                                    )}>
+                                      <DollarSign size={18} />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-black text-american-blue">{entry.supplierName}</p>
+                                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
+                                        {new Date(entry.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-6 mt-4 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
+                                    <div className="text-right">
+                                      <p className="text-xl font-black text-american-blue">{formatCurrency(entry.price)}</p>
+                                      {isNewest && <p className="text-[9px] font-black text-american-blue uppercase tracking-widest">Current/Newest</p>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button 
+                                        onClick={() => { setSelectedQuoteId(entry.quoteId); setActiveView('list'); }}
+                                        className="p-2 bg-white text-american-blue border border-[#E5E5E5] rounded-xl hover:bg-american-blue hover:text-white hover:border-american-blue transition-all shadow-sm"
+                                        title="View Original Quote"
+                                      >
+                                        <ExternalLink size={14} />
+                                      </button>
+                                      <button 
+                                        onClick={() => updateMaterialPrice(material.id, entry.price)}
+                                        className="px-4 py-2 bg-american-blue text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-american-red transition-all"
+                                      >
+                                        Use This Price
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
