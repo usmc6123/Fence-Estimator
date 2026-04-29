@@ -3,11 +3,91 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Upload, FileText, Trash2, TrendingUp, AlertCircle, 
   CheckCircle2, Loader2, ChevronRight, Scale, ExternalLink,
-  Plus, History, DollarSign
+  Plus, History, DollarSign, Search, ChevronDown
 } from 'lucide-react';
 import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
+
+interface SearchableSelectProps {
+  options: { value: string; label: string }[];
+  onSelect: (value: string) => void;
+  placeholder?: string;
+}
+
+function SearchableSelect({ options, onSelect, placeholder = "Search..." }: SearchableSelectProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const filteredOptions = options.filter(opt => 
+    opt.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative inline-block w-48" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-1 bg-[#F5F5F7] border-none rounded-md text-[10px] font-bold text-american-blue focus:ring-1 focus:ring-american-blue outline-none transition-all"
+      >
+        <span className="truncate">{placeholder}</span>
+        <Search size={10} className="text-[#999999]" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 z-50 w-64 mt-1 bg-white rounded-xl shadow-2xl border border-american-blue/10 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="p-2 border-b border-[#F5F5F7]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#CCCCCC]" size={12} />
+              <input
+                autoFocus
+                type="text"
+                className="w-full pl-8 pr-3 py-2 bg-[#F5F5F7] rounded-lg text-xs font-bold focus:ring-2 focus:ring-american-blue/10 outline-none"
+                placeholder="Type to find material..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto p-1 custom-scrollbar">
+            {filteredOptions.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-[10px] font-bold text-[#CCCCCC] uppercase tracking-widest">No matching materials</p>
+              </div>
+            ) : (
+              filteredOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onSelect(opt.value);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold text-american-blue hover:bg-american-blue/5 transition-colors flex items-center justify-between group"
+                >
+                  <span className="truncate">{opt.label}</span>
+                  <ChevronRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface QuoteManagerProps {
   materials: MaterialItem[];
@@ -455,16 +535,11 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                             <AlertCircle size={12} />
                                             <span className="font-black uppercase tracking-widest">Unlinked</span>
                                           </div>
-                                          <select 
-                                            onChange={(e) => mapMaterialToItem(selectedQuote.id, item.id, e.target.value)}
-                                            className="text-[10px] bg-[#F5F5F7] border-none rounded-md px-2 py-1 font-bold focus:ring-1 focus:ring-american-blue"
-                                            value=""
-                                          >
-                                            <option value="" disabled>Link to Library...</option>
-                                            {materials.map(m => (
-                                              <option key={m.id} value={m.id}>{m.name}</option>
-                                            ))}
-                                          </select>
+                                          <SearchableSelect 
+                                            options={materials.map(m => ({ value: m.id, label: m.name }))}
+                                            onSelect={(value) => mapMaterialToItem(selectedQuote.id, item.id, value)}
+                                            placeholder="Link to Library..."
+                                          />
                                         </div>
                                       )}
                                     </div>

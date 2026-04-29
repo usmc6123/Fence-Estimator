@@ -12,11 +12,23 @@ import MaterialTakeOff from './components/MaterialTakeOff';
 import LaborTakeOff from './components/LaborTakeOff';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
+import SavedEstimates from './components/SavedEstimates';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES } from './constants';
-import { MaterialItem, LaborRates, Estimate, SupplierQuote } from './types';
+import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('estimator');
+  
+  const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>(() => {
+    try {
+      const saved = localStorage.getItem('fence_pro_saved_estimates');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error loading saved estimates:', e);
+      return [];
+    }
+  });
+
   // Persistence Logic
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
     try {
@@ -152,6 +164,15 @@ export default function App() {
     localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
   }, [estimate]);
 
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_saved_estimates', JSON.stringify(savedEstimates));
+  }, [savedEstimates]);
+
+  const handleLoadEstimate = (est: SavedEstimate) => {
+    setEstimate(est);
+    setActiveTab('estimator');
+  };
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'estimator' && (
@@ -159,7 +180,16 @@ export default function App() {
           materials={materials} 
           laborRates={laborRates} 
           estimate={estimate} 
-          setEstimate={setEstimate} 
+          setEstimate={setEstimate}
+          savedEstimates={savedEstimates}
+          setSavedEstimates={setSavedEstimates}
+        />
+      )}
+      {activeTab === 'dossiers' && (
+        <SavedEstimates 
+          savedEstimates={savedEstimates} 
+          setSavedEstimates={setSavedEstimates}
+          onLoadEstimate={handleLoadEstimate}
         />
       )}
       {activeTab === 'library' && (

@@ -7,7 +7,7 @@ import {
   TrendingUp, RotateCcw
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO } from '../constants';
-import { MaterialItem, FenceStyle, Estimate, LaborRates } from '../types';
+import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 
@@ -16,13 +16,17 @@ interface EstimatorProps {
   laborRates: LaborRates;
   estimate: Partial<Estimate>;
   setEstimate: (estimate: Partial<Estimate>) => void;
+  savedEstimates: SavedEstimate[];
+  setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
 }
 
 export default function Estimator({ 
   materials, 
   laborRates: globalLaborRates, 
   estimate, 
-  setEstimate 
+  setEstimate,
+  savedEstimates,
+  setSavedEstimates
 }: EstimatorProps) {
   const [step, setStep] = React.useState(1);
 
@@ -85,10 +89,35 @@ export default function Estimator({
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
   const handleSave = () => {
-    setTimeout(() => {
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }, 1500);
+    // Generate a new ID if it doesn't have one
+    const id = estimate.id || `est-${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    
+    const estimateToSave: SavedEstimate = {
+      ...(estimate as Estimate),
+      id,
+      createdAt: estimate.createdAt || now,
+      lastModified: now,
+      status: 'active'
+    };
+
+    setSavedEstimates(prev => {
+      const existingIdx = prev.findIndex(e => e.id === id);
+      if (existingIdx > -1) {
+        const updated = [...prev];
+        updated[existingIdx] = estimateToSave;
+        return updated;
+      }
+      return [estimateToSave, ...prev];
+    });
+
+    // Update current estimate with the new ID if it was generated
+    if (!estimate.id) {
+      setEstimate({ ...estimate, id });
+    }
+
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const steps = [
@@ -1477,6 +1506,10 @@ export default function Estimator({
                     <div className="flex justify-between text-sm">
                       <span className="text-[#666666]">Subtotal</span>
                       <span className="font-mono">{formatCurrency(results.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#666666]">Markup ({estimate.markupPercentage}%)</span>
+                      <span className="font-mono">{formatCurrency(results.markup)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-[#666666]">Tax ({estimate.taxPercentage}%)</span>

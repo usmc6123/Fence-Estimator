@@ -6,7 +6,7 @@ export const COMPANY_INFO: CompanyInfo = {
   phone: '(469) 560-6269',
   email: 'BradenS@LoneStarFenceWorks.com',
   website: 'https://www.lonestarfenceworks.com/',
-  address: '123 Fencing Way, Austin, TX 78701'
+  address: '1240 Streetman Road, Royse City, Texas 75189'
 };
 
 export const MATERIALS: MaterialItem[] = [
@@ -92,6 +92,10 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'g-kit-3-hinge', name: '3-Hinge Wood Gate Kit', category: 'Gate', unit: 'each', cost: 42.00, description: 'Three heavy duty hinges specifically for wood walk gates', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
   { id: 'g-kit-shark', name: 'Metal Frame Shark Hinge Gate Kit', category: 'Gate', unit: 'each', cost: 145.00, description: 'Heavy duty double gate kit', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
   { id: 'g-latch-grav', name: 'Gravity Latch', category: 'Gate', unit: 'each', cost: 26.50, description: 'Pool-safe closure', imageUrl: 'https://static.grainger.com/rp/s/is/image/Grainger/1XMP1_AS01?$adapimg$&hei=536&wid=536' },
+  { id: 'g-hinge-jbolt', name: 'J-Bolt Barrel Hinge 7" (PR)', category: 'Hardware', unit: 'each', cost: 48.00, description: 'Heavy duty weld-on hinges' },
+  { id: 'g-frame-4ft-wood', name: '4\' Wood Gate Frame', category: 'Gate', unit: 'each', cost: 85.00 },
+  { id: 'g-frame-6ft-wood', name: '6\' Wood Gate Frame', category: 'Gate', unit: 'each', cost: 125.00 },
+  { id: 'g-latch-std', name: 'Standard Gate Latch', category: 'Hardware', unit: 'each', cost: 12.50 },
   
   // Installation
   { id: 'i-concrete-80', name: '80lb Concrete Mix (Standard)', category: 'Concrete', unit: 'bag', cost: 6.75, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },

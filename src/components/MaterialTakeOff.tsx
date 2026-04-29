@@ -160,7 +160,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                               <th className="px-6 py-4 text-center">Quantity</th>
                               <th className="px-6 py-4">Unit</th>
                               {showPrices && <th className="px-6 py-4 text-right">Raw Cost</th>}
-                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Markup & Tax</th>}
+                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Markup</th>}
+                              {showPrices && <th className="px-6 py-4 text-right whitespace-nowrap">Tax</th>}
                               {showPrices && <th className="px-6 py-4 text-right">Selling Price</th>}
                               {showPrices && <th className="px-6 py-4 text-right">Line Total</th>}
                             </tr>
@@ -168,17 +169,17 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                           <tbody className="divide-y-2 divide-[#F8F9FA]">
                             {/* Fence Section */}
                             <tr className="bg-american-blue/[0.03]">
-                              <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-american-blue uppercase tracking-widest">
+                              <td colSpan={showPrices ? 8 : 3} className="px-6 py-2 text-[9px] font-black text-american-blue uppercase tracking-widest">
                                 Fence Components & Labor
                               </td>
                             </tr>
                             {run.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'Gate').map((item, i) => {
-                              const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+                              const markupFactor = (estimate.markupPercentage || 0) / 100;
                               const taxFactor = (estimate.taxPercentage || 0) / 100;
-                              const unitMarkup = item.unitCost * (markupFactor - 1);
+                              const unitMarkup = item.unitCost * markupFactor;
                               const unitTax = item.unitCost * taxFactor;
                               const sellingPrice = item.unitCost + unitMarkup + unitTax;
-                              const lineTotal = item.total * markupFactor + item.total * taxFactor;
+                              const lineTotal = item.total * (1 + markupFactor + taxFactor);
 
                               return (
                                 <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
@@ -186,7 +187,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                                   <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup + unitTax)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">+{formatCurrency(unitTax)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
                                 </tr>
@@ -199,6 +201,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                               <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
                               {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.fenceLaborCost)}</td>}
                               {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.fenceLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
+                              {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">$0.00</td>}
                               {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                               {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.fenceLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                             </tr>
@@ -207,17 +210,17 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                             {run.items.some(i => i.category === 'Gate') && (
                               <>
                                 <tr className="bg-american-red/[0.03]">
-                                  <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-american-red uppercase tracking-widest border-t border-american-blue/5">
+                                  <td colSpan={showPrices ? 8 : 3} className="px-6 py-2 text-[9px] font-black text-american-red uppercase tracking-widest border-t border-american-blue/5">
                                     Gate Components & Logistics
                                   </td>
                                 </tr>
                                 {run.items.filter(i => i.category === 'Gate' || (i.category !== 'Labor' && i.category !== 'Demolition' && i.id.startsWith('gate-'))).map((item, i) => {
-                                  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+                                  const markupFactor = (estimate.markupPercentage || 0) / 100;
                                   const taxFactor = (estimate.taxPercentage || 0) / 100;
-                                  const unitMarkup = item.unitCost * (markupFactor - 1);
+                                  const unitMarkup = item.unitCost * markupFactor;
                                   const unitTax = item.unitCost * taxFactor;
                                   const sellingPrice = item.unitCost + unitMarkup + unitTax;
-                                  const lineTotal = item.total * markupFactor + item.total * taxFactor;
+                                  const lineTotal = item.total * (1 + markupFactor + taxFactor);
 
                                   return (
                                     <tr key={`gate-${i}`} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
@@ -225,7 +228,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                                       <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                       <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup + unitTax)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(unitMarkup)}</td>}
+                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">+{formatCurrency(unitTax)}</td>}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(lineTotal)}</td>}
                                     </tr>
@@ -237,6 +241,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.gateLaborCost)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.gateLaborCost * (estimate.markupPercentage || 0) / 100)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">$0.00</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.gateLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.gateLaborCost * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                                 </tr>
@@ -247,7 +252,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                             {run.demoCharge > 0 && (
                               <>
                                 <tr className="bg-american-red/[0.01]">
-                                  <td colSpan={showPrices ? 7 : 3} className="px-6 py-2 text-[9px] font-black text-[#666666] uppercase tracking-widest border-t border-american-blue/5">
+                                  <td colSpan={showPrices ? 8 : 3} className="px-6 py-2 text-[9px] font-black text-[#666666] uppercase tracking-widest border-t border-american-blue/5">
                                     Demolition & Removal
                                   </td>
                                 </tr>
@@ -257,6 +262,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">Job</td>
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(run.demoCharge)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px]">+{formatCurrency(run.demoCharge * (estimate.markupPercentage || 0) / 100)}</td>}
+                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px]">$0.00</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(run.demoCharge * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-red">{formatCurrency(run.demoCharge * (1 + (estimate.markupPercentage || 0) / 100))}</td>}
                                 </tr>
@@ -350,14 +356,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                      <thead>
                        <tr className="bg-american-blue/5 text-[10px] font-black uppercase tracking-widest text-american-blue">
                          <th className="px-6 py-3">Cost Category</th>
-                         <th className="px-6 py-3 text-right">Raw Total</th>
-                         <th className="px-6 py-3 text-right text-american-red">Final Adjusted Total</th>
+                         <th className="px-6 py-3 text-right whitespace-nowrap">Raw Total</th>
+                         <th className="px-6 py-3 text-right whitespace-nowrap text-american-red">Markup</th>
+                         <th className="px-6 py-3 text-right whitespace-nowrap">Tax</th>
+                         <th className="px-6 py-3 text-right whitespace-nowrap text-american-blue">Final Adjusted Total</th>
                        </tr>
                      </thead>
                      <tbody className="divide-y divide-[#F8F9FA]">
                        <tr className="text-sm font-bold text-american-blue">
                          <td className="px-6 py-4">Fence & Gate Materials</td>
                          <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.material)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-red/80">+{formatCurrency(data.totals.material * (estimate.markupPercentage || 0) / 100)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-blue/60">+{formatCurrency(data.totals.tax)}</td>
                          <td className="px-6 py-4 text-right tabular-nums">
                            {formatCurrency(data.totals.material * (1 + (estimate.markupPercentage || 0) / 100) + data.totals.tax)}
                          </td>
@@ -365,6 +375,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                        <tr className="text-sm font-bold text-american-blue">
                          <td className="px-6 py-4">Installation Labor</td>
                          <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.labor)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-red/80">+{formatCurrency(data.totals.labor * (estimate.markupPercentage || 0) / 100)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-blue/60">$0.00</td>
                          <td className="px-6 py-4 text-right tabular-nums">
                            {formatCurrency(data.totals.labor * (1 + (estimate.markupPercentage || 0) / 100))}
                          </td>
@@ -373,6 +385,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                          <tr className="text-sm font-bold text-american-blue">
                            <td className="px-6 py-4">Prep, Demo & Logistics</td>
                            <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(data.totals.demo + (data.totals.prep || 0))}</td>
+                           <td className="px-6 py-4 text-right tabular-nums text-american-red/80">+{formatCurrency((data.totals.demo + (data.totals.prep || 0)) * (estimate.markupPercentage || 0) / 100)}</td>
+                           <td className="px-6 py-4 text-right tabular-nums text-american-blue/60">$0.00</td>
                            <td className="px-6 py-4 text-right tabular-nums">
                              {formatCurrency((data.totals.demo + (data.totals.prep || 0)) * (1 + (estimate.markupPercentage || 0) / 100))}
                            </td>
@@ -385,14 +399,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                
                {/* Aggregated Totals Grid */}
                <div className="bg-[#F8F9FA] rounded-[24px] p-8 flex flex-col md:flex-row justify-between gap-8 border-2 border-[#EEEEEE]">
-                 <div className="grid grid-cols-2 gap-8 flex-1">
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 flex-1">
                    <div className="space-y-1">
                      <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Gross Raw Cost</p>
                      <p className="text-2xl font-black text-american-blue">{formatCurrency(data.totals.subtotal)}</p>
                    </div>
                    <div className="space-y-1">
-                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red">Markup & Tax Total</p>
-                     <p className="text-2xl font-black text-american-red">{formatCurrency(data.totals.markup + data.totals.tax)}</p>
+                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red">Markup Amount</p>
+                     <p className="text-2xl font-black text-american-red">{formatCurrency(data.totals.markup)}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">Sales Tax</p>
+                     <p className="text-2xl font-black text-american-blue">{formatCurrency(data.totals.tax)}</p>
                    </div>
                  </div>
                  

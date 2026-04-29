@@ -168,6 +168,11 @@ export interface Estimate {
   quotes?: SupplierQuote[];
 }
 
+export interface SavedEstimate extends Estimate {
+  status: 'active' | 'archived';
+  lastModified: string;
+}
+
 export interface CompanyInfo {
   name: string;
   logo: string;
