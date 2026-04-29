@@ -1225,6 +1225,31 @@ export function calculateDetailedTakeOff(
     };
   });
 
+  // Add manual items that are NOT in the calculated summary
+  if (estimate.manualQuantities) {
+    Object.entries(estimate.manualQuantities).forEach(([key, qty]) => {
+      if (qty === 0) return;
+      
+      const alreadyIncluded = overriddenSummary.some(i => i.id === key || i.name === key);
+      if (!alreadyIncluded) {
+        // Try to find in original materials
+        const mat = materials.find(m => m.id === key || m.name === key);
+        if (mat) {
+          const unitCost = estimate.manualPrices?.[key] ?? mat.cost;
+          overriddenSummary.push({
+            id: mat.id,
+            name: mat.name,
+            qty,
+            unit: mat.unit,
+            unitCost,
+            total: qty * unitCost,
+            category: mat.category
+          });
+        }
+      }
+    });
+  }
+
   // Re-calculate totals based on overridden summary
   totalMaterial = overriddenSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
   totalLabor = overriddenSummary.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);

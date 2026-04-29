@@ -1,5 +1,9 @@
 import React from 'react';
-import { Printer, Eye, EyeOff, FileText, ChevronDown, ChevronRight, Package, Hammer, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import { 
+  Printer, Eye, EyeOff, FileText, ChevronDown, ChevronRight, 
+  Package, Hammer, Trash2, Settings as SettingsIcon, ExternalLink,
+  Plus, Search, X
+} from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -9,10 +13,21 @@ interface MaterialTakeOffProps {
   estimate: Partial<Estimate>;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  setEstimate: (estimate: Partial<Estimate>) => void;
+  setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
 }
 
-export default function MaterialTakeOff({ estimate, materials, laborRates }: MaterialTakeOffProps) {
+export default function MaterialTakeOff({ estimate, materials, laborRates, setEstimate, setMaterials }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
+  const [showAddManual, setShowAddManual] = React.useState(false);
+  const [newItem, setNewItem] = React.useState({
+    name: '',
+    unit: 'each',
+    cost: '',
+    qty: '1',
+    category: 'Hardware'
+  });
+
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
   const [expandedRuns, setExpandedRuns] = React.useState<Record<string, boolean>>(
     data.runs.reduce((acc, run) => ({ ...acc, [run.runId]: true }), {})
@@ -24,6 +39,59 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleOpenNewTab = () => {
+    // Construct the URL. In this environment, we can just open current location
+    // and the system handles the auth/routing
+    window.open(window.location.href, '_blank');
+  };
+
+  const handleAddManualItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newItem.name || !newItem.cost || !newItem.qty) return;
+
+    const id = `manual-${Date.now()}`;
+    const cost = parseFloat(newItem.cost);
+    const qty = parseFloat(newItem.qty);
+
+    // 1. Create new material in library
+    const newMaterial: MaterialItem = {
+      id,
+      name: newItem.name,
+      unit: newItem.unit,
+      cost: cost,
+      category: newItem.category,
+      description: 'Manually added to take-off'
+    };
+
+    setMaterials(prev => [...prev, newMaterial]);
+
+    // 2. Add to current estimate's manual quantities
+    setEstimate({
+      ...estimate,
+      manualQuantities: {
+        ...(estimate.manualQuantities || {}),
+        [id]: qty
+      },
+      manualPrices: {
+        ...(estimate.manualPrices || {}),
+        [id]: cost
+      }
+    });
+
+    // Reset and close
+    setNewItem({ name: '', unit: 'each', cost: '', qty: '1', category: 'Hardware' });
+    setShowAddManual(false);
+  };
+
+  const removeItem = (id: string) => {
+    const newManualQuantities = { ...(estimate.manualQuantities || {}) };
+    delete newManualQuantities[id];
+    setEstimate({
+      ...estimate,
+      manualQuantities: newManualQuantities
+    });
   };
 
   return (
@@ -48,6 +116,14 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
             {showPrices ? 'Hide Prices' : 'Show Prices'}
           </button>
           <button
+            onClick={handleOpenNewTab}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
+            title="Open in new window for better printing"
+          >
+            <ExternalLink size={16} />
+            New Window
+          </button>
+          <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-105 transition-transform active:scale-95"
           >
@@ -56,6 +132,122 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
           </button>
         </div>
       </div>
+
+      {/* Manual Item Add Button (Floating/Fixed in UI) */}
+      <div className="flex justify-end print:hidden">
+        <button
+          onClick={() => setShowAddManual(true)}
+          className="flex items-center gap-3 px-6 py-3 bg-american-red text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-american-red/20 hover:scale-105 transition-all active:scale-95"
+        >
+          <Plus size={16} />
+          Add Manual Item
+        </button>
+      </div>
+
+      {/* Manual Add Modal */}
+      {showAddManual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-american-blue/40 backdrop-blur-sm animate-in fade-in duration-300 print:hidden">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border-4 border-american-blue/5">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-american-red/10 text-american-red flex items-center justify-center">
+                    <Plus size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Add Manual Item</h3>
+                    <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Update Take-off & Library</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAddManual(false)}
+                  className="p-2 hover:bg-[#F5F5F7] rounded-full transition-colors"
+                >
+                  <X size={20} className="text-[#CCCCCC]" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddManualItem} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Item Name</label>
+                  <input
+                    required
+                    type="text"
+                    value={newItem.name}
+                    onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                    placeholder="e.g. Extra Brace Pipe"
+                    className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue placeholder:text-[#CCCCCC] focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Quantity</label>
+                    <input
+                      required
+                      type="number"
+                      step="any"
+                      value={newItem.qty}
+                      onChange={(e) => setNewItem({ ...newItem, qty: e.target.value })}
+                      className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Unit Cost ($)</label>
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      value={newItem.cost}
+                      onChange={(e) => setNewItem({ ...newItem, cost: e.target.value })}
+                      className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Unit</label>
+                    <select
+                      value={newItem.unit}
+                      onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                      className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all appearance-none"
+                    >
+                      <option value="each">Each</option>
+                      <option value="lf">Linear Feet</option>
+                      <option value="bag">Bag</option>
+                      <option value="box">Box</option>
+                      <option value="lb">LB</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Category</label>
+                    <select
+                      value={newItem.category}
+                      onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                      className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all appearance-none"
+                    >
+                      <option value="Hardware">Hardware</option>
+                      <option value="Infill">Infill</option>
+                      <option value="Structure">Structure</option>
+                      <option value="Concrete">Concrete</option>
+                      <option value="Gate">Gate</option>
+                      <option value="Labor">Labor</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-4 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-american-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  Add to Take-off
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content (Printable) */}
       <div className="bg-white rounded-[40px] shadow-2xl border-2 border-american-blue/5 overflow-hidden print:border-0 print:shadow-none">
@@ -327,10 +519,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates }: Mat
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
                   {data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => (
-                    <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
+                    <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
                       <td className="px-8 py-5 flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
-                        {item.name}
+                        <span className="flex-1">{item.name}</span>
+                        {item.id.startsWith('manual-') && (
+                          <button 
+                            onClick={() => removeItem(item.id)}
+                            className="p-1 hover:bg-american-red/10 text-american-red rounded transition-colors opacity-0 group-hover:opacity-100 print:hidden"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </td>
                       <td className="px-8 py-5 text-center">
                         <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black">{item.qty} {item.unit}</span>

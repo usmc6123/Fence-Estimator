@@ -199,7 +199,13 @@ export default function App() {
         <LaborPricing laborRates={laborRates} setLaborRates={setLaborRates} />
       )}
       {activeTab === 'takeoff' && (
-        <MaterialTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
+        <MaterialTakeOff 
+          estimate={estimate} 
+          materials={materials} 
+          laborRates={laborRates}
+          setEstimate={setEstimate}
+          setMaterials={setMaterials}
+        />
       )}
       {activeTab === 'labor-takeoff' && (
         <LaborTakeOff estimate={estimate} materials={materials} laborRates={laborRates} />
