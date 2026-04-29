@@ -33,6 +33,7 @@ export interface RunTakeOff {
 
 export interface DetailedTakeOff {
   summary: TakeOffItem[];
+  manualSummary: TakeOffItem[];
   runs: RunTakeOff[];
   totals: {
     material: number;
@@ -1213,48 +1214,36 @@ export function calculateDetailedTakeOff(
     addToSummary(i);
   });
 
-  // Apply manual overrides to summary and totals
-  const overriddenSummary = Object.values(summaryMap).map(item => {
-    const qty = estimate.manualQuantities?.[item.id] ?? estimate.manualQuantities?.[item.name] ?? item.qty;
-    const unitCost = estimate.manualPrices?.[item.id] ?? estimate.manualPrices?.[item.name] ?? item.unitCost;
-    return { 
-      ...item, 
-      qty, 
-      unitCost, 
-      total: qty * unitCost 
-    };
-  });
+  const calculatedSummary = Object.values(summaryMap);
+  const manualSummary: TakeOffItem[] = [];
 
-  // Add manual items that are NOT in the calculated summary
   if (estimate.manualQuantities) {
     Object.entries(estimate.manualQuantities).forEach(([key, qty]) => {
       if (qty === 0) return;
       
-      const alreadyIncluded = overriddenSummary.some(i => i.id === key || i.name === key);
-      if (!alreadyIncluded) {
-        // Try to find in original materials
-        const mat = materials.find(m => m.id === key || m.name === key);
-        if (mat) {
-          const unitCost = estimate.manualPrices?.[key] ?? mat.cost;
-          overriddenSummary.push({
-            id: mat.id,
-            name: mat.name,
-            qty,
-            unit: mat.unit,
-            unitCost,
-            total: qty * unitCost,
-            category: mat.category
-          });
-        }
+      const mat = materials.find(m => m.id === key || m.name === key);
+      if (mat) {
+        const unitCost = estimate.manualPrices?.[key] ?? mat.cost;
+        manualSummary.push({
+          id: mat.id,
+          name: mat.name,
+          qty,
+          unit: mat.unit,
+          unitCost,
+          total: qty * unitCost,
+          category: mat.category
+        });
       }
     });
   }
 
-  // Re-calculate totals based on overridden summary
-  totalMaterial = overriddenSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
-  totalLabor = overriddenSummary.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
-  totalDemo = overriddenSummary.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
-  totalPrep = overriddenSummary.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  const allItems = [...calculatedSummary, ...manualSummary];
+
+  // Re-calculate totals based on ALL items
+  totalMaterial = allItems.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  totalLabor = allItems.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
+  totalDemo = allItems.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
+  totalPrep = allItems.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
   
   const subtotal = totalMaterial + totalLabor + totalDemo + totalPrep;
   const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
@@ -1262,7 +1251,8 @@ export function calculateDetailedTakeOff(
   const grandTotal = subtotal + markup + tax;
 
   return {
-    summary: overriddenSummary,
+    summary: calculatedSummary,
+    manualSummary: manualSummary,
     runs: detailedRuns,
     totals: {
       material: totalMaterial,

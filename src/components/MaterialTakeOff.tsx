@@ -51,33 +51,74 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
     e.preventDefault();
     if (!newItem.name || !newItem.cost || !newItem.qty) return;
 
-    const id = `manual-${Date.now()}`;
+    const existingMaterial = materials.find(m => m.name.toLowerCase() === newItem.name.toLowerCase());
+    
+    let targetId: string;
     const cost = parseFloat(newItem.cost);
     const qty = parseFloat(newItem.qty);
 
-    // 1. Create new material in library
-    const newMaterial: MaterialItem = {
-      id,
-      name: newItem.name,
-      unit: newItem.unit,
-      cost: cost,
-      category: newItem.category,
-      description: 'Manually added to take-off'
+    if (existingMaterial) {
+      targetId = existingMaterial.id;
+    } else {
+      targetId = `manual-${Date.now()}`;
+      const newMaterial: MaterialItem = {
+        id: targetId,
+        name: newItem.name,
+        unit: newItem.unit,
+        cost: cost,
+        category: newItem.category,
+        description: 'Manually added to take-off'
+      };
+      setMaterials(prev => [...prev, newMaterial]);
+    }
+
+    // Prepare update
+    const newManualQuantities = { ...(estimate.manualQuantities || {}) };
+    const newManualPrices = { ...(estimate.manualPrices || {}) };
+
+    const addItemToDossier = (mid: string, q: number, p?: number) => {
+      newManualQuantities[mid] = (newManualQuantities[mid] || 0) + q;
+      if (p !== undefined) newManualPrices[mid] = p;
     };
 
-    setMaterials(prev => [...prev, newMaterial]);
+    // Add primary item
+    addItemToDossier(targetId, qty, cost);
 
-    // 2. Add to current estimate's manual quantities
+    // Assembly Logic
+    const nameLower = newItem.name.toLowerCase();
+    const idLower = targetId.toLowerCase();
+    const isPost = nameLower.includes('post') || newItem.category === 'Structure' || newItem.category === 'Post';
+    const isBracket = nameLower.includes('bracket') || nameLower.includes('hinge');
+
+    if (isPost) {
+      // Find related items in library
+      // Determine if it's wood-style post (metal pipe for wood fence) vs metal fence post
+      const isWoodStyle = idLower.startsWith('w-post') || nameLower.includes('wood') || (newItem.category === 'Post' && idLower.includes('metal-8'));
+      
+      const cap = materials.find(m => m.id === 'pc-dome' || m.id === 'pc-flat');
+      const concrete = materials.find(m => m.id === 'i-concrete-maximizer' || m.id === 'i-concrete-80');
+      
+      const bracketId = isWoodStyle ? 'h-bracket-w' : 'm-bracket';
+      const bracket = materials.find(m => m.id === bracketId);
+      
+      const screwId = isWoodStyle ? 'h-lag-14' : 'm-screw-self-tap';
+      const screw = materials.find(m => m.id === screwId);
+
+      if (cap) addItemToDossier(cap.id, qty);
+      if (concrete) addItemToDossier(concrete.id, qty); // 1-to-1 assumption for manual add
+      if (bracket) addItemToDossier(bracket.id, qty * 4);
+      if (screw) addItemToDossier(screw.id, qty * 4);
+    } else if (isBracket) {
+      const isWoodBracket = idLower.includes('bracket-w') || idLower.includes('hinge-wood');
+      const screwId = isWoodBracket ? 'h-lag-14' : 'm-screw-self-tap';
+      const screw = materials.find(m => m.id === screwId);
+      if (screw) addItemToDossier(screw.id, qty * 4); // 4 screws per bracket assumption
+    }
+
     setEstimate({
       ...estimate,
-      manualQuantities: {
-        ...(estimate.manualQuantities || {}),
-        [id]: qty
-      },
-      manualPrices: {
-        ...(estimate.manualPrices || {}),
-        [id]: cost
-      }
+      manualQuantities: newManualQuantities,
+      manualPrices: newManualPrices
     });
 
     // Reset and close
@@ -168,16 +209,45 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
               </div>
 
               <form onSubmit={handleAddManualItem} className="space-y-4">
-                <div className="space-y-1">
+                <div className="space-y-1 relative">
                   <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Item Name</label>
-                  <input
-                    required
-                    type="text"
-                    value={newItem.name}
-                    onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                    placeholder="e.g. Extra Brace Pipe"
-                    className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue placeholder:text-[#CCCCCC] focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type="text"
+                      value={newItem.name}
+                      onChange={(e) => {
+                        setNewItem({ ...newItem, name: e.target.value });
+                      }}
+                      placeholder="e.g. Extra Brace Pipe"
+                      className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue placeholder:text-[#CCCCCC] focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
+                    />
+                    {newItem.name.length > 1 && (
+                      <div className="absolute top-full left-0 z-[60] w-full mt-2 bg-white rounded-2xl shadow-2xl border border-american-blue/10 overflow-hidden max-h-48 overflow-y-auto">
+                        {materials
+                          .filter(m => m.name.toLowerCase().includes(newItem.name.toLowerCase()) && m.name !== newItem.name)
+                          .map(m => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setNewItem({
+                                  name: m.name,
+                                  unit: m.unit,
+                                  cost: m.cost.toString(),
+                                  qty: newItem.qty,
+                                  category: m.category
+                                });
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-[#F5F5F7] text-[11px] font-bold text-american-blue border-b border-[#F5F5F7] last:border-none flex justify-between items-center group"
+                            >
+                              <span>{m.name}</span>
+                              <span className="text-[9px] text-[#999999] group-hover:text-american-blue">{m.category}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -503,7 +573,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
               </div>
               <div>
                 <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Master Inventory Summary</h2>
-                <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Aggregated Materials List</p>
+                <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Aggregated Calculated Materials List</p>
               </div>
             </div>
 
@@ -512,35 +582,93 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, setEs
                 <thead>
                   <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
                     <th className="px-8 py-6">Item Specification</th>
-                    <th className="px-8 py-6 text-center">Total Quantity</th>
+                    <th className="px-8 py-6 text-center">Calculated Qty</th>
                     <th className="px-8 py-6">Category</th>
-                    {showPrices && <th className="px-8 py-6 text-right">Aggregated Cost</th>}
+                    {showPrices && <th className="px-8 py-6 text-right">Calculated Cost</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
-                  {data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => (
-                    <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
-                      <td className="px-8 py-5 flex items-center gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
-                        <span className="flex-1">{item.name}</span>
-                        {item.id.startsWith('manual-') && (
+                  {data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').length === 0 ? (
+                    <tr>
+                      <td colSpan={showPrices ? 4 : 3} className="px-8 py-10 text-center text-sm font-bold text-[#999999] italic">
+                        No calculated items in this dossier
+                      </td>
+                    </tr>
+                  ) : (
+                    data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => (
+                      <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
+                        <td className="px-8 py-5 flex items-center gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-american-blue/30" />
+                          <span className="flex-1">{item.name}</span>
+                        </td>
+                        <td className="px-8 py-5 text-center">
+                          <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
+                        </td>
+                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-blue/60">{formatCurrency(item.total)}</td>}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Manual Additions Section */}
+          <div className="pt-12 border-t-4 border-american-red/10 space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-american-blue text-white flex items-center justify-center shadow-lg">
+                <Plus size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Custom Manual Additions</h2>
+                <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Manually Injected Items & Assemblies</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[32px] p-1 overflow-hidden border-2 border-dashed border-american-red/20 shadow-lg">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-[#FEF2F2] text-[10px] font-black uppercase tracking-widest text-american-red/60">
+                    <th className="px-8 py-6">Manual Addition Specification</th>
+                    <th className="px-8 py-6 text-center">Extra Qty</th>
+                    <th className="px-8 py-6">Category</th>
+                    {showPrices && <th className="px-8 py-6 text-right">Manual Cost</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y-2 divide-[#F8F9FA]">
+                  {data.manualSummary.length === 0 ? (
+                    <tr>
+                      <td colSpan={showPrices ? 4 : 3} className="px-8 py-10 text-center text-sm font-bold text-[#999999] italic">
+                        No manual additions present
+                      </td>
+                    </tr>
+                  ) : (
+                    data.manualSummary.map((item, i) => (
+                      <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
+                        <td className="px-8 py-5 flex items-center gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-american-red shadow-sm shadow-american-red/40" />
+                          <span className="flex-1">{item.name}</span>
                           <button 
                             onClick={() => removeItem(item.id)}
-                            className="p-1 hover:bg-american-red/10 text-american-red rounded transition-colors opacity-0 group-hover:opacity-100 print:hidden"
+                            className="p-1.5 bg-american-red/5 hover:bg-american-red hover:text-white text-american-red rounded-lg transition-all opacity-40 hover:opacity-100 print:hidden"
+                            title="Remove manual item"
                           >
                             <Trash2 size={12} />
                           </button>
-                        )}
-                      </td>
-                      <td className="px-8 py-5 text-center">
-                        <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black">{item.qty} {item.unit}</span>
-                      </td>
-                      <td className="px-8 py-5">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
-                      </td>
-                      {showPrices && <td className="px-8 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>}
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-8 py-5 text-center">
+                          <span className="px-3 py-1 bg-american-red/5 text-american-red rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                        </td>
+                        <td className="px-8 py-5">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
+                        </td>
+                        {showPrices && <td className="px-8 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
