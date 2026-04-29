@@ -118,6 +118,12 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'p-post-238-8', name: '2-3/8" x 8\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 42.00, description: 'Pipe for 6ft fence (+2ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
   { id: 'p-post-238-9', name: '2-3/8" x 9\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 48.00, description: 'Gate post for 6ft fence (+3ft in ground)' },
   { id: 'p-post-238-10', name: '2-3/8" x 10\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 54.00, description: 'Extra deep pipe (+4ft in ground)', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
+  { id: 'p-gate-4ft', name: "4' Pipe Fence Gate", category: 'Gate', unit: 'each', cost: 185.00, description: "4' single gate for pipe fence" },
+  { id: 'p-gate-6ft', name: "6' Pipe Fence Gate", category: 'Gate', unit: 'each', cost: 245.00, description: "6' single gate for pipe fence" },
+  { id: 'p-gate-12ft', name: "12' Pipe Fence Gate", category: 'Gate', unit: 'each', cost: 485.00, description: "12' single gate for pipe fence" },
+  { id: 'p-gate-hardware-4ft', name: "4' Pipe Gate Hardware Kit", category: 'Hardware', unit: 'each', cost: 65.00 },
+  { id: 'p-gate-hardware-6ft', name: "6' Pipe Gate Hardware Kit", category: 'Hardware', unit: 'each', cost: 85.00 },
+  { id: 'p-gate-hardware-12ft', name: "12' Pipe Gate Hardware Kit", category: 'Hardware', unit: 'each', cost: 125.00 },
   { id: 'p-ez-tie', name: '2-3/8" EZ Tie', category: 'Hardware', unit: 'each', cost: 1.85, description: 'Wire-to-pipe fastener', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
   
   // No-Climb Wire Variations
@@ -217,7 +223,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     type: 'Pipe',
     description: 'Structural pipe with premium no-climb wire.',
     availableHeights: [4, 5, 6],
-    availableWidths: [8],
+    availableWidths: [4, 6, 8, 12],
     availableColors: ['Black', 'Galvanized'],
     visualStyles: [
       { id: 'p-std', name: 'Standard No-Climb', priceModifier: 0, imageUrl: 'https://images.squarespace-cdn.com/content/v1/5c868019778897587747e4eb/1585257929424-C9D6W74ZJ8M9R7P6X0B3/Pipe+Fence+with+No+Climb+Wire' },

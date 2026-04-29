@@ -115,6 +115,71 @@ export function calculateDetailedTakeOff(
 
   const wasteFactor = 1 + (estimate.wastePercentage === undefined ? 10 : estimate.wastePercentage) / 100;
 
+  // Pass 1: Collect Wire Needs for Pipe Fences to calculate global roll aggregation
+  const wireNeeds: Record<string, number> = {};
+  runs.forEach((r) => {
+    const s = FENCE_STYLES.find(style => style.id === r.styleId);
+    if (s?.type === 'Pipe') {
+      const color = r.color || estimate.defaultColor || 'Black';
+      const finish = color.toLowerCase().includes('black') ? 'black' : 'galv';
+      let h = r.height || 4;
+      if (h !== 4 && h !== 5 && h !== 6) h = h < 5 ? 4 : (h < 6 ? 5 : 6);
+      const k = `${h}-${finish}`;
+      wireNeeds[k] = (wireNeeds[k] || 0) + r.linearFeet;
+    }
+  });
+
+  const wireCostsPerLF: Record<string, number> = {};
+  const globalWireRolls: TakeOffItem[] = [];
+
+  Object.entries(wireNeeds).forEach(([key, totalLF]) => {
+    const [h, f] = key.split('-');
+    const w200Id = `p-wire-${h}-200-${f}`;
+    const w100Id = `p-wire-${h}-100-${f}`;
+    const m200 = materials.find(m => m.id === w200Id);
+    const m100 = materials.find(m => m.id === w100Id);
+    
+    if (!m200 || !m100) return;
+
+    let r200 = Math.floor(totalLF / 200);
+    const rem = totalLF % 200;
+    let r100 = 0;
+
+    // Use priority: 200' rolls as much as possible, one 100' roll at the end if rem <= 100
+    // If rem > 100, we need another roll, so use a 200' roll.
+    if (rem > 100) {
+      r200 += 1;
+    } else if (rem > 0) {
+      r100 = 1;
+    }
+
+    const tCost = (r200 * m200.cost) + (r100 * m100.cost);
+    wireCostsPerLF[key] = tCost / totalLF;
+
+    if (r200 > 0) {
+      globalWireRolls.push({
+        id: m200.id,
+        name: m200.name,
+        qty: r200,
+        unit: 'each',
+        unitCost: m200.cost,
+        total: r200 * m200.cost,
+        category: 'Infill'
+      });
+    }
+    if (r100 > 0) {
+      globalWireRolls.push({
+        id: m100.id,
+        name: m100.name,
+        qty: r100,
+        unit: 'each',
+        unitCost: m100.cost,
+        total: r100 * m100.cost,
+        category: 'Infill'
+      });
+    }
+  });
+
   // Site Prep Logic (Matches Estimator)
   if (estimate.hasSitePrep) {
     const totalLF = runs.reduce((sum, r) => sum + r.linearFeet, 0);
@@ -234,6 +299,33 @@ export function calculateDetailedTakeOff(
               unitCost: railMat.cost,
               total: 2 * railMat.cost,
               category: 'Structure'
+            });
+          }
+        } else if (runStyle.type === 'Pipe') {
+          // Pipe Fence specific gates
+          const width = gate.width || 4;
+          const gateMat = materials.find(m => m.id === `p-gate-${width}ft`)!;
+          const hwMat = materials.find(m => m.id === `p-gate-hardware-${width}ft`)!;
+          
+          gateItems.push({
+            id: gateMat.id,
+            name: gateMat.name,
+            qty: 1,
+            unit: gateMat.unit,
+            unitCost: gateMat.cost,
+            total: gateMat.cost,
+            category: 'Gate'
+          });
+          
+          if (hwMat) {
+            gateItems.push({
+              id: hwMat.id,
+              name: hwMat.name,
+              qty: 1,
+              unit: hwMat.unit,
+              unitCost: hwMat.cost,
+              total: hwMat.cost,
+              category: 'Hardware'
             });
           }
         } else {
@@ -875,50 +967,24 @@ export function calculateDetailedTakeOff(
         category: 'Hardware'
       });
 
-      // No climb horse fence - Use 200' and 100' rolls
+      // No climb horse fence - Use aggregated pricing per LF
       const selectedColor = run.color || estimate.defaultColor || 'Black';
       const finish = selectedColor.toLowerCase().includes('black') ? 'black' : 'galv';
-      
-      // Ensure height is 4, 5, or 6 for the ID mapping
       let height = run.height || 4;
-      if (height !== 4 && height !== 5 && height !== 6) {
-        height = height < 5 ? 4 : (height < 6 ? 5 : 6);
-      }
+      if (height !== 4 && height !== 5 && height !== 6) height = height < 5 ? 4 : (height < 6 ? 5 : 6);
+      const key = `${height}-${finish}`;
       
-      const wire200Id = `p-wire-${height}-200-${finish}`;
-      const wire100Id = `p-wire-${height}-100-${finish}`;
-      
-      const wire200Mat = materials.find(m => m.id === wire200Id)!;
-      const wire100Mat = materials.find(m => m.id === wire100Id)!;
-      
-      const rolls200 = Math.floor(runLF / 200);
-      const remainingLF = runLF % 200;
-      const rolls100 = remainingLF > 0 ? Math.ceil(remainingLF / 100) : 0;
-      
-      if (rolls200 > 0) {
-        const cost = rolls200 * wire200Mat.cost;
-        runFenceMaterialCost += cost;
+      const avgCostPerLF = wireCostsPerLF[key];
+      if (avgCostPerLF) {
+        const totalCost = runLF * avgCostPerLF;
+        runFenceMaterialCost += totalCost;
         runItems.push({
-          id: wire200Mat.id,
-          name: wire200Mat.name,
-          qty: rolls200,
-          unit: 'each',
-          unitCost: wire200Mat.cost,
-          total: cost,
-          category: 'Infill'
-        });
-      }
-      
-      if (rolls100 > 0) {
-        const cost = rolls100 * wire100Mat.cost;
-        runFenceMaterialCost += cost;
-        runItems.push({
-          id: wire100Mat.id,
-          name: wire100Mat.name,
-          qty: rolls100,
-          unit: 'each',
-          unitCost: wire100Mat.cost,
-          total: cost,
+          id: `partial-wire-${key}-${run.id}`,
+          name: `No-Climb Wire (Partial Roll - ${height}' ${finish === 'black' ? 'Black' : 'Galv'})`,
+          qty: runLF,
+          unit: 'lf',
+          unitCost: avgCostPerLF,
+          total: totalCost,
           category: 'Infill'
         });
       }
@@ -982,14 +1048,20 @@ export function calculateDetailedTakeOff(
     totalLabor += laborTotal;
 
     runItems.forEach(i => {
+      const isPartialWire = i.id.startsWith('partial-wire-');
       if (i.category === 'Labor') {
         // Already handled by totalLabor += laborTotal at 762
       } else if (i.category === 'Demolition') {
         // Already handled by totalDemo += demoCost at 746
       } else {
-        totalMaterial += i.total;
+        if (!isPartialWire) {
+          totalMaterial += i.total;
+        }
       }
-      addToSummary(i);
+      
+      if (!isPartialWire) {
+        addToSummary(i);
+      }
     });
 
     detailedRuns.push({
@@ -1012,6 +1084,11 @@ export function calculateDetailedTakeOff(
   const totalLF = detailedRuns.reduce((sum, r) => sum + r.linearFeet, 0);
 
   // Global Items for Pipe Fence
+  globalWireRolls.forEach(roll => {
+    addToSummary(roll);
+    totalMaterial += roll.total;
+  });
+
   let totalPipeBlackLF = 0;
   let hasAnyPipe = false;
 

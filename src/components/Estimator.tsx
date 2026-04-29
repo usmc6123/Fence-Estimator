@@ -745,8 +745,16 @@ export default function Estimator({
                                     }}
                                     className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer"
                                   >
-                                    <option value="Single-4">4' Walk Gate</option>
-                                    <option value="Double-12">Double 6' Drive Gate</option>
+                                    {runStyle.type === 'Pipe' ? (
+                                      runStyle.availableWidths.map(w => (
+                                        <option key={w} value={`Single-${w}`}>{w}' Single Gate</option>
+                                      ))
+                                    ) : (
+                                      <>
+                                        <option value="Single-4">4' Walk Gate</option>
+                                        <option value="Double-12">Double 6' Drive Gate</option>
+                                      </>
+                                    )}
                                   </select>
                                   <button
                                     onClick={() => {
