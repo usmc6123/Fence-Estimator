@@ -345,13 +345,13 @@ export function calculateDetailedTakeOff(
     const startEndPosts = (idx === 0 ? 1 : 0) + (idx === runs.length - 1 ? 1 : 0);
     const runPostCount = runLinePosts + runCornerPosts + startEndPosts;
     
-    let pipeGatePostCount = 0;
-    if (runStyle.type === 'Pipe' && run.gateDetails) {
-      pipeGatePostCount = run.gateDetails.length * 2;
+    let gatePostCountForRun = 0;
+    if (run.gateDetails) {
+      gatePostCountForRun = run.gateDetails.length * 2;
     }
 
-    const stdPostCount = runStyle.type === 'Pipe' 
-      ? Math.max(0, runPostCount - pipeGatePostCount)
+    const stdPostCount = (runStyle.type === 'Pipe' || runStyle.type === 'Metal')
+      ? Math.max(0, runPostCount - gatePostCountForRun)
       : Math.max(0, runPostCount - hingePostCount);
 
     if (!run.reusePosts) {
@@ -363,6 +363,9 @@ export function calculateDetailedTakeOff(
         } else if (runStyle.type === 'Pipe') {
           const postHeight = (run.height || 4) + 2;
           postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
+        } else if (runStyle.type === 'Metal') {
+          const postHeight = (run.height || 4) + 2;
+          postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
         }
 
         const cost = stdPostCount * postMat.cost;
@@ -378,21 +381,68 @@ export function calculateDetailedTakeOff(
         });
       }
 
-      // Gate Posts for Pipe Fence
-      if (runStyle.type === 'Pipe' && pipeGatePostCount > 0) {
+      // Gate Posts for Pipe and Metal Fence
+      if ((runStyle.type === 'Pipe' || runStyle.type === 'Metal') && gatePostCountForRun > 0) {
         const postHeight = (run.height || 4) + 3;
-        const gatePostMat = materials.find(m => m.id === `p-post-238-${postHeight}`)!;
-        const cost = pipeGatePostCount * gatePostMat.cost;
-        runFenceMaterialCost += cost;
-        runItems.push({
-          id: gatePostMat.id,
-          name: `${gatePostMat.name} (Gate Post)`,
-          qty: pipeGatePostCount,
-          unit: gatePostMat.unit,
-          unitCost: gatePostMat.cost,
-          total: cost,
-          category: 'Structure'
-        });
+        
+        if (runStyle.type === 'Metal') {
+          // Wrought Iron: Distinguish between Single and Double (Drive) gates
+          let driveGatePostCount = 0;
+          let singleGatePostCount = 0;
+          
+          run.gateDetails?.forEach(gate => {
+            if (gate.type === 'Double') driveGatePostCount += 2;
+            else singleGatePostCount += 2;
+          });
+
+          // Single Gate Posts (2x2)
+          if (singleGatePostCount > 0) {
+            const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`)!;
+            const cost = singleGatePostCount * gatePostMat.cost;
+            runFenceMaterialCost += cost;
+            runItems.push({
+              id: gatePostMat.id,
+              name: `${gatePostMat.name} (Single Gate Post)`,
+              qty: singleGatePostCount,
+              unit: gatePostMat.unit,
+              unitCost: gatePostMat.cost,
+              total: cost,
+              category: 'Structure'
+            });
+          }
+
+          // Drive Gate Posts (4x4)
+          if (driveGatePostCount > 0) {
+            const gatePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-${postHeight - 1}`)!;
+            const cost = driveGatePostCount * gatePostMat.cost;
+            runFenceMaterialCost += cost;
+            runItems.push({
+              id: gatePostMat.id,
+              name: `${gatePostMat.name} (Drive Gate Post)`,
+              qty: driveGatePostCount,
+              unit: gatePostMat.unit,
+              unitCost: gatePostMat.cost,
+              total: cost,
+              category: 'Structure'
+            });
+          }
+        } else {
+          // Pipe Fence logic remains the same
+          const prefix = 'p-post-238-';
+          const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`)!;
+          
+          const cost = gatePostCountForRun * gatePostMat.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: gatePostMat.id,
+            name: `${gatePostMat.name} (Gate Post)`,
+            qty: gatePostCountForRun,
+            unit: gatePostMat.unit,
+            unitCost: gatePostMat.cost,
+            total: cost,
+            category: 'Structure'
+          });
+        }
       }
 
       // Hinge Posts (1' deeper) for Wood Fence
@@ -418,7 +468,7 @@ export function calculateDetailedTakeOff(
       
       // Post caps will only be used at end posts, corner posts, and gate posts for Pipe Fence
       const capQty = runStyle.type === 'Pipe' 
-        ? Math.max(0, (runPostCount - runLinePosts) + pipeGatePostCount) 
+        ? Math.max(0, (runPostCount - runLinePosts) + gatePostCountForRun) 
         : runPostCount;
 
       if (capQty > 0) {
@@ -523,6 +573,37 @@ export function calculateDetailedTakeOff(
         total: panelTotalCost,
         category: 'Infill'
       });
+
+      // Add mounting brackets and screws for Metal (Wrought Iron)
+      if (runStyle.type === 'Metal') {
+        const bracketMat = materials.find(m => m.id === 'm-bracket')!;
+        const bracketQty = panelQty * 4;
+        const bracketCost = bracketQty * bracketMat.cost;
+        runFenceMaterialCost += bracketCost;
+        runItems.push({
+          id: bracketMat.id,
+          name: bracketMat.name,
+          qty: bracketQty,
+          unit: bracketMat.unit,
+          unitCost: bracketMat.cost,
+          total: bracketCost,
+          category: 'Hardware'
+        });
+
+        const screwMat = materials.find(m => m.id === 'm-screw-self-tap')!;
+        const screwQty = bracketQty; // 1 screw per bracket
+        const screwCost = screwQty * screwMat.cost;
+        runFenceMaterialCost += screwCost;
+        runItems.push({
+          id: screwMat.id,
+          name: screwMat.name,
+          qty: screwQty,
+          unit: screwMat.unit,
+          unitCost: screwMat.cost,
+          total: screwCost,
+          category: 'Hardware'
+        });
+      }
 
       // Add visual style surcharge if > 0 (as a separate item)
       if (runVisualStyle.priceModifier > 0) {
