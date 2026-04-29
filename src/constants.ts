@@ -125,6 +125,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'p-gate-hardware-6ft', name: "6' Pipe Gate Hardware Kit", category: 'Hardware', unit: 'each', cost: 85.00 },
   { id: 'p-gate-hardware-12ft', name: "12' Pipe Gate Hardware Kit", category: 'Hardware', unit: 'each', cost: 125.00 },
   { id: 'p-ez-tie', name: '2-3/8" EZ Tie', category: 'Hardware', unit: 'each', cost: 1.85, description: 'Wire-to-pipe fastener', imageUrl: 'https://ozcobp.com/wp-content/uploads/2021/09/50110_WAP-OZ-on-Fence_Lifestyle.jpg' },
+  { id: 'p-paint-gal', name: 'Industrial Metal Paint (Gallon)', category: 'Hardware', unit: 'each', cost: 65.00, description: '1 gallon per 200ft coverage' },
   
   // No-Climb Wire Variations
   { id: 'p-wire-4-100-galv', name: "4' x 100' No-Climb Wire (Galv)", category: 'Picket', unit: 'each', cost: 195.00, description: 'Galvanized 100ft roll' },
@@ -224,9 +225,10 @@ export const FENCE_STYLES: FenceStyle[] = [
     description: 'Structural pipe with premium no-climb wire.',
     availableHeights: [4, 5, 6],
     availableWidths: [4, 6, 8, 12],
-    availableColors: ['Black', 'Galvanized'],
+    availableColors: ['Raw', 'Black', 'White', 'Green'],
     visualStyles: [
       { id: 'p-std', name: 'Standard No-Climb', priceModifier: 0, imageUrl: 'https://images.squarespace-cdn.com/content/v1/5c868019778897587747e4eb/1585257929424-C9D6W74ZJ8M9R7P6X0B3/Pipe+Fence+with+No+Climb+Wire' },
+      { id: 'p-black', name: 'Black No-Climb', priceModifier: 45, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_x_O-Ym9z-H_v_y_-_-_-_-y-_-_-_-y-_' }
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 1, picketsPerLF: 1, concretePerPost: 2 },
     baseLaborRate: 12.00,

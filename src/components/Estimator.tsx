@@ -625,23 +625,25 @@ export default function Estimator({
                               </div>
                             )}
 
-                            <div className="pt-6">
-                              <button
-                                onClick={() => {
-                                  const newRuns = [...estimate.runs!];
-                                  newRuns[idx].isPreStained = !newRuns[idx].isPreStained;
-                                  setEstimate({ ...estimate, runs: newRuns });
-                                }}
-                                className={cn(
-                                  "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
-                                  run.isPreStained 
-                                    ? "border-american-blue bg-american-blue text-white" 
-                                    : "border-white bg-white text-[#BBBBBB]"
-                                )}
-                              >
-                                {run.isPreStained ? "Pre-Stained Active" : "Add Factory Finish"}
-                              </button>
-                            </div>
+                            {runStyle?.type !== 'Pipe' && (
+                              <div className="pt-6">
+                                <button
+                                  onClick={() => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].isPreStained = !newRuns[idx].isPreStained;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className={cn(
+                                    "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                    run.isPreStained 
+                                      ? "border-american-blue bg-american-blue text-white" 
+                                      : "border-white bg-white text-[#BBBBBB]"
+                                  )}
+                                >
+                                  {run.isPreStained ? "Pre-Stained Active" : "Add Factory Finish"}
+                                </button>
+                              </div>
+                            )}
 
                             <div className="pt-6">
                               <button

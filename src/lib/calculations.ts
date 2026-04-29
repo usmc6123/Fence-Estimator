@@ -115,23 +115,33 @@ export function calculateDetailedTakeOff(
 
   const wasteFactor = 1 + (estimate.wastePercentage === undefined ? 10 : estimate.wastePercentage) / 100;
 
-  // Pass 1: Collect Wire Needs for Pipe Fences to calculate global roll aggregation
+  // Pass 1: Collect Wire and Paint Needs for Pipe Fences to calculate global roll aggregation
   const wireNeeds: Record<string, number> = {};
+  let totalPaintLF = 0;
+  
   runs.forEach((r) => {
     const s = FENCE_STYLES.find(style => style.id === r.styleId);
     if (s?.type === 'Pipe') {
-      const color = r.color || estimate.defaultColor || 'Black';
-      const finish = color.toLowerCase().includes('black') ? 'black' : 'galv';
+      // Wire Finish from visualStyleId
+      const finish = r.visualStyleId === 'p-black' ? 'black' : 'galv';
       let h = r.height || 4;
       if (h !== 4 && h !== 5 && h !== 6) h = h < 5 ? 4 : (h < 6 ? 5 : 6);
       const k = `${h}-${finish}`;
       wireNeeds[k] = (wireNeeds[k] || 0) + r.linearFeet;
+
+      // Paint needed if color is not 'Raw'
+      const color = r.color || estimate.defaultColor || 'Raw';
+      if (color !== 'Raw') {
+        totalPaintLF += r.linearFeet;
+      }
     }
   });
 
   const wireCostsPerLF: Record<string, number> = {};
   const globalWireRolls: TakeOffItem[] = [];
+  const globalPaintItems: TakeOffItem[] = [];
 
+  // Wire aggregation remains similar
   Object.entries(wireNeeds).forEach(([key, totalLF]) => {
     const [h, f] = key.split('-');
     const w200Id = `p-wire-${h}-200-${f}`;
@@ -145,8 +155,6 @@ export function calculateDetailedTakeOff(
     const rem = totalLF % 200;
     let r100 = 0;
 
-    // Use priority: 200' rolls as much as possible, one 100' roll at the end if rem <= 100
-    // If rem > 100, we need another roll, so use a 200' roll.
     if (rem > 100) {
       r200 += 1;
     } else if (rem > 0) {
@@ -179,6 +187,25 @@ export function calculateDetailedTakeOff(
       });
     }
   });
+
+  // Paint aggregation (1 gallon per 200')
+  let paintAvgCostPerLF = 0;
+  if (totalPaintLF > 0) {
+    const paintMat = materials.find(m => m.id === 'p-paint-gal')!;
+    const totalGallons = Math.ceil(totalPaintLF / 200);
+    const totalPaintCost = totalGallons * paintMat.cost;
+    paintAvgCostPerLF = totalPaintCost / totalPaintLF;
+    
+    globalPaintItems.push({
+      id: paintMat.id,
+      name: paintMat.name,
+      qty: totalGallons,
+      unit: paintMat.unit,
+      unitCost: paintMat.cost,
+      total: totalPaintCost,
+      category: 'Hardware'
+    });
+  }
 
   // Site Prep Logic (Matches Estimator)
   if (estimate.hasSitePrep) {
@@ -967,25 +994,40 @@ export function calculateDetailedTakeOff(
         category: 'Hardware'
       });
 
-      // No climb horse fence - Use aggregated pricing per LF
-      const selectedColor = run.color || estimate.defaultColor || 'Black';
-      const finish = selectedColor.toLowerCase().includes('black') ? 'black' : 'galv';
+      // No-Climb Wire - Use aggregated pricing per LF
+      const finish = run.visualStyleId === 'p-black' ? 'black' : 'galv';
       let height = run.height || 4;
       if (height !== 4 && height !== 5 && height !== 6) height = height < 5 ? 4 : (height < 6 ? 5 : 6);
       const key = `${height}-${finish}`;
       
-      const avgCostPerLF = wireCostsPerLF[key];
-      if (avgCostPerLF) {
-        const totalCost = runLF * avgCostPerLF;
+      const avgWireCost = wireCostsPerLF[key];
+      if (avgWireCost) {
+        const totalCost = runLF * avgWireCost;
         runFenceMaterialCost += totalCost;
         runItems.push({
           id: `partial-wire-${key}-${run.id}`,
           name: `No-Climb Wire (Partial Roll - ${height}' ${finish === 'black' ? 'Black' : 'Galv'})`,
           qty: runLF,
           unit: 'lf',
-          unitCost: avgCostPerLF,
+          unitCost: avgWireCost,
           total: totalCost,
           category: 'Infill'
+        });
+      }
+
+      // Paint - Use aggregated pricing per LF
+      const color = run.color || estimate.defaultColor || 'Raw';
+      if (color !== 'Raw' && paintAvgCostPerLF > 0) {
+        const paintCost = runLF * paintAvgCostPerLF;
+        runFenceMaterialCost += paintCost;
+        runItems.push({
+          id: `partial-paint-${run.id}`,
+          name: `Industrial Metal Paint (${color} - Partial)`,
+          qty: runLF,
+          unit: 'lf',
+          unitCost: paintAvgCostPerLF,
+          total: paintCost,
+          category: 'Finishing'
         });
       }
     }
@@ -1049,17 +1091,18 @@ export function calculateDetailedTakeOff(
 
     runItems.forEach(i => {
       const isPartialWire = i.id.startsWith('partial-wire-');
+      const isPartialPaint = i.id.startsWith('partial-paint-');
       if (i.category === 'Labor') {
         // Already handled by totalLabor += laborTotal at 762
       } else if (i.category === 'Demolition') {
         // Already handled by totalDemo += demoCost at 746
       } else {
-        if (!isPartialWire) {
+        if (!isPartialWire && !isPartialPaint) {
           totalMaterial += i.total;
         }
       }
       
-      if (!isPartialWire) {
+      if (!isPartialWire && !isPartialPaint) {
         addToSummary(i);
       }
     });
@@ -1089,7 +1132,11 @@ export function calculateDetailedTakeOff(
     totalMaterial += roll.total;
   });
 
-  let totalPipeBlackLF = 0;
+  globalPaintItems.forEach(item => {
+    addToSummary(item);
+    totalMaterial += item.total;
+  });
+
   let hasAnyPipe = false;
 
   detailedRuns.forEach((r, idx) => {
@@ -1097,10 +1144,6 @@ export function calculateDetailedTakeOff(
     const style = FENCE_STYLES.find(s => s.id === run.styleId);
     if (style?.type === 'Pipe') {
       hasAnyPipe = true;
-      const selectedColor = run.color || estimate.defaultColor || 'Black';
-      if (selectedColor.toLowerCase().includes('black')) {
-        totalPipeBlackLF += run.linearFeet;
-      }
     }
   });
 
@@ -1116,22 +1159,6 @@ export function calculateDetailedTakeOff(
       category: 'Hardware'
     });
     totalMaterial += domeCapMat.cost;
-  }
-
-  if (totalPipeBlackLF > 0) {
-    const paintMat = materials.find(m => m.id === 'p-paint-gal')!;
-    const paintQty = Math.max(1, Math.ceil(totalPipeBlackLF / 200));
-    const paintCost = paintQty * paintMat.cost;
-    addToSummary({
-      id: paintMat.id,
-      name: paintMat.name,
-      qty: paintQty,
-      unit: paintMat.unit,
-      unitCost: paintMat.cost,
-      total: paintCost,
-      category: 'Finishing'
-    });
-    totalMaterial += paintCost;
   }
 
   const globalItems: TakeOffItem[] = [];
