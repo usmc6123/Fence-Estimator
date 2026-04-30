@@ -1,5 +1,5 @@
 import React from 'react';
-import { GoogleMap, useJsApiLoader, Marker, Polyline, Autocomplete } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, Polyline, Polygon, Autocomplete } from '@react-google-maps/api';
 import { Map as MapIcon, Satellite, Ruler, Trash2, Check, Search, X, Navigation, Layers, MousePointer2, Plus } from 'lucide-react';
 import { Estimate, FenceRun } from '../types';
 import { cn } from '../lib/utils';
@@ -47,6 +47,7 @@ export default function SiteMeasurement({ estimate, setEstimate, onClose }: Site
   const [map, setMap] = React.useState<google.maps.Map | null>(null);
   const [mapType, setMapType] = React.useState<"roadmap" | "satellite" | "hybrid">("satellite");
   const [points, setPoints] = React.useState<google.maps.LatLngLiteral[]>([]);
+  const [isClosed, setIsClosed] = React.useState(false);
   const [autocomplete, setAutocomplete] = React.useState<google.maps.places.Autocomplete | null>(null);
   const [center, setCenter] = React.useState(defaultCenter);
   const [isDrawing, setIsDrawing] = React.useState(true);
@@ -119,6 +120,27 @@ export default function SiteMeasurement({ estimate, setEstimate, onClose }: Site
       });
     }
 
+    if (isClosed && points.length > 2) {
+      const p1 = points[points.length - 1];
+      const p2 = points[0];
+      const distance = calculateDistance(p1, p2);
+      currentTotalLF += distance;
+      newRuns.push({
+        id: Math.random().toString(36).substr(2, 9),
+        name: `Section ${points.length}`,
+        linearFeet: Math.round(distance),
+        corners: 0,
+        gates: 0,
+        points: [p1, p2],
+        styleId: estimate.defaultStyleId || 'wood-standard',
+        visualStyleId: estimate.defaultVisualStyleId || 'side-by-side',
+        height: estimate.defaultHeight || 6,
+        color: estimate.defaultColor || 'Natural',
+        isPreStained: estimate.isPreStained,
+        hasRotBoard: estimate.hasRotBoard
+      });
+    }
+
     setEstimate({
       ...estimate,
       runs: [...(estimate.runs || []), ...newRuns],
@@ -132,8 +154,11 @@ export default function SiteMeasurement({ estimate, setEstimate, onClose }: Site
     for (let i = 0; i < points.length - 1; i++) {
       length += calculateDistance(points[i], points[i+1]);
     }
+    if (isClosed && points.length > 2) {
+      length += calculateDistance(points[points.length - 1], points[0]);
+    }
     return length;
-  }, [points]);
+  }, [points, isClosed]);
 
   if (loadError) return (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-american-red/5">
@@ -242,6 +267,17 @@ export default function SiteMeasurement({ estimate, setEstimate, onClose }: Site
                         <Navigation size={20} className="transform rotate-180" />
                     </button>
                 </Tooltip>
+                <Tooltip label={isClosed ? "Open Shape" : "Close Shape"}>
+                    <button 
+                        onClick={() => setIsClosed(!isClosed)}
+                        className={cn(
+                            "p-3 rounded-2xl transition-all",
+                            isClosed ? "text-american-blue" : "text-american-blue/40 hover:bg-american-blue/5"
+                        )}
+                    >
+                        <Layers size={20} />
+                    </button>
+                </Tooltip>
                 <div className="h-px bg-american-blue/5 mx-2" />
                 <Tooltip label="Clear All">
                     <button 
@@ -286,15 +322,28 @@ export default function SiteMeasurement({ estimate, setEstimate, onClose }: Site
                   }}
                 />
               ))}
-              <Polyline 
-                path={points}
-                options={{
-                  strokeColor: '#BF0A30',
-                  strokeOpacity: 0.8,
-                  strokeWeight: 4,
-                  geodesic: true
-                }}
-              />
+            {isClosed && points.length > 2 ? (
+                <Polygon 
+                    paths={points}
+                    options={{
+                        strokeColor: '#BF0A30',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 4,
+                        fillColor: '#BF0A30',
+                        fillOpacity: 0.2
+                    }}
+                />
+            ) : (
+                <Polyline 
+                    path={points}
+                    options={{
+                        strokeColor: '#BF0A30',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 4,
+                        geodesic: true
+                    }}
+                />
+            )}
               {/* Segment Measurement Tooltips */}
               {points.slice(1).map((pt, i) => {
                   const dist = calculateDistance(points[i], pt);
