@@ -1,10 +1,37 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { QuoteItem } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Lazy initialization of GoogleGenAI to prevent crash if apiKey is missing at load time
+let genAI: GoogleGenAI | null = null;
+
+function getGenAI(): GoogleGenAI {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    // Final check for key validity
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+      throw new Error("GEMINI_API_KEY_MISSING");
+    }
+    
+    genAI = new GoogleGenAI({ apiKey });
+  }
+  return genAI;
+}
+
+export async function generateAIScope(prompt: string): Promise<string> {
+  const ai = getGenAI();
+  // Using gemini-3-flash-preview as the default stable model
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ role: "user", parts: [{ text: prompt }] }]
+  });
+  
+  return response.text || "Failed to generate scope.";
+}
 
 export async function analyzeQuoteDocument(fileData: string, mimeType: string): Promise<{ supplierName: string, items: Partial<QuoteItem>[], totalAmount: number }> {
   try {
+    const ai = getGenAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
@@ -47,6 +74,9 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
 
     return JSON.parse(response.text);
   } catch (error) {
+    if (error instanceof Error && error.message === "GEMINI_API_KEY_MISSING") {
+      throw error;
+    }
     console.error("Error analyzing quote:", error);
     throw new Error("Failed to analyze quote document. Please ensure it is a clear image or PDF.");
   }

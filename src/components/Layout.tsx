@@ -1,23 +1,28 @@
 import React from 'react';
-import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive } from 'lucide-react';
+import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
+import { User } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  user: User | null;
+  onLogin: () => void;
+  onLogout: () => void;
 }
 
-export default function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, user, onLogin, onLogout }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
     { id: 'dossiers', label: 'Saved Dossiers', icon: Archive },
+    { id: 'financials', label: 'Financials', icon: Wallet },
     { id: 'takeoff', label: 'Material Take-off', icon: FileText },
-    { id: 'labor-takeoff', label: 'Labor Breakdown', icon: Shield },
+    { id: 'labor-breakdown', label: 'Labor Breakdown', icon: Shield },
     { id: 'quotes', label: 'Supplier Quotes', icon: TrendingUp },
     { id: 'library', label: 'Materials', icon: Book },
     { id: 'labor', label: 'Labor Rates', icon: Hammer },
@@ -67,15 +72,38 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         </nav>
         
         <div className="absolute bottom-0 w-full border-t border-[#E5E5E5] p-6">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-[#E5E5E5] flex items-center justify-center text-xs font-bold">
-              JD
+          {user ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-american-blue text-white flex items-center justify-center text-xs font-bold uppercase">
+                    {user.displayName?.substring(0, 2) || 'U'}
+                  </div>
+                )}
+                <div className="overflow-hidden">
+                  <p className="text-sm font-black text-american-blue truncate">{user.displayName || 'User'}</p>
+                  <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest truncate">Fence Pro</p>
+                </div>
+              </div>
+              <button 
+                onClick={onLogout}
+                className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors"
+                title="Log Out"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-semibold">John Doe</p>
-              <p className="text-xs text-[#666666]">Fence Builder</p>
-            </div>
-          </div>
+          ) : (
+            <button 
+              onClick={onLogin}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-american-blue py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-american-blue/20 hover:bg-american-blue/90 transition-all"
+            >
+              <LogIn size={16} />
+              Sign In
+            </button>
+          )}
         </div>
       </aside>
 

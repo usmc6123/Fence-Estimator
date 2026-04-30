@@ -9,6 +9,7 @@ export interface TakeOffItem {
   unitCost: number;
   total: number;
   category: string;
+  formula?: string;
 }
 
 export interface RunTakeOff {
@@ -17,6 +18,15 @@ export interface RunTakeOff {
   linearFeet: number;
   netLF: number;
   styleName: string;
+  height: number;
+  railCount: number;
+  hasRotBoard: boolean;
+  topStyle: string;
+  hasTopCap: boolean;
+  hasTrim: boolean;
+  woodType?: string;
+  stainSides?: string;
+  picketStyle?: string;
   items: TakeOffItem[];
   fenceMaterialCost: number;
   fenceLaborCost: number;
@@ -251,6 +261,32 @@ export function calculateDetailedTakeOff(
     let runGateMaterialCost = 0;
     let runGateLaborCost = 0;
     let runDemoCharge = 0;
+    
+    // Existing Fence Check - We still need style info for staining square footage
+    const isExisting = !!run.isExistingFence;
+    const isWood = runStyle.type === 'Wood';
+
+    // Stain Logic - Calculate early so we can preserve it if existing
+    let runStainLabor = 0;
+    const needsStain = !!run.needsStain && isWood;
+    if (needsStain) {
+      const sidesMult = run.stainSides === 'Both Sides' ? 2 : 1;
+      const height = run.height || 6;
+      const sqft = runLF * height * sidesMult;
+      runStainLabor = sqft * 0.80; // $0.80 per sq ft
+      
+      const stainItem = {
+        id: `labor-stain-${run.id}`,
+        name: `Wash & Stain - ${run.stainSides} (${run.name})`,
+        qty: sqft,
+        unit: 'sq ft',
+        unitCost: 0.80,
+        total: runStainLabor,
+        category: 'Labor',
+        formula: `${runLF}LF × ${height}' × ${sidesMult} sides × $0.80/sqft`
+      };
+      runItems.push(stainItem);
+    }
 
     // Posts for run
     let runEndPosts = 0;
@@ -309,7 +345,7 @@ export function calculateDetailedTakeOff(
             });
 
             // Cane Bolts
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-48');
             if (caneBoltMat) {
               gateItems.push({
                 id: caneBoltMat.id,
@@ -388,7 +424,7 @@ export function calculateDetailedTakeOff(
           }
 
           if (gate.type === 'Double') {
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
             if (caneBoltMat) {
               gateItems.push({
                 id: caneBoltMat.id,
@@ -442,7 +478,7 @@ export function calculateDetailedTakeOff(
           }
 
           if (gate.type === 'Double') {
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt');
+            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
             if (caneBoltMat) {
               gateItems.push({
                 id: caneBoltMat.id,
@@ -628,7 +664,8 @@ export function calculateDetailedTakeOff(
       }
 
       // Post Caps
-      const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
+      const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
+      const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (runTopStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
       const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
       
       // Post caps will only be used at end posts, corner posts, and gate posts for Pipe Fence
@@ -683,39 +720,38 @@ export function calculateDetailedTakeOff(
 
       // Brackets and Lags for Wood Fence
       if (runStyle.type === 'Wood' && runPostCount > 0) {
-        const is6ft = run.height === 6;
-        const railsCount = run.height === 8 ? 4 : (run.height > 6 ? 4 : 3);
-        const sectionCount = runPostCount - 1;
-        
-        if (sectionCount > 0) {
-          const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-          const bracketQty = sectionCount * railsCount * 2; // 2 brackets per rail per section
-          const bracketCost = bracketQty * bracketMat.cost;
-          runFenceMaterialCost += bracketCost;
-          runItems.push({
-            id: bracketMat.id,
-            name: bracketMat.name,
-            qty: bracketQty,
-            unit: bracketMat.unit,
-            unitCost: bracketMat.cost,
-            total: bracketCost,
-            category: 'Hardware'
-          });
+        const bracketsPerPost = (run.height === 8 ? 4 : 3) + (!!(run.hasRotBoard ?? estimate.hasRotBoard) ? 1 : 0);
+        const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
+        const bracketQty = runPostCount * bracketsPerPost;
+        const bracketFormula = `${runPostCount} posts × ${bracketsPerPost} brackets/post`;
+        const bracketCost = bracketQty * bracketMat.cost;
+        runFenceMaterialCost += bracketCost;
+        runItems.push({
+          id: bracketMat.id,
+          name: bracketMat.name,
+          qty: bracketQty,
+          unit: bracketMat.unit,
+          unitCost: bracketMat.cost,
+          total: bracketCost,
+          category: 'Hardware',
+          formula: bracketFormula
+        });
 
-          const lagMat = materials.find(m => m.id === 'h-lag-14')!;
-          const lagQty = bracketQty * 4;
-          const lagCost = lagQty * lagMat.cost;
-          runFenceMaterialCost += lagCost;
-          runItems.push({
-            id: lagMat.id,
-            name: lagMat.name,
-            qty: lagQty,
-            unit: lagMat.unit,
-            unitCost: lagMat.cost,
-            total: lagCost,
-            category: 'Hardware'
-          });
-        }
+        const lagMat = materials.find(m => m.id === 'h-lag-14')!;
+        const lagQty = bracketQty * 4;
+        const lagFormula = `${bracketQty} brackets × 4 lag screws/bracket`;
+        const lagCost = lagQty * lagMat.cost;
+        runFenceMaterialCost += lagCost;
+        runItems.push({
+          id: lagMat.id,
+          name: lagMat.name,
+          qty: lagQty,
+          unit: lagMat.unit,
+          unitCost: lagMat.cost,
+          total: lagCost,
+          category: 'Hardware',
+          formula: lagFormula
+        });
       }
     }
 
@@ -725,18 +761,6 @@ export function calculateDetailedTakeOff(
     let skipGenericInfill = false;
     
     if (runStyle.type === 'Wood') {
-      const totalInches = runLF * 12; // Use total run linear feet (including gates) for picket count
-      const isBob = run.visualStyleId === 'w-bob';
-      
-      if (isBob) {
-        // Board on Board: Two layers, boards in each layer spaced with a 3.5" gap.
-        // Total = 1 board per 4.5 inches.
-        panelQty = Math.ceil((totalInches / 4.5) * wasteFactor);
-      } else {
-        // Side by Side: Exactly total inches / 5.5" then add waste
-        panelQty = Math.ceil((totalInches / 5.5) * wasteFactor);
-      }
-      
       if (woodType === 'PT Pine') {
         const baseId = run.height === 8 ? 'w-picket-pine-8' : 'w-picket-pine';
         panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
@@ -746,6 +770,39 @@ export function calculateDetailedTakeOff(
       } else if (woodType === 'Western Red Cedar') {
         const baseId = run.height === 8 ? 'w-picket-w-cedar-8' : 'w-picket-w-cedar';
         panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
+      }
+
+      const totalInches = runLF * 12; // Use total run linear feet (including gates) for picket count
+      const isBob = run.visualStyleId === 'w-bob';
+      
+      if (isBob) {
+        // Board on Board: Two layers, boards in each layer spaced with a 3.5" gap.
+        // User specific calculation:
+        // 1. back_layer = ceiling(total_inches / 9) (5.5" picket + 3.5" spacing)
+        // 2. front_layer = back_layer - 1
+        // 3. total = back_layer + front_layer + 2 (waste per run)
+        const backLayer = Math.ceil(totalInches / 9);
+        const frontLayer = Math.max(0, backLayer - 1);
+        panelQty = backLayer + frontLayer + 2;
+        
+        const picketUnitCost = panelMat.cost;
+        const totalPicketCost = panelQty * picketUnitCost;
+        runFenceMaterialCost += totalPicketCost;
+        
+        runItems.push({
+          id: panelMat.id,
+          name: `${panelMat.name} (BOB ${run.height}' - 3.5" Spacing)`,
+          qty: panelQty,
+          unit: panelMat.unit,
+          unitCost: picketUnitCost,
+          total: totalPicketCost,
+          category: 'Infill',
+          formula: `${totalInches}" / 9" = ${backLayer} Back; ${backLayer}-1 = ${frontLayer} Front; +2 Waste`
+        });
+        skipGenericInfill = true;
+      } else {
+        // Side by Side: Exactly total inches / 5.5" then add waste
+        panelQty = Math.ceil((totalInches / 5.5) * wasteFactor);
       }
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
@@ -760,9 +817,16 @@ export function calculateDetailedTakeOff(
     
     if (!skipGenericInfill) {
       const panelUnitCost = panelMat.cost; 
+      const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
       const panelName = runStyle.type === 'Metal' 
         ? `${run.height}'x8' Wrought Iron ${runVisualStyle.name}` 
-        : panelMat.name;
+        : (runStyle.type === 'Wood' ? `${panelMat.name} (${runTopStyle})` : panelMat.name);
+
+      const picketFormula = runStyle.type === 'Wood' 
+        ? (run.visualStyleId === 'w-bob' 
+            ? `BoB: (${(runLF * 12).toFixed(0)}" / 4.5") × ${wasteFactor} waste`
+            : `SbS: (${(runLF * 12).toFixed(0)}" / 5.5") × ${wasteFactor} waste`)
+        : `${(netLF / 8).toFixed(1)} Panels × ${wasteFactor} waste`;
 
       const panelTotalCost = panelQty * panelUnitCost;
       runFenceMaterialCost += panelTotalCost;
@@ -773,7 +837,8 @@ export function calculateDetailedTakeOff(
         unit: panelMat.unit,
         unitCost: panelUnitCost,
         total: panelTotalCost,
-        category: 'Infill'
+        category: 'Infill',
+        formula: picketFormula
       });
 
       // Add mounting brackets and screws for Metal (Wrought Iron)
@@ -852,6 +917,7 @@ export function calculateDetailedTakeOff(
       
       const railMat = materials.find(m => m.id === railId)!;
       const railQty = sectionCount * railsCount;
+      const railFormula = `${sectionCount} sections × ${railsCount} rails/section`;
       const railCost = railQty * railMat.cost;
       runFenceMaterialCost += railCost;
       runItems.push({
@@ -861,25 +927,29 @@ export function calculateDetailedTakeOff(
         unit: railMat.unit,
         unitCost: railMat.cost,
         total: railCost,
-        category: 'Structure'
+        category: 'Structure',
+        formula: railFormula
       });
 
-      const rotBoardId = is8ft 
-        ? (isStained ? 'w-rot-board-12-stained' : 'w-rot-board-12')
-        : (isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16');
-      const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
-      const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
-      const rotBoardCost = rotBoardQty * rotBoardMat.cost;
-      runFenceMaterialCost += rotBoardCost;
-      runItems.push({
-        id: rotBoardMat.id,
-        name: rotBoardMat.name,
-        qty: rotBoardQty,
-        unit: rotBoardMat.unit,
-        unitCost: rotBoardMat.cost,
-        total: rotBoardCost,
-        category: 'Structure'
-      });
+      const hasRotBoard = !!(run.hasRotBoard ?? estimate.hasRotBoard);
+      if (hasRotBoard) {
+        const rotBoardId = is8ft 
+          ? (isStained ? 'w-rot-board-12-stained' : 'w-rot-board-12')
+          : (isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16');
+        const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
+        const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
+        const rotBoardCost = rotBoardQty * rotBoardMat.cost;
+        runFenceMaterialCost += rotBoardCost;
+        runItems.push({
+          id: rotBoardMat.id,
+          name: rotBoardMat.name,
+          qty: rotBoardQty,
+          unit: rotBoardMat.unit,
+          unitCost: rotBoardMat.cost,
+          total: rotBoardCost,
+          category: 'Structure'
+        });
+      }
 
       // Nails
       const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
@@ -898,8 +968,11 @@ export function calculateDetailedTakeOff(
     }
 
     // Optional Items (Trim, Cap)
-    if (is6ftWood) {
-       if (estimate.hasCapAndTrim) {
+    const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
+    const forceTrim = runStyle.type === 'Wood' && runTopStyle === 'Flat Top';
+
+    if (runStyle.type === 'Wood') {
+       if (estimate.hasCapAndTrim || forceTrim) {
           // Top Trim (1x4x8)
           const trimMat = materials.find(m => m.id === 'f-cap-trim')!;
           const trimQty = Math.ceil(runLF / 8);
@@ -1029,7 +1102,8 @@ export function calculateDetailedTakeOff(
       } else {
         runLaborRate = isSideBySide ? laborRates.woodSideBySide8 : laborRates.woodBoardOnBoard8;
       }
-      if (estimate.hasCapAndTrim) runLaborRate += laborRates.topCap;
+      const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
+      if (estimate.hasTopCap) runLaborRate += laborRates.topCap;
     } else if (runStyle.type === 'Metal') {
       runLaborRate = (run.ironInstallType === 'Weld up') ? laborRates.ironWeldUp : laborRates.ironBoltUp;
     } else if (runStyle.type === 'Chain Link') {
@@ -1038,7 +1112,11 @@ export function calculateDetailedTakeOff(
       runLaborRate = laborRates.pipeFence;
     }
 
-    const runFenceLaborCost = netLF * runLaborRate;
+    if (run.reusePosts) {
+      runLaborRate = Math.max(0, runLaborRate - 2);
+    }
+
+    let runFenceLaborCost = netLF * runLaborRate;
     
     // Add fence labor as an item
     if (runFenceLaborCost > 0) {
@@ -1073,6 +1151,29 @@ export function calculateDetailedTakeOff(
       runItems.push(demoItem);
     }
 
+    if (isExisting) {
+      // If it's an existing fence, zero out standard costs
+      // We only keep stain labor and demolition labor
+      const preservedItems = runItems.filter(i => 
+        i.id.startsWith('labor-stain-') || 
+        i.id.startsWith('labor-demo-') ||
+        i.category === 'Demolition'
+      );
+      
+      runItems.length = 0;
+      runItems.push(...preservedItems);
+      
+      runFenceMaterialCost = 0;
+      runGateMaterialCost = 0;
+      // We'll set labor cost to only include the preserved items' totals
+      runFenceLaborCost = preservedItems.filter(i => i.id.startsWith('labor-stain-')).reduce((sum, i) => sum + i.total, 0);
+      runGateLaborCost = 0;
+      // demoCharge is already preserved in detailedData but we explicitly zero others
+    } else {
+      // Standard Case: add the stain labor to the fence labor cost for this run
+      runFenceLaborCost += runStainLabor;
+    }
+
     const laborTotal = runFenceLaborCost + runGateLaborCost;
     totalLabor += laborTotal;
 
@@ -1080,9 +1181,9 @@ export function calculateDetailedTakeOff(
       const isPartialWire = i.id.startsWith('partial-wire-');
       const isPartialPaint = i.id.startsWith('partial-paint-');
       if (i.category === 'Labor') {
-        // Already handled by totalLabor += laborTotal at 762
+        // Already handled by totalLabor += laborTotal
       } else if (i.category === 'Demolition') {
-        // Already handled by totalDemo += demoCost at 746
+        // Already handled by totalDemo += demoCost
       } else {
         if (!isPartialWire && !isPartialPaint) {
           totalMaterial += i.total;
@@ -1100,6 +1201,15 @@ export function calculateDetailedTakeOff(
       linearFeet: runLF,
       netLF,
       styleName: runStyle.name,
+      height: run.height || estimate.defaultHeight || 6,
+      railCount: (run.height === 8 ? 4 : 3),
+      hasRotBoard: !!(run.hasRotBoard ?? estimate.hasRotBoard),
+      topStyle: run.topStyle || estimate.topStyle || 'Dog Ear',
+      hasTopCap: !!estimate.hasTopCap,
+      hasTrim: !!estimate.hasCapAndTrim,
+      woodType: run.woodType || estimate.woodType,
+      stainSides: run.stainSides,
+      picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : (run.visualStyleId === 'w-side' ? 'Side by Side' : run.visualStyleId),
       items: runItems,
       fenceMaterialCost: runFenceMaterialCost,
       fenceLaborCost: runFenceLaborCost,

@@ -25,16 +25,28 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     return matchesSearch && matchesFilter;
   });
 
-  const toggleArchive = (id: string) => {
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
+
+  const deleteEstimate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    if (deleteConfirmId === id) {
+      setSavedEstimates(prev => prev.filter(est => est.id !== id));
+      setDeleteConfirmId(null);
+    } else {
+      setDeleteConfirmId(id);
+      // Reset after 6 seconds if not clicked again
+      setTimeout(() => setDeleteConfirmId(null), 6000);
+    }
+  };
+
+  const toggleArchive = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     setSavedEstimates(prev => prev.map(est => 
       est.id === id ? { ...est, status: est.status === 'archived' ? 'active' : 'archived', lastModified: new Date().toISOString() } : est
     ));
-  };
-
-  const deleteEstimate = (id: string) => {
-    if (confirm('Are you sure you want to delete this estimate? This cannot be undone.')) {
-      setSavedEstimates(prev => prev.filter(est => est.id !== id));
-    }
   };
 
   return (
@@ -115,6 +127,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                   <div className="flex items-center gap-2 text-[#999999] mt-1">
                     <MapPin size={12} />
                     <span className="text-[10px] font-bold uppercase tracking-widest truncate">{estimate.customerAddress || 'No Address'}</span>
+                    {estimate.version && estimate.version > 1 && (
+                      <span className="ml-2 px-1.5 py-0.5 bg-american-blue/5 text-american-blue text-[8px] font-black rounded uppercase">v{estimate.version}</span>
+                    )}
                   </div>
                 </div>
 
@@ -126,7 +141,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                   <div>
                     <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Created</p>
                     <p className="text-sm font-bold text-american-blue">
-                      {new Date(estimate.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(estimate.lastModified || estimate.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
                   </div>
                 </div>
@@ -134,26 +149,37 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <button
+                      type="button"
                       onClick={() => onLoadEstimate(estimate)}
-                      className="p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
+                      className="relative z-30 p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
                       title="Open in Estimator"
                     >
-                      <ExternalLink size={18} />
+                      <ExternalLink size={18} className="pointer-events-none" />
                     </button>
                     <button
-                      onClick={() => toggleArchive(estimate.id)}
-                      className="p-3 bg-[#F5F5F7] text-[#999999] hover:text-american-blue rounded-xl hover:scale-110 active:scale-95 transition-all"
+                      type="button"
+                      onClick={(e) => toggleArchive(estimate.id, e)}
+                      className="relative z-30 p-3 bg-[#F5F5F7] text-[#999999] hover:text-american-blue rounded-xl hover:scale-110 active:scale-95 transition-all"
                       title={estimate.status === 'active' ? 'Archive' : 'Restore'}
                     >
-                      {estimate.status === 'active' ? <Archive size={18} /> : <RotateCcw size={18} />}
+                      {estimate.status === 'active' ? <Archive size={18} className="pointer-events-none" /> : <RotateCcw size={18} className="pointer-events-none" />}
                     </button>
                   </div>
                   <button
-                    onClick={() => deleteEstimate(estimate.id)}
-                    className="p-3 bg-american-red/10 text-american-red rounded-xl hover:bg-american-red hover:text-white hover:scale-110 active:scale-95 transition-all opacity-0 group-hover:opacity-100"
-                    title="Delete Permanently"
+                    type="button"
+                    onClick={(e) => deleteEstimate(estimate.id, e)}
+                    className={cn(
+                      "relative z-30 p-3 rounded-xl transition-all hover:scale-110 active:scale-95 flex items-center gap-2",
+                      deleteConfirmId === estimate.id 
+                        ? "bg-american-red text-white animate-pulse px-4" 
+                        : "bg-american-red/10 text-american-red hover:bg-american-red hover:text-white"
+                    )}
+                    title={deleteConfirmId === estimate.id ? "Confirm Delete" : "Delete Permanently"}
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={18} className="pointer-events-none" />
+                    {deleteConfirmId === estimate.id && (
+                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Sure?</span>
+                    )}
                   </button>
                 </div>
               </div>

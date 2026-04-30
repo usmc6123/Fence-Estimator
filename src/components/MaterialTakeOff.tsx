@@ -108,8 +108,13 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       // Determine if it's wood-style post (metal pipe for wood fence) vs metal fence post
       const isWoodStyle = idLower.startsWith('w-post') || nameLower.includes('wood') || (newItem.category === 'Post' && idLower.includes('metal-8'));
       
-      const cap = materials.find(m => m.id === 'pc-dome' || m.id === 'pc-flat');
-      const concrete = materials.find(m => m.id === 'i-concrete-maximizer' || m.id === 'i-concrete-80');
+      // Use project defaults or fallback
+      const targetCapId = estimate.topStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome';
+      const cap = materials.find(m => m.id === targetCapId) || materials.find(m => m.id === 'pc-dome');
+      
+      const concreteId = estimate.concreteType === 'Quickset' ? 'i-concrete-quickset' : 
+                         (estimate.concreteType === 'Maximizer' ? 'i-concrete-maximizer' : 'i-concrete-80');
+      const concrete = materials.find(m => m.id === concreteId) || materials.find(m => m.id === 'i-concrete-80');
       
       const bracketId = isWoodStyle ? 'h-bracket-w' : 'm-bracket';
       const bracket = materials.find(m => m.id === bracketId);
@@ -118,7 +123,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       const screw = materials.find(m => m.id === screwId);
 
       if (cap) addItemToDossier(cap.id, qty);
-      if (concrete) addItemToDossier(concrete.id, qty); // 1-to-1 assumption for manual add
+      if (concrete) {
+        const bagsPerPost = estimate.concreteType === 'Quickset' ? 2 : (estimate.concreteType === 'Maximizer' ? 0.7 : 0.7);
+        addItemToDossier(concrete.id, Math.ceil(qty * bagsPerPost));
+      }
       if (bracket) addItemToDossier(bracket.id, qty * 4);
       if (screw) addItemToDossier(screw.id, qty * 4);
     } else if (isBracket) {
@@ -457,9 +465,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                               const lineTotal = item.total * (1 + markupFactor + taxFactor);
 
                               return (
-                                <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
-                                  <td className="px-6 py-4">{item.name}</td>
-                                  <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                                  <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
+                                    <td className="px-6 py-4">
+                                      <div className="flex flex-col">
+                                        <span>{item.name}</span>
+                                        {item.formula && (
+                                          <span className="text-[9px] font-bold text-american-red/60 uppercase tracking-tighter mt-0.5">
+                                            {item.formula}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
@@ -770,8 +787,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
         </div>
 
         {/* Footer Branding */}
-        <div className="bg-[#1A1A1A] p-8 text-center border-t-8 border-american-red print:hidden">
-          <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em]">Lone Star Fence Works • Precision Manufacturing & Strategic Deployment</p>
+        <div className="bg-american-blue p-8 text-center border-t-8 border-american-blue/20 print:hidden">
+          <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Lone Star Fence Works • Precision Manufacturing & Strategic Deployment</p>
         </div>
       </div>
 

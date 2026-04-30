@@ -1,4 +1,4 @@
-import { MaterialItem, FenceStyle, CompanyInfo } from './types';
+import { MaterialItem, FenceStyle, CompanyInfo, Estimate } from './types';
 
 export const COMPANY_INFO: CompanyInfo = {
   name: 'Lone Star Fence Works',
@@ -100,7 +100,7 @@ export const MATERIALS: MaterialItem[] = [
   // Installation
   { id: 'i-concrete-80', name: '80lb Concrete Mix (Standard)', category: 'Concrete', unit: 'bag', cost: 6.75, description: 'Standard setting', imageUrl: 'https://mobileimages.lowes.com/productimages/abbf972d-3b5f-47fb-94b2-2b7c4797cdaf/64515057.png?size=pdhism' },
   { id: 'i-concrete-maximizer', name: '80lb Maximizer Concrete', category: 'Concrete', unit: 'bag', cost: 8.50, description: 'High-yield concrete (.7 bags per post)', imageUrl: 'https://images.thdstatic.com/productImages/50170884-6014-4161-829d-486152a6547a/svn/sakrete-concrete-mix-100220671-64_1000.jpg' },
-  { id: 'i-concrete-quickset', name: '80lb Quickset Concrete', category: 'Concrete', unit: 'bag', cost: 9.75, description: 'Fast-setting concrete (2 bags per post)', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
+  { id: 'i-concrete-quickset', name: '50lb Quickset Concrete', category: 'Concrete', unit: 'bag', cost: 9.75, description: 'Fast-setting concrete (2 bags per post), 50lb bag', imageUrl: 'https://www.quikrete.com/images/products/fast-setting-concrete.png' },
   { id: 'i-foam', name: 'Post-Setting Foam', category: 'Concrete', unit: 'each', cost: 18.50, description: '2-part expanding foam', imageUrl: 'https://images.thdstatic.com/productImages/bc70eb23-9f73-4ce7-95b4-b048b422ee33/svn/sika-deck-parts-accessories-7116170-c3_600.jpg' },
   
   // Site Prep
@@ -153,8 +153,49 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'pc-flat', name: 'Flat Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },
   { id: 'pc-dome', name: 'Dome Cap', category: 'PostCap', unit: 'each', cost: 7.25, imageUrl: 'https://i5.walmartimages.com/seo/Universal-Forest-Products-106515-Gothic-Post-Top_430dfd8e-82a1-46c2-995e-13a418bab791.a479575ff19a8db23738c5346e194433.jpeg?odnHeight=2000&odnWidth=2000&odnBg=FFFFFF' },
   { id: 'pc-solar', name: 'Solar LED Cap', category: 'PostCap', unit: 'each', cost: 22.00, imageUrl: 'https://s.turbifycdn.com/aah/yhst-99239380869547/classy-caps-kingsbridge-white-dual-lighted-solar-post-cap-442.png' },
-  { id: 'h-cane-bolt', name: 'Gate Cane Bolt', category: 'Hardware', unit: 'each', cost: 14.50, description: '12" Drop rod for double gates', imageUrl: 'https://images.thdstatic.com/productImages/38318721-a8e5-4f36-8c4d-b072a392268b/svn/everbilt-gate-hardware-15462-64_600.jpg' },
+  { id: 'h-cane-bolt-24', name: '24" Black Cane Bolt', category: 'Hardware', unit: 'each', cost: 18.50, description: '24" Black drop rod for pipe or metal gates', imageUrl: 'https://images.thdstatic.com/productImages/38318721-a8e5-4f36-8c4d-b072a392268b/svn/everbilt-gate-hardware-15462-64_600.jpg' },
+  { id: 'h-cane-bolt-48', name: '48" Black Cane Bolt', category: 'Hardware', unit: 'each', cost: 28.50, description: '48" Black drop rod for wood gates', imageUrl: 'https://images.thdstatic.com/productImages/38318721-a8e5-4f36-8c4d-b072a392268b/svn/everbilt-gate-hardware-15462-64_600.jpg' },
 ];
+
+export const DEFAULT_ESTIMATE: Partial<Estimate> = {
+  customerName: '',
+  customerEmail: '',
+  customerPhone: '',
+  customerAddress: '',
+  linearFeet: 100,
+  corners: 2,
+  height: 6,
+  width: 8,
+  runs: [],
+  defaultStyleId: 'wood-privacy',
+  defaultVisualStyleId: 'w-side',
+  defaultHeight: 6,
+  defaultColor: 'Natural',
+  postCapId: 'pc-dome',
+  hasCapAndTrim: false,
+  gateCount: 1,
+  gateStyleId: 'g-frame-4ft-wood',
+  footingType: 'Cuboid',
+  concreteType: 'Maximizer',
+  postWidth: 6,
+  postThickness: 6,
+  hasSitePrep: false,
+  needsClearing: false,
+  needsMarking: true,
+  obstacleRemoval: false,
+  wastePercentage: 0,
+  includeStain: false,
+  markupPercentage: 20,
+  taxPercentage: 8.25,
+  manualQuantities: {},
+  manualPrices: {},
+  woodType: 'PT Pine',
+  ironRails: '2 rail',
+  ironTop: 'Flat top',
+  topStyle: 'Dog Ear',
+  isPreStained: false,
+  hasRotBoard: true,
+};
 
 export const DEFAULT_LABOR_RATES = {
   woodSideBySide6: 10,

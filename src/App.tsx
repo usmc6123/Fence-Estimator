@@ -10,31 +10,75 @@ import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
 import MaterialTakeOff from './components/MaterialTakeOff';
 import LaborTakeOff from './components/LaborTakeOff';
+import SupplierOrderForm from './components/SupplierOrderForm';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
 import SavedEstimates from './components/SavedEstimates';
-import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES } from './constants';
+import Financials from './components/Financials';
+import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
+import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
+import { User } from 'firebase/auth';
 
 export default function App() {
+  const [user, setUser] = React.useState<User | null>(null);
+
+  React.useEffect(() => {
+    testConnection();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
   // Helper to get state from Hash or LocalStorage
   const getInitialValue = (key: string, storageKey: string, defaultValue: any) => {
+    // 1. Try URL Hash (highest priority for new window bridging)
     const hash = window.location.hash;
     if (hash.startsWith('#state=')) {
       try {
         const decoded = JSON.parse(decodeURIComponent(hash.substring(7)));
-        if (decoded[key] !== undefined) return decoded[key];
+        if (decoded && typeof decoded === 'object' && key in decoded) {
+          const val = decoded[key];
+          // If we found a valid non-null value in hash, return it immediately
+          if (val !== undefined && val !== null) return val;
+        }
       } catch (e) {
-        console.error('Error parsing hash state:', e);
+        console.warn(`Failed to parse hash state for key "${key}":`, e);
       }
     }
-    const saved = localStorage.getItem(storageKey);
-    if (!saved) return defaultValue;
+
+    // 2. Try LocalStorage (session persistence)
     try {
-      return JSON.parse(saved);
-    } catch {
-      return defaultValue;
+      const saved = localStorage.getItem(storageKey);
+      if (saved && saved !== 'undefined' && saved !== 'null') {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          // Fallback for non-JSON strings
+          return saved;
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to parse localStorage for key "${storageKey}":`, e);
     }
+    
+    return defaultValue;
   };
 
   const [activeTab, setActiveTab] = React.useState(() => {
@@ -46,13 +90,15 @@ export default function App() {
   });
 
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
-    const fromStorage = getInitialValue('materials', 'fence_pro_materials', MATERIALS);
-    // Sync logic already exists below or can be integrated
-    return fromStorage;
+    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
   });
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
     return getInitialValue('quotes', 'fence_pro_quotes', []);
+  });
+
+  const [aiProjectScope, setAiProjectScope] = React.useState<string | null>(() => {
+    return getInitialValue('aiProjectScope', 'fence_pro_ai_scope', null);
   });
 
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
@@ -60,87 +106,91 @@ export default function App() {
   });
 
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
-    const defaultEst = {
-      customerName: '',
-      customerEmail: '',
-      customerPhone: '',
-      customerAddress: '',
-      linearFeet: 100,
-      corners: 2,
-      height: 6,
-      width: 8,
-      runs: [],
-      defaultStyleId: FENCE_STYLES[0].id,
-      defaultVisualStyleId: FENCE_STYLES[0].visualStyles[0].id,
-      defaultHeight: 6,
-      defaultColor: 'Natural',
-      postCapId: MATERIALS.find(m => m.category === 'PostCap')?.id || '',
-      hasCapAndTrim: false,
-      gateCount: 1,
-      gateStyleId: MATERIALS.find(m => m.category === 'Gate')?.id || '',
-      footingType: 'Cuboid',
-      concreteType: 'Maximizer',
-      postWidth: 6,
-      postThickness: 6,
-      hasSitePrep: false,
-      needsClearing: false,
-      needsMarking: true,
-      obstacleRemoval: false,
-      wastePercentage: 10,
-      includeGravel: true,
-      includeStain: false,
-      markupPercentage: 30,
-      taxPercentage: 8.25,
-      manualQuantities: {},
-      manualPrices: {},
-      woodType: 'PT Pine',
-      ironRails: '2 rail',
-      ironTop: 'Flat top',
-      topStyle: 'Dog Ear',
-      isPreStained: false,
-    };
-    return getInitialValue('estimate', 'fence_pro_estimate', defaultEst);
+    const initial = getInitialValue('estimate', 'fence_pro_estimate', DEFAULT_ESTIMATE);
+    const hasNoCustomer = !initial.customerName && !initial.customerAddress;
+    
+    if (hasNoCustomer) {
+      let migrated = { ...initial };
+      let changed = false;
+
+      if (initial.markupPercentage === 30) {
+        migrated.markupPercentage = 20;
+        changed = true;
+      }
+      if (initial.wastePercentage === 10) {
+        migrated.wastePercentage = 0;
+        changed = true;
+      }
+
+      if (changed) return migrated;
+    }
+    return initial;
   });
 
+  // Global Sync to localStorage
   React.useEffect(() => {
+    localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
     localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
-  }, [materials]);
+    localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
+    localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
+    localStorage.setItem('fence_pro_saved_estimates', JSON.stringify(savedEstimates));
+    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+    localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
+  }, [estimate, materials, laborRates, activeTab, savedEstimates, quotes, aiProjectScope]);
+
+  // Sync state across tabs using the storage event (enables simultaneous updates)
+  React.useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.newValue || e.newValue === 'undefined' || e.newValue === 'null') return;
+      
+      try {
+        const parsed = JSON.parse(e.newValue);
+        switch (e.key) {
+          case 'fence_pro_estimate': setEstimate(parsed); break;
+          case 'fence_pro_materials': setMaterials(parsed); break;
+          case 'fence_pro_labor_rates': setLaborRates(parsed); break;
+          case 'fence_pro_saved_estimates': setSavedEstimates(parsed); break;
+          case 'fence_pro_quotes': setQuotes(parsed); break;
+          case 'fence_pro_ai_scope': setAiProjectScope(parsed); break;
+          // Note: Avoid syncing activeTab across windows as they should be independent
+        }
+      } catch (err) {
+        console.error('Failed to sync storage change:', err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Structural sync for existing items if they differ from constants in key ways
   React.useEffect(() => {
     let changed = false;
-    const syncedMaterials = materials.map(m => {
+    
+    // Update existing items if names/units/descriptions changed in constants
+    let syncedMaterials = materials.map(m => {
       const base = MATERIALS.find(bm => bm.id === m.id);
-      if (base && base.unit !== m.unit) {
-        changed = true;
-        return { ...m, unit: base.unit, cost: base.cost, description: base.description, name: base.name };
+      if (base) {
+        const needsSync = base.name !== m.name || base.unit !== m.unit || base.description !== m.description;
+        if (needsSync) {
+          changed = true;
+          return { ...m, name: base.name, unit: base.unit, description: base.description };
+        }
       }
       return m;
     });
+
+    // Add missing default items that are in MATERIALS but not in the user's list
+    const missingItems = MATERIALS.filter(bm => !syncedMaterials.find(m => m.id === bm.id));
+    if (missingItems.length > 0) {
+      syncedMaterials = [...syncedMaterials, ...missingItems];
+      changed = true;
+    }
+
     if (changed) {
       setMaterials(syncedMaterials);
     }
   }, []);
-
-  React.useEffect(() => {
-    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
-  }, [quotes]);
-
-  React.useEffect(() => {
-    localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
-  }, [laborRates]);
-
-  React.useEffect(() => {
-    localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
-  }, [estimate]);
-
-  React.useEffect(() => {
-    localStorage.setItem('fence_pro_saved_estimates', JSON.stringify(savedEstimates));
-  }, [savedEstimates]);
-
-  React.useEffect(() => {
-    localStorage.setItem('fence_pro_active_tab', activeTab);
-  }, [activeTab]);
 
   const handleLoadEstimate = (est: SavedEstimate) => {
     setEstimate(est);
@@ -148,7 +198,13 @@ export default function App() {
   };
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      user={user} 
+      onLogin={handleLogin} 
+      onLogout={handleLogout}
+    >
       {activeTab === 'estimator' && (
         <Estimator 
           materials={materials} 
@@ -166,6 +222,9 @@ export default function App() {
           onLoadEstimate={handleLoadEstimate}
         />
       )}
+      {activeTab === 'financials' && (
+        <Financials savedEstimates={savedEstimates} user={user} />
+      )}
       {activeTab === 'library' && (
         <MaterialLibrary materials={materials} setMaterials={setMaterials} />
       )}
@@ -182,8 +241,18 @@ export default function App() {
           setMaterials={setMaterials}
         />
       )}
-      {activeTab === 'labor-takeoff' && (
-        <LaborTakeOff estimate={estimate} materials={materials} laborRates={laborRates} quotes={quotes} />
+      {activeTab === 'labor-breakdown' && (
+        <LaborTakeOff 
+          estimate={estimate} 
+          materials={materials} 
+          laborRates={laborRates} 
+          quotes={quotes}
+          aiProjectScope={aiProjectScope}
+          setAiProjectScope={setAiProjectScope}
+        />
+      )}
+      {activeTab === 'supplier-order' && (
+        <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} />
       )}
       {activeTab === 'quotes' && (
         <QuoteManager 

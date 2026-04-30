@@ -48,6 +48,7 @@ export interface FenceRun {
   corners: number;
   gates: number;
   gateDetails?: GateDetail[];
+  points?: { lat: number; lng: number }[]; // Coordinates from map measurements
   // Style per run
   styleId: string;
   visualStyleId: string;
@@ -60,9 +61,15 @@ export interface FenceRun {
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
+  topStyle?: 'Dog Ear' | 'Flat Top';
+  hasRotBoard?: boolean;
   hasDemolition?: boolean;
   demoLinearFeet?: number;
   demoType?: 'Wood' | 'Chain Link' | 'Metal';
+  // Existing and Stain options
+  isExistingFence?: boolean;
+  needsStain?: boolean;
+  stainSides?: 'One Side' | 'Both Sides';
 }
 
 export interface LaborRates {
@@ -149,8 +156,8 @@ export interface Estimate {
   
   // Advanced
   wastePercentage: number;
-  includeGravel: boolean;
   includeStain: boolean;
+  hasRotBoard?: boolean;
   footingType: 'Cuboid' | 'Cylindrical';
   concreteType: 'Maximizer' | 'Quickset';
   postWidth: number;
@@ -163,6 +170,8 @@ export interface Estimate {
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;
+  version?: number;
+  parentId?: string; // Links to the original version id
 
   // Supplier Quotes
   quotes?: SupplierQuote[];
@@ -180,4 +189,54 @@ export interface CompanyInfo {
   email: string;
   website: string;
   address: string;
+}
+
+export type TransactionType = 'Income' | 'Expense';
+export type TransactionStatus = 'Pending' | 'Cleared' | 'Reconciled';
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  type: 'Checking' | 'Savings' | 'Credit Card';
+  balance: number;
+  institutionName: string;
+  lastSync?: string;
+  userId: string;
+}
+
+export interface BankTransaction {
+  id: string;
+  accountId: string;
+  date: string;
+  amount: number;
+  type: TransactionType;
+  description: string;
+  category: string;
+  status: TransactionStatus;
+  estimateId?: string; // Link to an estimate for job costing
+  receiptUrl?: string;
+  receiptName?: string;
+  notes?: string;
+  userId: string;
+}
+
+export interface InventoryStock {
+  id: string;
+  materialId: string;
+  quantityInStock: number;
+  minStockLevel: number;
+  averageCost: number;
+  userId: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  date: string;
+  description: string;
+  lines: {
+    accountName: string;
+    debit: number;
+    credit: number;
+  }[];
+  userId: string;
 }

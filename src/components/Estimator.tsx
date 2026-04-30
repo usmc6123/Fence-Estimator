@@ -3,13 +3,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
-  Layers, HardHat, FileText, Map, X, Printer, Share2, Trees, Droplets,
-  TrendingUp, RotateCcw
+  Layers, HardHat, FileText, Map as MapIcon, X, Printer, Share2, Trees, Droplets,
+  TrendingUp, RotateCcw, Package, Navigation
 } from 'lucide-react';
-import { FENCE_STYLES, COMPANY_INFO } from '../constants';
+import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
+import SupplierOrderForm from './SupplierOrderForm';
+import SiteMeasurement from './SiteMeasurement';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -37,8 +39,10 @@ export default function Estimator({
   }, [step]);
 
   const [isFullView, setIsFullView] = React.useState(false);
+  const [showMap, setShowMap] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [showInvoice, setShowInvoice] = React.useState(false);
+  const [showSupplierForm, setShowSupplierForm] = React.useState(false);
   const [showDiagram, setShowDiagram] = React.useState(false);
   const [leftTab, setLeftTab] = React.useState<'Dimensions' | 'Styles'>('Dimensions');
 
@@ -68,7 +72,9 @@ export default function Estimator({
       };
     });
 
-    const lf = detailedData.runs.reduce((sum, r) => sum + r.linearFeet, 0) || estimate.linearFeet || 0;
+    const lf = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.linearFeet, 0)
+      : (estimate.linearFeet || 0);
     const gateCount = detailedData.runs.reduce((sum, r) => sum + r.gates.length, 0) || estimate.gateCount || 0;
     const postCount = detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
 
@@ -94,36 +100,49 @@ export default function Estimator({
   const handleNext = () => setStep(s => Math.min(s + 1, 4));
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
+  const handleReset = () => {
+    if (confirm('Are you sure you want to start a new estimate? This will clear all current data.')) {
+      setEstimate(DEFAULT_ESTIMATE);
+      setStep(1);
+      setIsFullView(false);
+      localStorage.removeItem('fence_pro_estimator_step');
+    }
+  };
+
   const handleSave = () => {
-    // Generate a new ID if it doesn't have one
-    const id = estimate.id || `est-${Math.random().toString(36).substr(2, 9)}`;
+    // Determine the actual linear feet to save
+    const actualLF = (estimate.runs && estimate.runs.length > 0)
+      ? estimate.runs.reduce((sum, r) => sum + r.linearFeet, 0)
+      : (estimate.linearFeet || 0);
+
     const now = new Date().toISOString();
     
+    // Revision Logic
+    const isExisting = !!estimate.id;
+    const newId = `est-${Math.random().toString(36).substr(2, 9)}`;
+    const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
+    const parentId = isExisting ? (estimate.parentId || estimate.id) : undefined;
+
     const estimateToSave: SavedEstimate = {
       ...(estimate as Estimate),
-      id,
+      linearFeet: actualLF,
+      id: newId, // Always a new ID for the revision
+      parentId,
+      version: newVersion,
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active'
     };
 
-    setSavedEstimates(prev => {
-      const existingIdx = prev.findIndex(e => e.id === id);
-      if (existingIdx > -1) {
-        const updated = [...prev];
-        updated[existingIdx] = estimateToSave;
-        return updated;
-      }
-      return [estimateToSave, ...prev];
-    });
-
-    // Update current estimate with the new ID if it was generated
-    if (!estimate.id) {
-      setEstimate({ ...estimate, id });
-    }
+    setSavedEstimates(prev => [estimateToSave, ...prev]);
 
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setTimeout(() => {
+      setShowSuccess(false);
+      setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
+      setStep(1);
+      localStorage.removeItem('fence_pro_estimator_step');
+    }, 3000);
   };
 
   const steps = [
@@ -295,17 +314,37 @@ export default function Estimator({
                  </div>
 
                  {defaultStyle.type === 'Wood' && (
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Wood Species</label>
-                       <select 
-                         value={estimate.woodType}
-                         onChange={(e) => setEstimate({...estimate, woodType: e.target.value as any})}
-                         className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
-                       >
-                         <option value="PT Pine">PT Pine</option>
-                         <option value="Western Red Cedar">Western Red Cedar</option>
-                         <option value="Japanese Cedar">Japanese Cedar</option>
-                       </select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Wood Species</label>
+                         <select 
+                           value={estimate.woodType}
+                           onChange={(e) => setEstimate({...estimate, woodType: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="PT Pine">PT Pine</option>
+                           <option value="Western Red Cedar">Western Red Cedar</option>
+                           <option value="Japanese Cedar">Japanese Cedar</option>
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Style Type</label>
+                         <select 
+                           value={estimate.topStyle || 'Dog Ear'}
+                           onChange={(e) => {
+                              const newTopStyle = e.target.value as any;
+                              setEstimate({
+                                ...estimate, 
+                                topStyle: newTopStyle,
+                                hasCapAndTrim: newTopStyle === 'Flat Top' ? true : estimate.hasCapAndTrim
+                              });
+                            }}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Dog Ear">Dog Ear</option>
+                           <option value="Flat Top">Flat Top</option>
+                         </select>
+                      </div>
                     </div>
                   )}
 
@@ -391,7 +430,7 @@ export default function Estimator({
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={estimate.linearFeet} 
+                      value={estimate.runs && estimate.runs.length > 0 ? results.lf : estimate.linearFeet} 
                       onChange={(e) => setEstimate({...estimate, linearFeet: Number(e.target.value)})} 
                       disabled={estimate.runs && estimate.runs.length > 0}
                       className={`w-full rounded-2xl border-2 border-[#F0F0F0] bg-white px-6 py-4 text-2xl font-black text-american-blue focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all ${estimate.runs && estimate.runs.length > 0 ? 'opacity-50 cursor-not-allowed bg-[#F5F5F5]' : ''}`} 
@@ -431,27 +470,37 @@ export default function Estimator({
                     <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Fence Sections</h3>
                     <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Mix & Match Styles per Run</p>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const newRun = { 
-                        id: Math.random().toString(36).substr(2, 9), 
-                        name: `Run ${(estimate.runs?.length || 0) + 1}`, 
-                        linearFeet: 0, 
-                        corners: 0, 
-                        gates: 0,
-                        styleId: estimate.defaultStyleId!,
-                        visualStyleId: estimate.defaultVisualStyleId!,
-                        height: estimate.defaultHeight!,
-                        color: estimate.defaultColor!,
-                        isPreStained: estimate.isPreStained
-                      };
-                      setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
-                    }}
-                    className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
-                  >
-                    <Plus size={16} />
-                    Add Section
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button 
+                      onClick={() => setShowMap(true)}
+                      className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-red/5 text-american-red text-xs font-black uppercase tracking-widest hover:bg-american-red/10 hover:scale-105 active:scale-95 transition-all border-2 border-american-red/10"
+                    >
+                      <MapIcon size={16} />
+                      Measure from Map
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const newRun = { 
+                          id: Math.random().toString(36).substr(2, 9), 
+                          name: `Run ${(estimate.runs?.length || 0) + 1}`, 
+                          linearFeet: 0, 
+                          corners: 0, 
+                          gates: 0,
+                          styleId: estimate.defaultStyleId!,
+                          visualStyleId: estimate.defaultVisualStyleId!,
+                          height: estimate.defaultHeight!,
+                          color: estimate.defaultColor!,
+                          isPreStained: estimate.isPreStained,
+                          hasRotBoard: estimate.hasRotBoard
+                        };
+                        setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
+                      }}
+                      className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-blue text-white text-xs font-black uppercase tracking-widest hover:bg-american-blue/90 hover:scale-105 active:scale-95 transition-all shadow-lg shadow-american-blue/20"
+                    >
+                      <Plus size={16} />
+                      Add Section
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-6">
@@ -543,22 +592,44 @@ export default function Estimator({
                             </div>
 
                             {runStyle.type === 'Wood' && (
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Wood Type</label>
-                                <select 
-                                  value={run.woodType || estimate.woodType}
-                                  onChange={(e) => {
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].woodType = e.target.value as any;
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
-                                >
-                                  <option value="PT Pine">PT Pine</option>
-                                  <option value="Western Red Cedar">Western Red Cedar</option>
-                                  <option value="Japanese Cedar">Japanese Cedar</option>
-                                </select>
-                              </div>
+                              <>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Wood Type</label>
+                                  <select 
+                                    value={run.woodType || estimate.woodType}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].woodType = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="PT Pine">PT Pine</option>
+                                    <option value="Western Red Cedar">Western Red Cedar</option>
+                                    <option value="Japanese Cedar">Japanese Cedar</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Style</label>
+                                  <select 
+                                    value={run.topStyle || estimate.topStyle || 'Dog Ear'}
+                                    onChange={(e) => {
+                                      const newTopStyle = e.target.value as any;
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].topStyle = newTopStyle;
+                                      setEstimate({ 
+                                        ...estimate, 
+                                        runs: newRuns,
+                                        hasCapAndTrim: newTopStyle === 'Flat Top' ? true : estimate.hasCapAndTrim
+                                      });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="Dog Ear">Dog Ear</option>
+                                    <option value="Flat Top">Flat Top</option>
+                                  </select>
+                                </div>
+                              </>
                             )}
 
                             {runStyle.type === 'Metal' && (
@@ -640,24 +711,101 @@ export default function Estimator({
                                 {runStyle.availableColors.map(c => <option key={c} value={c}>{c}</option>)}
                               </select>
                             </div>
+                            <div className="pt-6">
+                              <button
+                                onClick={() => {
+                                  const newRuns = [...estimate.runs!];
+                                  newRuns[idx].isExistingFence = !newRuns[idx].isExistingFence;
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className={cn(
+                                  "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                  run.isExistingFence 
+                                    ? "border-american-blue bg-american-blue text-white" 
+                                    : "border-white bg-white text-[#BBBBBB]"
+                                )}
+                              >
+                                {run.isExistingFence ? "Existing Fence Active" : "Existing Fence"}
+                              </button>
+                            </div>
+
                             {runStyle.type === 'Wood' && (
-                              <div className="pt-6">
-                                <button
-                                  onClick={() => {
-                                    const newRuns = [...estimate.runs!];
-                                    newRuns[idx].reusePosts = !newRuns[idx].reusePosts;
-                                    setEstimate({ ...estimate, runs: newRuns });
-                                  }}
-                                  className={cn(
-                                    "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
-                                    run.reusePosts 
-                                      ? "border-american-red bg-american-red text-white" 
-                                      : "border-white bg-white text-[#BBBBBB]"
+                              <>
+                                <div className="pt-6">
+                                  <button
+                                    onClick={() => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].needsStain = !newRuns[idx].needsStain;
+                                      if (newRuns[idx].needsStain && !newRuns[idx].stainSides) {
+                                        newRuns[idx].stainSides = 'Both Sides';
+                                      }
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className={cn(
+                                      "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                      run.needsStain 
+                                        ? "border-emerald-600 bg-emerald-600 text-white" 
+                                        : "border-white bg-white text-[#BBBBBB]"
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-center gap-2">
+                                      <Droplets size={12} />
+                                      {run.needsStain ? "Staining Active" : "Add Staining"}
+                                    </div>
+                                  </button>
+                                </div>
+                                <AnimatePresence>
+                                  {run.needsStain && (
+                                    <motion.div 
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      className="col-span-full pt-4"
+                                    >
+                                      <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-100 flex items-center justify-between">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-800">Stain Coverage</span>
+                                        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-emerald-100">
+                                          {(['One Side', 'Both Sides'] as const).map(sides => (
+                                            <button 
+                                              key={sides}
+                                              onClick={() => {
+                                                const newRuns = [...estimate.runs!];
+                                                newRuns[idx].stainSides = sides;
+                                                setEstimate({ ...estimate, runs: newRuns });
+                                              }}
+                                              className={cn(
+                                                "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                                                run.stainSides === sides 
+                                                  ? "bg-emerald-600 text-white" 
+                                                  : "text-emerald-800/40 hover:text-emerald-800"
+                                              )}
+                                            >
+                                              {sides}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </motion.div>
                                   )}
-                                >
-                                  {run.reusePosts ? "Reusing Old Posts" : "Reuse Existing Posts"}
-                                </button>
-                              </div>
+                                </AnimatePresence>
+                                <div className="pt-6">
+                                  <button
+                                    onClick={() => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].reusePosts = !newRuns[idx].reusePosts;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className={cn(
+                                      "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                      run.reusePosts 
+                                        ? "border-american-red bg-american-red text-white" 
+                                        : "border-white bg-white text-[#BBBBBB]"
+                                    )}
+                                  >
+                                    {run.reusePosts ? "Reusing Old Posts" : "Reuse Existing Posts"}
+                                  </button>
+                                </div>
+                              </>
                             )}
 
                             {runStyle?.type !== 'Pipe' && (
@@ -923,10 +1071,6 @@ export default function Estimator({
                       {estimate.concreteType === 'Quickset' ? '2.0 Bags per post' : '0.7 Bags per post'}
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={estimate.includeGravel} onChange={(e) => setEstimate({...estimate, includeGravel: e.target.checked})} className="rounded border-[#E5E5E5]" />
-                    <span className="text-sm">Include Drainage Gravel (0.5 cu ft/hole)</span>
-                  </label>
                   {defaultStyle.type === 'Wood' && (
                     <div className="space-y-3 pt-2">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -944,6 +1088,10 @@ export default function Estimator({
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={estimate.hasTopCap} onChange={(e) => setEstimate({...estimate, hasTopCap: e.target.checked})} className="rounded border-[#E5E5E5]" />
                         <span className="text-sm">Top Cap (2x6)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={estimate.hasRotBoard} onChange={(e) => setEstimate({...estimate, hasRotBoard: e.target.checked})} className="rounded border-[#E5E5E5]" />
+                        <span className="text-sm">Rot Board (2x6)</span>
                       </label>
                     </div>
                   )}
@@ -1032,7 +1180,7 @@ export default function Estimator({
                   </div>
                 </div>
                 <button 
-                  onClick={() => setEstimate({ ...estimate, manualQuantities: {}, manualPrices: {}, markupPercentage: 30, taxPercentage: 8.25 })}
+                  onClick={() => setEstimate({ ...estimate, manualQuantities: {}, manualPrices: {}, markupPercentage: 20, wastePercentage: 0, taxPercentage: 8.25 })}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-american-blue/10 bg-white text-[10px] font-black uppercase tracking-widest text-[#999999] hover:bg-american-red hover:text-white hover:border-american-red transition-all shadow-sm"
                 >
                   <RotateCcw size={14} />
@@ -1045,7 +1193,7 @@ export default function Estimator({
                   <div className="flex justify-between items-center">
                     <div className="space-y-1">
                       <label className="text-xs font-black uppercase tracking-widest text-american-blue">Profit Markup (Universal)</label>
-                      <p className="text-[10px] text-[#999999] font-bold">Standard: 30%</p>
+                      <p className="text-[10px] text-[#999999] font-bold">Standard: 20%</p>
                     </div>
                     <span className="px-3 py-1.5 rounded-xl bg-american-red/10 text-american-red text-sm font-black min-w-[60px] text-center">{estimate.markupPercentage}%</span>
                   </div>
@@ -1104,22 +1252,29 @@ export default function Estimator({
                </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <button 
-                onClick={handleSave}
-                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-american-red text-white text-sm font-black uppercase tracking-widest hover:bg-american-red/90 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-american-red/20 outline-none"
-              >
-                <Send size={20} />
-                Submit Dossier
-              </button>
-              <button 
-                onClick={() => setShowInvoice(true)}
-                className="flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-white border-4 border-american-blue text-american-blue text-sm font-black uppercase tracking-widest hover:bg-american-blue/5 hover:scale-[1.02] active:scale-[0.98] transition-all outline-none"
-              >
-                <FileText size={20} />
-                Detailed View
-              </button>
-            </div>
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <button 
+                  onClick={handleSave}
+                  className="flex-1 flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-american-red text-white text-sm font-black uppercase tracking-widest hover:bg-american-red/90 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-american-red/20 outline-none"
+                >
+                  <Send size={20} />
+                  Submit Dossier
+                </button>
+                <button 
+                  onClick={() => setShowInvoice(true)}
+                  className="flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-white border-4 border-american-blue text-american-blue text-sm font-black uppercase tracking-widest hover:bg-american-blue/5 hover:scale-[1.02] active:scale-[0.98] transition-all outline-none"
+                >
+                  <FileText size={20} />
+                  Detailed View
+                </button>
+                <button 
+                  onClick={() => setShowSupplierForm(true)}
+                  className="flex items-center justify-center gap-3 px-8 py-5 rounded-2xl bg-white border-4 border-[#333333] text-[#333333] text-sm font-black uppercase tracking-widest hover:bg-[#333333]/5 hover:scale-[1.02] active:scale-[0.98] transition-all outline-none"
+                >
+                  <Package size={20} />
+                  Order Form
+                </button>
+              </div>
           </div>
         );
       default:
@@ -1149,16 +1304,26 @@ export default function Estimator({
               </button>
             ))}
           </div>
-          <button 
-            onClick={() => setIsFullView(!isFullView)}
-            className={cn(
-              "flex items-center gap-2 px-6 py-3.5 rounded-2xl border font-bold text-xs uppercase tracking-wider transition-all shadow-sm",
-              isFullView ? "bg-american-blue text-white border-american-blue" : "bg-white text-american-blue border-[#E5E5E5] hover:border-american-blue"
-            )}
-          >
-            <Map size={16} />
-            {isFullView ? "Wizard View" : "Full Review"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleReset}
+              className="flex items-center gap-2 px-4 py-3.5 rounded-2xl border bg-white text-american-red border-american-red/20 font-bold text-xs uppercase tracking-wider transition-all shadow-sm hover:bg-american-red/5"
+              title="Clear all data and start new"
+            >
+              <RotateCcw size={16} />
+              <span className="hidden md:inline">Start New</span>
+            </button>
+            <button 
+              onClick={() => setIsFullView(!isFullView)}
+              className={cn(
+                "flex items-center gap-2 px-6 py-3.5 rounded-2xl border font-bold text-xs uppercase tracking-wider transition-all shadow-sm",
+                isFullView ? "bg-american-blue text-white border-american-blue" : "bg-white text-american-blue border-[#E5E5E5] hover:border-american-blue"
+              )}
+            >
+              <MapIcon size={16} />
+              {isFullView ? "Wizard View" : "Full Review"}
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-3xl p-8 shadow-sm border border-[#E5E5E5]">
@@ -1275,22 +1440,41 @@ export default function Estimator({
               )}
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-3">
+            <div className="mt-8 grid grid-cols-3 gap-3">
               <button 
                 onClick={() => setShowInvoice(true)}
-                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
+                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-[10px] font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
               >
-                <Download size={16} />
+                <Download size={14} />
                 Invoice
               </button>
               <button 
-                onClick={() => setShowDiagram(true)}
-                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
+                onClick={() => setShowSupplierForm(true)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-[10px] font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
               >
-                <Map size={16} />
+                <Package size={14} />
+                Order
+              </button>
+              <button 
+                onClick={() => setShowDiagram(true)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-[10px] font-bold text-white hover:bg-white/20 transition-colors border border-white/10"
+              >
+                <MapIcon size={14} />
                 Diagram
               </button>
             </div>
+
+            {showMap && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 bg-american-blue/20 backdrop-blur-md">
+                <div className="w-full h-full max-w-7xl bg-white rounded-[40px] shadow-2xl overflow-hidden border-8 border-white relative">
+                  <SiteMeasurement 
+                    estimate={estimate} 
+                    setEstimate={setEstimate} 
+                    onClose={() => setShowMap(false)} 
+                  />
+                </div>
+              </div>
+            )}
 
             {showSuccess && (
               <motion.div 
@@ -1409,6 +1593,57 @@ export default function Estimator({
         </div>
       </div>
     </div>
+
+      {/* Supplier Order Form Modal */}
+      <AnimatePresence>
+        {showSupplierForm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSupplierForm(false)}
+              className="absolute inset-0 bg-[#1A1A1A]/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-[#F0F0F0] rounded-3xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col order-form-print-area"
+            >
+              <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-blue text-white shadow-lg relative z-10">
+                <div className="flex items-center gap-3">
+                  <Package size={24} />
+                  <h2 className="text-xl font-bold uppercase tracking-tight">Supplier Order Form</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => {
+                      document.body.classList.add('printing-supplier-form');
+                      window.print();
+                      setTimeout(() => document.body.classList.remove('printing-supplier-form'), 500);
+                    }} 
+                    className="p-2 hover:bg-white/10 rounded-xl transition-all"
+                  >
+                    <Printer size={20} />
+                  </button>
+                  <button onClick={() => setShowSupplierForm(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                <SupplierOrderForm 
+                  estimate={estimate}
+                  materials={materials}
+                  laborRates={globalLaborRates}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Invoice Modal */}
       <AnimatePresence>
@@ -1562,7 +1797,7 @@ export default function Estimator({
             >
               <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-red text-white">
                 <div className="flex items-center gap-3">
-                  <Map size={24} />
+                  <MapIcon size={24} />
                   <h2 className="text-xl font-bold">Fence Layout Diagram</h2>
                 </div>
                 <button onClick={() => setShowDiagram(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
@@ -1599,33 +1834,73 @@ export default function Estimator({
                       
                       const maxSpacing = (defaultStyle.type === 'Wood' && (estimate.defaultHeight || 6) === 8) ? 6 : 8;
                       
-                      // 1. Calculate raw points based on directions
-                      const rawPoints: [number, number][] = [[0, 0]];
-                      let currentX = 0;
-                      let currentY = 0;
-                      const directions = [
-                        [1, 0],   // Right
-                        [0, 1],   // Down
-                        [-1, 0],  // Left
-                        [0, -1]   // Up
-                      ];
-                      
-                      const isClosedFour = runsData.length === 4;
+                      // 1. Calculate raw points based on directions or map coordinates
+                      const rawPoints: [number, number][] = [];
+                      const hasMapPoints = runsData.some(r => r.points && r.points.length >= 2);
 
-                      runsData.forEach((run, i) => {
-                        if (isClosedFour && i === 3) {
-                          // For the 4th run, force back to start (0,0) to close the shape
-                          // This handles non-perfect squares by making the 4th run connect at an angle
-                          currentX = 0;
-                          currentY = 0;
-                        } else {
-                          const dir = directions[i % 4];
-                          const length = Math.max(run.linearFeet, 1); // Prevent 0-length breaking
-                          currentX += dir[0] * length;
-                          currentY += dir[1] * length;
+                      if (hasMapPoints) {
+                        const firstPt = runsData.find(r => r.points && r.points.length >= 2)?.points![0];
+                        if (firstPt) {
+                          // We project lat/lng to a local Cartesian grid in FEET
+                          // One degree of latitude is ~364,000 feet
+                          // One degree of longitude is ~364,000 * cos(lat) feet
+                          const latScale = 364000;
+                          const lngScale = 364000 * Math.cos(firstPt.lat * Math.PI / 180);
+
+                          rawPoints.push([0, 0]);
+                          let currentLat = firstPt.lat;
+                          let currentLng = firstPt.lng;
+
+                          runsData.forEach((run, i) => {
+                            if (run.points && run.points.length >= 2) {
+                              const endPt = run.points[run.points.length - 1];
+                              const dx = (endPt.lng - currentLng) * lngScale;
+                              const dy = (endPt.lat - currentLat) * -latScale; // Y is down in SVG usually, but here we calculate relative
+                              
+                              const prevX = rawPoints[rawPoints.length - 1][0];
+                              const prevY = rawPoints[rawPoints.length - 1][1];
+                              
+                              rawPoints.push([prevX + dx, prevY + dy]);
+                              
+                              currentLat = endPt.lat;
+                              currentLng = endPt.lng;
+                            } else {
+                              // Fallback for runs without points? Just continue in a direction
+                              const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+                              const dir = directions[i % 4];
+                              const length = run.linearFeet || 0;
+                              const prevX = rawPoints[rawPoints.length - 1][0];
+                              const prevY = rawPoints[rawPoints.length - 1][1];
+                              rawPoints.push([prevX + dir[0] * length, prevY + dir[1] * length]);
+                            }
+                          });
                         }
-                        rawPoints.push([currentX, currentY]);
-                      });
+                      } else {
+                        rawPoints.push([0, 0]);
+                        let currentX = 0;
+                        let currentY = 0;
+                        const directions = [
+                          [1, 0],   // Right
+                          [0, 1],   // Down
+                          [-1, 0],  // Left
+                          [0, -1]   // Up
+                        ];
+                        
+                        const isClosedFour = runsData.length === 4;
+
+                        runsData.forEach((run, i) => {
+                          if (isClosedFour && i === 3) {
+                            currentX = 0;
+                            currentY = 0;
+                          } else {
+                            const dir = directions[i % 4];
+                            const length = Math.max(run.linearFeet, 1);
+                            currentX += dir[0] * length;
+                            currentY += dir[1] * length;
+                          }
+                          rawPoints.push([currentX, currentY]);
+                        });
+                      }
                       
                       // 2. Calculate bounding box
                       const xs = rawPoints.map(p => p[0]);

@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "Estimate": {
+      "title": "Estimate",
+      "description": "A fence project estimate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerAddress": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "runs": { "type": "array" },
+        "laborRates": { "type": "object" },
+        "markupPercentage": { "type": "number" },
+        "taxPercentage": { "type": "number" },
+        "wastePercentage": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "userId"]
+    },
+    "BankAccount": {
+      "title": "Bank Account",
+      "description": "Linked bank account information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Checking", "Savings", "Credit Card"] },
+        "balance": { "type": "number" },
+        "institutionName": { "type": "string" },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "userId"]
+    },
+    "BankTransaction": {
+      "title": "Bank Transaction",
+      "description": "Financial transaction synced from bank or entered manually",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "accountId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["Income", "Expense"] },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Cleared", "Reconciled"] },
+        "estimateId": { "type": "string" },
+        "receiptUrl": { "type": "string" },
+        "receiptName": { "type": "string" },
+        "notes": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "accountId", "date", "amount", "type", "userId"]
+    },
+    "InventoryStock": {
+      "title": "Inventory Stock",
+      "description": "Track stock levels for materials",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "materialId": { "type": "string" },
+        "quantityInStock": { "type": "number" },
+        "minStockLevel": { "type": "number" },
+        "averageCost": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "materialId", "userId"]
+    },
+    "JournalEntry": {
+      "title": "Journal Entry",
+      "description": "Manual accounting adjustment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "lines": { "type": "array" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "date", "userId"]
+    }
+  },
+  "firestore": {
+    "/estimates/{estimateId}": {
+      "schema": "Estimate",
+      "description": "Collection of fence estimates"
+    },
+    "/bankAccounts/{accountId}": {
+      "schema": "BankAccount",
+      "description": "User bank accounts"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "BankTransaction",
+      "description": "Bank and manual transactions"
+    },
+    "/inventory/{inventoryId}": {
+      "schema": "InventoryStock",
+      "description": "Material inventory tracking"
+    },
+    "/journalEntries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Accounting journal entries"
+    }
+  }
+}

@@ -103,6 +103,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const [selectedQuoteId, setSelectedQuoteId] = React.useState<string | null>(null);
   const [selectedHistoryMaterialId, setSelectedHistoryMaterialId] = React.useState<string | null>(null);
   const [selectedHistorySupplier, setSelectedHistorySupplier] = React.useState<string | null>(null);
+  const [compareSearch, setCompareSearch] = React.useState("");
   const [toast, setToast] = React.useState<string | null>(null);
 
   const selectedQuote = React.useMemo(() => 
@@ -610,23 +611,41 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                 className="space-y-6"
               >
                 <div className="bg-white rounded-[40px] shadow-xl border-2 border-american-blue/5 p-8">
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="h-12 w-12 rounded-2xl bg-american-red text-white flex items-center justify-center shadow-lg">
-                      <Scale size={24} />
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-8 border-b-2 border-[#F5F5F7]">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-american-red text-white flex items-center justify-center shadow-lg">
+                        <Scale size={24} />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Cross-Supplier Comparison</h2>
+                        <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Side-by-Side Market Analysis</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Cross-Supplier Comparison</h2>
-                      <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Side-by-Side Market Analysis</p>
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-american-blue/40" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Search materials to compare..." 
+                        value={compareSearch} 
+                        onChange={(e) => setCompareSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-[#F5F5F7] border-2 border-transparent focus:border-american-blue/20 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-american-blue/5 transition-all outline-none"
+                      />
                     </div>
                   </div>
 
                   <div className="space-y-8">
-                    {compareData.length === 0 ? (
+                    {compareData.filter(item => 
+                      !compareSearch || item.materialName.toLowerCase().includes(compareSearch.toLowerCase())
+                    ).length === 0 ? (
                       <div className="py-20 text-center">
-                        <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Upload quotes with matching materials to compare</p>
+                        <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
+                          {compareSearch ? "No matching materials found in comparison" : "Upload quotes with matching materials to compare"}
+                        </p>
                       </div>
                     ) : (
-                      compareData.map((item) => (
+                      compareData.filter(item => 
+                        !compareSearch || item.materialName.toLowerCase().includes(compareSearch.toLowerCase())
+                      ).map((item) => (
                         <div key={item.id} className="space-y-4">
                           <div className="flex justify-between items-end">
                             <h4 className="text-sm font-black text-american-blue uppercase tracking-tight">{item.materialName}</h4>

@@ -103,45 +103,6 @@ input[type=number] {
 
   /* Diagram specifically needs landscape and fixed centering */
   .printing-diagram {
-    @page {
-      size: landscape;
-      margin: 0;
-    }
-
-    /* Hide UI elements but keep the container of the diagram */
-    header, aside, footer, nav, .print-hidden {
-      display: none !important;
-    }
-    
-    #print-area {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: white !important;
-      z-index: 99999 !important;
-      display: flex !important;
-      align-items: center;
-      justify-content: center;
-      visibility: visible !important;
-      overflow: hidden !important;
-    }
-
-    body, html, #root, main {
-      overflow: hidden !important;
-      height: 100vh !important;
-      width: 100vw !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-
-    #print-area * {
-      visibility: visible !important;
-    }
-
     /* Ensure the SVG itself behaves well in print */
     #print-area svg {
       width: 96% !important;
@@ -162,6 +123,46 @@ input[type=number] {
       font-weight: 800;
       color: #002868;
       visibility: visible !important;
+    }
+  }
+
+  /* Supplier Order Form specific print styles */
+  .printing-supplier-form {
+    header, aside, footer, nav, .print-hidden {
+      display: none !important;
+    }
+
+    .order-form-print-area {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: auto !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+      z-index: 99999 !important;
+      display: block !important;
+      overflow: visible !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+    }
+
+    /* Hide the header/close buttons of the modal during print */
+    .order-form-print-area > div:first-child {
+      display: none !important;
+    }
+
+    .order-form-print-area > div:last-child {
+      overflow: visible !important;
+      padding: 0 !important;
+    }
+
+    body, html, #root, main {
+      overflow: visible !important;
+      height: auto !important;
+      width: auto !important;
     }
   }
 
