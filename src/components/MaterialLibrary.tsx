@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Plus, Filter, MoreVertical, Edit2, Trash2, 
   Package, Box, Layers, HardHat, Hammer, Ruler, 
-  Grid, List as ListIcon, ImageIcon, RotateCcw
+  Grid, List as ListIcon, ImageIcon, RotateCcw,
+  CheckCircle2, XCircle, AlertCircle
 } from 'lucide-react';
 import { MATERIALS } from '../constants';
 import { MaterialCategory, MaterialItem } from '../types';
@@ -24,6 +25,37 @@ const CATEGORY_ICONS: Record<string, any> = {
   'Labor': HardHat,
   'PostCap': ImageIcon,
 };
+
+// Price Freshness Logic
+const getPriceStatus = (lastUpdate?: string) => {
+  if (!lastUpdate) return 'preloaded' as const;
+  
+  const updateDate = new Date(lastUpdate);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - updateDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 30) return 'fresh' as const;
+  return 'stale' as const;
+};
+
+function PriceIndicator({ status }: { status: 'fresh' | 'stale' | 'preloaded' }) {
+  if (status === 'fresh') {
+    return <div className="flex items-center gap-1.5" title="Price updated within last 30 days">
+      <CheckCircle2 size={12} className="text-emerald-500" />
+      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Current</span>
+    </div>;
+  }
+  if (status === 'stale') {
+    return <div className="flex items-center gap-1.5" title="Price updated over 30 days ago">
+      <CheckCircle2 size={12} className="text-amber-500" />
+      <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Stale</span>
+    </div>;
+  }
+  return <div className="flex items-center gap-1.5" title="Last updated was preloaded price">
+    <XCircle size={12} className="text-american-red" />
+    <span className="text-[9px] font-black text-american-red uppercase tracking-widest">Legacy</span>
+  </div>;
+}
 
 interface MaterialLibraryProps {
   materials: MaterialItem[];
@@ -78,10 +110,15 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = editingMaterial ? editingMaterial.id : Math.random().toString(36).substr(2, 9);
+    
+    // Track price updates
+    const isPriceChanged = !editingMaterial || editingMaterial.cost !== formData.cost;
+    
     const materialData = {
       ...formData,
       id,
-      companyId: 'lonestarfence'
+      companyId: 'lonestarfence',
+      lastPriceUpdate: isPriceChanged ? new Date().toISOString() : editingMaterial?.lastPriceUpdate
     } as MaterialItem;
 
     if (user) {
@@ -93,9 +130,9 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
       }
     } else {
       if (editingMaterial) {
-        setMaterials(materials.map(m => m.id === editingMaterial.id ? materialData : m));
+        setMaterials(prev => prev.map(m => m.id === editingMaterial.id ? materialData : m));
       } else {
-        setMaterials([materialData, ...materials]);
+        setMaterials(prev => [materialData, ...prev]);
       }
     }
     setIsModalOpen(false);
@@ -238,7 +275,10 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                   )}
 
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#999999]">{item.category}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#999999]">{item.category}</span>
+                      <PriceIndicator status={getPriceStatus(item.lastPriceUpdate)} />
+                    </div>
                     <h3 className="text-lg font-bold text-[#1A1A1A] leading-tight line-clamp-2">{item.name}</h3>
                   </div>
 
@@ -293,7 +333,10 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                             <Package size={20} />
                           </div>
                         )}
-                        <span className="font-bold text-[#1A1A1A]">{item.name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[#1A1A1A]">{item.name}</span>
+                          <PriceIndicator status={getPriceStatus(item.lastPriceUpdate)} />
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">

@@ -10,6 +10,7 @@ export interface MaterialItem {
   description?: string;
   imageUrl?: string;
   aliases?: string[]; // Remembered naming conventions from supplier quotes
+  lastPriceUpdate?: string; // ISO string 
 }
 
 export interface FenceStyle {

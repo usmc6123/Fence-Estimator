@@ -138,7 +138,10 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         itemsToUpdate.forEach(item => {
           const mat = materials.find(m => m.id === item.mappedMaterialId);
           if (mat) {
-            batch.update(doc(db, 'materials', mat.id), { cost: item.unitPrice });
+            batch.update(doc(db, 'materials', mat.id), { 
+              cost: item.unitPrice,
+              lastPriceUpdate: new Date().toISOString()
+            });
           }
         });
         await batch.commit();
@@ -149,7 +152,11 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     } else {
       setMaterials(prev => prev.map(m => {
         const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
-        return update ? { ...m, cost: update.unitPrice } : m;
+        return update ? { 
+          ...m, 
+          cost: update.unitPrice,
+          lastPriceUpdate: new Date().toISOString()
+        } : m;
       }));
     }
     showToast(`Synchronized ${itemsToUpdate.length} prices from quote`);
@@ -253,14 +260,21 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     const mat = materials.find(m => m.id === materialId);
     if (user) {
       try {
-        await updateDoc(doc(db, 'materials', materialId), { cost: newPrice });
+        await updateDoc(doc(db, 'materials', materialId), { 
+          cost: newPrice,
+          lastPriceUpdate: new Date().toISOString()
+        });
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `materials/${materialId}`);
         return;
       }
     } else {
       setMaterials(prev => prev.map(m => 
-        m.id === materialId ? { ...m, cost: newPrice } : m
+        m.id === materialId ? { 
+          ...m, 
+          cost: newPrice,
+          lastPriceUpdate: new Date().toISOString()
+        } : m
       ));
     }
     showToast(`Updated ${mat?.name || 'Material'} price to ${formatCurrency(newPrice)}`);
