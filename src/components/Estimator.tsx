@@ -611,22 +611,61 @@ export default function Estimator({
                 <div className="space-y-6">
                   {estimate.runs?.map((run, idx) => {
                     const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || FENCE_STYLES[0];
+                    const isNewSection = idx === 0 || run.isStartOfNewSection;
+                    
                     return (
-                      <div key={run.id} className="p-8 rounded-[32px] bg-[#F9F9FB] border-2 border-[#F0F0F0] shadow-sm hover:shadow-md transition-all relative group overflow-hidden">
+                      <React.Fragment key={run.id}>
+                        {isNewSection && (
+                          <div className={cn(
+                            "flex items-center gap-4 py-4",
+                            idx > 0 && "mt-8"
+                          )}>
+                            <div className="h-[2px] flex-1 bg-american-blue/5" />
+                            <div className="flex items-center gap-2">
+                              <Layers size={14} className="text-american-blue" />
+                              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-american-blue">Fence Line #{estimate.runs!.slice(0, idx + 1).filter(r => r.isStartOfNewSection || estimate.runs!.indexOf(r) === 0).length}</h3>
+                            </div>
+                            <div className="h-[2px] flex-1 bg-american-blue/5" />
+                          </div>
+                        )}
+                        <div className="p-8 rounded-[32px] bg-[#F9F9FB] border-2 border-[#F0F0F0] shadow-sm hover:shadow-md transition-all relative group overflow-hidden">
                         <div className="flex flex-col lg:flex-row gap-8">
                           {/* Run Identifier & Length */}
                           <div className="lg:w-1/3 space-y-6">
                             <div className="flex items-center justify-between mb-2">
                               <span className="px-3 py-1 rounded-full bg-american-blue/10 text-american-blue text-[10px] font-black uppercase tracking-widest">Section {idx + 1}</span>
-                              <button 
-                                onClick={() => {
-                                  const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                                  setEstimate({ ...estimate, runs: newRuns });
-                                }}
-                                className="text-american-red hover:bg-american-red/10 p-2 rounded-xl transition-all"
-                              >
-                                <Trash2 size={18} />
-                              </button>
+                              <div className="flex items-center gap-2">
+                                {idx > 0 && (
+                                  <button
+                                    onClick={() => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].isStartOfNewSection = !newRuns[idx].isStartOfNewSection;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ring-1",
+                                      run.isStartOfNewSection 
+                                        ? "bg-emerald-600 text-white ring-emerald-500 shadow-sm" 
+                                        : "bg-white text-american-blue ring-american-blue/20 hover:bg-american-blue/5"
+                                    )}
+                                    title={run.isStartOfNewSection ? "This run starts a separate section" : "This run is connected to the previous run"}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <Navigation size={10} className={run.isStartOfNewSection ? "" : "rotate-180"} />
+                                      {run.isStartOfNewSection ? "New Line" : "Connected"}
+                                    </div>
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => {
+                                    const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="text-american-red hover:bg-american-red/10 p-2 rounded-xl transition-all"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
                             </div>
                             <div className="space-y-4">
                               <div className="space-y-2">
@@ -1080,7 +1119,8 @@ export default function Estimator({
                             ))}
                           </div>
                         </div>
-                      </div>
+                        </div>
+                      </React.Fragment>
                     );
                   })}
                   {(!estimate.runs || estimate.runs.length === 0) && (

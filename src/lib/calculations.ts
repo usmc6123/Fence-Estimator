@@ -552,14 +552,24 @@ export function calculateDetailedTakeOff(
     const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
     const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
     
+    const nextRun = runs[idx + 1];
+    const isLastOfSection = !nextRun || nextRun.isStartOfNewSection;
+    const isFirstOfSection = idx === 0 || run.isStartOfNewSection;
+
     const runLinePosts = Math.max(0, Math.ceil(runLF / maxSpacing) - 1);
-    const runCornerPosts = (idx === runs.length - 1) ? 0 : 1;
-    const startEndPosts = (idx === 0 ? 1 : 0) + (idx === runs.length - 1 ? 1 : 0);
+    const runCornerPosts = isLastOfSection ? 0 : 1;
+    const startEndPosts = (isFirstOfSection ? 1 : 0) + (isLastOfSection ? 1 : 0);
     const runPostCount = runLinePosts + runCornerPosts + startEndPosts;
     
     let gatePostCountForRun = 0;
     if (run.gateDetails) {
-      gatePostCountForRun = run.gateDetails.length * 2;
+      if (runStyle.type === 'Metal') {
+        run.gateDetails.forEach(gate => {
+          gatePostCountForRun += (gate.type === 'Double' ? 2 : 1);
+        });
+      } else {
+        gatePostCountForRun = run.gateDetails.length * 2;
+      }
     }
 
     const stdPostCount = (runStyle.type === 'Pipe' || runStyle.type === 'Metal')
@@ -604,7 +614,7 @@ export function calculateDetailedTakeOff(
           
           run.gateDetails?.forEach(gate => {
             if (gate.type === 'Double') driveGatePostCount += 2;
-            else singleGatePostCount += 2;
+            else singleGatePostCount += 1;
           });
 
           // Single Gate Posts (2x2)

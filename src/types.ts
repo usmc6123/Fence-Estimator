@@ -70,6 +70,7 @@ export interface FenceRun {
   demoType?: 'Wood' | 'Chain Link' | 'Metal';
   // Existing and Stain options
   isExistingFence?: boolean;
+  isStartOfNewSection?: boolean;
   needsStain?: boolean;
   stainSides?: 'One Side' | 'Both Sides';
 }
