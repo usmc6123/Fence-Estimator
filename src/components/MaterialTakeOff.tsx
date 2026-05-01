@@ -77,9 +77,9 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       const newMaterial: MaterialItem = {
         id: targetId,
         name: newItem.name,
-        unit: newItem.unit,
+        unit: newItem.unit as any,
         cost: cost,
-        category: newItem.category,
+        category: newItem.category as any,
         description: 'Manually added to take-off'
       };
       setMaterials(prev => [...prev, newMaterial]);
@@ -122,13 +122,15 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       const screwId = isWoodStyle ? 'h-lag-14' : 'm-screw-self-tap';
       const screw = materials.find(m => m.id === screwId);
 
+      const skipHardware = !isWoodStyle && (estimate.ironInstallType === 'Weld up');
+
       if (cap) addItemToDossier(cap.id, qty);
       if (concrete) {
         const bagsPerPost = estimate.concreteType === 'Quickset' ? 2 : (estimate.concreteType === 'Maximizer' ? 0.7 : 0.7);
         addItemToDossier(concrete.id, Math.ceil(qty * bagsPerPost));
       }
-      if (bracket) addItemToDossier(bracket.id, qty * 4);
-      if (screw) addItemToDossier(screw.id, qty * 4);
+      if (bracket && !skipHardware) addItemToDossier(bracket.id, qty * 4);
+      if (screw && !skipHardware) addItemToDossier(screw.id, qty * 4);
     } else if (isBracket) {
       const isWoodBracket = idLower.includes('bracket-w') || idLower.includes('hinge-wood');
       const screwId = isWoodBracket ? 'h-lag-14' : 'm-screw-self-tap';

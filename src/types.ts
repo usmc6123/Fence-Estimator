@@ -214,6 +214,7 @@ export interface BankTransaction {
   category: string;
   status: TransactionStatus;
   estimateId?: string; // Link to an estimate for job costing
+  ref?: string;
   receiptUrl?: string;
   receiptName?: string;
   notes?: string;

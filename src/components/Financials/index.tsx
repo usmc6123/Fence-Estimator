@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { BankAccount, BankTransaction, InventoryStock, JournalEntry } from '../../types';
+import { BankAccount, BankTransaction, InventoryStock, JournalEntry, SavedEstimate } from '../../types';
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { 
   collection, 
@@ -384,14 +384,14 @@ function BankingView({ accounts }: { accounts: BankAccount[] }) {
   );
 }
 
-function TransactionsView({ transactions, savedEstimates, onLink }: { transactions: BankTransaction[], savedEstimates: any[], onLink: (tid: string, eid: string) => void }) {
+function TransactionsView({ transactions, savedEstimates, onLink }: { transactions: BankTransaction[], savedEstimates: SavedEstimate[], onLink: (tid: string, eid: string) => void }) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [linkingTxnId, setLinkingTxnId] = React.useState<string | null>(null);
 
   const displayTransactions = transactions.length > 0 ? transactions : [
-    { id: 'm1', date: 'April 20, 2026', description: 'Home Depot - Materials', type: 'Expense', amount: 1250.50, category: 'Cost of Goods Sold', status: 'Reconciled', ref: '#TXN-98231', estimateId: 'EST-1' },
-    { id: 'm2', date: 'April 19, 2026', description: 'Payment - Smith Residence', type: 'Income', amount: 4500.00, category: 'Project Revenue', status: 'Reconciled', ref: '#TXN-98232', estimateId: 'EST-2' },
-  ] as any[];
+    { id: 'm1', date: 'April 20, 2026', accountId: 'mock-1', userId: 'mock', description: 'Home Depot - Materials', type: 'Expense' as const, amount: 1250.50, category: 'Cost of Goods Sold', status: 'Reconciled' as const, ref: '#TXN-98231', estimateId: 'EST-1' },
+    { id: 'm2', date: 'April 19, 2026', accountId: 'mock-1', userId: 'mock', description: 'Payment - Smith Residence', type: 'Income' as const, amount: 4500.00, category: 'Project Revenue', status: 'Reconciled' as const, ref: '#TXN-98232', estimateId: 'EST-2' },
+  ] as BankTransaction[];
   
   return (
     <div className="bg-white rounded-3xl border-2 border-american-blue/5 shadow-sm overflow-hidden">
@@ -549,7 +549,7 @@ function TransactionsView({ transactions, savedEstimates, onLink }: { transactio
   );
 }
 
-function ReportsView() {
+function ReportsView({ transactions }: { transactions: BankTransaction[] }) {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div className="bg-white rounded-3xl border-2 border-american-blue/5 shadow-sm p-8">
@@ -659,7 +659,7 @@ function ReportsView() {
   );
 }
 
-function InventoryView() {
+function InventoryView({ inventory }: { inventory: any[] }) {
   const [allocatingItem, setAllocatingItem] = React.useState<any | null>(null);
 
   const inventoryItems = [

@@ -843,33 +843,36 @@ export function calculateDetailedTakeOff(
 
       // Add mounting brackets and screws for Metal (Wrought Iron)
       if (runStyle.type === 'Metal') {
-        const bracketMat = materials.find(m => m.id === 'm-bracket')!;
-        const bracketQty = panelQty * 4;
-        const bracketCost = bracketQty * bracketMat.cost;
-        runFenceMaterialCost += bracketCost;
-        runItems.push({
-          id: bracketMat.id,
-          name: bracketMat.name,
-          qty: bracketQty,
-          unit: bracketMat.unit,
-          unitCost: bracketMat.cost,
-          total: bracketCost,
-          category: 'Hardware'
-        });
+        const installType = run.ironInstallType || estimate.ironInstallType || 'Bolt up';
+        if (installType !== 'Weld up') {
+          const bracketMat = materials.find(m => m.id === 'm-bracket')!;
+          const bracketQty = panelQty * 4;
+          const bracketCost = bracketQty * bracketMat.cost;
+          runFenceMaterialCost += bracketCost;
+          runItems.push({
+            id: bracketMat.id,
+            name: bracketMat.name,
+            qty: bracketQty,
+            unit: bracketMat.unit,
+            unitCost: bracketMat.cost,
+            total: bracketCost,
+            category: 'Hardware'
+          });
 
-        const screwMat = materials.find(m => m.id === 'm-screw-self-tap')!;
-        const screwQty = bracketQty; // 1 screw per bracket
-        const screwCost = screwQty * screwMat.cost;
-        runFenceMaterialCost += screwCost;
-        runItems.push({
-          id: screwMat.id,
-          name: screwMat.name,
-          qty: screwQty,
-          unit: screwMat.unit,
-          unitCost: screwMat.cost,
-          total: screwCost,
-          category: 'Hardware'
-        });
+          const screwMat = materials.find(m => m.id === 'm-screw-self-tap')!;
+          const screwQty = bracketQty; // 1 screw per bracket
+          const screwCost = screwQty * screwMat.cost;
+          runFenceMaterialCost += screwCost;
+          runItems.push({
+            id: screwMat.id,
+            name: screwMat.name,
+            qty: screwQty,
+            unit: screwMat.unit,
+            unitCost: screwMat.cost,
+            total: screwCost,
+            category: 'Hardware'
+          });
+        }
       }
 
       // Add visual style surcharge if > 0 (as a separate item)

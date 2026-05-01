@@ -88,6 +88,7 @@ export default function Estimator({
       markup: detailedData.totals.markup,
       tax: detailedData.totals.tax,
       total: detailedData.totals.grandTotal,
+      overallPricePerFoot: lf > 0 ? detailedData.totals.grandTotal / lf : 0,
       runBreakdown,
       lf,
       postCount,
@@ -1388,8 +1389,18 @@ export default function Estimator({
             </div>
             
             <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-white/60 mb-2">Estimated Total</h2>
-            <div className="text-5xl font-bold tracking-tighter mb-8">
+            <div className="text-5xl font-bold tracking-tighter mb-8 bg-clip-text">
               {formatCurrency(results.total)}
+            </div>
+
+            <div className="flex items-center gap-2 mb-8 -mt-6">
+              <div className="px-3 py-1 rounded-lg bg-american-red text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-american-red/20">
+                {formatCurrency(results.overallPricePerFoot)} / ft
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[8px] font-bold text-white/40 uppercase tracking-[0.2em] leading-none">Project</span>
+                <span className="text-[10px] font-black text-white uppercase tracking-wider leading-none">Average Cost</span>
+              </div>
             </div>
 
             <div className="space-y-4 border-t border-white/10 pt-6">
@@ -1416,6 +1427,11 @@ export default function Estimator({
               <div className="flex justify-between text-sm">
                 <span className="text-[#999999]">Tax (Materials Only)</span>
                 <span className="font-mono">{formatCurrency(results.tax)}</span>
+              </div>
+              
+              <div className="flex justify-between pt-4 mt-4 border-t border-white/10 text-american-red font-black">
+                <span className="text-[10px] uppercase tracking-widest">Overall Price Per Foot</span>
+                <span className="text-lg tabular-nums">{formatCurrency(results.overallPricePerFoot)}/ft</span>
               </div>
 
               {results.runBreakdown.length > 0 && (

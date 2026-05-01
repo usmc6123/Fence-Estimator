@@ -755,7 +755,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
                   {historyData.filter(h => 
                     (!selectedHistoryMaterialId || h.materialName.toLowerCase().includes(selectedHistoryMaterialId.toLowerCase())) &&
-                    (!selectedHistorySupplier || h.supplierName === selectedHistorySupplier)
+                    (!selectedHistorySupplier || h.entries.some(e => e.supplierName === selectedHistorySupplier))
                   ).length === 0 ? (
                     <div className="py-20 text-center">
                       <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
