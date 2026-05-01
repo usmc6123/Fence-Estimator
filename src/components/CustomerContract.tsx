@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates } from '../types';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
 import { COMPANY_INFO, FENCE_STYLES } from '../constants';
@@ -11,6 +11,7 @@ interface CustomerContractProps {
   estimate: Partial<Estimate>;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  quotes: SupplierQuote[];
   aiContractScope: string | null;
   setAiContractScope: (scope: string | null) => void;
 }
@@ -19,10 +20,38 @@ export default function CustomerContract({
   estimate, 
   materials, 
   laborRates,
+  quotes,
   aiContractScope,
   setAiContractScope
 }: CustomerContractProps) {
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
+  // Resolve materials based on chosen strategy
+  const pricingStrategy = estimate.pricingStrategy || 'best';
+  const selectedSupplier = estimate.selectedSupplier || '';
+
+  let resolvedMaterials = materials;
+  if (pricingStrategy === 'supplier' && selectedSupplier) {
+    const supplierQuotes = quotes
+      .filter(q => q.supplierName === selectedSupplier)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    resolvedMaterials = materials.map(m => {
+      let quotedPrice: number | undefined;
+      for (const quote of supplierQuotes) {
+        const item = quote.items.find(i => i.mappedMaterialId === m.id);
+        if (item) {
+          quotedPrice = item.unitPrice;
+          break;
+        }
+      }
+
+      if (quotedPrice !== undefined) {
+        return { ...m, cost: quotedPrice };
+      }
+      return m;
+    });
+  }
+
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
   const [isGenerating, setIsGenerating] = useState(false);
   
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
@@ -75,9 +104,8 @@ export default function CustomerContract({
 
   const totalFenceCharge = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge, 0);
   const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
-  const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
-
   const grandTotal = data.totals.grandTotal;
+  const globalPricePerFoot = totalNetLF > 0 ? grandTotal / totalNetLF : 0;
 
   const handlePrint = () => {
     window.print();

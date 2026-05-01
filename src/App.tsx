@@ -350,6 +350,7 @@ export default function App() {
           estimate={estimate} 
           materials={materials} 
           laborRates={laborRates}
+          quotes={quotes}
           aiContractScope={aiContractScope}
           setAiContractScope={setAiContractScope}
         />
