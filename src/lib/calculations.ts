@@ -12,6 +12,19 @@ export interface TakeOffItem {
   formula?: string;
 }
 
+export interface StickCut {
+  id: number;
+  cuts: number[];
+  leftover: number;
+}
+
+export interface PipeCuttingGuide {
+  stickLength: number;
+  sticks: StickCut[];
+  totalWaste: number;
+  efficiency: number;
+}
+
 export interface RunTakeOff {
   runId: string;
   runName: string;
@@ -28,6 +41,7 @@ export interface RunTakeOff {
   stainSides?: string;
   picketStyle?: string;
   items: TakeOffItem[];
+  pipeCuttingGuide?: PipeCuttingGuide;
   fenceMaterialCost: number;
   fenceLaborCost: number;
   gateMaterialCost: number;
@@ -45,6 +59,7 @@ export interface DetailedTakeOff {
   summary: TakeOffItem[];
   manualSummary: TakeOffItem[];
   runs: RunTakeOff[];
+  pipeCuttingSummary?: PipeCuttingGuide;
   totals: {
     material: number;
     labor: number;
@@ -55,6 +70,44 @@ export interface DetailedTakeOff {
     tax: number;
     grandTotal: number;
   };
+}
+
+function calculateStickOptimization(requiredLengths: number[], stickLength: number): PipeCuttingGuide {
+  if (requiredLengths.length === 0) {
+    return { stickLength, sticks: [], totalWaste: 0, efficiency: 100 };
+  }
+
+  // Sort lengths descending for First Fit Decreasing
+  const sortedLengths = [...requiredLengths].sort((a, b) => b - a);
+  const sticks: StickCut[] = [];
+
+  sortedLengths.forEach(length => {
+    let placed = false;
+    // Try to find a stick with enough leftover room
+    for (const stick of sticks) {
+      if (stick.leftover >= length) {
+        stick.cuts.push(length);
+        stick.leftover -= length;
+        placed = true;
+        break;
+      }
+    }
+
+    // If not placed, start a new stick
+    if (!placed) {
+      sticks.push({
+        id: sticks.length + 1,
+        cuts: [length],
+        leftover: stickLength - length
+      });
+    }
+  });
+
+  const totalWaste = sticks.reduce((sum, s) => sum + s.leftover, 0);
+  const totalLengthUsed = sticks.length * stickLength;
+  const efficiency = totalLengthUsed > 0 ? ((totalLengthUsed - totalWaste) / totalLengthUsed) * 100 : 100;
+
+  return { stickLength, sticks, totalWaste, efficiency };
 }
 
 export function calculateDetailedTakeOff(
@@ -126,6 +179,8 @@ export function calculateDetailedTakeOff(
 
   const wasteFactor = 1 + (estimate.wastePercentage === undefined ? 10 : estimate.wastePercentage) / 100;
 
+  const allPipeSegments: number[] = [];
+  
   // Pass 1: Collect Wire and Paint Needs for Pipe Fences to calculate global roll aggregation
   const wireNeeds: Record<string, number> = {};
   let totalPaintLF = 0;
@@ -585,6 +640,10 @@ export function calculateDetailedTakeOff(
         } else if (runStyle.type === 'Pipe') {
           const postHeight = (run.height || 4) + 2;
           postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
+          // Collect for optimization
+          for (let i = 0; i < stdPostCount; i++) {
+            allPipeSegments.push(postHeight);
+          }
         } else if (runStyle.type === 'Metal') {
           const postHeight = (run.height || 4) + 2;
           postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
@@ -658,6 +717,10 @@ export function calculateDetailedTakeOff(
           const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`);
           
           if (gatePostMat) {
+            // Collect for optimization
+            for (let i = 0; i < gatePostCountForRun; i++) {
+              allPipeSegments.push(postHeight);
+            }
             const cost = gatePostCountForRun * gatePostMat.cost;
             runFenceMaterialCost += cost;
             runItems.push({
@@ -1080,6 +1143,15 @@ export function calculateDetailedTakeOff(
       // 2 3/8" top rail- equal to overall length of fence
       const railMat = materials.find(m => m.id === 'p-rail-238');
       if (railMat) {
+        // Collect for optimization (broken into stick lengths)
+        let rem = runLF;
+        while (rem > 32) {
+          allPipeSegments.push(32);
+          rem -= 32;
+        }
+        if (rem > 0.1) {
+          allPipeSegments.push(rem);
+        }
         const railCost = runLF * railMat.cost;
         runFenceMaterialCost += railCost;
         runItems.push({
@@ -1316,6 +1388,34 @@ export function calculateDetailedTakeOff(
     }
   }
 
+  // Pipe Stick Optimization
+  let pipeCuttingSummary: PipeCuttingGuide | undefined;
+  if (allPipeSegments.length > 0) {
+    pipeCuttingSummary = calculateStickOptimization(allPipeSegments, 32);
+    const stickMat = materials.find(m => m.id === 'p-stick-32');
+    if (stickMat && pipeCuttingSummary.sticks.length > 0) {
+      // Remove individual pipe items from summaryMap to replace with optimized sticks
+      Object.keys(summaryMap).forEach(key => {
+        if (key.includes('2-3/8" Sch 40 Top Rail Pipe') || key.includes('Sch 40 Pipe Post')) {
+          delete summaryMap[key];
+        }
+      });
+
+      // Add optimized sticks
+      const qty = pipeCuttingSummary.sticks.length;
+      const stickItem = {
+        id: stickMat.id,
+        name: stickMat.name,
+        qty,
+        unit: 'each',
+        unitCost: stickMat.cost,
+        total: qty * stickMat.cost,
+        category: 'Rail'
+      };
+      addToSummary(stickItem);
+    }
+  }
+
   const globalItems: TakeOffItem[] = [];
 
   globalItems.forEach(i => {
@@ -1363,6 +1463,7 @@ export function calculateDetailedTakeOff(
     summary: calculatedSummary,
     manualSummary: manualSummary,
     runs: detailedRuns,
+    pipeCuttingSummary,
     totals: {
       material: totalMaterial,
       labor: totalLabor,

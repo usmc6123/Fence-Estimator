@@ -117,6 +117,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'f-shims', name: 'Leveling Shims', category: 'Consumable', unit: 'box', cost: 9.50, description: 'For rail alignment', imageUrl: 'https://i.ebayimg.com/images/g/SAcAAOSwTc5b6aQR/s-l1200.jpg' },
   
   // Pipe Fence (No-Climb)
+  { id: 'p-stick-32', name: '2-3/8" x 32\' Sch 40 Pipe Stick', category: 'Rail', unit: 'each', cost: 219.20, description: 'Standard 32ft stick for cutting posts and rails' },
   { id: 'p-rail-238', name: '2-3/8" Sch 40 Top Rail Pipe', category: 'Rail', unit: 'lf', cost: 6.85, description: 'Structural galvanized pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
   { id: 'p-post-238-6', name: '2-3/8" x 6\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 30.00, description: 'Pipe for 4ft fence (+2ft in ground)' },
   { id: 'p-post-238-7', name: '2-3/8" x 7\' Sch 40 Pipe Post', category: 'Post', unit: 'each', cost: 36.00, description: 'Pipe for 5ft fence (+2ft in ground)' },
@@ -188,6 +189,8 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   includeStain: false,
   markupPercentage: 20,
   taxPercentage: 8.25,
+  pricingStrategy: 'best',
+  selectedSupplier: '',
   manualQuantities: {},
   manualPrices: {},
   woodType: 'PT Pine',

@@ -299,6 +299,7 @@ export default function App() {
           materials={materials} 
           laborRates={laborRates} 
           estimate={estimate} 
+          quotes={quotes}
           setEstimate={setEstimate}
           savedEstimates={savedEstimates}
           setSavedEstimates={setSavedEstimates}

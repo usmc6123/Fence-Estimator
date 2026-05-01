@@ -25,8 +25,17 @@ interface MaterialTakeOffProps {
 export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
-  const [pricingStrategy, setPricingStrategy] = React.useState<'best' | 'supplier'>('best');
-  const [selectedSupplier, setSelectedSupplier] = React.useState<string>('');
+  
+  const pricingStrategy = estimate.pricingStrategy || 'best';
+  const selectedSupplier = estimate.selectedSupplier || '';
+
+  const setPricingStrategy = (strategy: 'best' | 'supplier') => {
+    setEstimate({ ...estimate, pricingStrategy: strategy });
+  };
+
+  const setSelectedSupplier = (supplier: string) => {
+    setEstimate({ ...estimate, selectedSupplier: supplier });
+  };
   
   const [newItem, setNewItem] = React.useState({
     name: '',
@@ -779,6 +788,70 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
               </table>
             </div>
           </div>
+
+          {/* Pipe Cutting Guide */}
+          {data.pipeCuttingSummary && data.pipeCuttingSummary.sticks.length > 0 && (
+            <div className="pt-12 border-t-4 border-american-blue/10 space-y-8 takeoff-card">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-american-blue text-white flex items-center justify-center shadow-lg">
+                  <div className="scale-75"><Package size={24} /></div>
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Pipe Cutting Guide (32' Sticks)</h2>
+                  <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Optimal Cut List for Minimal Waste</p>
+                </div>
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {data.pipeCuttingSummary.sticks.map((stick, sIdx) => (
+                  <div key={sIdx} className="bg-white rounded-3xl border-2 border-american-blue/5 p-6 space-y-4 shadow-md hover:shadow-xl transition-all group overflow-hidden relative">
+                    <div className="flex justify-between items-center pb-3 border-b-2 border-dashed border-[#F0F0F0]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-american-blue/40 uppercase tracking-widest">Stick</span>
+                        <span className="text-lg font-black text-american-blue">#{stick.id}</span>
+                      </div>
+                      <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest">
+                        {((32 - stick.leftover) / 32 * 100).toFixed(0)}% Utilized
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {stick.cuts.sort((a, b) => b - a).map((cut, cIdx) => (
+                        <div key={cIdx} className="flex justify-between items-center bg-[#F8F9FA] p-3 rounded-xl border border-transparent group-hover:border-american-blue/10 transition-colors">
+                          <span className="text-sm font-black text-american-blue">Cut @ {cut.toFixed(2)}'</span>
+                          <span className="text-[9px] font-bold text-[#999999] uppercase tracking-widest">Required Segment</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {stick.leftover > 0 && (
+                      <div className="bg-american-red/5 p-3 rounded-xl flex justify-between items-center border border-american-red/10">
+                        <span className="text-[10px] font-black text-american-red uppercase tracking-widest">Leftover Scrap</span>
+                        <span className="text-sm font-black text-american-red">{stick.leftover.toFixed(2)}'</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[#F8F9FA] p-6 rounded-3xl border-2 border-emerald-500/10 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-6">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-[#999999] uppercase tracking-widest">Total Sticks Needed</p>
+                    <p className="text-2xl font-black text-american-blue">{data.pipeCuttingSummary.sticks.length}</p>
+                  </div>
+                  <div className="h-10 w-[2px] bg-[#E0E0E0]" />
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-[#999999] uppercase tracking-widest">Optimization Efficiency</p>
+                    <p className="text-2xl font-black text-emerald-600">{data.pipeCuttingSummary.efficiency.toFixed(1)}%</p>
+                  </div>
+                </div>
+                <div className="text-right text-[10px] font-bold text-[#999999] uppercase tracking-widest max-w-sm">
+                  This cutting list considers the project as a whole, including all posts and top rails, to minimize overall material waste.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Manual Additions Section */}
           <div className="pt-12 border-t-4 border-american-red/10 space-y-8 takeoff-card">

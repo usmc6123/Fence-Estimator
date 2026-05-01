@@ -171,6 +171,8 @@ export interface Estimate {
   markupPercentage: number;
   taxPercentage: number;
   laborRates: LaborRates;
+  pricingStrategy?: 'best' | 'supplier';
+  selectedSupplier?: string;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   createdAt: string;

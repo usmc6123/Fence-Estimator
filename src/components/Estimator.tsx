@@ -7,7 +7,7 @@ import {
   TrendingUp, RotateCcw, Package, Navigation
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
-import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate } from '../types';
+import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
@@ -20,6 +20,7 @@ interface EstimatorProps {
   materials: MaterialItem[];
   laborRates: LaborRates;
   estimate: Partial<Estimate>;
+  quotes?: SupplierQuote[];
   setEstimate: (estimate: Partial<Estimate>) => void;
   savedEstimates: SavedEstimate[];
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
@@ -31,6 +32,7 @@ export default function Estimator({
   materials, 
   laborRates: globalLaborRates, 
   estimate, 
+  quotes = [],
   setEstimate,
   savedEstimates,
   setSavedEstimates,
@@ -59,7 +61,34 @@ export default function Estimator({
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
 
   const calculateCosts = () => {
-    const detailedData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
+    // Resolve materials based on chosen strategy
+    const pricingStrategy = estimate.pricingStrategy || 'best';
+    const selectedSupplier = estimate.selectedSupplier || '';
+
+    let resolvedMaterials = materials;
+    if (pricingStrategy === 'supplier' && selectedSupplier) {
+      const supplierQuotes = quotes
+        .filter(q => q.supplierName === selectedSupplier)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      resolvedMaterials = materials.map(m => {
+        let quotedPrice: number | undefined;
+        for (const quote of supplierQuotes) {
+          const item = quote.items.find(i => i.mappedMaterialId === m.id);
+          if (item) {
+            quotedPrice = item.unitPrice;
+            break;
+          }
+        }
+
+        if (quotedPrice !== undefined) {
+          return { ...m, cost: quotedPrice };
+        }
+        return m;
+      });
+    }
+
+    const detailedData = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates);
 
     const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
     const taxFactor = (estimate.taxPercentage || 0) / 100;
