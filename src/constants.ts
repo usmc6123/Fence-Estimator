@@ -69,6 +69,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'm-post-4x4-8', name: '4x4 x 8\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 115.00, description: 'Drive gate post for 5ft fence' },
   { id: 'm-post-4x4-9', name: '4x4 x 9\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 125.00, description: 'Drive gate post for 6-7ft fence' },
   { id: 'm-post-4x4-10', name: '4x4 x 10\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 135.00, description: 'Heavy duty drive gate post' },
+  { id: 'm-post-4x4-10-hd', name: '4x4 x 10\' Wrought Iron Post (Heavy Wall)', category: 'Post', unit: 'each', cost: 158.00, description: 'Extra heavy wall thickness for large drive gates', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
   { id: 'm-bracket', name: 'Wrought Iron Mounting Bracket', category: 'Hardware', unit: 'each', cost: 4.50, description: '4 per panel required' },
   { id: 'm-screw-self-tap', name: '1/4" x 1" Self Tapping Screw', category: 'Hardware', unit: 'each', cost: 0.35, description: 'Required for mounting brackets' },
   { id: 'm-panel-4x8', name: '4x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 165.00, description: 'Pre-welded 4ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
