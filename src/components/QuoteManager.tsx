@@ -9,7 +9,7 @@ import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, updateDoc, deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { User } from 'firebase/auth';
 
@@ -120,7 +120,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     setTimeout(() => setToast(null), 3000);
   };
 
-  const syncAllPrices = () => {
+  const syncAllPrices = async () => {
     if (!selectedQuote) return;
     const itemsToUpdate = selectedQuote.items.filter(item => {
       const mat = materials.find(m => m.id === item.mappedMaterialId);
@@ -132,10 +132,26 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       return;
     }
 
-    setMaterials(prev => prev.map(m => {
-      const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
-      return update ? { ...m, cost: update.unitPrice } : m;
-    }));
+    if (user) {
+      try {
+        const batch = writeBatch(db);
+        itemsToUpdate.forEach(item => {
+          const mat = materials.find(m => m.id === item.mappedMaterialId);
+          if (mat) {
+            batch.update(doc(db, 'materials', mat.id), { cost: item.unitPrice });
+          }
+        });
+        await batch.commit();
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'materials/bulk-sync');
+        return;
+      }
+    } else {
+      setMaterials(prev => prev.map(m => {
+        const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
+        return update ? { ...m, cost: update.unitPrice } : m;
+      }));
+    }
     showToast(`Synchronized ${itemsToUpdate.length} prices from quote`);
   };
 
@@ -218,11 +234,20 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     }
   };
 
-  const updateMaterialPrice = (materialId: string, newPrice: number) => {
+  const updateMaterialPrice = async (materialId: string, newPrice: number) => {
     const mat = materials.find(m => m.id === materialId);
-    setMaterials(prev => prev.map(m => 
-      m.id === materialId ? { ...m, cost: newPrice } : m
-    ));
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'materials', materialId), { cost: newPrice });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `materials/${materialId}`);
+        return;
+      }
+    } else {
+      setMaterials(prev => prev.map(m => 
+        m.id === materialId ? { ...m, cost: newPrice } : m
+      ));
+    }
     showToast(`Updated ${mat?.name || 'Material'} price to ${formatCurrency(newPrice)}`);
   };
 
@@ -235,15 +260,25 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       const item = quote?.items.find(i => i.id === itemId);
       
       if (item) {
-        setMaterials(prev => prev.map(m => {
-          if (m.id === materialId) {
-            const currentAliases = m.aliases || [];
-            if (!currentAliases.includes(item.materialName)) {
-              return { ...m, aliases: [...currentAliases, item.materialName] };
+        const mat = materials.find(m => m.id === materialId);
+        if (mat) {
+          const currentAliases = mat.aliases || [];
+          if (!currentAliases.includes(item.materialName)) {
+            const nextAliases = [...currentAliases, item.materialName];
+            if (user) {
+              updateDoc(doc(db, 'materials', materialId), { aliases: nextAliases }).catch(err => {
+                handleFirestoreError(err, OperationType.UPDATE, `materials/${materialId}`);
+              });
+            } else {
+              setMaterials(prev => prev.map(m => {
+                if (m.id === materialId) {
+                  return { ...m, aliases: nextAliases };
+                }
+                return m;
+              }));
             }
           }
-          return m;
-        }));
+        }
         showToast(`Learned mapping: ${item.materialName} → ${materials.find(m => m.id === materialId)?.name}`);
       }
     }

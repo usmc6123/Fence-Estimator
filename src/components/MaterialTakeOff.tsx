@@ -8,6 +8,9 @@ import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
+import { User } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface MaterialTakeOffProps {
   estimate: Partial<Estimate>;
@@ -16,9 +19,10 @@ interface MaterialTakeOffProps {
   quotes: SupplierQuote[];
   setEstimate: (estimate: Partial<Estimate>) => void;
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
+  user: User | null;
 }
 
-export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials }: MaterialTakeOffProps) {
+export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
   const [newItem, setNewItem] = React.useState({
@@ -80,9 +84,17 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
         unit: newItem.unit as any,
         cost: cost,
         category: newItem.category as any,
-        description: 'Manually added to take-off'
-      };
-      setMaterials(prev => [...prev, newMaterial]);
+        description: 'Manually added to take-off',
+        companyId: 'lonestarfence'
+      } as MaterialItem;
+      
+      if (user) {
+        setDoc(doc(db, 'materials', targetId), newMaterial).catch(err => {
+          handleFirestoreError(err, OperationType.WRITE, `materials/${targetId}`);
+        });
+      } else {
+        setMaterials(prev => [...prev, newMaterial]);
+      }
     }
 
     // Prepare update

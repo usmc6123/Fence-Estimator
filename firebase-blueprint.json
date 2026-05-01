@@ -83,6 +83,40 @@
         "userId": { "type": "string" }
       },
       "required": ["id", "date", "userId"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "A material item in the library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "cost": { "type": "number" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "aliases": { "type": "array" }
+      },
+      "required": ["id", "companyId", "name", "category", "unit", "cost"]
+    },
+    "Quote": {
+      "title": "Supplier Quote",
+      "description": "A quote document from a supplier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "date": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" }
+      },
+      "required": ["id", "companyId", "supplierName", "totalAmount"]
     }
   },
   "firestore": {
@@ -105,6 +139,14 @@
     "/journalEntries/{entryId}": {
       "schema": "JournalEntry",
       "description": "Accounting journal entries"
+    },
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "Company material library"
+    },
+    "/quotes/{quoteId}": {
+      "schema": "Quote",
+      "description": "Supplier quotes"
     }
   }
 }

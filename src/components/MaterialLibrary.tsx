@@ -9,6 +9,9 @@ import { MATERIALS } from '../constants';
 import { MaterialCategory, MaterialItem } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { X } from 'lucide-react';
+import { User } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 
 const CATEGORY_ICONS: Record<string, any> = {
   'Post': Box,
@@ -25,9 +28,10 @@ const CATEGORY_ICONS: Record<string, any> = {
 interface MaterialLibraryProps {
   materials: MaterialItem[];
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
+  user: User | null;
 }
 
-export default function MaterialLibrary({ materials, setMaterials }: MaterialLibraryProps) {
+export default function MaterialLibrary({ materials, setMaterials, user }: MaterialLibraryProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<MaterialCategory | 'All'>('All');
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
@@ -71,22 +75,42 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingMaterial) {
-      setMaterials(materials.map(m => m.id === editingMaterial.id ? { ...m, ...formData } as MaterialItem : m));
+    const id = editingMaterial ? editingMaterial.id : Math.random().toString(36).substr(2, 9);
+    const materialData = {
+      ...formData,
+      id,
+      companyId: 'lonestarfence'
+    } as MaterialItem;
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'materials', id), materialData);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `materials/${id}`);
+        return;
+      }
     } else {
-      const newMaterial: MaterialItem = {
-        ...formData,
-        id: Math.random().toString(36).substr(2, 9),
-      } as MaterialItem;
-      setMaterials([newMaterial, ...materials]);
+      if (editingMaterial) {
+        setMaterials(materials.map(m => m.id === editingMaterial.id ? materialData : m));
+      } else {
+        setMaterials([materialData, ...materials]);
+      }
     }
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    setMaterials(materials.filter(m => m.id !== id));
+  const handleDelete = async (id: string) => {
+    if (user) {
+      try {
+        await deleteDoc(doc(db, 'materials', id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
+      }
+    } else {
+      setMaterials(materials.filter(m => m.id !== id));
+    }
   };
 
   return (
@@ -100,9 +124,22 @@ export default function MaterialLibrary({ materials, setMaterials }: MaterialLib
         <div className="flex items-center gap-3">
           <div className="flex bg-white rounded-xl border border-[#E5E5E5] p-1 shadow-sm">
             <button 
-              onClick={() => {
+              onClick={async () => {
                 if (confirm('Reset all materials to factory defaults? Your custom changes will be lost.')) {
-                  setMaterials(MATERIALS);
+                  if (user) {
+                    try {
+                      const batch = writeBatch(db);
+                      MATERIALS.forEach(mat => {
+                        batch.set(doc(db, 'materials', mat.id), { ...mat, companyId: 'lonestarfence' });
+                      });
+                      await batch.commit();
+                      console.log('Reset complete');
+                    } catch (error) {
+                      handleFirestoreError(error, OperationType.WRITE, 'materials/reset');
+                    }
+                  } else {
+                    setMaterials(MATERIALS);
+                  }
                 }
               }}
               className="p-2 rounded-lg text-[#999999] hover:text-red-500 transition-all"

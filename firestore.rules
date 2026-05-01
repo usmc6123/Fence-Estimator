@@ -63,6 +63,13 @@ service cloud.firestore {
       return data.companyId == 'lonestarfence';
     }
 
+    function isValidMaterial(data) {
+      return data.companyId == 'lonestarfence'
+        && data.id is string
+        && data.name is string
+        && data.cost is number;
+    }
+
     // --- Collection Routes ---
 
     match /estimates/{estimateId} {
@@ -104,6 +111,13 @@ service cloud.firestore {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
       allow create:    if isSignedIn() && isValidQuote(incoming());
       allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidQuote(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+    }
+
+    match /materials/{materialId} {
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidMaterial(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidMaterial(incoming());
       allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
   }

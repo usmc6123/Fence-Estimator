@@ -20,7 +20,7 @@ import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, writeBatch, getDocs } from 'firebase/firestore';
 
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
@@ -47,6 +47,45 @@ export default function App() {
         setSavedEstimates(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate)));
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'estimates')
+    );
+    return () => unsubscribe();
+  }, [user]);
+
+  // Fetch materials from Firestore if user is logged in
+  React.useEffect(() => {
+    if (!user) {
+      setMaterials(MATERIALS);
+      return;
+    }
+
+    const q = query(collection(db, 'materials'), where('companyId', '==', 'lonestarfence'));
+    
+    // Check if we need to seed
+    const checkAndSeed = async () => {
+      try {
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+          console.log('Seeding materials to Firestore...');
+          const batch = writeBatch(db);
+          MATERIALS.forEach((mat) => {
+            const docRef = doc(db, 'materials', mat.id);
+            batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
+          });
+          await batch.commit();
+          console.log('Seeding complete.');
+        }
+      } catch (error) {
+        console.error('Seeding failed:', error);
+      }
+    };
+
+    checkAndSeed();
+
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        setMaterials(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MaterialItem)));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
     );
     return () => unsubscribe();
   }, [user]);
@@ -122,9 +161,7 @@ export default function App() {
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
   
-  const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
-    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
-  });
+  const [materials, setMaterials] = React.useState<MaterialItem[]>([]);
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
     return getInitialValue('quotes', 'fence_pro_quotes', []);
@@ -163,11 +200,11 @@ export default function App() {
   // Global Sync to localStorage
   React.useEffect(() => {
     localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
-    localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
     if (!user) {
       localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+      localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     }
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
   }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, user]);
@@ -262,7 +299,7 @@ export default function App() {
         <Financials savedEstimates={savedEstimates} user={user} />
       )}
       {activeTab === 'library' && (
-        <MaterialLibrary materials={materials} setMaterials={setMaterials} />
+        <MaterialLibrary materials={materials} setMaterials={setMaterials} user={user} />
       )}
       {activeTab === 'labor' && (
         <LaborPricing laborRates={laborRates} setLaborRates={setLaborRates} />
@@ -275,6 +312,7 @@ export default function App() {
           quotes={quotes}
           setEstimate={setEstimate}
           setMaterials={setMaterials}
+          user={user}
         />
       )}
       {activeTab === 'labor-breakdown' && (

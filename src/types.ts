@@ -2,6 +2,7 @@ export type MaterialCategory = 'Post' | 'Rail' | 'Picket' | 'Panel' | 'Gate' | '
 
 export interface MaterialItem {
   id: string;
+  companyId?: string;
   name: string;
   category: MaterialCategory;
   unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip' | 'pint';

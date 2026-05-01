@@ -161,20 +161,27 @@ export default function Estimator({
     const isExisting = !!estimate.id;
     const newId = isExisting ? estimate.id : `est-${Math.random().toString(36).substr(2, 9)}`;
     const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
-    const parentId = isExisting ? (estimate.parentId || estimate.id) : null;
+    const parentId = isExisting ? (estimate.parentId || estimate.id || null) : null;
 
-    const estimateToSave = JSON.parse(JSON.stringify({
-      ...(estimate as Estimate),
+    const estimateToSave = {
+      ...estimate,
       linearFeet: actualLF,
       id: newId,
-      parentId,
+      parentId: parentId || null,
       version: newVersion,
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
       userId: user.uid,
       companyId: 'lonestarfence'
-    }));
+    };
+
+    // Remove any undefined fields that cause Firestore to crash
+    Object.keys(estimateToSave).forEach(key => {
+      if ((estimateToSave as any)[key] === undefined) {
+        delete (estimateToSave as any)[key];
+      }
+    });
 
     try {
       await setDoc(doc(db, 'estimates', newId), estimateToSave);
