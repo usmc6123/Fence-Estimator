@@ -28,13 +28,6 @@ export default function SupplierOrderForm({ estimate, materials, laborRates }: S
     return acc;
   }, [] as (typeof data.summary[0])[]);
 
-  React.useEffect(() => {
-    document.body.classList.add('is-printing-supplier-form');
-    return () => {
-      document.body.classList.remove('is-printing-supplier-form');
-    };
-  }, []);
-
   const handlePrint = () => {
     window.print();
   };
@@ -59,7 +52,7 @@ export default function SupplierOrderForm({ estimate, materials, laborRates }: S
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700 takeoff-page printing-supplier-form print:max-w-none print:p-0 print:m-0 print:break-inside-avoid">
       {/* Header Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
+      <div className="no-print flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg">
             <Package size={24} />
