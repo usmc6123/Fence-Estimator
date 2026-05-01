@@ -52,9 +52,27 @@ export default function CustomerContract({
       demoCharge,
       gates: run.gates,
       style: run.styleName,
-      height: run.height
+      height: run.height,
+      hasRotBoard: run.hasRotBoard,
+      hasTopCap: run.hasTopCap,
+      hasTrim: run.hasTrim,
+      picketStyle: run.picketStyle
     };
   });
+
+  // Check if all runs are homogenous (same specs)
+  const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => 
+    r.style === projectBreakdown[0].style && 
+    r.height === projectBreakdown[0].height &&
+    r.hasRotBoard === projectBreakdown[0].hasRotBoard &&
+    r.hasTopCap === projectBreakdown[0].hasTopCap &&
+    r.hasTrim === projectBreakdown[0].hasTrim &&
+    r.picketStyle === projectBreakdown[0].picketStyle
+  );
+
+  const totalFenceCharge = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge, 0);
+  const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
+  const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
   const grandTotal = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge + r.totalGateCharge + r.demoCharge, 0);
 
@@ -245,28 +263,65 @@ export default function CustomerContract({
               II. Cost Summary
             </h3>
             
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {projectBreakdown.map((run, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
-                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.height}' {run.style}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-black text-american-red">{formatCurrency(run.pricePerFoot)} <span className="opacity-40">/ FT</span></p>
-                        <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
-                      </div>
+            <div className="space-y-6">
+              {isHomogeneous ? (
+                <div className="space-y-6">
+                  {/* Unified Project Rate Card */}
+                  <div className="bg-white rounded-3xl p-8 border-2 border-american-blue/5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+                      <Sparkles size={120} />
                     </div>
                     
-                    <div className="mt-auto pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Section Total</span>
-                      <span className="font-bold text-american-blue">{formatCurrency(run.totalFenceCharge)}</span>
+                    <div className="relative z-10 text-center md:text-left">
+                      <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
+                        Project-Wide Rate
+                      </div>
+                      <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h4>
+                      <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">{projectBreakdown[0].height}' {projectBreakdown[0].style} Specification</p>
+                    </div>
+
+                    <div className="text-center md:text-right relative z-10">
+                      <div className="flex items-baseline justify-center md:justify-end gap-2">
+                        <span className="text-4xl font-black text-american-blue tabular-nums">{formatCurrency(globalPricePerFoot)}</span>
+                        <span className="text-sm font-black text-[#BBBBBB] uppercase tracking-widest">/ LF</span>
+                      </div>
+                      <p className="text-[10px] font-bold text-american-red uppercase tracking-widest mt-1">Guaranteed Custom Rate</p>
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  {/* Individual Footages for Clarity */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    {projectBreakdown.map((run, i) => (
+                      <div key={i} className="bg-[#F9F9F9] rounded-2xl p-4 border border-[#F0F0F0] flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.name}</span>
+                        <span className="text-sm font-bold text-american-blue">{run.netLF.toFixed(1)}'</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {projectBreakdown.map((run, i) => (
+                    <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
+                          <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.height}' {run.style}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-black text-american-red">{formatCurrency(run.pricePerFoot)} <span className="opacity-40">/ FT</span></p>
+                          <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-auto pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Section Total</span>
+                        <span className="font-bold text-american-blue">{formatCurrency(run.totalFenceCharge)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Gates Section - Listed Separately */}
               <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5]">
