@@ -148,21 +148,17 @@ input[type=number] {
       box-shadow: none !important;
       border-radius: 0 !important;
     }
+  }
 
-    /* Hide the header/close buttons of the modal during print */
-    .order-form-print-area > div:first-child {
+  /* Global print override to hide everything when printing order form */
+  @page {
+    size: portrait;
+    margin: 15mm;
+  }
+  
+  @media print {
+    body.is-printing-supplier-form > *:not(.order-form-print-area) {
       display: none !important;
-    }
-
-    .order-form-print-area > div:last-child {
-      overflow: visible !important;
-      padding: 0 !important;
-    }
-
-    body, html, #root, main {
-      overflow: visible !important;
-      height: auto !important;
-      width: auto !important;
     }
   }
 

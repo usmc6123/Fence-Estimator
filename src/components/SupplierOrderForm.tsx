@@ -28,6 +28,13 @@ export default function SupplierOrderForm({ estimate, materials, laborRates }: S
     return acc;
   }, [] as (typeof data.summary[0])[]);
 
+  React.useEffect(() => {
+    document.body.classList.add('is-printing-supplier-form');
+    return () => {
+      document.body.classList.remove('is-printing-supplier-form');
+    };
+  }, []);
+
   const handlePrint = () => {
     window.print();
   };
