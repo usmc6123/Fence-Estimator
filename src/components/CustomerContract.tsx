@@ -77,7 +77,7 @@ export default function CustomerContract({
   const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
-  const grandTotal = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge + r.totalGateCharge + r.demoCharge, 0);
+  const grandTotal = data.totals.grandTotal;
 
   const handlePrint = () => {
     window.print();
