@@ -117,6 +117,23 @@
         "fileType": { "type": "string" }
       },
       "required": ["id", "companyId", "supplierName", "totalAmount"]
+    },
+    "CompanySettings": {
+      "title": "Company Settings",
+      "description": "Global company settings and integrations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "businessEmail": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "website": { "type": "string" },
+        "address": { "type": "string" },
+        "ghlWebhookUrl": { "type": "string" },
+        "autoSyncEstimates": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -147,6 +164,10 @@
     "/quotes/{quoteId}": {
       "schema": "Quote",
       "description": "Supplier quotes"
+    },
+    "/companySettings/{settingId}": {
+      "schema": "CompanySettings",
+      "description": "Global settings for the company"
     }
   }
 }

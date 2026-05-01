@@ -70,7 +70,18 @@ service cloud.firestore {
         && data.cost is number;
     }
 
+    function isValidSettings(data) {
+      return data.id is string
+        && (data.ghlWebhookUrl == null || data.ghlWebhookUrl is string);
+    }
+
     // --- Collection Routes ---
+
+    match /companySettings/{settingId} {
+      allow get, list: if isCompanyMember();
+      allow create, update: if isCompanyMember() && isValidSettings(incoming());
+      allow delete: if isCompanyMember();
+    }
 
     match /estimates/{estimateId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';

@@ -7,19 +7,62 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export default function Settings() {
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [activeSection, setActiveSection] = React.useState<'company' | 'integration' | 'notifications'>('company');
+  
+  const [formData, setFormData] = React.useState({
+    companyName: COMPANY_INFO.name,
+    businessEmail: COMPANY_INFO.email,
+    phoneNumber: COMPANY_INFO.phone,
+    website: COMPANY_INFO.website,
+    address: COMPANY_INFO.address,
+    ghlWebhookUrl: '',
+    autoSyncEstimates: true
+  });
 
-  const handleSave = () => {
+  // Load settings on mount
+  React.useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settingsDoc = await getDoc(doc(db, 'companySettings', 'main'));
+        if (settingsDoc.exists()) {
+          const data = settingsDoc.data();
+          setFormData(prev => ({
+            ...prev,
+            ...data
+          }));
+        }
+      } catch (error) {
+        console.error("Error loading settings:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await setDoc(doc(db, 'companySettings', 'main'), {
+        ...formData,
+        id: 'main',
+        updatedAt: new Date().toISOString()
+      });
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 1000);
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      alert("Failed to save settings. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const sections = [
@@ -27,6 +70,14 @@ export default function Settings() {
     { id: 'integration', label: 'CRM Integration', icon: Webhook },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <RefreshCw className="animate-spin text-american-blue" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -95,35 +146,60 @@ export default function Settings() {
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Company Name</label>
                     <div className="relative">
                       <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue={COMPANY_INFO.name} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input 
+                        type="text" 
+                        value={formData.companyName} 
+                        onChange={(e) => setFormData({...formData, companyName: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Email</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="email" defaultValue={COMPANY_INFO.email} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input 
+                        type="email" 
+                        value={formData.businessEmail} 
+                        onChange={(e) => setFormData({...formData, businessEmail: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Phone Number</label>
                     <div className="relative">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="tel" defaultValue={COMPANY_INFO.phone} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input 
+                        type="tel" 
+                        value={formData.phoneNumber} 
+                        onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Website</label>
                     <div className="relative">
                       <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="url" defaultValue={COMPANY_INFO.website} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input 
+                        type="url" 
+                        value={formData.website} 
+                        onChange={(e) => setFormData({...formData, website: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Business Address</label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input type="text" defaultValue={COMPANY_INFO.address} className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" />
+                      <input 
+                        type="text" 
+                        value={formData.address} 
+                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none" 
+                      />
                     </div>
                   </div>
                 </div>
@@ -151,6 +227,8 @@ export default function Settings() {
                       <input 
                         type="url" 
                         placeholder="https://services.gohighlevel.com/webhook/..."
+                        value={formData.ghlWebhookUrl}
+                        onChange={(e) => setFormData({...formData, ghlWebhookUrl: e.target.value})}
                         className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none" 
                       />
                     </div>
@@ -166,8 +244,17 @@ export default function Settings() {
                         <p className="text-[10px] text-[#666666]">Automatically send all new estimates to CRM</p>
                       </div>
                     </div>
-                    <button className="h-6 w-12 rounded-full bg-american-blue relative transition-all">
-                      <div className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm" />
+                    <button 
+                      onClick={() => setFormData({...formData, autoSyncEstimates: !formData.autoSyncEstimates})}
+                      className={cn(
+                        "h-6 w-12 rounded-full relative transition-all",
+                        formData.autoSyncEstimates ? "bg-american-blue" : "bg-gray-300"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                        formData.autoSyncEstimates ? "right-1" : "left-1"
+                      )} />
                     </button>
                   </div>
                 </div>
