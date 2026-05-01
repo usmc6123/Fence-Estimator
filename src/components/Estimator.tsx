@@ -1060,63 +1060,71 @@ export default function Estimator({
                           </div>
                           
                           <div className="space-y-3">
-                            {run.gateDetails?.map((gate, gIdx) => (
-                              <div key={gate.id} className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-[#F0F0F0] shadow-sm">
-                                <div className="flex items-center justify-between">
-                                  <select 
-                                    value={`${gate.type}-${gate.width}`}
-                                    onChange={(e) => {
-                                      const [gType, gWidth] = e.target.value.split('-');
-                                      const newRuns = [...estimate.runs!];
-                                      newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
-                                      newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
-                                      setEstimate({ ...estimate, runs: newRuns });
-                                    }}
-                                    className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer"
-                                  >
-                                    {runStyle.type === 'Pipe' ? (
-                                      runStyle.availableWidths.map(w => (
-                                        <option key={w} value={`Single-${w}`}>{w}' Single Gate</option>
-                                      ))
-                                    ) : (
-                                      <>
-                                        <option value="Single-4">4' Walk Gate</option>
-                                        <option value="Double-12">Double 6' Drive Gate</option>
-                                      </>
-                                    )}
-                                  </select>
-                                  <button
-                                    onClick={() => {
-                                      const newRuns = [...estimate.runs!];
-                                      newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
-                                      newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                                      setEstimate({ ...estimate, runs: newRuns });
-                                    }}
-                                    className="text-[#CCCCCC] hover:text-american-red"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-[8px] font-black uppercase text-[#BBBBBB]">
-                                    <span>Location on Run</span>
-                                    <span>{gate.position || 0} FT</span>
+                            {(() => {
+                              const gateWidthTotal = (run.gateDetails || []).reduce((sum, g) => sum + g.width, 0);
+                              const fenceLFTotal = run.linearFeet - gateWidthTotal;
+                              const numFencePanels = Math.ceil(fenceLFTotal / 8);
+                              const panelWidth = numFencePanels > 0 ? fenceLFTotal / numFencePanels : 0;
+
+                              return run.gateDetails?.map((gate, gIdx) => (
+                                <div key={gate.id} className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-[#F0F0F0] shadow-sm">
+                                  <div className="flex items-center justify-between">
+                                    <select 
+                                      value={`${gate.type}-${gate.width}`}
+                                      onChange={(e) => {
+                                        const [gType, gWidth] = e.target.value.split('-');
+                                        const newRuns = [...estimate.runs!];
+                                        newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
+                                        newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
+                                        setEstimate({ ...estimate, runs: newRuns });
+                                      }}
+                                      className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer"
+                                    >
+                                      {runStyle.type === 'Pipe' ? (
+                                        runStyle.availableWidths.map(w => (
+                                          <option key={w} value={`Single-${w}`}>{w}' Single Gate</option>
+                                        ))
+                                      ) : (
+                                        <>
+                                          <option value="Single-4">4' Walk Gate</option>
+                                          <option value="Double-12">Double 6' Drive Gate</option>
+                                        </>
+                                      )}
+                                    </select>
+                                    <button
+                                      onClick={() => {
+                                        const newRuns = [...estimate.runs!];
+                                        newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                        newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                        setEstimate({ ...estimate, runs: newRuns });
+                                      }}
+                                      className="text-[#CCCCCC] hover:text-american-red"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
                                   </div>
-                                  <input 
-                                    type="range"
-                                    min="0"
-                                    max={Math.max(0, run.linearFeet - gate.width)}
-                                    value={gate.position || 0}
-                                    onChange={(e) => {
-                                      const newRuns = [...estimate.runs!];
-                                      newRuns[idx].gateDetails![gIdx].position = Number(e.target.value);
-                                      setEstimate({ ...estimate, runs: newRuns });
-                                    }}
-                                    className="w-full h-1 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-red"
-                                  />
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-[8px] font-black uppercase text-[#BBBBBB]">
+                                      <span>Location on Run</span>
+                                      <span>{gate.position || 0} FT</span>
+                                    </div>
+                                    <input 
+                                      type="range"
+                                      min="0"
+                                      max={Math.max(0, run.linearFeet - gate.width)}
+                                      step={panelWidth || 1}
+                                      value={gate.position || 0}
+                                      onChange={(e) => {
+                                        const newRuns = [...estimate.runs!];
+                                        newRuns[idx].gateDetails![gIdx].position = Number(e.target.value);
+                                        setEstimate({ ...estimate, runs: newRuns });
+                                      }}
+                                      className="w-full h-1 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-red"
+                                    />
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ));
+                            })()}
                           </div>
                         </div>
                         </div>
@@ -2130,26 +2138,74 @@ export default function Estimator({
                                   const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || defaultStyle;
                                   const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
 
-                                  const runGateWidth = (run.gateDetails || []).reduce((sum: number, g: any) => sum + (g.width || 0), 0) || ((run.gates || 0) * 4);
-                                  const spacingLimit = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
-                                  const sectionsCount = Math.max(1, Math.ceil(Math.max(0, run.linearFeet - runGateWidth) / spacingLimit));
-                                  const spacing = Math.max(0, run.linearFeet - runGateWidth) / sectionsCount;
+                                  // Refined Post Management - Standard posts are Grey, Gate posts are Green
+                                  const gateWidthTotal = (run.gateDetails || []).reduce((sum, g) => sum + g.width, 0);
+                                  const fenceLFTotal = run.linearFeet - gateWidthTotal;
+                                  const numFencePanels = Math.ceil(fenceLFTotal / 8);
+                                  const panelWidth = numFencePanels > 0 ? fenceLFTotal / numFencePanels : 0;
+
+                                  const sortedGates = [...(run.gateDetails || [])].map(g => {
+                                    // Snap gate position to the nearest panel boundary
+                                    const snappedPos = panelWidth > 0 ? Math.round((g.position || 0) / panelWidth) * panelWidth : (g.position || 0);
+                                    const finalPos = Math.min(snappedPos, run.linearFeet - g.width);
+                                    return { ...g, position: finalPos };
+                                  }).sort((a,b) => (a.position || 0) - (b.position || 0));
+
+                                  // Collect all post positions
+                                  const postMap = new Map<number, { color: string, type: string }>();
                                   
-                                  const linePostsCoords = [];
-                                  for (let j = 1; j < sectionsCount; j++) {
-                                    const fraction = j / sectionsCount;
-                                    const currentDistanceLF = run.linearFeet * fraction;
-                                    const isInsideGate = (run.gateDetails || []).some(g => {
-                                      const start = g.position || 0;
-                                      return currentDistanceLF > (start - 0.5) && currentDistanceLF < (start + g.width + 0.5);
-                                    });
-                                    if (!isInsideGate) {
-                                      linePostsCoords.push([
-                                        p[0] + (nextP[0] - p[0]) * fraction,
-                                        p[1] + (nextP[1] - p[1]) * fraction
-                                      ]);
+                                  // Default end posts
+                                  postMap.set(0, { color: '#A5A5A5', type: 'post' });
+                                  postMap.set(run.linearFeet, { color: '#A5A5A5', type: 'post' });
+
+                                  // Add gate posts (overwrite if gate is at start/end)
+                                  sortedGates.forEach(g => {
+                                    const gStart = g.position || 0;
+                                    const gEnd = gStart + g.width;
+                                    
+                                    // Gate starts are always green
+                                    postMap.set(gStart, { color: '#10B981', type: 'gate' });
+                                    
+                                    // Gate ends: Double Gates have green on both ends, Single have grey (post)
+                                    if (g.type === 'Double') {
+                                      postMap.set(gEnd, { color: '#10B981', type: 'gate' });
+                                    } else {
+                                      // Only set to grey if it wasn't already marked as a gate start for another gate
+                                      if (!postMap.has(gEnd) || postMap.get(gEnd)?.color !== '#10B981') {
+                                        postMap.set(gEnd, { color: '#A5A5A5', type: 'post' });
+                                      }
+                                    }
+                                  });
+
+                                  // Get sorted list of critical points to fill gaps
+                                  const checkpoints = Array.from(postMap.keys()).sort((a,b) => a - b);
+                                  
+                                  for (let j = 0; j < checkpoints.length - 1; j++) {
+                                    const start = checkpoints[j];
+                                    const end = checkpoints[j+1];
+                                    const gapSize = end - start;
+                                    const isGate = sortedGates.some(g => 
+                                      Math.abs((g.position || 0) - start) < 0.1 && 
+                                      Math.abs(((g.position || 0) + g.width) - end) < 0.1
+                                    );
+
+                                    // If this is a fence gap, fill with panels of panelWidth
+                                    if (!isGate && gapSize > (panelWidth + 0.1)) {
+                                      const numSubPanels = Math.round(gapSize / panelWidth);
+                                      const spacing = gapSize / numSubPanels;
+                                      for (let k = 1; k < numSubPanels; k++) {
+                                        const pos = start + k * spacing;
+                                        if (!postMap.has(pos)) {
+                                          postMap.set(pos, { color: '#A5A5A5', type: 'line' });
+                                        }
+                                      }
                                     }
                                   }
+
+                                  const finalSortedPosts = Array.from(postMap.entries())
+                                    .map(([dist, data]) => ({ dist, ...data }))
+                                    .sort((a,b) => a.dist - b.dist);
+                                  const totalPostsOnRun = finalSortedPosts.length;
                                   
                                   let tOX = 0, tOY = 0, tA = "middle";
                                   if (dirIndex === 0) tOY = -80;
@@ -2159,76 +2215,123 @@ export default function Estimator({
                                   
                                   return (
                                     <g key={`l-${section.id}-${i}`}>
-                                      <line x1={p[0]} y1={p[1]} x2={nextP[0]} y2={nextP[1]} stroke="#3C3B6E" strokeWidth="10" strokeLinecap="round" />
-                                      {linePostsCoords.map((pc, pIdx) => (
-                                        <circle key={`lp-${section.id}-${i}-${pIdx}`} cx={pc[0]} cy={pc[1]} r="8" fill="#A5A5A5" stroke="#FFFFFF" strokeWidth="2" />
-                                      ))}
+                                      {/* Draw Segments (Blue for Fence, Red for Gate) */}
+                                      {finalSortedPosts.map((post, idx) => {
+                                        if (idx === finalSortedPosts.length - 1) return null;
+                                        const startPost = post;
+                                        const endPost = finalSortedPosts[idx+1];
+                                        const isGateSegment = sortedGates.some(g => 
+                                          Math.abs((g.position || 0) - startPost.dist) < 0.1 && 
+                                          Math.abs(((g.position || 0) + g.width) - endPost.dist) < 0.1
+                                        );
+
+                                        const f1 = startPost.dist / run.linearFeet;
+                                        const f2 = endPost.dist / run.linearFeet;
+                                        const x1 = p[0] + (nextP[0] - p[0]) * f1;
+                                        const y1 = p[1] + (nextP[1] - p[1]) * f1;
+                                        const x2 = p[0] + (nextP[0] - p[0]) * f2;
+                                        const y2 = p[1] + (nextP[1] - p[1]) * f2;
+
+                                        return (
+                                          <line 
+                                            key={`seg-${idx}`} 
+                                            x1={x1} y1={y1} x2={x2} y2={y2} 
+                                            stroke={isGateSegment ? "#B22234" : "#3C3B6E"} 
+                                            strokeWidth={isGateSegment ? "6" : "10"} 
+                                            strokeLinecap="round" 
+                                          />
+                                        );
+                                      })}
+
+                                      {/* Draw Posts */}
+                                      {finalSortedPosts.map((rp, pIdx) => {
+                                        const fraction = rp.dist / run.linearFeet;
+                                        const px = p[0] + (nextP[0] - p[0]) * fraction;
+                                        const py = p[1] + (nextP[1] - p[1]) * fraction;
+                                        
+                                        return (
+                                          <circle 
+                                            key={`rp-${pIdx}`} 
+                                            cx={px} 
+                                            cy={py} 
+                                            r={rp.type === 'gate' ? 10 : 8} 
+                                            fill={rp.color} 
+                                            stroke="#FFFFFF" 
+                                            strokeWidth="2" 
+                                          />
+                                        );
+                                      })}
                                       <text x={midX + tOX} y={midY + tOY} textAnchor={tA as any} className="text-[16px] font-bold fill-american-blue" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px' }}>
                                         <tspan x={midX + tOX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
                                         <tspan x={midX + tOX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">{runStyle.name} - {runVisualStyle.name}</tspan>
-                                        <tspan x={midX + tOX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
+                                        <tspan x={midX + tOX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(panelWidth)} OC</tspan>
                                       </text>
                                     </g>
                                   );
                                 })}
 
                                 {sectionRuns.map((run, rIdx) => {
-                                  const gatesToDraw = run.gateDetails || Array.from({ length: run.gates || 0 }).map((_, i) => ({ id: `old-${i}`, type: 'Single' as const, width: 4, position: (run.linearFeet - 4) / 2 }));
-                                  if (gatesToDraw.length === 0) return null;
+                                  const rawGates = run.gateDetails || [];
+                                  if (rawGates.length === 0) return null;
+                                  
+                                  const gateWidthTotal = rawGates.reduce((sum, g) => sum + g.width, 0);
+                                  const fenceLFTotal = run.linearFeet - gateWidthTotal;
+                                  const numFencePanels = Math.ceil(fenceLFTotal / 8);
+                                  const panelWidth = numFencePanels > 0 ? fenceLFTotal / numFencePanels : 0;
+
+                                  const gatesToDraw = rawGates.map(g => {
+                                    const snappedPos = panelWidth > 0 ? Math.round((g.position || 0) / panelWidth) * panelWidth : (g.position || 0);
+                                    const finalPos = Math.min(snappedPos, run.linearFeet - g.width);
+                                    return { ...g, position: finalPos };
+                                  });
+
                                   const p1 = scaledPoints[rIdx];
                                   const p2 = scaledPoints[rIdx + 1];
                                   const isHorizontal = (rIdx % 4) % 2 === 0;
                                   
                                   return gatesToDraw.map((gate, gIdx) => {
-                                    const fraction = ((gate.position || 0) + (gate.width / 2)) / run.linearFeet;
-                                    const x = p1[0] + (p2[0] - p1[0]) * fraction;
-                                    const y = p1[1] + (p2[1] - p1[1]) * fraction;
-                                    const vW = gate.width * scale;
+                                    const startFraction = (gate.position || 0) / run.linearFeet;
+                                    const endFraction = ((gate.position || 0) + gate.width) / run.linearFeet;
+                                    
+                                    const x1 = p1[0] + (p2[0] - p1[0]) * startFraction;
+                                    const y1 = p1[1] + (p2[1] - p1[1]) * startFraction;
+                                    const x2 = p1[0] + (p2[0] - p1[0]) * endFraction;
+                                    const y2 = p1[1] + (p2[1] - p1[1]) * endFraction;
+                                    
+                                    const midX = (x1 + x2) / 2;
+                                    const midY = (y1 + y2) / 2;
+                                    
                                     return (
-                                      <g key={`g-${section.id}-${rIdx}-${gIdx}`} transform={`translate(${x}, ${y})`}>
+                                      <g key={`g-${section.id}-${rIdx}-${gIdx}`}>
                                         {isHorizontal ? (
-                                          <>
-                                            <rect x={-vW/2} y="-8" width={vW} height="16" fill="#F5F5F5" />
-                                            <line x1={-vW/2} y1="0" x2={vW/2} y2="0" stroke="#B22234" strokeWidth="5" />
-                                            <circle cx={-vW/2} cy="0" r="8" fill="#B22234" />
-                                            <circle cx={vW/2} cy="0" r="8" fill="#B22234" />
-                                            <text y="25" textAnchor="middle" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
-                                          </>
+                                          <text x={midX} y={midY + 25} textAnchor="middle" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '3px' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
                                         ) : (
-                                          <>
-                                            <rect x="-8" y={-vW/2} width="16" height={vW} fill="#F5F5F5" />
-                                            <line x1="0" y1={-vW/2} x2="0" y2={vW/2} stroke="#B22234" strokeWidth="5" />
-                                            <circle cx="0" cy={-vW/2} r="8" fill="#B22234" />
-                                            <circle cx="0" cy={vW/2} r="8" fill="#B22234" />
-                                            <text x="25" y="4" textAnchor="start" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
-                                          </>
+                                          <text x={midX + 25} y={midY + 4} textAnchor="start" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '3px' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
                                         )}
                                       </g>
                                     );
                                   });
                                 })}
 
-                                {scaledPoints.map((p, i) => {
-                                  const isCorner = i !== 0 && i !== scaledPoints.length - 1;
-                                  return isCorner 
-                                    ? <rect key={`p-${section.id}-${i}`} x={p[0]-10} y={p[1]-10} width="20" height="20" fill="#3C3B6E" />
-                                    : <circle key={`p-${section.id}-${i}`} cx={p[0]} cy={p[1]} r="10" fill="#B22234" />;
+                                {sectionRuns.map((run, rIdx) => {
+                                  // Removed the old corner block here as it's now handled by runPosts logic inside the loop
+                                  return null;
                                 })}
                               </g>
                             </svg>
 
                             <div className="absolute bottom-8 left-8 flex gap-4">
                               <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                                <div className="w-3 h-3 bg-american-red rounded-full" />
-                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">End Post</span>
+                                <div className="w-3 h-3 bg-[#A5A5A5] rounded-full" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Post</span>
                               </div>
                               <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                                <div className="w-3 h-3 bg-american-blue rounded-sm" />
-                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Corner</span>
+                                <div className="w-3 h-3 bg-[#10B981] rounded-full" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Gate Post</span>
                               </div>
                               <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                                <div className="w-3 h-3 bg-[#A5A5A5] rounded-full border border-white" />
-                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Line</span>
+                                <div className="w-6 h-1 bg-[#B22234] rounded-full" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Gate</span>
                               </div>
                             </div>
                           </div>
