@@ -159,6 +159,47 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
                 </li>
               ))}
             </ul>
+
+            <div className="mt-4 border-t border-[#E5E5E5] pt-4">
+              {user ? (
+                <div className="flex items-center justify-between gap-3 px-4">
+                  <div className="flex items-center gap-3">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-american-blue text-white flex items-center justify-center text-xs font-bold uppercase">
+                        {user.displayName?.substring(0, 2) || 'U'}
+                      </div>
+                    )}
+                    <div className="overflow-hidden">
+                      <p className="text-sm font-black text-american-blue truncate">{user.displayName || 'User'}</p>
+                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest truncate">Fence Pro</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      onLogout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors flex items-center gap-2 text-sm font-bold uppercase tracking-wider"
+                  >
+                    <LogOut size={16} />
+                    Exit
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    onLogin();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-american-blue py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-american-blue/20 hover:bg-american-blue/90 transition-all"
+                >
+                  <LogIn size={16} />
+                  Sign In
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
