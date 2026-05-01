@@ -1,20 +1,24 @@
 import React from 'react';
 import { 
   FileText, Search, Archive, RotateCcw, Trash2, 
-  ChevronRight, Calendar, User, MapPin, DollarSign,
+  ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download
 } from 'lucide-react';
 import { SavedEstimate } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { User } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface SavedEstimatesProps {
   savedEstimates: SavedEstimate[];
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
   onLoadEstimate: (estimate: SavedEstimate) => void;
+  user: User | null;
 }
 
-export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate }: SavedEstimatesProps) {
+export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, user }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'archived'>('active');
 
@@ -27,13 +31,18 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
 
-  const deleteEstimate = (id: string, e: React.MouseEvent) => {
+  const deleteEstimate = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
     if (deleteConfirmId === id) {
-      setSavedEstimates(prev => prev.filter(est => est.id !== id));
-      setDeleteConfirmId(null);
+      if (!user) return;
+      try {
+        await deleteDoc(doc(db, 'estimates', id));
+        setDeleteConfirmId(null);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `estimates/${id}`);
+      }
     } else {
       setDeleteConfirmId(id);
       // Reset after 6 seconds if not clicked again
@@ -41,12 +50,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     }
   };
 
-  const toggleArchive = (id: string, e: React.MouseEvent) => {
+  const toggleArchive = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setSavedEstimates(prev => prev.map(est => 
-      est.id === id ? { ...est, status: est.status === 'archived' ? 'active' : 'archived', lastModified: new Date().toISOString() } : est
-    ));
+    if (!user) return;
+
+    const estimate = savedEstimates.find(est => est.id === id);
+    if (!estimate) return;
+
+    try {
+      await updateDoc(doc(db, 'estimates', id), {
+        status: estimate.status === 'archived' ? 'active' : 'archived',
+        lastModified: new Date().toISOString(),
+        companyId: 'lonestarfence'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    }
   };
 
   return (

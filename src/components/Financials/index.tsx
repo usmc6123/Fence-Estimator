@@ -60,30 +60,38 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
     if (!user) return;
 
     // Accounts
-    const qAcc = query(collection(db, 'bankAccounts'), where('userId', '==', user.uid));
+    const qAcc = query(collection(db, 'bankAccounts'), where('companyId', '==', 'lonestarfence'));
     const unsubAcc = onSnapshot(qAcc, 
       (snapshot) => setBankAccounts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BankAccount))),
       (error) => handleFirestoreError(error, OperationType.LIST, 'bankAccounts')
     );
 
     // Transactions
-    const qTxn = query(collection(db, 'transactions'), where('userId', '==', user.uid), orderBy('date', 'desc'));
+    const qTxn = query(collection(db, 'transactions'), where('companyId', '==', 'lonestarfence'), orderBy('date', 'desc'));
     const unsubTxn = onSnapshot(qTxn, 
       (snapshot) => setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as BankTransaction))),
       (error) => handleFirestoreError(error, OperationType.LIST, 'transactions')
     );
 
     // Inventory
-    const qInv = query(collection(db, 'inventory'), where('userId', '==', user.uid));
+    const qInv = query(collection(db, 'inventory'), where('companyId', '==', 'lonestarfence'));
     const unsubInv = onSnapshot(qInv, 
       (snapshot) => setInventory(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InventoryStock))),
       (error) => handleFirestoreError(error, OperationType.LIST, 'inventory')
+    );
+
+    // Journal Entries
+    const qJournal = query(collection(db, 'journalEntries'), where('companyId', '==', 'lonestarfence'), orderBy('date', 'desc'));
+    const unsubJournal = onSnapshot(qJournal, 
+      (snapshot) => setJournalEntries(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as JournalEntry))),
+      (error) => handleFirestoreError(error, OperationType.LIST, 'journalEntries')
     );
 
     return () => {
       unsubAcc();
       unsubTxn();
       unsubInv();
+      unsubJournal();
     };
   }, [user]);
 
@@ -104,6 +112,7 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
         ...newTxn,
         amount: Number(newTxn.amount),
         userId: user.uid,
+        companyId: 'lonestarfence',
         status: 'Pending',
         createdAt: serverTimestamp()
       });
@@ -126,7 +135,8 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
     if (!user) return;
     try {
       await updateDoc(doc(db, 'transactions', txnId), {
-        estimateId: estId
+        estimateId: estId,
+        companyId: 'lonestarfence'
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `transactions/${txnId}`);
@@ -214,7 +224,7 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
           )}
           {activeSubTab === 'reports' && <ReportsView transactions={transactions} />}
           {activeSubTab === 'inventory' && <InventoryView inventory={inventory} />}
-          {activeSubTab === 'journal' && <JournalView />}
+          {activeSubTab === 'journal' && <JournalView journalEntries={journalEntries} />}
         </motion.div>
       </AnimatePresence>
 
@@ -659,13 +669,12 @@ function ReportsView({ transactions }: { transactions: BankTransaction[] }) {
   );
 }
 
-function InventoryView({ inventory }: { inventory: any[] }) {
+function InventoryView({ inventory }: { inventory: InventoryStock[] }) {
   const [allocatingItem, setAllocatingItem] = React.useState<any | null>(null);
 
-  const inventoryItems = [
-    { id: '1', name: '4x4x8 Treated Post', cat: 'Post', stock: 145, min: 20, cost: 12.50 },
-    { id: '2', name: 'Western Red Cedar Picket', cat: 'Picket', stock: 12, min: 250, cost: 2.45 },
-    { id: '3', name: '80lb Concrete Mix', cat: 'Concrete', stock: 85, min: 10, cost: 5.80 },
+  const displayInventory = inventory.length > 0 ? inventory : [
+    { id: '1', materialId: 'm1', quantityInStock: 145, minStockLevel: 20, averageCost: 12.50, userId: 'mock' },
+    { id: '2', materialId: 'm2', quantityInStock: 12, minStockLevel: 250, averageCost: 2.45, userId: 'mock' },
   ];
 
   return (
@@ -681,8 +690,7 @@ function InventoryView({ inventory }: { inventory: any[] }) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#FBFBFB] border-b border-american-blue/5">
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999]">Material</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999]">Category</th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999]">Item ID</th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999] text-center">In Stock</th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999] text-center">Min Level</th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#999999] text-right">Avg Cost</th>
@@ -690,22 +698,21 @@ function InventoryView({ inventory }: { inventory: any[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-american-blue/5">
-            {inventoryItems.map((item, i) => (
+            {displayInventory.map((item, i) => (
               <tr key={i} className="hover:bg-[#FBFBFB] transition-colors group">
                 <td className="px-6 py-6 font-black text-american-blue text-sm">
-                  {item.name}
-                  {item.stock < item.min && (
+                  {item.materialId}
+                  {item.quantityInStock < item.minStockLevel && (
                     <span className="ml-2 px-2 py-0.5 rounded text-[8px] font-black uppercase bg-american-red/10 text-american-red">Low Stock</span>
                   )}
                 </td>
-                <td className="px-6 py-6 text-xs font-bold text-[#666666]">{item.cat}</td>
-                <td className="px-6 py-6 text-center tabular-nums font-black text-american-blue">{item.stock}</td>
-                <td className="px-6 py-6 text-center tabular-nums font-bold text-[#999999]">{item.min}</td>
-                <td className="px-6 py-6 text-right tabular-nums font-bold text-american-blue">{formatCurrency(item.cost)}</td>
+                <td className="px-6 py-6 text-center tabular-nums font-black text-american-blue">{item.quantityInStock}</td>
+                <td className="px-6 py-6 text-center tabular-nums font-bold text-[#999999]">{item.minStockLevel}</td>
+                <td className="px-6 py-6 text-right tabular-nums font-bold text-american-blue">{formatCurrency(item.averageCost)}</td>
                 <td className="px-6 py-6">
                   <div className="flex justify-center">
                     <button 
-                      onClick={() => setAllocatingItem(item)}
+                       onClick={() => setAllocatingItem(item)}
                       className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-american-blue/5 text-american-blue hover:bg-american-blue hover:text-white transition-all opacity-0 group-hover:opacity-100"
                     >
                       Allocate to Job
@@ -746,16 +753,28 @@ function InventoryView({ inventory }: { inventory: any[] }) {
   );
 }
 
-function JournalView() {
+function JournalView({ journalEntries }: { journalEntries: JournalEntry[] }) {
+  const displayEntries = journalEntries.length > 0 ? journalEntries : [
+    { id: 'j1', date: '2026-04-20', description: 'Opening Balance Equity Alignment', lines: [], userId: 'mock' }
+  ] as JournalEntry[];
+
   return (
     <div className="bg-white rounded-3xl border-2 border-american-blue/5 shadow-sm p-8 flex flex-col items-center justify-center text-center min-h-[400px]">
       <div className="w-20 h-20 bg-american-blue/5 rounded-3xl flex items-center justify-center text-american-blue mb-6">
         <History size={40} />
       </div>
       <h3 className="text-2xl font-black text-american-blue mb-2">History & Journal Entries</h3>
-      <p className="text-[#666666] max-w-md mx-auto mb-8 font-medium">
-        Review audit logs, manual adjustments, and historical journal entries for full compliance and transparency.
-      </p>
+      <div className="w-full max-w-2xl mx-auto mb-8 text-left">
+        {displayEntries.map(entry => (
+          <div key={entry.id} className="p-4 border-b border-american-blue/5 flex justify-between items-center hover:bg-american-blue/5 transition-all rounded-xl">
+            <div>
+              <p className="text-sm font-black text-american-blue uppercase">{entry.description}</p>
+              <p className="text-[10px] font-bold text-[#999999]">{entry.date}</p>
+            </div>
+            <ArrowUpRight size={16} className="text-american-blue/30" />
+          </div>
+        ))}
+      </div>
       <button className="flex items-center gap-2 rounded-xl bg-american-blue px-8 py-4 text-sm font-black text-white hover:bg-american-blue/90 transition-all shadow-xl shadow-american-blue/20">
         <FilePlus size={18} />
         New Journal Entry

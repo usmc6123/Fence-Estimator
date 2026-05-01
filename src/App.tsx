@@ -19,9 +19,12 @@ import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from '
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
 import { User } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
+  const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
 
   React.useEffect(() => {
     testConnection();
@@ -30,6 +33,23 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Fetch estimates from Firestore if user is logged in
+  React.useEffect(() => {
+    if (!user) {
+      setSavedEstimates([]);
+      return;
+    }
+
+    const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        setSavedEstimates(snapshot.docs.map(d => ({ ...d.data() } as SavedEstimate)));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'estimates')
+    );
+    return () => unsubscribe();
+  }, [user]);
 
   const handleLogin = async () => {
     try {
@@ -85,10 +105,6 @@ export default function App() {
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
   
-  const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>(() => {
-    return getInitialValue('savedEstimates', 'fence_pro_saved_estimates', []);
-  });
-
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
     return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
   });
@@ -133,10 +149,9 @@ export default function App() {
     localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
-    localStorage.setItem('fence_pro_saved_estimates', JSON.stringify(savedEstimates));
     localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
-  }, [estimate, materials, laborRates, activeTab, savedEstimates, quotes, aiProjectScope]);
+  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope]);
 
   // Sync state across tabs using the storage event (enables simultaneous updates)
   React.useEffect(() => {
@@ -149,7 +164,6 @@ export default function App() {
           case 'fence_pro_estimate': setEstimate(parsed); break;
           case 'fence_pro_materials': setMaterials(parsed); break;
           case 'fence_pro_labor_rates': setLaborRates(parsed); break;
-          case 'fence_pro_saved_estimates': setSavedEstimates(parsed); break;
           case 'fence_pro_quotes': setQuotes(parsed); break;
           case 'fence_pro_ai_scope': setAiProjectScope(parsed); break;
           // Note: Avoid syncing activeTab across windows as they should be independent
@@ -213,6 +227,7 @@ export default function App() {
           setEstimate={setEstimate}
           savedEstimates={savedEstimates}
           setSavedEstimates={setSavedEstimates}
+          user={user}
         />
       )}
       {activeTab === 'dossiers' && (
@@ -220,6 +235,7 @@ export default function App() {
           savedEstimates={savedEstimates} 
           setSavedEstimates={setSavedEstimates}
           onLoadEstimate={handleLoadEstimate}
+          user={user}
         />
       )}
       {activeTab === 'financials' && (

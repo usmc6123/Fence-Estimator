@@ -6,10 +6,13 @@ let genAI: GoogleGenAI | null = null;
 
 function getGenAI(): GoogleGenAI {
   if (!genAI) {
+    // In Vite, process.env.GEMINI_API_KEY is replaced by define during build
+    // or provided by the environment in some cases.
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // Final check for key validity
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    // Final check for key validity - handle missing, empty, or placeholder keys
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'YOUR_GEMINI_API_KEY' || apiKey === 'undefined') {
+      console.warn("Gemini API Key is missing or using a placeholder.");
       throw new Error("GEMINI_API_KEY_MISSING");
     }
     
@@ -23,7 +26,7 @@ export async function generateAIScope(prompt: string): Promise<string> {
   // Using gemini-3-flash-preview as the default stable model
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: [{ role: "user", parts: [{ text: prompt }] }]
+    contents: prompt
   });
   
   return response.text || "Failed to generate scope.";

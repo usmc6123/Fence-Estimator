@@ -12,6 +12,9 @@ import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
+import { User } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -20,6 +23,7 @@ interface EstimatorProps {
   setEstimate: (estimate: Partial<Estimate>) => void;
   savedEstimates: SavedEstimate[];
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
+  user: User | null;
 }
 
 export default function Estimator({ 
@@ -28,7 +32,8 @@ export default function Estimator({
   estimate, 
   setEstimate,
   savedEstimates,
-  setSavedEstimates
+  setSavedEstimates,
+  user
 }: EstimatorProps) {
   const [step, setStep] = React.useState(() => {
     return Number(localStorage.getItem('fence_pro_estimator_step')) || 1;
@@ -68,13 +73,39 @@ export default function Estimator({
         netLF: run.netLF,
         fenceChargePerFoot,
         gateCharge,
-        demoCharge: run.demoCharge * markupFactor
+        demoCharge: run.demoCharge * markupFactor,
+        fenceCharge: chargeTotal
       };
     });
+
+    const netLF = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.netLF, 0)
+      : (estimate.linearFeet || 0);
 
     const lf = (estimate.runs && estimate.runs.length > 0)
       ? detailedData.runs.reduce((sum, r) => sum + r.linearFeet, 0)
       : (estimate.linearFeet || 0);
+
+    const manualFenceMaterial = detailedData.manualSummary
+      .filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep' && i.category !== 'Gate')
+      .reduce((sum, i) => sum + i.total, 0);
+    const manualFenceLabor = detailedData.manualSummary
+      .filter(i => i.category === 'Labor')
+      .reduce((sum, i) => sum + i.total, 0);
+
+    const calculatedFenceMaterial = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.fenceMaterialCost, 0)
+      : detailedData.summary.filter(i => i.category !== 'Gate' && i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+    
+    const calculatedFenceLabor = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.fenceLaborCost, 0)
+      : detailedData.summary.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
+
+    const totalFenceMaterial = calculatedFenceMaterial + manualFenceMaterial;
+    const totalFenceLabor = calculatedFenceLabor + manualFenceLabor;
+
+    const totalFenceCharge = (totalFenceMaterial + totalFenceLabor) * markupFactor + (totalFenceMaterial * taxFactor);
+
     const gateCount = detailedData.runs.reduce((sum, r) => sum + r.gates.length, 0) || estimate.gateCount || 0;
     const postCount = detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
 
@@ -88,9 +119,10 @@ export default function Estimator({
       markup: detailedData.totals.markup,
       tax: detailedData.totals.tax,
       total: detailedData.totals.grandTotal,
-      overallPricePerFoot: lf > 0 ? detailedData.totals.grandTotal / lf : 0,
+      overallPricePerFoot: netLF > 0 ? totalFenceCharge / netLF : 0,
       runBreakdown,
       lf,
+      netLF,
       postCount,
       gateCount
     };
@@ -110,7 +142,12 @@ export default function Estimator({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!user) {
+      alert('Please log in to save estimates to the team cloud.');
+      return;
+    }
+
     // Determine the actual linear feet to save
     const actualLF = (estimate.runs && estimate.runs.length > 0)
       ? estimate.runs.reduce((sum, r) => sum + r.linearFeet, 0)
@@ -120,30 +157,35 @@ export default function Estimator({
     
     // Revision Logic
     const isExisting = !!estimate.id;
-    const newId = `est-${Math.random().toString(36).substr(2, 9)}`;
+    const newId = isExisting ? estimate.id : `est-${Math.random().toString(36).substr(2, 9)}`;
     const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
     const parentId = isExisting ? (estimate.parentId || estimate.id) : undefined;
 
-    const estimateToSave: SavedEstimate = {
+    const estimateToSave = {
       ...(estimate as Estimate),
       linearFeet: actualLF,
-      id: newId, // Always a new ID for the revision
+      id: newId,
       parentId,
       version: newVersion,
       createdAt: estimate.createdAt || now,
       lastModified: now,
-      status: 'active'
+      status: 'active',
+      userId: user.uid,
+      companyId: 'lonestarfence'
     };
 
-    setSavedEstimates(prev => [estimateToSave, ...prev]);
-
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-      setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
-      setStep(1);
-      localStorage.removeItem('fence_pro_estimator_step');
-    }, 3000);
+    try {
+      await setDoc(doc(db, 'estimates', newId), estimateToSave);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
+        setStep(1);
+        localStorage.removeItem('fence_pro_estimator_step');
+      }, 3000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `estimates/${newId}`);
+    }
   };
 
   const steps = [
