@@ -187,34 +187,46 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
 
       const newQuoteId = Math.random().toString(36).substr(2, 9);
+
+      // 3. Prepare quote object with explicit mapping to avoid garbage fields
+      const items = (extractedData.items || []).map((item: any) => {
+        const itemNameLower = (item.materialName || '').toLowerCase();
+        const match = materials.find(m => 
+          m.name.toLowerCase().includes(itemNameLower) ||
+          itemNameLower.includes(m.name.toLowerCase()) ||
+          m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
+        );
+        
+        return {
+          id: Math.random().toString(36).substr(2, 9),
+          materialName: item.materialName || 'Unknown Material',
+          qty: Number(item.qty) || 0,
+          unit: item.unit || 'each',
+          unitPrice: Number(item.unitPrice) || 0,
+          totalPrice: Number(item.totalPrice) || (Number(item.qty || 0) * Number(item.unitPrice || 0)) || 0,
+          mappedMaterialId: match?.id || null
+        };
+      });
+
       const newQuote: SupplierQuote = {
         id: newQuoteId,
         companyId: 'lonestarfence',
         supplierName: extractedData.supplierName || 'Unknown Supplier',
         date: new Date().toISOString(),
-        items: extractedData.items.map((item: any) => {
-          const itemNameLower = item.materialName.toLowerCase();
-          const match = materials.find(m => 
-            m.name.toLowerCase().includes(itemNameLower) ||
-            itemNameLower.includes(m.name.toLowerCase()) ||
-            m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
-          );
-          return {
-            ...item,
-            id: Math.random().toString(36).substr(2, 9),
-            // Ensure no undefined values for Firestore
-            mappedMaterialId: match?.id || null
-          };
-        }),
-        totalAmount: extractedData.totalAmount || 0,
-        fileName: file.name,
-        fileType: file.type,
-        fileUrl: downloadUrl
+        items: items,
+        totalAmount: Number(extractedData.totalAmount) || items.reduce((sum, i) => sum + i.totalPrice, 0),
+        fileName: file.name || 'document',
+        fileType: file.type || 'application/pdf',
+        fileUrl: downloadUrl || ''
       };
 
       // 4. Save to Firestore
-      // Sanitize object to remove any potential undefined values
-      const sanitizedQuote = JSON.parse(JSON.stringify(newQuote));
+      // Deep sanitization to ensure no undefined values
+      const sanitize = (obj: any): any => {
+        return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
+      };
+      
+      const sanitizedQuote = sanitize(newQuote);
       await setDoc(doc(db, 'quotes', newQuoteId), sanitizedQuote);
       setSelectedQuoteId(newQuoteId);
       showToast("Quote processed and saved to cloud");
