@@ -61,14 +61,17 @@ export default function CustomerContract({
   });
 
   // Check if all runs are homogenous (same specs)
-  const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => 
-    r.style === projectBreakdown[0].style && 
-    r.height === projectBreakdown[0].height &&
-    r.hasRotBoard === projectBreakdown[0].hasRotBoard &&
-    r.hasTopCap === projectBreakdown[0].hasTopCap &&
-    r.hasTrim === projectBreakdown[0].hasTrim &&
-    r.picketStyle === projectBreakdown[0].picketStyle
-  );
+  const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => {
+    const isWood = r.style.includes('Wood') || r.style.includes('Cedar') || r.style.includes('Pine');
+    return r.style === projectBreakdown[0].style && 
+      r.height === projectBreakdown[0].height &&
+      (!isWood || (
+        r.hasRotBoard === projectBreakdown[0].hasRotBoard &&
+        r.hasTopCap === projectBreakdown[0].hasTopCap &&
+        r.hasTrim === projectBreakdown[0].hasTrim &&
+        r.picketStyle === projectBreakdown[0].picketStyle
+      ));
+  });
 
   const totalFenceCharge = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge, 0);
   const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
@@ -88,13 +91,15 @@ export default function CustomerContract({
         
         Customer: ${estimate.customerName || 'Valued Customer'}
         Project Details:
-        ${data.runs.map(run => `
+        ${data.runs.map(run => {
+          const isWood = run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine');
+          return `
           Section: ${run.runName}
-          Specs: ${run.height}' ${run.styleName} (${run.picketStyle || 'Standard'})
+          Specs: ${run.height}' ${run.styleName} ${isWood ? `(${run.picketStyle || 'Standard'})` : ''}
           Length: ${run.linearFeet} LF (Gross)
           Gates: ${run.gates.map(g => `${g.width}' ${g.type}`).join(', ') || 'None'}
-          Features: ${run.hasRotBoard ? 'Rot Board included' : ''} ${run.hasTopCap ? 'Top Cap included' : ''} ${run.hasTrim ? 'Trim included' : ''}
-        `).join('\n')}
+          ${isWood ? `Features: ${run.hasRotBoard ? 'Rot Board included' : ''} ${run.hasTopCap ? 'Top Cap included' : ''} ${run.hasTrim ? 'Trim included' : ''}` : ''}
+        `}).join('\n')}
 
         Requirements for the AI Scope:
         1. Professional Summary: Start with a 2-3 sentence overview of the project's goal (e.g., "Enhancing security and aesthetic appeal with a custom-built ${data.runs[0]?.styleName || 'fence'}...").

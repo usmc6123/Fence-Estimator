@@ -46,19 +46,21 @@ export default function LaborTakeOff({
         Customer: ${estimate.customerName}
         Address: ${estimate.customerAddress}
         Total Projects Specs:
-        ${data.runs.map(run => `
+        ${data.runs.map(run => {
+          const isWood = run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine');
+          return `
           Run: ${run.runName}
           Length: ${run.linearFeet} LF
-          Style: ${run.styleName} - ${run.picketStyle} orientation
+          Style: ${run.styleName} ${isWood ? `- ${run.picketStyle} orientation` : ''}
           Height: ${run.height}'
-          Rails: ${run.railCount}
+          ${isWood ? `Rails: ${run.railCount}
           Rot Board: ${run.hasRotBoard ? 'Included' : 'None'}
           Top Style: ${run.topStyle}
           Cap: ${run.hasTopCap ? 'Yes' : 'No'}
           Trim: ${run.hasTrim ? 'Yes' : 'No'}
-          Wood Type: ${run.woodType || 'N/A'}
+          Wood Type: ${run.woodType || 'N/A'}` : ''}
           Gates: ${run.gates.map(g => `${g.width}' ${g.type}`).join(', ')}
-        `).join('\n')}
+        `}).join('\n')}
 
         Requirements to include in the generated text:
         - Specific hole depths as mentioned: 8"x24" for standard, 8"x36" for 8' wood. Gate posts 1' deeper.
@@ -212,21 +214,25 @@ export default function LaborTakeOff({
                     <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">
                       {run.height}' HEIGHT
                     </span>
-                    <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">
-                      {run.railCount} RAILS
-                    </span>
-                    {run.hasRotBoard && (
-                      <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-500/40">
-                        ROT BOARD
-                      </span>
-                    )}
-                    <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">
-                      {run.topStyle}
-                    </span>
-                    {(run.hasTopCap || run.hasTrim) && (
-                      <span className="px-3 py-1 bg-american-red/20 text-american-red rounded-full text-[9px] font-black uppercase tracking-widest border border-american-red/40">
-                        {run.hasTopCap && run.hasTrim ? 'CAP & TRIM' : (run.hasTopCap ? 'TOP CAP' : 'TRIM')}
-                      </span>
+                    {(run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine')) && (
+                      <>
+                        <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">
+                          {run.railCount} RAILS
+                        </span>
+                        {run.hasRotBoard && (
+                          <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-500/40">
+                            ROT BOARD
+                          </span>
+                        )}
+                        <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">
+                          {run.topStyle}
+                        </span>
+                        {(run.hasTopCap || run.hasTrim) && (
+                          <span className="px-3 py-1 bg-american-red/20 text-american-red rounded-full text-[9px] font-black uppercase tracking-widest border border-american-red/40">
+                            {run.hasTopCap && run.hasTrim ? 'CAP & TRIM' : (run.hasTopCap ? 'TOP CAP' : 'TRIM')}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -253,11 +259,13 @@ export default function LaborTakeOff({
                               {item.name.includes('Installation') && (
                                 <>
                                   <span className="block mb-1 text-american-blue/80 font-bold underline">
-                                    Project Specs: {run.height}' Tall {run.woodType || ''} {run.styleName} ({run.picketStyle})
+                                    Project Specs: {run.height}' Tall {run.styleName} {(run.styleName.includes('Wood') || run.styleName.includes('Cedar')) ? `(${run.picketStyle})` : ''}
                                   </span>
-                                  Includes: Layout, utility marking verification, digging to spec ({run.height === 8 ? '36"' : '24"'} min depth x 8" min width), post setting in wet concrete, {run.railCount}x horizontal rail installation, and {run.styleName.includes('Wood') ? 'picket' : 'panel'} attachment. 
-                                  {run.picketStyle === 'Board on Board' && <span className="text-american-red font-bold">⚠️ BOARD ON BOARD: Pickets in the back layer MUST HAVE EXACTLY 3.5" SPACING between them. Front layer pickets must be centered over the gaps.</span>}
-                                  {run.hasRotBoard && " Includes installation of 2x6 rot board."} {run.hasTopCap && " Includes 2x6 top cap rail."} {run.hasTrim && " Includes trim board application."}
+                                  Includes: Layout, utility marking verification, digging to spec ({run.height === 8 ? '36"' : '24"'} min depth x 8" min width), post setting in wet concrete, {run.styleName.includes('Pipe') ? 'top rail installation,' : (run.railCount > 0 ? `${run.railCount}x horizontal rail installation,` : '')} and {run.styleName.includes('Wood') ? 'picket' : (run.styleName.includes('Pipe') ? 'top rail' : 'panel')} attachment. 
+                                  {run.picketStyle === 'Board on Board' && run.styleName.includes('Wood') && <span className="text-american-red font-bold">⚠️ BOARD ON BOARD: Pickets in the back layer MUST HAVE EXACTLY 3.5" SPACING between them. Front layer pickets must be centered over the gaps.</span>}
+                                  {run.hasRotBoard && run.styleName.includes('Wood') && " Includes installation of 2x6 rot board."} 
+                                  {run.hasTopCap && run.styleName.includes('Wood') && " Includes 2x6 top cap rail."} 
+                                  {run.hasTrim && run.styleName.includes('Wood') && " Includes trim board application."}
                                   Must exercise full due diligence for private lines (sprinklers/septic/aux power). Gate posts must be set 12" deeper than regular posts. All work must be level, plum, and uniform.
                                 </>
                               )}
