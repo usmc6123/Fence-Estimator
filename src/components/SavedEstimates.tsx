@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   FileText, Search, Archive, RotateCcw, Trash2, 
   ChevronRight, Calendar, MapPin, DollarSign,
-  Filter, MoreVertical, ExternalLink, Download
+  Filter, MoreVertical, ExternalLink, Download,
+  Shield
 } from 'lucide-react';
 import { SavedEstimate } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
@@ -23,11 +24,31 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [filter, setFilter] = React.useState<'all' | 'active' | 'archived'>('active');
 
   const filteredEstimates = savedEstimates.filter(est => {
-    const matchesSearch = est.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         est.customerAddress.toLowerCase().includes(searchTerm.toLowerCase());
+    const name = est.customerName || 'Unnamed Prospect';
+    const address = est.customerAddress || 'No Address';
+    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         address.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filter === 'all' || est.status === filter;
     return matchesSearch && matchesFilter;
   });
+
+  if (!user) {
+    return (
+      <div className="max-w-7xl mx-auto py-20 px-4 text-center space-y-6">
+        <div className="flex justify-center">
+          <div className="h-24 w-24 rounded-[32px] bg-american-blue/5 flex items-center justify-center text-american-blue rotate-6">
+            <Shield size={48} />
+          </div>
+        </div>
+        <div>
+          <h2 className="text-3xl font-black text-american-blue uppercase tracking-tighter">Authentication Required</h2>
+          <p className="text-sm font-bold text-[#999999] uppercase tracking-widest mt-2 max-w-md mx-auto">
+            Please sign in on the sidebar to access the Lone Star company cloud dossiers.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
 

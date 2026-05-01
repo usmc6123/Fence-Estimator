@@ -44,7 +44,7 @@ export default function App() {
     const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        setSavedEstimates(snapshot.docs.map(d => ({ ...d.data() } as SavedEstimate)));
+        setSavedEstimates(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate)));
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'estimates')
     );
@@ -247,6 +247,7 @@ export default function App() {
           savedEstimates={savedEstimates}
           setSavedEstimates={setSavedEstimates}
           user={user}
+          setActiveTab={setActiveTab}
         />
       )}
       {activeTab === 'dossiers' && (

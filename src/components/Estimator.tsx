@@ -24,6 +24,7 @@ interface EstimatorProps {
   savedEstimates: SavedEstimate[];
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
   user: User | null;
+  setActiveTab?: (tab: string) => void;
 }
 
 export default function Estimator({ 
@@ -33,7 +34,8 @@ export default function Estimator({
   setEstimate,
   savedEstimates,
   setSavedEstimates,
-  user
+  user,
+  setActiveTab
 }: EstimatorProps) {
   const [step, setStep] = React.useState(() => {
     return Number(localStorage.getItem('fence_pro_estimator_step')) || 1;
@@ -159,9 +161,9 @@ export default function Estimator({
     const isExisting = !!estimate.id;
     const newId = isExisting ? estimate.id : `est-${Math.random().toString(36).substr(2, 9)}`;
     const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
-    const parentId = isExisting ? (estimate.parentId || estimate.id) : undefined;
+    const parentId = isExisting ? (estimate.parentId || estimate.id) : null;
 
-    const estimateToSave = {
+    const estimateToSave = JSON.parse(JSON.stringify({
       ...(estimate as Estimate),
       linearFeet: actualLF,
       id: newId,
@@ -172,7 +174,7 @@ export default function Estimator({
       status: 'active',
       userId: user.uid,
       companyId: 'lonestarfence'
-    };
+    }));
 
     try {
       await setDoc(doc(db, 'estimates', newId), estimateToSave);
@@ -182,7 +184,11 @@ export default function Estimator({
         setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
         setStep(1);
         localStorage.removeItem('fence_pro_estimator_step');
-      }, 3000);
+        // Switch to dossiers tab if available
+        if (setActiveTab) {
+          setActiveTab('dossiers');
+        }
+      }, 1500);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `estimates/${newId}`);
     }
@@ -1538,10 +1544,10 @@ export default function Estimator({
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="absolute inset-x-0 bottom-0 bg-[#00FF00] p-4 text-[#1A1A1A] text-center font-bold flex items-center justify-center gap-2"
+                className="absolute inset-x-0 bottom-0 bg-[#00FF00] p-4 text-[#1A1A1A] text-center font-bold flex items-center justify-center gap-2 z-50 shadow-2xl"
               >
                 <CheckCircle2 size={18} />
-                Sent to GoHighLevel!
+                Dossier Saved to Cloud!
               </motion.div>
             )}
           </section>
