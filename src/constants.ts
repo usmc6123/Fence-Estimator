@@ -147,7 +147,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'p-wire-6-100-black', name: "6' x 100' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 345.00, description: 'Black coated 100ft roll' },
   { id: 'p-wire-6-200-black', name: "6' x 200' No-Climb Wire (Black)", category: 'Picket', unit: 'each', cost: 665.00, description: 'Black coated 200ft roll' },
 
-  { id: 'p-paint-gal', name: 'Structural Pipe Paint (Gallon)', category: 'Finishing', unit: 'gallon', cost: 72.00, description: 'Black satin finish', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
+  { id: 'p-paint-gal-structural', name: 'Structural Pipe Paint (Gallon)', category: 'Finishing', unit: 'gallon', cost: 72.00, description: 'Black satin finish', imageUrl: 'https://m.media-amazon.com/images/I/91JiDMXNQfL._AC_UF350,350_QL80_.jpg' },
   
   // Post Caps
   { id: 'pc-flat', name: 'Flat Cap', category: 'PostCap', unit: 'each', cost: 5.25, imageUrl: 'https://images.thdstatic.com/productImages/4bcc407b-7ae0-4300-8024-540e19b184a0/svn/redwood-stained-deck-post-caps-483969-64_600.jpg' },

@@ -124,7 +124,10 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     if (!selectedQuote) return;
     const itemsToUpdate = selectedQuote.items.filter(item => {
       const mat = materials.find(m => m.id === item.mappedMaterialId);
-      return mat && Math.abs(item.unitPrice - mat.cost) > 0.001;
+      if (!mat) return false;
+      const priceDiffers = Math.abs(item.unitPrice - mat.cost) > 0.001;
+      const neverUpdated = !mat.lastPriceUpdate;
+      return priceDiffers || neverUpdated;
     });
 
     if (itemsToUpdate.length === 0) {
@@ -603,7 +606,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                               const mat = materials.find(m => m.id === item.mappedMaterialId);
                               const isHigher = mat && item.unitPrice > mat.cost;
                               const isLower = mat && item.unitPrice < mat.cost;
-                              const isDifferent = mat && Math.abs(item.unitPrice - mat.cost) > 0.001;
+                              const isDifferent = mat && (Math.abs(item.unitPrice - mat.cost) > 0.001 || !mat.lastPriceUpdate);
 
                               return (
                                 <tr key={item.id} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
@@ -662,7 +665,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                         className="flex items-center gap-2 ml-auto px-4 py-2 bg-american-blue text-white hover:bg-american-blue/90 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
                                       >
                                         <TrendingUp size={12} />
-                                        Update Library
+                                        {mat.lastPriceUpdate ? 'Update Library' : 'Confirm Price'}
                                       </button>
                                     ) : mat ? (
                                       <div className="flex items-center justify-end gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">

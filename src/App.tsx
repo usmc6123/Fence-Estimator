@@ -239,8 +239,20 @@ export default function App() {
   React.useEffect(() => {
     let changed = false;
     
-    // Update existing items if names/units/descriptions changed in constants
-    let syncedMaterials = materials.map(m => {
+    // 1. Deduplicate by ID to fix potential runtime errors from old dual-p-paint-gal state
+    const uniqueMaterials: MaterialItem[] = [];
+    const seenIds = new Set();
+    materials.forEach(m => {
+      if (!seenIds.has(m.id)) {
+        uniqueMaterials.push(m);
+        seenIds.add(m.id);
+      } else {
+        changed = true;
+      }
+    });
+
+    // 2. Update existing items if names/units/descriptions changed in constants
+    let syncedMaterials = uniqueMaterials.map(m => {
       const base = MATERIALS.find(bm => bm.id === m.id);
       if (base) {
         const needsSync = base.name !== m.name || base.unit !== m.unit || base.description !== m.description;

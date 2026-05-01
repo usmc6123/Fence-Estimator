@@ -85,7 +85,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
         cost: cost,
         category: newItem.category as any,
         description: 'Manually added to take-off',
-        companyId: 'lonestarfence'
+        companyId: 'lonestarfence',
+        lastPriceUpdate: new Date().toISOString()
       } as MaterialItem;
       
       if (user) {
