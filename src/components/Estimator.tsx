@@ -1981,68 +1981,62 @@ export default function Estimator({
                   <X size={24} />
                 </button>
               </div>
-              
-              <div className="p-8">
-                <div id="print-area" className="aspect-[11/8.5] bg-[#F5F5F5] rounded-2xl border-2 border-dashed border-[#E5E5E5] relative overflow-hidden flex items-center justify-center">
-                  {/* Simple SVG Diagram optimized for 8.5x11 printing */}
-                  <svg width="100%" height="100%" viewBox="0 0 1100 850" className="max-w-full">
-                    <defs>
-                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E0E0E0" strokeWidth="1"/>
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid)" />
+                           <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F5F5F7] p-8">
+                <div id="print-area" className="space-y-12">
+                  {/* Process runs into sections */}
+                  {(() => {
+                    const runsData = (estimate.runs && estimate.runs.length > 0)
+                      ? estimate.runs
+                      : [{ 
+                          id: 'default', 
+                          linearFeet: estimate.linearFeet || 100, 
+                          gates: estimate.gateCount || 0, 
+                          name: 'Main Run', 
+                          corners: 0,
+                          styleId: estimate.defaultStyleId!,
+                          visualStyleId: estimate.defaultVisualStyleId!,
+                          height: estimate.defaultHeight!,
+                          color: estimate.defaultColor!
+                        }];
+
+                    const sections: { runs: any[], id: number }[] = [];
+                    let currentSection: any[] = [];
                     
-                    {/* Render Runs */}
-                    {(() => {
-                      const runsData = estimate.runs && estimate.runs.length > 0 
-                        ? estimate.runs 
-                        : [{ 
-                            id: 'default', 
-                            linearFeet: estimate.linearFeet || 100, 
-                            gates: estimate.gateCount || 0, 
-                            name: 'Main Run', 
-                            corners: 0,
-                            styleId: estimate.defaultStyleId!,
-                            visualStyleId: estimate.defaultVisualStyleId!,
-                            height: estimate.defaultHeight!,
-                            color: estimate.defaultColor!
-                          }];
-                      
-                      const maxSpacing = (defaultStyle.type === 'Wood' && (estimate.defaultHeight || 6) === 8) ? 6 : 8;
-                      
-                      // 1. Calculate raw points based on directions or map coordinates
+                    runsData.forEach((run, i) => {
+                      if (i > 0 && run.isStartOfNewSection) {
+                        sections.push({ runs: currentSection, id: sections.length + 1 });
+                        currentSection = [];
+                      }
+                      currentSection.push(run);
+                    });
+                    sections.push({ runs: currentSection, id: sections.length + 1 });
+
+                    return sections.map((section, sIdx) => {
+                      // Logic for each section diagram
+                      const sectionRuns = section.runs;
                       const rawPoints: [number, number][] = [];
-                      const hasMapPoints = runsData.some(r => r.points && r.points.length >= 2);
+                      const hasMapPoints = sectionRuns.some(r => r.points && r.points.length >= 2);
 
                       if (hasMapPoints) {
-                        const firstPt = runsData.find(r => r.points && r.points.length >= 2)?.points![0];
+                        const firstPt = sectionRuns.find(r => r.points && r.points.length >= 2)?.points![0];
                         if (firstPt) {
-                          // We project lat/lng to a local Cartesian grid in FEET
-                          // One degree of latitude is ~364,000 feet
-                          // One degree of longitude is ~364,000 * cos(lat) feet
                           const latScale = 364000;
                           const lngScale = 364000 * Math.cos(firstPt.lat * Math.PI / 180);
-
                           rawPoints.push([0, 0]);
                           let currentLat = firstPt.lat;
                           let currentLng = firstPt.lng;
 
-                          runsData.forEach((run, i) => {
+                          sectionRuns.forEach((run, i) => {
                             if (run.points && run.points.length >= 2) {
                               const endPt = run.points[run.points.length - 1];
                               const dx = (endPt.lng - currentLng) * lngScale;
-                              const dy = (endPt.lat - currentLat) * -latScale; // Y is down in SVG usually, but here we calculate relative
-                              
+                              const dy = (endPt.lat - currentLat) * -latScale;
                               const prevX = rawPoints[rawPoints.length - 1][0];
                               const prevY = rawPoints[rawPoints.length - 1][1];
-                              
                               rawPoints.push([prevX + dx, prevY + dy]);
-                              
                               currentLat = endPt.lat;
                               currentLng = endPt.lng;
                             } else {
-                              // Fallback for runs without points? Just continue in a direction
                               const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
                               const dir = directions[i % 4];
                               const length = run.linearFeet || 0;
@@ -2051,21 +2045,17 @@ export default function Estimator({
                               rawPoints.push([prevX + dir[0] * length, prevY + dir[1] * length]);
                             }
                           });
+                        } else {
+                           rawPoints.push([0, 0], [sectionRuns[0].linearFeet || 100, 0]);
                         }
                       } else {
                         rawPoints.push([0, 0]);
                         let currentX = 0;
                         let currentY = 0;
-                        const directions = [
-                          [1, 0],   // Right
-                          [0, 1],   // Down
-                          [-1, 0],  // Left
-                          [0, -1]   // Up
-                        ];
-                        
-                        const isClosedFour = runsData.length === 4;
+                        const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+                        const isClosedFour = sectionRuns.length === 4;
 
-                        runsData.forEach((run, i) => {
+                        sectionRuns.forEach((run, i) => {
                           if (isClosedFour && i === 3) {
                             currentX = 0;
                             currentY = 0;
@@ -2078,39 +2068,27 @@ export default function Estimator({
                           rawPoints.push([currentX, currentY]);
                         });
                       }
-                      
-                      // 2. Calculate bounding box
+
+                      // Bounding box
                       const xs = rawPoints.map(p => p[0]);
                       const ys = rawPoints.map(p => p[1]);
                       const minX = Math.min(...xs);
                       const maxX = Math.max(...xs);
                       const minY = Math.min(...ys);
                       const maxY = Math.max(...ys);
-                      const rawWidth = maxX - minX;
-                      const rawHeight = maxY - minY;
-                      
-                      // 3. Scale and offset to fit SVG viewBox (1100x850 - Landscape Letter)
-                      // Internal padding to ensure labels (which are offset from lines) don't get cut off
-                      const paddingX = 100;
-                      const paddingY = 120;
+                      const rawWidth = Math.max(maxX - minX, 1);
+                      const rawHeight = Math.max(maxY - minY, 1);
+
+                      // Scale to fit 1100x850
+                      const paddingX = 120;
+                      const paddingY = 140;
                       const availWidth = 1100 - paddingX * 2;
                       const availHeight = 850 - paddingY * 2;
-                      
-                      let scale = 1;
-                      if (rawWidth > 0 && rawHeight > 0) {
-                        scale = Math.min(availWidth / rawWidth, availHeight / rawHeight);
-                      } else if (rawWidth > 0) {
-                        scale = availWidth / rawWidth;
-                      } else if (rawHeight > 0) {
-                        scale = availHeight / rawHeight;
-                      }
-                      
-                      // Cap scale to prevent tiny fences from looking gigantic, but allow it to be larger for better fit
+                      let scale = Math.min(availWidth / rawWidth, availHeight / rawHeight);
                       scale = Math.min(scale, 25);
                       
                       const scaledWidth = rawWidth * scale;
                       const scaledHeight = rawHeight * scale;
-                      
                       const offsetX = paddingX + (availWidth - scaledWidth) / 2 - minX * scale;
                       const offsetY = paddingY + (availHeight - scaledHeight) / 2 - minY * scale;
                       
@@ -2118,168 +2096,146 @@ export default function Estimator({
                         p[0] * scale + offsetX,
                         p[1] * scale + offsetY
                       ]);
-                      
+
                       return (
-                        <g>
-                          {/* Draw lines */}
-                          {scaledPoints.map((p, i) => {
-                            if (i === scaledPoints.length - 1) return null;
-                            const nextP = scaledPoints[i + 1];
-                            const run = runsData[i];
-                            const dirIndex = i % 4;
-                            
-                            const midX = p[0] + (nextP[0] - p[0]) / 2;
-                            const midY = p[1] + (nextP[1] - p[1]) / 2;
-                            
-                            const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || defaultStyle;
-                            const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
+                        <div key={section.id} className="relative bg-white rounded-[32px] border-2 border-american-blue/5 shadow-xl overflow-hidden page-break-after-always">
+                          <div className="absolute top-8 left-8 z-10 flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-american-blue flex items-center justify-center text-white shadow-lg">
+                              <Layers size={18} />
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-black uppercase tracking-wider text-american-blue leading-tight">Fence Line Section #{section.id}</h3>
+                              <p className="text-[9px] font-bold text-american-red uppercase tracking-widest">{sectionRuns.reduce((sum, r) => sum + r.linearFeet, 0)} Total Linear Feet</p>
+                            </div>
+                          </div>
 
-                            const runGateWidth = (run.gateDetails || []).reduce((sum: number, g: any) => sum + (g.width || 0), 0) || ((run.gates || 0) * 4);
-                            const fenceLinearFeet = Math.max(0, run.linearFeet - runGateWidth);
-                            const spacingLimit = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
-                            const sections = Math.max(1, Math.ceil(fenceLinearFeet / spacingLimit));
-                            const spacing = fenceLinearFeet / sections;
-                            
-                            const linePostsCoords = [];
-                            for (let j = 1; j < sections; j++) {
-                               const fraction = j / sections;
-                               const currentDistanceLF = run.linearFeet * fraction;
-                               
-                               const isInsideGate = (run.gateDetails || []).some(g => {
-                                 const start = g.position || 0;
-                                 return currentDistanceLF > (start - 0.5) && currentDistanceLF < (start + g.width + 0.5);
-                               });
+                          <div className="aspect-[11/8.5] relative">
+                            <svg width="100%" height="100%" viewBox="0 0 1100 850">
+                              <defs>
+                                <pattern id={`grid-${section.id}`} width="40" height="40" patternUnits="userSpaceOnUse">
+                                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#F0F0F0" strokeWidth="1"/>
+                                </pattern>
+                              </defs>
+                              <rect width="100%" height="100%" fill={`url(#grid-${section.id})`} />
+                              
+                              <g>
+                                {scaledPoints.map((p, i) => {
+                                  if (i === scaledPoints.length - 1) return null;
+                                  const nextP = scaledPoints[i + 1];
+                                  const run = sectionRuns[i];
+                                  const dirIndex = i % 4;
+                                  const midX = p[0] + (nextP[0] - p[0]) / 2;
+                                  const midY = p[1] + (nextP[1] - p[1]) / 2;
+                                  
+                                  const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || defaultStyle;
+                                  const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
 
-                               if (!isInsideGate) {
-                                 linePostsCoords.push([
-                                   p[0] + (nextP[0] - p[0]) * fraction,
-                                   p[1] + (nextP[1] - p[1]) * fraction
-                                 ]);
-                               }
-                            }
-                            
-                            let textOffsetX = 0;
-                            let textOffsetY = 0;
-                            let textAnchor = "middle";
-                            
-                            if (dirIndex === 0) { // Right
-                              textOffsetY = -80;
-                            } else if (dirIndex === 1) { // Down
-                              textOffsetX = 80;
-                              textAnchor = "start";
-                            } else if (dirIndex === 2) { // Left
-                              textOffsetY = 95;
-                            } else if (dirIndex === 3) { // Up
-                              textOffsetX = -80;
-                              textAnchor = "end";
-                            }
-                            
-                            return (
-                              <g key={`l-${i}`}>
-                                <line x1={p[0]} y1={p[1]} x2={nextP[0]} y2={nextP[1]} stroke="#3C3B6E" strokeWidth="10" strokeLinecap="round" />
-                                {linePostsCoords.map((pc, pIdx) => (
-                                  <circle key={`lp-${i}-${pIdx}`} cx={pc[0]} cy={pc[1]} r="8" fill="#A5A5A5" stroke="#FFFFFF" strokeWidth="2" />
-                                ))}
-                                <text 
-                                  x={midX + textOffsetX} 
-                                  y={midY + textOffsetY} 
-                                  textAnchor={textAnchor as any} 
-                                  className="text-[16px] font-bold fill-american-blue"
-                                  style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px', strokeLinecap: 'round', strokeLinejoin: 'round' }}
-                                >
-                                  <tspan x={midX + textOffsetX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
-                                  <tspan x={midX + textOffsetX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">
-                                    {runStyle.name}{runStyle.type === 'Wood' && ` (${run.woodType || estimate.woodType})`} - {runVisualStyle.name}
-                                  </tspan>
-                                  {runStyle.type === 'Metal' && (
-                                    <tspan x={midX + textOffsetX} dy="18" className="text-[12px] fill-american-blue/60 font-medium italic">
-                                      {run.ironRails || estimate.ironRails} | {run.ironTop || estimate.ironTop}
-                                    </tspan>
-                                  )}
-                                  <tspan x={midX + textOffsetX} dy={runStyle.type === 'Metal' ? "18" : "18"} className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
-                                </text>
+                                  const runGateWidth = (run.gateDetails || []).reduce((sum: number, g: any) => sum + (g.width || 0), 0) || ((run.gates || 0) * 4);
+                                  const spacingLimit = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
+                                  const sectionsCount = Math.max(1, Math.ceil(Math.max(0, run.linearFeet - runGateWidth) / spacingLimit));
+                                  const spacing = Math.max(0, run.linearFeet - runGateWidth) / sectionsCount;
+                                  
+                                  const linePostsCoords = [];
+                                  for (let j = 1; j < sectionsCount; j++) {
+                                    const fraction = j / sectionsCount;
+                                    const currentDistanceLF = run.linearFeet * fraction;
+                                    const isInsideGate = (run.gateDetails || []).some(g => {
+                                      const start = g.position || 0;
+                                      return currentDistanceLF > (start - 0.5) && currentDistanceLF < (start + g.width + 0.5);
+                                    });
+                                    if (!isInsideGate) {
+                                      linePostsCoords.push([
+                                        p[0] + (nextP[0] - p[0]) * fraction,
+                                        p[1] + (nextP[1] - p[1]) * fraction
+                                      ]);
+                                    }
+                                  }
+                                  
+                                  let tOX = 0, tOY = 0, tA = "middle";
+                                  if (dirIndex === 0) tOY = -80;
+                                  else if (dirIndex === 1) { tOX = 80; tA = "start"; }
+                                  else if (dirIndex === 2) tOY = 95;
+                                  else if (dirIndex === 3) { tOX = -80; tA = "end"; }
+                                  
+                                  return (
+                                    <g key={`l-${section.id}-${i}`}>
+                                      <line x1={p[0]} y1={p[1]} x2={nextP[0]} y2={nextP[1]} stroke="#3C3B6E" strokeWidth="10" strokeLinecap="round" />
+                                      {linePostsCoords.map((pc, pIdx) => (
+                                        <circle key={`lp-${section.id}-${i}-${pIdx}`} cx={pc[0]} cy={pc[1]} r="8" fill="#A5A5A5" stroke="#FFFFFF" strokeWidth="2" />
+                                      ))}
+                                      <text x={midX + tOX} y={midY + tOY} textAnchor={tA as any} className="text-[16px] font-bold fill-american-blue" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px' }}>
+                                        <tspan x={midX + tOX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
+                                        <tspan x={midX + tOX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">{runStyle.name} - {runVisualStyle.name}</tspan>
+                                        <tspan x={midX + tOX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(spacing)} OC</tspan>
+                                      </text>
+                                    </g>
+                                  );
+                                })}
+
+                                {sectionRuns.map((run, rIdx) => {
+                                  const gatesToDraw = run.gateDetails || Array.from({ length: run.gates || 0 }).map((_, i) => ({ id: `old-${i}`, type: 'Single' as const, width: 4, position: (run.linearFeet - 4) / 2 }));
+                                  if (gatesToDraw.length === 0) return null;
+                                  const p1 = scaledPoints[rIdx];
+                                  const p2 = scaledPoints[rIdx + 1];
+                                  const isHorizontal = (rIdx % 4) % 2 === 0;
+                                  
+                                  return gatesToDraw.map((gate, gIdx) => {
+                                    const fraction = ((gate.position || 0) + (gate.width / 2)) / run.linearFeet;
+                                    const x = p1[0] + (p2[0] - p1[0]) * fraction;
+                                    const y = p1[1] + (p2[1] - p1[1]) * fraction;
+                                    const vW = gate.width * scale;
+                                    return (
+                                      <g key={`g-${section.id}-${rIdx}-${gIdx}`} transform={`translate(${x}, ${y})`}>
+                                        {isHorizontal ? (
+                                          <>
+                                            <rect x={-vW/2} y="-8" width={vW} height="16" fill="#F5F5F5" />
+                                            <line x1={-vW/2} y1="0" x2={vW/2} y2="0" stroke="#B22234" strokeWidth="5" />
+                                            <circle cx={-vW/2} cy="0" r="8" fill="#B22234" />
+                                            <circle cx={vW/2} cy="0" r="8" fill="#B22234" />
+                                            <text y="25" textAnchor="middle" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <rect x="-8" y={-vW/2} width="16" height={vW} fill="#F5F5F5" />
+                                            <line x1="0" y1={-vW/2} x2="0" y2={vW/2} stroke="#B22234" strokeWidth="5" />
+                                            <circle cx="0" cy={-vW/2} r="8" fill="#B22234" />
+                                            <circle cx="0" cy={vW/2} r="8" fill="#B22234" />
+                                            <text x="25" y="4" textAnchor="start" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gate.type === 'Double' ? 'DBL ' : ''}GATE ({gate.width}')</text>
+                                          </>
+                                        )}
+                                      </g>
+                                    );
+                                  });
+                                })}
+
+                                {scaledPoints.map((p, i) => {
+                                  const isCorner = i !== 0 && i !== scaledPoints.length - 1;
+                                  return isCorner 
+                                    ? <rect key={`p-${section.id}-${i}`} x={p[0]-10} y={p[1]-10} width="20" height="20" fill="#3C3B6E" />
+                                    : <circle key={`p-${section.id}-${i}`} cx={p[0]} cy={p[1]} r="10" fill="#B22234" />;
+                                })}
                               </g>
-                            );
-                          })}
-                          
-                           {/* Draw Gates for each run */}
-                           {runsData.map((run, rIdx) => {
-                             const gatesToDraw = run.gateDetails || Array.from({ length: run.gates || 0 }).map((_, i) => ({ id: `old-${i}`, type: 'Single' as const, width: 4, position: (run.linearFeet - 4) / 2 }));
-                             if (gatesToDraw.length === 0) return null;
-                             
-                             const p1 = scaledPoints[rIdx];
-                             const p2 = scaledPoints[rIdx + 1];
-                             const dirIndex = rIdx % 4;
-                             const isHorizontal = dirIndex % 2 === 0;
-                             
-                             return gatesToDraw.map((gate, gIdx) => {
-                               const gateCenterLF = (gate.position || 0) + (gate.width / 2);
-                               const fraction = gateCenterLF / run.linearFeet;
-                               const x = p1[0] + (p2[0] - p1[0]) * fraction;
-                               const y = p1[1] + (p2[1] - p1[1]) * fraction;
-                               
-                               const visualWidth = gate.width * scale;
-                               const halfWidth = visualWidth / 2;
-                               
-                               const gateLabel = `${gate.type === 'Double' ? 'DBL ' : ''}GATE (${gate.width}')`;
-                               
-                               return (
-                                 <g key={`g-${rIdx}-${gIdx}`} transform={`translate(${x}, ${y})`}>
-                                   {isHorizontal ? (
-                                     <>
-                                       <rect x={-halfWidth} y="-8" width={visualWidth} height="16" fill="#F5F5F5" />
-                                       <line x1={-halfWidth} y1="0" x2={halfWidth} y2="0" stroke="#B22234" strokeWidth="5" />
-                                       <circle cx={-halfWidth} cy="0" r="8" fill="#B22234" />
-                                       <circle cx={halfWidth} cy="0" r="8" fill="#B22234" />
-                                       {gate.type === 'Double' && <circle cx="0" cy="0" r="5" fill="#B22234" />}
-                                       <text y="25" textAnchor="middle" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gateLabel}</text>
-                                     </>
-                                   ) : (
-                                     <>
-                                       <rect x="-8" y={-halfWidth} width="16" height={visualWidth} fill="#F5F5F5" />
-                                       <line x1="0" y1={-halfWidth} x2="0" y2={halfWidth} stroke="#B22234" strokeWidth="5" />
-                                       <circle cx="0" cy={-halfWidth} r="8" fill="#B22234" />
-                                       <circle cx="0" cy={halfWidth} r="8" fill="#B22234" />
-                                       {gate.type === 'Double' && <circle cx="0" cy="0" r="5" fill="#B22234" />}
-                                       <text x="25" y="4" textAnchor="start" className="text-[14px] font-bold fill-american-red" style={{ paintOrder: 'stroke', stroke: 'white' }}>{gateLabel}</text>
-                                     </>
-                                   )}
-                                 </g>
-                               );
-                             });
-                           })}
-                          
-                          {/* Draw Posts (on top of lines and gates) */}
-                          {scaledPoints.map((p, i) => {
-                            const isStart = i === 0;
-                            const isEnd = i === scaledPoints.length - 1;
-                            const isCorner = !isStart && !isEnd;
-                            
-                            if (isCorner) {
-                              return <rect key={`p-${i}`} x={p[0]-10} y={p[1]-10} width="20" height="20" fill="#3C3B6E" />;
-                            } else {
-                              return <circle key={`p-${i}`} cx={p[0]} cy={p[1]} r="10" fill="#B22234" />
-                            }
-                          })}
-                        </g>
+                            </svg>
+
+                            <div className="absolute bottom-8 left-8 flex gap-4">
+                              <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                                <div className="w-3 h-3 bg-american-red rounded-full" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">End Post</span>
+                              </div>
+                              <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                                <div className="w-3 h-3 bg-american-blue rounded-sm" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Corner</span>
+                              </div>
+                              <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
+                                <div className="w-3 h-3 bg-[#A5A5A5] rounded-full border border-white" />
+                                <span className="text-[9px] font-black uppercase tracking-widest leading-none">Line</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       );
-                    })()}
-                  </svg>
-                  
-                    <div className="absolute bottom-6 left-6 flex gap-4">
-                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                        <div className="w-3 h-3 bg-american-red rounded-full" />
-                        <span className="text-[10px] font-bold uppercase">End Post</span>
-                      </div>
-                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                        <div className="w-3 h-3 bg-american-blue rounded-sm" />
-                        <span className="text-[10px] font-bold uppercase">Corner Post</span>
-                      </div>
-                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[#E5E5E5] shadow-sm">
-                        <div className="w-3 h-3 bg-[#A5A5A5] rounded-full border border-white" />
-                        <span className="text-[10px] font-bold uppercase">Line Post</span>
-                      </div>
-                    </div>
+                    });
+                  })()}
                 </div>
 
                 <div className="mt-8 grid grid-cols-3 gap-6">

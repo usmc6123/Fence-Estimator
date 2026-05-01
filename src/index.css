@@ -175,5 +175,9 @@ input[type=number] {
   .print-no-break {
     break-inside: avoid;
   }
+
+  .page-break-after-always {
+    break-after: page;
+  }
 }
 
