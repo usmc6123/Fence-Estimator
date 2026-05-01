@@ -23,6 +23,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
     { id: 'financials', label: 'Financials', icon: Wallet },
     { id: 'takeoff', label: 'Material Take-off', icon: FileText },
     { id: 'labor-breakdown', label: 'Labor Breakdown', icon: Shield },
+    { id: 'customer-contract', label: 'Customer Contract', icon: FileText },
     { id: 'quotes', label: 'Supplier Quotes', icon: TrendingUp },
     { id: 'library', label: 'Materials', icon: Book },
     { id: 'labor', label: 'Labor Rates', icon: Hammer },

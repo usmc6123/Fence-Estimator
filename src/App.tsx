@@ -10,6 +10,7 @@ import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
 import MaterialTakeOff from './components/MaterialTakeOff';
 import LaborTakeOff from './components/LaborTakeOff';
+import CustomerContract from './components/CustomerContract';
 import SupplierOrderForm from './components/SupplierOrderForm';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
@@ -25,6 +26,10 @@ import { collection, query, where, onSnapshot, doc, writeBatch, getDocs } from '
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
+  const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
+    const saved = localStorage.getItem('fence_pro_customer_contract_ai_scope');
+    return saved ? JSON.parse(saved) : null;
+  });
 
   React.useEffect(() => {
     testConnection();
@@ -337,6 +342,15 @@ export default function App() {
           quotes={quotes}
           aiProjectScope={aiProjectScope}
           setAiProjectScope={setAiProjectScope}
+        />
+      )}
+      {activeTab === 'customer-contract' && (
+        <CustomerContract 
+          estimate={estimate} 
+          materials={materials} 
+          laborRates={laborRates}
+          aiContractScope={aiContractScope}
+          setAiContractScope={setAiContractScope}
         />
       )}
       {activeTab === 'supplier-order' && (
