@@ -22,6 +22,7 @@ interface SavedEstimatesProps {
 export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, user }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'archived'>('active');
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
 
   const filteredEstimates = savedEstimates.filter(est => {
     const name = est.customerName || 'Unnamed Prospect';
@@ -49,8 +50,6 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       </div>
     );
   }
-
-  const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
 
   const deleteEstimate = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
