@@ -25,6 +25,9 @@ interface MaterialTakeOffProps {
 export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
+  const [pricingStrategy, setPricingStrategy] = React.useState<'best' | 'supplier'>('best');
+  const [selectedSupplier, setSelectedSupplier] = React.useState<string>('');
+  
   const [newItem, setNewItem] = React.useState({
     name: '',
     unit: 'each',
@@ -33,7 +36,37 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
     category: 'Hardware'
   });
 
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
+  // Unique suppliers from quotes
+  const uniqueSuppliers = React.useMemo(() => 
+    Array.from(new Set(quotes.map(q => q.supplierName))).sort()
+  , [quotes]);
+
+  // Resolve materials based on chosen strategy
+  const resolvedMaterials = React.useMemo(() => {
+    if (pricingStrategy === 'best' || !selectedSupplier) return materials;
+
+    const supplierQuotes = quotes
+      .filter(q => q.supplierName === selectedSupplier)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return materials.map(m => {
+      let quotedPrice: number | undefined;
+      for (const quote of supplierQuotes) {
+        const item = quote.items.find(i => i.mappedMaterialId === m.id);
+        if (item) {
+          quotedPrice = item.unitPrice;
+          break;
+        }
+      }
+
+      if (quotedPrice !== undefined) {
+        return { ...m, cost: quotedPrice };
+      }
+      return m;
+    });
+  }, [materials, quotes, pricingStrategy, selectedSupplier]);
+
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
   const [expandedRuns, setExpandedRuns] = React.useState<Record<string, boolean>>(
     data.runs.reduce((acc, run) => ({ ...acc, [run.runId]: true }), {})
   );
@@ -174,39 +207,100 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700 takeoff-page print:max-w-none print:p-0 print:m-0 print:space-y-4">
       {/* Header Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg">
-            <FileText size={24} />
+      <div className="flex flex-col gap-6 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-american-blue flex items-center justify-center text-white shadow-lg">
+              <FileText size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-american-blue uppercase tracking-tight">Material Take-off</h1>
+              <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Detailed Inventory & Logistics</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-black text-american-blue uppercase tracking-tight">Material Take-off</h1>
-            <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Detailed Inventory & Logistics</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowPrices(!showPrices)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
+            >
+              {showPrices ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPrices ? 'Hide Prices' : 'Show Prices'}
+            </button>
+            <button
+              onClick={handleOpenNewTab}
+              className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
+              title="Open in new window for better printing"
+            >
+              <ExternalLink size={16} />
+              New Window
+            </button>
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-105 transition-transform active:scale-95"
+            >
+              <Printer size={16} />
+              Print Take-off
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowPrices(!showPrices)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
-          >
-            {showPrices ? <EyeOff size={16} /> : <Eye size={16} />}
-            {showPrices ? 'Hide Prices' : 'Show Prices'}
-          </button>
-          <button
-            onClick={handleOpenNewTab}
-            className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
-            title="Open in new window for better printing"
-          >
-            <ExternalLink size={16} />
-            New Window
-          </button>
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-105 transition-transform active:scale-95"
-          >
-            <Printer size={16} />
-            Print Take-off
-          </button>
+
+        {/* Pricing Strategy Selector */}
+        <div className="pt-6 border-t-2 border-[#F5F5F7] flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center p-1 bg-[#F5F5F7] rounded-2xl w-full md:w-auto">
+            <button
+              onClick={() => setPricingStrategy('best')}
+              className={cn(
+                "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                pricingStrategy === 'best' 
+                  ? "bg-white text-american-blue shadow-md" 
+                  : "text-[#999999] hover:text-american-blue"
+              )}
+            >
+              Best Prices
+            </button>
+            <button
+              onClick={() => {
+                setPricingStrategy('supplier');
+                if (!selectedSupplier && uniqueSuppliers.length > 0) {
+                  setSelectedSupplier(uniqueSuppliers[0]);
+                }
+              }}
+              className={cn(
+                "flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                pricingStrategy === 'supplier' 
+                  ? "bg-white text-american-blue shadow-md" 
+                  : "text-[#999999] hover:text-american-blue"
+              )}
+            >
+              Single Supplier
+            </button>
+          </div>
+
+          {pricingStrategy === 'supplier' && (
+            <div className="flex items-center gap-3 w-full md:w-auto animate-in slide-in-from-right-4 duration-300">
+              <label className="text-[10px] font-black uppercase tracking-widest text-american-red whitespace-nowrap">Select Supplier:</label>
+              <select
+                value={selectedSupplier}
+                onChange={(e) => setSelectedSupplier(e.target.value)}
+                className="flex-1 md:w-64 px-4 py-2 bg-[#F5F5F7] border-none rounded-xl text-xs font-bold text-american-blue outline-none ring-2 ring-transparent focus:ring-american-blue/10 appearance-none cursor-pointer"
+              >
+                {uniqueSuppliers.length === 0 ? (
+                  <option disabled>No supplier quotes uploaded</option>
+                ) : (
+                  uniqueSuppliers.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))
+                )}
+              </select>
+            </div>
+          )}
+
+          {pricingStrategy === 'best' && (
+            <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Optimal Sourcing Mode Active
+            </div>
+          )}
         </div>
       </div>
 
@@ -479,11 +573,23 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                               const sellingPrice = item.unitCost + unitMarkup + unitTax;
                               const lineTotal = item.total * (1 + markupFactor + taxFactor);
 
+                              // Check if price is fallback
+                              const isFallback = pricingStrategy === 'supplier' && 
+                                !quotes.filter(q => q.supplierName === selectedSupplier)
+                                  .some(q => q.items.some(qi => qi.mappedMaterialId === item.id));
+
                               return (
                                   <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
                                     <td className="px-6 py-4">
                                       <div className="flex flex-col">
-                                        <span>{item.name}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span>{item.name}</span>
+                                          {isFallback && showPrices && (
+                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[8px] font-black uppercase tracking-tighter rounded-md">
+                                              Library Price
+                                            </span>
+                                          )}
+                                        </div>
                                         {item.formula && (
                                           <span className="text-[9px] font-bold text-american-red/60 uppercase tracking-tighter mt-0.5">
                                             {item.formula}
@@ -640,12 +746,24 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                       </td>
                     </tr>
                   ) : (
-                    data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => (
-                      <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
-                        <td className="px-8 py-5 flex items-center gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-american-blue/30" />
-                          <span className="flex-1">{item.name}</span>
-                        </td>
+                    data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => {
+                      const isFallback = pricingStrategy === 'supplier' && 
+                        !quotes.filter(q => q.supplierName === selectedSupplier)
+                          .some(q => q.items.some(qi => qi.mappedMaterialId === item.id));
+
+                      return (
+                        <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
+                          <td className="px-8 py-5 flex items-center gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-american-blue/30" />
+                            <div className="flex flex-col">
+                              <span>{item.name}</span>
+                              {isFallback && showPrices && (
+                                <span className="text-[8px] font-black uppercase tracking-tighter text-orange-600 mt-0.5">
+                                  Not in supplier quotes - Using library price
+                                </span>
+                              )}
+                            </div>
+                          </td>
                         <td className="px-8 py-5 text-center">
                           <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">{item.qty} {item.unit}</span>
                         </td>
@@ -654,9 +772,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                         </td>
                         {showPrices && <td className="px-8 py-5 text-right font-black text-american-blue/60 print:hidden">{formatCurrency(item.total)}</td>}
                       </tr>
-                    ))
-                  )}
-                </tbody>
+                    );
+                  })
+                )}
+              </tbody>
               </table>
             </div>
           </div>
