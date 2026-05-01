@@ -14,7 +14,7 @@ import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -52,6 +52,8 @@ export default function Estimator({
   const [showSupplierForm, setShowSupplierForm] = React.useState(false);
   const [showDiagram, setShowDiagram] = React.useState(false);
   const [leftTab, setLeftTab] = React.useState<'Dimensions' | 'Styles'>('Dimensions');
+
+  const [showGhlSync, setShowGhlSync] = React.useState(false);
 
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
@@ -186,6 +188,53 @@ export default function Estimator({
     try {
       await setDoc(doc(db, 'estimates', newId), estimateToSave);
       setShowSuccess(true);
+
+      // GHL Webhook Integration
+      try {
+        const settingsDoc = await getDoc(doc(db, 'companySettings', 'main'));
+        if (settingsDoc.exists()) {
+          const settings = settingsDoc.data();
+          if (settings.ghlWebhookUrl && settings.autoSyncEstimates) {
+            const webhookBody = {
+              customerName: estimateToSave.customerName || 'N/A',
+              customerEmail: estimateToSave.customerEmail || 'N/A',
+              customerPhone: estimateToSave.customerPhone || 'N/A',
+              customerAddress: estimateToSave.customerAddress || 'N/A',
+              projectScope: actualLF,
+              fenceType: FENCE_STYLES.find(s => s.id === estimateToSave.defaultStyleId)?.name || 'Unknown',
+              fenceHeight: estimateToSave.defaultHeight || 0,
+              totalCost: results.total,
+              materialCost: results.materialSubtotal,
+              laborCost: results.laborCost,
+              estimateId: newId,
+              createdAt: now,
+              lineItems: results.items.map(item => ({
+                name: item.name,
+                qty: item.qty,
+                unit: item.unit,
+                total: item.total,
+                category: item.category
+              }))
+            };
+
+            const response = await fetch(settings.ghlWebhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(webhookBody)
+            });
+
+            if (response.ok) {
+              setShowGhlSync(true);
+              setTimeout(() => setShowGhlSync(false), 3000);
+            } else {
+              console.warn("GHL Webhook returned non-2xx response:", response.status);
+            }
+          }
+        }
+      } catch (webhookError) {
+        console.error("GHL Webhook failed to sync:", webhookError);
+      }
+
       setTimeout(() => {
         setShowSuccess(false);
         setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
@@ -1547,16 +1596,33 @@ export default function Estimator({
               </div>
             )}
 
-            {showSuccess && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="absolute inset-x-0 bottom-0 bg-[#00FF00] p-4 text-[#1A1A1A] text-center font-bold flex items-center justify-center gap-2 z-50 shadow-2xl"
-              >
-                <CheckCircle2 size={18} />
-                Dossier Saved to Cloud!
-              </motion.div>
-            )}
+            <AnimatePresence>
+              {showSuccess && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="absolute inset-x-0 bottom-0 bg-[#00FF00] p-4 text-[#1A1A1A] text-center font-bold flex items-center justify-center gap-2 z-50 shadow-2xl"
+                >
+                  <CheckCircle2 size={18} />
+                  Dossier Saved to Cloud!
+                </motion.div>
+              )}
+
+              {showGhlSync && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 50 }}
+                  className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-american-blue text-white px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-3 shadow-2xl z-[100] border-2 border-white/20"
+                >
+                  <div className="h-6 w-6 rounded-lg bg-white/20 flex items-center justify-center">
+                    <TrendingUp size={14} />
+                  </div>
+                  Synced to GHL CRM
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
 
           {/* Material Breakdown - Right Column */}
