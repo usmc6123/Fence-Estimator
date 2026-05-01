@@ -50,7 +50,7 @@ export default function SupplierOrderForm({ estimate, materials, laborRates }: S
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700 takeoff-page print:max-w-none print:p-0 print:m-0">
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-700 takeoff-page printing-supplier-form print:max-w-none print:p-0 print:m-0 print:break-inside-avoid">
       {/* Header Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/5 print:hidden">
         <div className="flex items-center gap-4">
@@ -82,7 +82,7 @@ export default function SupplierOrderForm({ estimate, materials, laborRates }: S
       </div>
 
       {/* Printable Form */}
-      <div className="bg-white rounded-[40px] shadow-2xl border-2 border-american-blue/5 overflow-hidden print:border-0 print:shadow-none">
+      <div className="bg-white rounded-[40px] shadow-2xl border-2 border-american-blue/5 overflow-hidden print:border-0 print:shadow-none order-form-print-area">
         {/* Printable Header */}
         <div className="p-10 border-b-4 border-american-blue/5 bg-[#FBFBFB]">
           <div className="flex flex-col md:flex-row justify-between items-start gap-8">
