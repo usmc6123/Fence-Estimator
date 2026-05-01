@@ -172,7 +172,10 @@ export function calculateDetailedTakeOff(
       r100 = 1;
     }
 
-    const tCost = (r200 * m200.cost) + (r100 * m100.cost);
+    const m200Cost = m200?.cost || 0;
+    const m100Cost = m100?.cost || 0;
+
+    const tCost = (r200 * m200Cost) + (r100 * m100Cost);
     wireCostsPerLF[key] = tCost / totalLF;
 
     if (r200 > 0) {
@@ -181,8 +184,8 @@ export function calculateDetailedTakeOff(
         name: m200.name,
         qty: r200,
         unit: 'each',
-        unitCost: m200.cost,
-        total: r200 * m200.cost,
+        unitCost: m200Cost,
+        total: r200 * m200Cost,
         category: 'Infill'
       });
     }
@@ -192,8 +195,8 @@ export function calculateDetailedTakeOff(
         name: m100.name,
         qty: r100,
         unit: 'each',
-        unitCost: m100.cost,
-        total: r100 * m100.cost,
+        unitCost: m100Cost,
+        total: r100 * m100Cost,
         category: 'Infill'
       });
     }
@@ -202,20 +205,22 @@ export function calculateDetailedTakeOff(
   // Paint aggregation (1 gallon per 200')
   let paintAvgCostPerLF = 0;
   if (totalPaintLF > 0) {
-    const paintMat = materials.find(m => m.id === 'p-paint-gal')!;
-    const totalGallons = Math.ceil(totalPaintLF / 200);
-    const totalPaintCost = totalGallons * paintMat.cost;
-    paintAvgCostPerLF = totalPaintCost / totalPaintLF;
-    
-    globalPaintItems.push({
-      id: paintMat.id,
-      name: paintMat.name,
-      qty: totalGallons,
-      unit: paintMat.unit,
-      unitCost: paintMat.cost,
-      total: totalPaintCost,
-      category: 'Hardware'
-    });
+    const paintMat = materials.find(m => m.id === 'p-paint-gal');
+    if (paintMat) {
+      const totalGallons = Math.ceil(totalPaintLF / 200);
+      const totalPaintCost = totalGallons * paintMat.cost;
+      paintAvgCostPerLF = totalPaintCost / totalPaintLF;
+      
+      globalPaintItems.push({
+        id: paintMat.id,
+        name: paintMat.name,
+        qty: totalGallons,
+        unit: paintMat.unit,
+        unitCost: paintMat.cost,
+        total: totalPaintCost,
+        category: 'Hardware'
+      });
+    }
   }
 
   // Site Prep Logic (Matches Estimator)
@@ -299,7 +304,7 @@ export function calculateDetailedTakeOff(
     let railId = isStained ? 'w-rail-pine-12-stained' : 'w-rail-pine-12';
     if (woodType === 'Japanese Cedar') railId = isStained ? 'w-rail-j-cedar-12-stained' : 'w-rail-j-cedar-12';
     else if (woodType === 'Western Red Cedar') railId = isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12';
-    const railMat = materials.find(m => m.id === railId)!;
+    const railMat = materials.find(m => m.id === railId) || { cost: 0, name: 'Unknown Rail', unit: 'each', id: 'unknown-rail' } as MaterialItem;
 
     if (run.gateDetails && run.gateDetails.length > 0) {
       run.gateDetails.forEach(gate => {
@@ -333,16 +338,18 @@ export function calculateDetailedTakeOff(
 
           if (gate.type === 'Double') {
             // Drive Gate (Shark kit includes hinges/latches usually, but let's be explicit per request)
-            const sharkKit = materials.find(m => m.id === 'g-kit-shark')!;
-            gateItems.push({
-              id: sharkKit.id,
-              name: sharkKit.name,
-              qty: 1,
-              unit: sharkKit.unit,
-              unitCost: sharkKit.cost,
-              total: sharkKit.cost,
-              category: 'Gate'
-            });
+            const sharkKit = materials.find(m => m.id === 'g-kit-shark');
+            if (sharkKit) {
+              gateItems.push({
+                id: sharkKit.id,
+                name: sharkKit.name,
+                qty: 1,
+                unit: sharkKit.unit,
+                unitCost: sharkKit.cost,
+                total: sharkKit.cost,
+                category: 'Gate'
+              });
+            }
 
             // Cane Bolts
             const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-48');
@@ -359,16 +366,18 @@ export function calculateDetailedTakeOff(
             }
           } else {
             // Walk Gate
-            const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge')!;
-            gateItems.push({
-              id: hingeKit.id,
-              name: hingeKit.name,
-              qty: 1,
-              unit: hingeKit.unit,
-              unitCost: hingeKit.cost,
-              total: hingeKit.cost,
-              category: 'Gate'
-            });
+            const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge');
+            if (hingeKit) {
+              gateItems.push({
+                id: hingeKit.id,
+                name: hingeKit.name,
+                qty: 1,
+                unit: hingeKit.unit,
+                unitCost: hingeKit.cost,
+                total: hingeKit.cost,
+                category: 'Gate'
+              });
+            }
 
             const latchMat = materials.find(m => m.id === 'g-latch-std');
             if (latchMat) {
@@ -396,8 +405,8 @@ export function calculateDetailedTakeOff(
           }
         } else if (runStyle.type === 'Pipe') {
           // Pipe Fence specific gates
-          const gateMat = materials.find(m => m.id === `p-gate-${width}ft`)!;
-          const hwMat = materials.find(m => m.id === `p-gate-hardware-${width}ft`)!;
+          const gateMat = materials.find(m => m.id === `p-gate-${width}ft`);
+          const hwMat = materials.find(m => m.id === `p-gate-hardware-${width}ft`);
           
           if (gateMat) {
             gateItems.push({
@@ -439,16 +448,18 @@ export function calculateDetailedTakeOff(
           }
         } else if (runStyle.type === 'Metal') {
           // Metal Gate
-          const gateMat = materials.find(m => m.category === 'Gate' && m.id === estimate.gateStyleId) || materials.find(m => m.category === 'Gate')!;
-          gateItems.push({
-            id: gateMat.id,
-            name: `${gateMat.name} (${width}')`,
-            qty: 1,
-            unit: gateMat.unit,
-            unitCost: gateMat.cost,
-            total: gateMat.cost,
-            category: 'Gate'
-          });
+          const gateMat = materials.find(m => m.category === 'Gate' && m.id === estimate.gateStyleId) || materials.find(m => m.category === 'Gate');
+          if (gateMat) {
+            gateItems.push({
+              id: gateMat.id,
+              name: `${gateMat.name} (${width}')`,
+              qty: 1,
+              unit: gateMat.unit,
+              unitCost: gateMat.cost,
+              total: gateMat.cost,
+              category: 'Gate'
+            });
+          }
 
           // J-Bolt Hinges
           const hingeMat = materials.find(m => m.id === 'g-hinge-jbolt');
@@ -598,82 +609,90 @@ export function calculateDetailedTakeOff(
 
           // Single Gate Posts (2x2)
           if (singleGatePostCount > 0) {
-            const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`)!;
-            const cost = singleGatePostCount * gatePostMat.cost;
-            runFenceMaterialCost += cost;
-            runItems.push({
-              id: gatePostMat.id,
-              name: `${gatePostMat.name} (Single Gate Post)`,
-              qty: singleGatePostCount,
-              unit: gatePostMat.unit,
-              unitCost: gatePostMat.cost,
-              total: cost,
-              category: 'Structure'
-            });
+            const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`);
+            if (gatePostMat) {
+              const cost = singleGatePostCount * gatePostMat.cost;
+              runFenceMaterialCost += cost;
+              runItems.push({
+                id: gatePostMat.id,
+                name: `${gatePostMat.name} (Single Gate Post)`,
+                qty: singleGatePostCount,
+                unit: gatePostMat.unit,
+                unitCost: gatePostMat.cost,
+                total: cost,
+                category: 'Structure'
+              });
+            }
           }
 
           // Drive Gate Posts (4x4)
           if (driveGatePostCount > 0) {
-            const gatePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-${postHeight - 1}`)!;
-            const cost = driveGatePostCount * gatePostMat.cost;
+            const gatePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-${postHeight - 1}`);
+            if (gatePostMat) {
+              const cost = driveGatePostCount * gatePostMat.cost;
+              runFenceMaterialCost += cost;
+              runItems.push({
+                id: gatePostMat.id,
+                name: `${gatePostMat.name} (Drive Gate Post)`,
+                qty: driveGatePostCount,
+                unit: gatePostMat.unit,
+                unitCost: gatePostMat.cost,
+                total: cost,
+                category: 'Structure'
+              });
+            }
+          }
+        } else {
+          // Pipe Fence logic remains the same
+          const prefix = 'p-post-238-';
+          const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`);
+          
+          if (gatePostMat) {
+            const cost = gatePostCountForRun * gatePostMat.cost;
             runFenceMaterialCost += cost;
             runItems.push({
               id: gatePostMat.id,
-              name: `${gatePostMat.name} (Drive Gate Post)`,
-              qty: driveGatePostCount,
+              name: `${gatePostMat.name} (Gate Post)`,
+              qty: gatePostCountForRun,
               unit: gatePostMat.unit,
               unitCost: gatePostMat.cost,
               total: cost,
               category: 'Structure'
             });
           }
-        } else {
-          // Pipe Fence logic remains the same
-          const prefix = 'p-post-238-';
-          const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`)!;
-          
-          const cost = gatePostCountForRun * gatePostMat.cost;
-          runFenceMaterialCost += cost;
-          runItems.push({
-            id: gatePostMat.id,
-            name: `${gatePostMat.name} (Gate Post)`,
-            qty: gatePostCountForRun,
-            unit: gatePostMat.unit,
-            unitCost: gatePostMat.cost,
-            total: cost,
-            category: 'Structure'
-          });
         }
       }
 
       // Hinge Posts (1' deeper) for Wood Fence
       if (hingePostCount > 0 && runStyle.type === 'Wood') {
         const hingeId = run.height === 8 ? 'w-post-metal-12' : 'w-post-metal-9';
-        const hingeMat = materials.find(m => m.id === hingeId)!;
-        const cost = hingePostCount * hingeMat.cost;
-        runFenceMaterialCost += cost;
-        runItems.push({
-          id: hingeMat.id,
-          name: `${hingeMat.name} (Gate Hinge)`,
-          qty: hingePostCount,
-          unit: hingeMat.unit,
-          unitCost: hingeMat.cost,
-          total: cost,
-          category: 'Structure'
-        });
+        const hingeMat = materials.find(m => m.id === hingeId);
+        if (hingeMat) {
+          const cost = hingePostCount * hingeMat.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: hingeMat.id,
+            name: `${hingeMat.name} (Gate Hinge)`,
+            qty: hingePostCount,
+            unit: hingeMat.unit,
+            unitCost: hingeMat.cost,
+            total: cost,
+            category: 'Structure'
+          });
+        }
       }
 
       // Post Caps
       const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
       const capId = runStyle.type === 'Pipe' ? 'pc-dome' : (runTopStyle === 'Flat Top' ? 'pc-flat' : 'pc-dome');
-      const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome')!;
+      const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome');
       
       // Post caps will only be used at end posts, corner posts, and gate posts for Pipe Fence
       const capQty = runStyle.type === 'Pipe' 
         ? Math.max(0, (runPostCount - runLinePosts) + gatePostCountForRun) 
         : runPostCount;
 
-      if (capQty > 0) {
+      if (capQty > 0 && capMat) {
         const capCost = capQty * capMat.cost;
         runFenceMaterialCost += capCost;
         runItems.push({
@@ -704,54 +723,60 @@ export function calculateDetailedTakeOff(
         bagsPerPost = logic.concretePerPost;
       }
 
-      const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80')!;
-      const concreteQty = Math.ceil(runPostCount * bagsPerPost);
-      const concreteCost = concreteQty * concreteMat.cost;
-      runFenceMaterialCost += concreteCost;
-      runItems.push({
-        id: concreteMat.id,
-        name: concreteMat.name,
-        qty: concreteQty,
-        unit: concreteMat.unit,
-        unitCost: concreteMat.cost,
-        total: concreteCost,
-        category: 'Installation'
-      });
+      const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80');
+      if (concreteMat) {
+        const concreteQty = Math.ceil(runPostCount * bagsPerPost);
+        const concreteCost = concreteQty * concreteMat.cost;
+        runFenceMaterialCost += concreteCost;
+        runItems.push({
+          id: concreteMat.id,
+          name: concreteMat.name,
+          qty: concreteQty,
+          unit: concreteMat.unit,
+          unitCost: concreteMat.cost,
+          total: concreteCost,
+          category: 'Installation'
+        });
+      }
 
       // Brackets and Lags for Wood Fence
       if (runStyle.type === 'Wood' && runPostCount > 0) {
         const bracketsPerPost = (run.height === 8 ? 4 : 3) + (!!(run.hasRotBoard ?? estimate.hasRotBoard) ? 1 : 0);
-        const bracketMat = materials.find(m => m.id === 'h-bracket-w')!;
-        const bracketQty = runPostCount * bracketsPerPost;
-        const bracketFormula = `${runPostCount} posts × ${bracketsPerPost} brackets/post`;
-        const bracketCost = bracketQty * bracketMat.cost;
-        runFenceMaterialCost += bracketCost;
-        runItems.push({
-          id: bracketMat.id,
-          name: bracketMat.name,
-          qty: bracketQty,
-          unit: bracketMat.unit,
-          unitCost: bracketMat.cost,
-          total: bracketCost,
-          category: 'Hardware',
-          formula: bracketFormula
-        });
+        const bracketMat = materials.find(m => m.id === 'h-bracket-w');
+        if (bracketMat) {
+          const bracketQty = runPostCount * bracketsPerPost;
+          const bracketFormula = `${runPostCount} posts × ${bracketsPerPost} brackets/post`;
+          const bracketCost = bracketQty * bracketMat.cost;
+          runFenceMaterialCost += bracketCost;
+          runItems.push({
+            id: bracketMat.id,
+            name: bracketMat.name,
+            qty: bracketQty,
+            unit: bracketMat.unit,
+            unitCost: bracketMat.cost,
+            total: bracketCost,
+            category: 'Hardware',
+            formula: bracketFormula
+          });
 
-        const lagMat = materials.find(m => m.id === 'h-lag-14')!;
-        const lagQty = bracketQty * 4;
-        const lagFormula = `${bracketQty} brackets × 4 lag screws/bracket`;
-        const lagCost = lagQty * lagMat.cost;
-        runFenceMaterialCost += lagCost;
-        runItems.push({
-          id: lagMat.id,
-          name: lagMat.name,
-          qty: lagQty,
-          unit: lagMat.unit,
-          unitCost: lagMat.cost,
-          total: lagCost,
-          category: 'Hardware',
-          formula: lagFormula
-        });
+          const lagMat = materials.find(m => m.id === 'h-lag-14');
+          if (lagMat) {
+            const lagQty = bracketQty * 4;
+            const lagFormula = `${bracketQty} brackets × 4 lag screws/bracket`;
+            const lagCost = lagQty * lagMat.cost;
+            runFenceMaterialCost += lagCost;
+            runItems.push({
+              id: lagMat.id,
+              name: lagMat.name,
+              qty: lagQty,
+              unit: lagMat.unit,
+              unitCost: lagMat.cost,
+              total: lagCost,
+              category: 'Hardware',
+              formula: lagFormula
+            });
+          }
+        }
       }
     }
 
@@ -845,33 +870,37 @@ export function calculateDetailedTakeOff(
       if (runStyle.type === 'Metal') {
         const installType = run.ironInstallType || estimate.ironInstallType || 'Bolt up';
         if (installType !== 'Weld up') {
-          const bracketMat = materials.find(m => m.id === 'm-bracket')!;
-          const bracketQty = panelQty * 4;
-          const bracketCost = bracketQty * bracketMat.cost;
-          runFenceMaterialCost += bracketCost;
-          runItems.push({
-            id: bracketMat.id,
-            name: bracketMat.name,
-            qty: bracketQty,
-            unit: bracketMat.unit,
-            unitCost: bracketMat.cost,
-            total: bracketCost,
-            category: 'Hardware'
-          });
+          const bracketMat = materials.find(m => m.id === 'm-bracket');
+          if (bracketMat) {
+            const bracketQty = panelQty * 4;
+            const bracketCost = bracketQty * bracketMat.cost;
+            runFenceMaterialCost += bracketCost;
+            runItems.push({
+              id: bracketMat.id,
+              name: bracketMat.name,
+              qty: bracketQty,
+              unit: bracketMat.unit,
+              unitCost: bracketMat.cost,
+              total: bracketCost,
+              category: 'Hardware'
+            });
 
-          const screwMat = materials.find(m => m.id === 'm-screw-self-tap')!;
-          const screwQty = bracketQty; // 1 screw per bracket
-          const screwCost = screwQty * screwMat.cost;
-          runFenceMaterialCost += screwCost;
-          runItems.push({
-            id: screwMat.id,
-            name: screwMat.name,
-            qty: screwQty,
-            unit: screwMat.unit,
-            unitCost: screwMat.cost,
-            total: screwCost,
-            category: 'Hardware'
-          });
+            const screwMat = materials.find(m => m.id === 'm-screw-self-tap');
+            if (screwMat) {
+              const screwQty = bracketQty; // 1 screw per bracket
+              const screwCost = screwQty * screwMat.cost;
+              runFenceMaterialCost += screwCost;
+              runItems.push({
+                id: screwMat.id,
+                name: screwMat.name,
+                qty: screwQty,
+                unit: screwMat.unit,
+                unitCost: screwMat.cost,
+                total: screwCost,
+                category: 'Hardware'
+              });
+            }
+          }
         }
       }
 
@@ -918,7 +947,7 @@ export function calculateDetailedTakeOff(
           : (isStained ? 'w-rail-w-cedar-12-stained' : 'w-rail-w-cedar-12');
       }
       
-      const railMat = materials.find(m => m.id === railId)!;
+      const railMat = materials.find(m => m.id === railId) || { cost: 0, name: 'Unknown Rail', unit: 'each', id: 'unknown-rail' } as MaterialItem;
       const railQty = sectionCount * railsCount;
       const railFormula = `${sectionCount} sections × ${railsCount} rails/section`;
       const railCost = railQty * railMat.cost;
@@ -939,35 +968,39 @@ export function calculateDetailedTakeOff(
         const rotBoardId = is8ft 
           ? (isStained ? 'w-rot-board-12-stained' : 'w-rot-board-12')
           : (isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16');
-        const rotBoardMat = materials.find(m => m.id === rotBoardId)!;
-        const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
-        const rotBoardCost = rotBoardQty * rotBoardMat.cost;
-        runFenceMaterialCost += rotBoardCost;
-        runItems.push({
-          id: rotBoardMat.id,
-          name: rotBoardMat.name,
-          qty: rotBoardQty,
-          unit: rotBoardMat.unit,
-          unitCost: rotBoardMat.cost,
-          total: rotBoardCost,
-          category: 'Structure'
-        });
+        const rotBoardMat = materials.find(m => m.id === rotBoardId);
+        if (rotBoardMat) {
+          const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
+          const rotBoardCost = rotBoardQty * rotBoardMat.cost;
+          runFenceMaterialCost += rotBoardCost;
+          runItems.push({
+            id: rotBoardMat.id,
+            name: rotBoardMat.name,
+            qty: rotBoardQty,
+            unit: rotBoardMat.unit,
+            unitCost: rotBoardMat.cost,
+            total: rotBoardCost,
+            category: 'Structure'
+          });
+        }
       }
 
       // Nails
-      const nailsMat = materials.find(m => m.id === 'h-nail-galv')!;
-      const nailCount = Math.ceil(panelQty * 6);
-      const nailCost = nailCount * nailsMat.cost;
-      runFenceMaterialCost += nailCost;
-      runItems.push({
-        id: nailsMat.id,
-        name: nailsMat.name,
-        qty: nailCount,
-        unit: 'nails',
-        unitCost: nailsMat.cost,
-        total: nailCost,
-        category: 'Hardware'
-      });
+      const nailsMat = materials.find(m => m.id === 'h-nail-galv');
+      if (nailsMat) {
+        const nailCount = Math.ceil(panelQty * 6);
+        const nailCost = nailCount * nailsMat.cost;
+        runFenceMaterialCost += nailCost;
+        runItems.push({
+          id: nailsMat.id,
+          name: nailsMat.name,
+          qty: nailCount,
+          unit: 'nails',
+          unitCost: nailsMat.cost,
+          total: nailCost,
+          category: 'Hardware'
+        });
+      }
     }
 
     // Optional Items (Trim, Cap)
@@ -977,85 +1010,95 @@ export function calculateDetailedTakeOff(
     if (runStyle.type === 'Wood') {
        if (estimate.hasCapAndTrim || forceTrim) {
           // Top Trim (1x4x8)
-          const trimMat = materials.find(m => m.id === 'f-cap-trim')!;
-          const trimQty = Math.ceil(runLF / 8);
-          const trimCost = trimQty * trimMat.cost;
-          runFenceMaterialCost += trimCost;
-          runItems.push({
-            id: trimMat.id,
-            name: trimMat.name,
-            qty: trimQty,
-            unit: 'each',
-            unitCost: trimMat.cost,
-            total: trimCost,
-            category: 'Finishing'
-          });
+          const trimMat = materials.find(m => m.id === 'f-cap-trim');
+          if (trimMat) {
+            const trimQty = Math.ceil(runLF / 8);
+            const trimCost = trimQty * trimMat.cost;
+            runFenceMaterialCost += trimCost;
+            runItems.push({
+              id: trimMat.id,
+              name: trimMat.name,
+              qty: trimQty,
+              unit: 'each',
+              unitCost: trimMat.cost,
+              total: trimCost,
+              category: 'Finishing'
+            });
+          }
        }
 
        if (estimate.hasDoubleTrim) {
           // Double Trim (1x2x8)
-          const doubleTrimMat = materials.find(m => m.id === 'f-double-trim-1x2')!;
-          const trimQty = Math.ceil(runLF / 8);
-          const trimCost = trimQty * doubleTrimMat.cost;
-          runFenceMaterialCost += trimCost;
-          runItems.push({
-            id: doubleTrimMat.id,
-            name: doubleTrimMat.name,
-            qty: trimQty,
-            unit: 'each',
-            unitCost: doubleTrimMat.cost,
-            total: trimCost,
-            category: 'Finishing'
-          });
+          const doubleTrimMat = materials.find(m => m.id === 'f-double-trim-1x2');
+          if (doubleTrimMat) {
+            const trimQty = Math.ceil(runLF / 8);
+            const trimCost = trimQty * doubleTrimMat.cost;
+            runFenceMaterialCost += trimCost;
+            runItems.push({
+              id: doubleTrimMat.id,
+              name: doubleTrimMat.name,
+              qty: trimQty,
+              unit: 'each',
+              unitCost: doubleTrimMat.cost,
+              total: trimCost,
+              category: 'Finishing'
+            });
+          }
        }
 
        if (estimate.hasTopCap) {
           // Top Cap (2x6x12)
-          const topCapMat = materials.find(m => m.id === 'f-top-cap-2x6')!;
-          const topCapQty = Math.ceil(runLF / 12);
-          const topCapCost = topCapQty * topCapMat.cost;
-          runFenceMaterialCost += topCapCost;
-          runItems.push({
-            id: topCapMat.id,
-            name: topCapMat.name,
-            qty: topCapQty,
-            unit: 'each',
-            unitCost: topCapMat.cost,
-            total: topCapCost,
-            category: 'Finishing'
-          });
+          const topCapMat = materials.find(m => m.id === 'f-top-cap-2x6');
+          if (topCapMat) {
+            const topCapQty = Math.ceil(runLF / 12);
+            const topCapCost = topCapQty * topCapMat.cost;
+            runFenceMaterialCost += topCapCost;
+            runItems.push({
+              id: topCapMat.id,
+              name: topCapMat.name,
+              qty: topCapQty,
+              unit: 'each',
+              unitCost: topCapMat.cost,
+              total: topCapCost,
+              category: 'Finishing'
+            });
+          }
        }
     }
 
     if (runStyle.type === 'Pipe') {
       // 2 3/8" top rail- equal to overall length of fence
-      const railMat = materials.find(m => m.id === 'p-rail-238')!;
-      const railCost = runLF * railMat.cost;
-      runFenceMaterialCost += railCost;
-      runItems.push({
-        id: railMat.id,
-        name: railMat.name,
-        qty: runLF,
-        unit: railMat.unit,
-        unitCost: railMat.cost,
-        total: railCost,
-        category: 'Structure'
-      });
+      const railMat = materials.find(m => m.id === 'p-rail-238');
+      if (railMat) {
+        const railCost = runLF * railMat.cost;
+        runFenceMaterialCost += railCost;
+        runItems.push({
+          id: railMat.id,
+          name: railMat.name,
+          qty: runLF,
+          unit: railMat.unit,
+          unitCost: railMat.cost,
+          total: railCost,
+          category: 'Structure'
+        });
+      }
 
       // 2 3/8" EZ ties- 12 for every 8 linear feet of fence
-      const tieMat = materials.find(m => m.id === 'p-ez-tie')!;
-      const tieQty = Math.ceil((runLF / 8) * 12);
-      const tieCost = tieQty * tieMat.cost;
-      runFenceMaterialCost += tieCost;
-      runItems.push({
-        id: tieMat.id,
-        name: tieMat.name,
-        qty: tieQty,
-        unit: tieMat.unit,
-        unitCost: tieMat.cost,
-        total: tieCost,
-        category: 'Hardware'
-      });
+      const tieMat = materials.find(m => m.id === 'p-ez-tie');
+      if (tieMat) {
+        const tieQty = Math.ceil((runLF / 8) * 12);
+        const tieCost = tieQty * tieMat.cost;
+        runFenceMaterialCost += tieCost;
+        runItems.push({
+          id: tieMat.id,
+          name: tieMat.name,
+          qty: tieQty,
+          unit: tieMat.unit,
+          unitCost: tieMat.cost,
+          total: tieCost,
+          category: 'Hardware'
+        });
+      }
 
       // No-Climb Wire - Use aggregated pricing per LF
       const finish = run.visualStyleId === 'p-black' ? 'black' : 'galv';
@@ -1248,17 +1291,19 @@ export function calculateDetailedTakeOff(
   });
 
   if (hasAnyPipe) {
-    const domeCapMat = materials.find(m => m.id === 'pc-dome')!;
-    addToSummary({
-      id: domeCapMat.id,
-      name: `${domeCapMat.name} (Project Extra)`,
-      qty: 1,
-      unit: domeCapMat.unit,
-      unitCost: domeCapMat.cost,
-      total: domeCapMat.cost,
-      category: 'Hardware'
-    });
-    totalMaterial += domeCapMat.cost;
+    const domeCapMat = materials.find(m => m.id === 'pc-dome');
+    if (domeCapMat) {
+      addToSummary({
+        id: domeCapMat.id,
+        name: `${domeCapMat.name} (Project Extra)`,
+        qty: 1,
+        unit: domeCapMat.unit,
+        unitCost: domeCapMat.cost,
+        total: domeCapMat.cost,
+        category: 'Hardware'
+      });
+      totalMaterial += domeCapMat.cost;
+    }
   }
 
   const globalItems: TakeOffItem[] = [];

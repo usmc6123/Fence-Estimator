@@ -161,7 +161,9 @@ export default function App() {
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
   
-  const [materials, setMaterials] = React.useState<MaterialItem[]>([]);
+  const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
+    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
+  });
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
     return getInitialValue('quotes', 'fence_pro_quotes', []);
