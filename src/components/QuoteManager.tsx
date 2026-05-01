@@ -8,6 +8,10 @@ import {
 import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
+import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { User } from 'firebase/auth';
 
 interface SearchableSelectProps {
   options: { value: string; label: string }[];
@@ -94,9 +98,10 @@ interface QuoteManagerProps {
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   quotes: SupplierQuote[];
   setQuotes: React.Dispatch<React.SetStateAction<SupplierQuote[]>>;
+  user: User | null;
 }
 
-export default function QuoteManager({ materials, setMaterials, quotes, setQuotes }: QuoteManagerProps) {
+export default function QuoteManager({ materials, setMaterials, quotes, setQuotes, user }: QuoteManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeView, setActiveView] = React.useState<'list' | 'compare' | 'history'>('list');
@@ -137,12 +142,21 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user) {
+      setError("Please login to upload quotes");
+      return;
+    }
 
     setIsUploading(true);
     setError(null);
 
     try {
-      // Convert file to base64
+      // 1. Upload to Firebase Storage
+      const storageRef = ref(storage, `quotes/${user.uid}/${Date.now()}-${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+      // 2. Convert file to base64 for Gemini
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onload = () => {
@@ -153,12 +167,14 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       reader.readAsDataURL(file);
       const base64Data = await base64Promise;
 
-      // Extract data with Gemini
+      // 3. Extract data with Gemini
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
 
+      const newQuoteId = Math.random().toString(36).substr(2, 9);
       const newQuote: SupplierQuote = {
-        id: Math.random().toString(36).substr(2, 9),
-        supplierName: extractedData.supplierName,
+        id: newQuoteId,
+        companyId: 'lonestarfence',
+        supplierName: extractedData.supplierName || 'Unknown Supplier',
         date: new Date().toISOString(),
         items: extractedData.items.map((item: any) => {
           const itemNameLower = item.materialName.toLowerCase();
@@ -173,24 +189,33 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
             )?.id
           };
         }),
-        totalAmount: extractedData.totalAmount,
+        totalAmount: extractedData.totalAmount || 0,
         fileName: file.name,
         fileType: file.type,
-        fileUrl: URL.createObjectURL(file) // Local preview
+        fileUrl: downloadUrl
       };
 
-      setQuotes([newQuote, ...quotes]);
-      setSelectedQuoteId(newQuote.id);
+      // 4. Save to Firestore
+      await setDoc(doc(db, 'quotes', newQuoteId), newQuote);
+      setSelectedQuoteId(newQuoteId);
+      showToast("Quote processed and saved to cloud");
     } catch (err) {
+      console.error(err);
       setError(err instanceof Error ? err.message : "Failed to process quote");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const deleteQuote = (id: string) => {
-    setQuotes(quotes.filter(q => q.id !== id));
-    if (selectedQuoteId === id) setSelectedQuoteId(null);
+  const deleteQuote = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'quotes', id));
+      if (selectedQuoteId === id) setSelectedQuoteId(null);
+      showToast("Quote deleted from cloud");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `quotes/${id}`);
+    }
   };
 
   const updateMaterialPrice = (materialId: string, newPrice: number) => {
@@ -201,7 +226,9 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     showToast(`Updated ${mat?.name || 'Material'} price to ${formatCurrency(newPrice)}`);
   };
 
-  const mapMaterialToItem = (quoteId: string, itemId: string, materialId: string) => {
+  const mapMaterialToItem = async (quoteId: string, itemId: string, materialId: string) => {
+    if (!user) return;
+
     // Save the mapping for future memory
     if (materialId) {
       const quote = quotes.find(q => q.id === quoteId);
@@ -221,17 +248,20 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       }
     }
 
-    setQuotes(prev => prev.map(q => {
-      if (q.id === quoteId) {
-        return {
-          ...q,
-          items: q.items.map(item => 
-            item.id === itemId ? { ...item, mappedMaterialId: materialId } : item
-          )
-        };
-      }
-      return q;
-    }));
+    try {
+      const quote = quotes.find(q => q.id === quoteId);
+      if (!quote) return;
+
+      const updatedItems = quote.items.map(item => 
+        item.id === itemId ? { ...item, mappedMaterialId: materialId } : item
+      );
+
+      await updateDoc(doc(db, 'quotes', quoteId), {
+        items: updatedItems
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `quotes/${quoteId}`);
+    }
   };
 
   // Comparison Logic: Group by mapped materials

@@ -51,6 +51,23 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // Fetch quotes from Firestore if user is logged in
+  React.useEffect(() => {
+    if (!user) {
+      setQuotes(getInitialValue('quotes', 'fence_pro_quotes', []));
+      return;
+    }
+
+    const q = query(collection(db, 'quotes'), where('companyId', '==', 'lonestarfence'));
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        setQuotes(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SupplierQuote)));
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'quotes')
+    );
+    return () => unsubscribe();
+  }, [user]);
+
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -149,9 +166,11 @@ export default function App() {
     localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
-    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+    if (!user) {
+      localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+    }
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
-  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope]);
+  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, user]);
 
   // Sync state across tabs using the storage event (enables simultaneous updates)
   React.useEffect(() => {
@@ -276,6 +295,7 @@ export default function App() {
           setMaterials={setMaterials} 
           quotes={quotes} 
           setQuotes={setQuotes} 
+          user={user}
         />
       )}
       {activeTab === 'settings' && <Settings />}

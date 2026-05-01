@@ -103,6 +103,7 @@ export interface QuoteItem {
 
 export interface SupplierQuote {
   id: string;
+  companyId?: string;
   supplierName: string;
   date: string;
   items: QuoteItem[];

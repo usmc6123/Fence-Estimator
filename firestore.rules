@@ -11,16 +11,8 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     function isCompanyMember() {
       return isSignedIn();
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -34,24 +26,21 @@ service cloud.firestore {
     // --- Validation Helpers ---
 
     function isValidEstimate(data) {
-      return data.userId == request.auth.uid
-        && data.companyId == 'lonestarfence'
+      return data.companyId == 'lonestarfence'
         && data.id is string
         && (data.customerName == null || data.customerName is string)
         && (data.customerEmail == null || data.customerEmail is string);
     }
 
     function isValidBankAccount(data) {
-      return data.userId == request.auth.uid
-        && data.companyId == 'lonestarfence'
+      return data.companyId == 'lonestarfence'
         && data.name is string && data.name.size() <= 100
         && data.type in ['Checking', 'Savings', 'Credit Card']
         && data.balance is number;
     }
 
     function isValidTransaction(data) {
-      return data.userId == request.auth.uid
-        && data.companyId == 'lonestarfence'
+      return data.companyId == 'lonestarfence'
         && data.accountId is string
         && data.amount is number
         && data.type in ['Income', 'Expense']
@@ -59,74 +48,63 @@ service cloud.firestore {
     }
 
     function isValidInventory(data) {
-      return data.userId == request.auth.uid
-        && data.companyId == 'lonestarfence'
+      return data.companyId == 'lonestarfence'
         && data.materialId is string
         && data.quantityInStock is number;
     }
 
     function isValidJournal(data) {
-      return data.userId == request.auth.uid
-        && data.companyId == 'lonestarfence'
+      return data.companyId == 'lonestarfence'
         && data.date is string
         && data.lines is list;
+    }
+
+    function isValidQuote(data) {
+      return data.companyId == 'lonestarfence';
     }
 
     // --- Collection Routes ---
 
     match /estimates/{estimateId} {
-      allow get:    if isCompanyMember() && existing().companyId == 'lonestarfence';
-      allow list:   if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create: if isSignedIn() && isValidEstimate(incoming());
-      allow update: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence'
-                     && isValidEstimate(incoming());
-      allow delete: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidEstimate(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidEstimate(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
 
     match /bankAccounts/{accountId} {
-      allow get:    if isCompanyMember() && existing().companyId == 'lonestarfence';
-      allow list:   if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create: if isSignedIn() && isValidBankAccount(incoming());
-      allow update: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence'
-                     && isValidBankAccount(incoming());
-      allow delete: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidBankAccount(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidBankAccount(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
 
     match /transactions/{transactionId} {
-      allow get:    if isCompanyMember() && existing().companyId == 'lonestarfence';
-      allow list:   if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create: if isSignedIn() && isValidTransaction(incoming());
-      allow update: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence'
-                     && isValidTransaction(incoming());
-      allow delete: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidTransaction(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidTransaction(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
 
     match /inventory/{inventoryId} {
-      allow get:    if isCompanyMember() && existing().companyId == 'lonestarfence';
-      allow list:   if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create: if isSignedIn() && isValidInventory(incoming());
-      allow update: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence'
-                     && isValidInventory(incoming());
-      allow delete: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidInventory(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidInventory(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
 
     match /journalEntries/{entryId} {
-      allow get:    if isCompanyMember() && existing().companyId == 'lonestarfence';
-      allow list:   if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create: if isSignedIn() && isValidJournal(incoming());
-      allow update: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence'
-                     && isValidJournal(incoming());
-      allow delete: if isOwner(existing().userId)
-                     && existing().companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidJournal(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidJournal(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+    }
+
+    match /quotes/{quoteId} {
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidQuote(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidQuote(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
   }
 }
