@@ -194,15 +194,16 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         date: new Date().toISOString(),
         items: extractedData.items.map((item: any) => {
           const itemNameLower = item.materialName.toLowerCase();
+          const match = materials.find(m => 
+            m.name.toLowerCase().includes(itemNameLower) ||
+            itemNameLower.includes(m.name.toLowerCase()) ||
+            m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
+          );
           return {
             ...item,
             id: Math.random().toString(36).substr(2, 9),
-            // Improved fuzzy matching + alias lookup
-            mappedMaterialId: materials.find(m => 
-              m.name.toLowerCase().includes(itemNameLower) ||
-              itemNameLower.includes(m.name.toLowerCase()) ||
-              m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
-            )?.id
+            // Ensure no undefined values for Firestore
+            mappedMaterialId: match?.id || null
           };
         }),
         totalAmount: extractedData.totalAmount || 0,
@@ -212,7 +213,9 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       };
 
       // 4. Save to Firestore
-      await setDoc(doc(db, 'quotes', newQuoteId), newQuote);
+      // Sanitize object to remove any potential undefined values
+      const sanitizedQuote = JSON.parse(JSON.stringify(newQuote));
+      await setDoc(doc(db, 'quotes', newQuoteId), sanitizedQuote);
       setSelectedQuoteId(newQuoteId);
       showToast("Quote processed and saved to cloud");
     } catch (err) {
