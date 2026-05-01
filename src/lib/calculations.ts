@@ -376,21 +376,6 @@ export function calculateDetailedTakeOff(
         const width = gate.width || 4;
         
         if (runStyle.type === 'Wood') {
-          // Actual Gate Frame/Leaf
-          const frameId = width <= 4 ? 'g-frame-4ft-wood' : 'g-frame-6ft-wood';
-          const frameMat = materials.find(m => m.id === frameId);
-          if (frameMat) {
-            gateItems.push({
-              id: frameMat.id,
-              name: frameMat.name,
-              qty: 1,
-              unit: frameMat.unit,
-              unitCost: frameMat.cost,
-              total: frameMat.cost,
-              category: 'Gate'
-            });
-          }
-
           if (gate.type === 'Double') {
             // Drive Gate (Shark kit includes hinges/latches usually, but let's be explicit per request)
             const sharkKit = materials.find(m => m.id === 'g-kit-shark');
@@ -421,6 +406,7 @@ export function calculateDetailedTakeOff(
             }
           } else {
             // Walk Gate
+            let hasHingeKit = false;
             const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge');
             if (hingeKit) {
               gateItems.push({
@@ -432,10 +418,11 @@ export function calculateDetailedTakeOff(
                 total: hingeKit.cost,
                 category: 'Gate'
               });
+              hasHingeKit = true;
             }
 
             const latchMat = materials.find(m => m.id === 'g-latch-std');
-            if (latchMat) {
+            if (latchMat && !hasHingeKit) {
               gateItems.push({
                 id: latchMat.id,
                 name: latchMat.name,
