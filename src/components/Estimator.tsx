@@ -1970,18 +1970,18 @@ export default function Estimator({
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
             >
-              <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-red text-white">
+              <div className="p-6 border-b border-[#F5F5F5] flex items-center justify-between bg-american-blue text-white shrink-0">
                 <div className="flex items-center gap-3">
-                  <MapIcon size={24} />
+                  <Layers size={24} />
                   <h2 className="text-xl font-bold">Fence Layout Diagram</h2>
                 </div>
                 <button onClick={() => setShowDiagram(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
                   <X size={24} />
                 </button>
               </div>
-                           <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F5F5F7] p-8">
+              <div className="flex-1 overflow-y-auto bg-[#F5F5F7] p-4 sm:p-8">
                 <div id="print-area" className="space-y-12">
                   {/* Process runs into sections */}
                   {(() => {
@@ -2254,14 +2254,14 @@ export default function Estimator({
                 </div>
               </div>
               
-              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex items-center justify-between gap-3">
+              <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] text-american-red font-bold uppercase tracking-widest">Printing Issue?</p>
-                  <p className="text-[9px] text-[#999999] max-w-[200px] leading-tight italic">
+                  <p className="text-[9px] text-[#999999] max-w-[280px] leading-tight italic">
                     The browser blocks printing inside this preview window. Use the red button to open the app in a new tab where printing is enabled.
                   </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap justify-end gap-3 w-full sm:w-auto">
                   <a 
                     href={window.location.href}
                     target="_blank"
