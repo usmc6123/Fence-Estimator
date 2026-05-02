@@ -25,6 +25,7 @@ export default function LaborTakeOff({
 }: LaborTakeOffProps) {
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState<string>('');
   
   // Filter for ONLY labor items for the internal manifest
   const laborSummary = data.summary.filter(item => item.category === 'Labor' || item.category === 'Demolition');
@@ -73,6 +74,9 @@ export default function LaborTakeOff({
         - DO NOT include general PPE or safety requirements (the crew is responsible for their own safety gear).
         
         Format the output with professional headings and clear bullet points. Keep it concise but exhaustive for a contractor to follow perfectly.
+
+        ADDITIONAL INSTRUCTIONS:
+        ${customInstructions}
       `;
 
       const result = await generateAIScope(prompt);
@@ -355,6 +359,15 @@ export default function LaborTakeOff({
                   <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">AI Contract Refinement</h2>
                   <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Generate detailed job site procedures</p>
                 </div>
+              </div>
+              
+              <div className="flex-1 w-full md:w-auto">
+                <textarea
+                  placeholder="Add specific instructions for AI scope generation..."
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  className="w-full h-12 p-2 rounded-xl text-xs border border-[#E5E5E5] resize-none"
+                />
               </div>
               
               <button

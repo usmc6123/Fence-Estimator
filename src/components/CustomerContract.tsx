@@ -54,6 +54,7 @@ export default function CustomerContract({
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>('');
+  const [customInstructions, setCustomInstructions] = useState<string>('');
 
   useEffect(() => {
     if (aiContractScope) {
@@ -148,6 +149,9 @@ export default function CustomerContract({
         `}).join('\n')}
 
         Structure the final Scope of Work with Markdown bold headers to cover the entire project. Ensure the document clearly separates instructions and disclaimers for different sections (e.g., New Install vs Staining/Restoration). Clearly define warranty differences for new vs existing components.
+
+        ADDITIONAL INSTRUCTIONS:
+        ${customInstructions}
       `;
 
 
@@ -176,6 +180,14 @@ export default function CustomerContract({
         </div>
 
         <div className="flex items-center gap-3 relative z-10 w-full md:w-auto">
+          <div className="flex-1">
+            <textarea
+              placeholder="Add specific instructions for AI scope generation..."
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+              className="w-full h-12 p-2 rounded-xl text-xs border border-[#E5E5E5] resize-none"
+            />
+          </div>
           <button 
             onClick={handleGenerateAIScope}
             disabled={isGenerating}
