@@ -125,17 +125,19 @@ export default function CustomerContract({
         Project Details:
         ${data.runs.map(run => {
           const isWood = run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine');
+          // Add info about whether posts are reused or staining only if available in run or projectDescription
           return `
           Section: ${run.runName}
           Specs: ${run.height}' ${run.styleName} ${isWood ? `(${run.picketStyle || 'Standard'})` : ''}
           Length: ${run.linearFeet} LF (Gross)
+          Action: ${estimate.projectDescription || ''}
           Gates: ${run.gates.map(g => `${g.width}' ${g.type}`).join(', ') || 'None'}
           ${isWood ? `Features: ${run.hasRotBoard ? 'Rot Board included' : ''} ${run.hasTopCap ? 'Top Cap included' : ''} ${run.hasTrim ? 'Trim included' : ''}` : ''}
         `}).join('\n')}
 
         Structure the Scope of Work as follows (use Markdown with bold headers):
         ### Project Overview
-        2-3 sentences max, professional tone. 
+        2-3 sentences max, professional tone. If the project involves reusing existing posts or staining-only, explicitly state this in the overview.
         
         ### Scope of Work & Installation Details
         ${estimate.projectType === 'Staining Only' ? `
@@ -143,7 +145,7 @@ export default function CustomerContract({
         - Natural Variations: Absorption, color, and tone variations are natural due to wood grain/age.
         - Overspray Protection: Contractor takes reasonable precautions (covering nearby areas), but is not responsible for damage caused by expected levels of overspray, drift, or runoff.` : `
         - Total LF and fence height.
-        - Post details (size, spacing, depth - assume 24"-36" depth for concrete set).
+        - Post details: If reusing existing posts, state clearly: "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts." If new, state size, spacing, depth (assume 24"-36" depth for concrete set).
         - Installation method.
         - Layout: Follows property lines provided by customer; survey required for disputes.
         - Utility: Customer must provide 811 utility clearance prior to digging.
