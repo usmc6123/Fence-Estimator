@@ -115,7 +115,9 @@ export default function CustomerContract({
     setIsGenerating(true);
     try {
       const prompt = `
-        You are a professional estimator for Lone Star Fence Works. Generate a refined "Scope of Work" for a customer contract.
+        You are a professional estimator for Lone Star Fence Works, a premium fence contractor in Texas. 
+        Your tone is professional, confident, and direct. No fluff. 
+        Generate a detailed, contractor-grade Scope of Work that protects the contractor legally.
         
         Customer: ${estimate.customerName || 'Valued Customer'}
         Project Details:
@@ -129,17 +131,35 @@ export default function CustomerContract({
           ${isWood ? `Features: ${run.hasRotBoard ? 'Rot Board included' : ''} ${run.hasTopCap ? 'Top Cap included' : ''} ${run.hasTrim ? 'Trim included' : ''}` : ''}
         `}).join('\n')}
 
-        Requirements for the AI Scope:
-        1. Professional Summary: Start with a 2-3 sentence overview of the project's goal (e.g., "Enhancing security and aesthetic appeal with a custom-built ${data.runs[0]?.styleName || 'fence'}...").
-        2. Detailed specifications for the fence construction (posts spacing, hole depth standard 24", 36" for 8ft fences).
-        3. Clear description of materials to be used (e.g., #1 Grade ${estimate.woodType || 'Western Red Cedar'}, Galvanized Steel Posts, etc.).
-        4. Gate installation details.
-        5. Preparation & Cleanup: Mention demolition of existing fence (if applicable) and removal of debris.
-        6. DO NOT mention itemized pricing, just description of work.
-        7. Use professional, reassuring language.
+        Structure the Scope of Work as follows (use Markdown with bold headers):
+        ### Project Overview
+        2-3 sentences max, professional tone.
+        ### Scope of Work & Installation Details
+        - Total LF and fence height.
+        - Post details (size, spacing, depth - assume 24"-36" depth for concrete set).
+        - Installation method.
+        - Layout: Follows property lines provided by customer; survey required for disputes.
+        - Utility: Customer must provide 811 utility clearance prior to digging.
+        - Grade/Dirt: Minor grade variations may cause small gaps; dirt from post holes will be left on-site and spread along fence line.
+        - Protection: Damage to unmarked underground utilities, irrigation, or landscaping is not the responsibility of the contractor.
 
-        Use Markdown formatting with bold headers.
+        ### Materials
+        Professional description of materials based on project specs (e.g., #1 Grade ${estimate.woodType || 'Western Red Cedar'}, Galvanized Steel Posts, etc.).
+
+        ### Gates
+        For all gates: specify width, height, type, hinges, and latches.
+        ### Cleanup & Disposal
+        Standard removal of construction debris and fencing materials.
+        ### Exclusions & Limitations
+        Rock excavation, permits (unless stated), and unforeseen conditions.
+
+        ### Customer Responsibilities
+        Ensure access, provide utility clearance, and clear immediate work area of vehicles, personal items, and plants.
+
+        ### Warranty & Workmanship
+        Contractor warrants workmanship for 1 year from completion. For painting or staining: workmanship/application warranty is limited to 30 days due to the nature of environmental factors (weathering, fading, natural wood movement).
       `;
+
 
       const result = await generateAIScope(prompt);
       setAiContractScope(result);
@@ -415,17 +435,20 @@ export default function CustomerContract({
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10 text-[11px] leading-relaxed text-[#555555]">
               {[
-                { title: "1. Property Line Responsibility", content: "LSFW is not liable for fences constructed on a neighboring property unless the customer provides a certified property survey clearly marking the property lines. It is the sole responsibility of the customer to determine and provide accurate property boundaries." },
-                { title: "2. Underground Utilities", content: "LSFW is not responsible for any damage to underground utilities that are not properly marked by the appropriate utility marking services prior to construction." },
-                { title: "3. Lawn and Landscaping", content: "LSFW is not liable for damage to lawns, plants, trees, sprinkler systems, or landscaping resulting from normal foot traffic, material storage, or equipment use necessary to complete the project." },
-                { title: "4. Neighboring Property Access", content: "LSFW may require access to neighboring properties to properly complete the fence installation. By signing this agreement, the customer confirms that all affected neighbors have been notified and have granted permission for LSFW personnel to access their property as needed." },
-                { title: "5. Limited Warranty", content: "LSFW offers a one (1) year limited warranty on materials and workmanship. This warranty does not cover damage caused by severe weather conditions, including but not limited to high winds, hail, flooding, or other natural disasters." },
-                { title: "6. Payment Terms", content: "The customer agrees to pay 50% of the project total upon accepting the estimate and scheduling the job. The remaining 50% is due upon completion of the work." },
-                { title: "7. Spoil Haul-Off", content: "Spoil removal (excavated dirt, concrete, etc.) is not included in the base estimate. LSFW offers spoil haul-off for an additional flat fee of $250, upon request." },
-                { title: "8. Fence Length Tolerance", content: "All fence length estimates include a tolerance of ±5 feet. Final pricing may reflect minor adjustments based on actual field measurements." },
-                { title: "9. Utility Access", content: "The customer agrees to provide LSFW with access to a hose bib (outdoor water spigot) and a standard power outlet for the duration of the project." },
-                { title: "10. Weather Delays", content: "In the event of rain or inclement weather, the scheduled job date may be delayed. Each weather day may result in up to a 2-day delay to the original schedule." },
-                { title: "11. Fence Clearance & Swing Gap", content: "Due to natural variations in terrain, a gap of up to 3 inches between the bottom of the fence and the ground may be necessary for proper installation. Fence gates may have up to a 4-inch gap to allow for smooth swing and operation." }
+                { title: "1. Payment Terms", content: "Total Contract Price: $[Amount] | Deposit: [10%] due at signing. Balance: [90%] due upon completion. Invoiced via QuickBooks (check, ACH, credit card). 3% fee on credit card payments. Late fee of 5% per month on balances unpaid past 3 days." },
+                { title: "2. Change Orders", content: "Any changes to materials, layout, or additions requested after work begins must be agreed to in writing and may affect cost and timeline." },
+                { title: "3. Client Responsibilities", content: "Client warrants property ownership or legal authority, is responsible for identifying property lines (LSFW is not responsible for disputes), must ensure access, provide utility clearance (811 Call Before You Dig), and must clear the immediate work area (including vehicles, items, and plants) of obstructions prior to painting or staining." },
+                { title: "4. Warranty", content: "Workmanship is warranted for [1 year] from completion, covering installation defects. Exclusions: Normal wear/tear, settling, misuse, neglect, accidents, pets, vehicles, natural disasters. Materials covered by manufacturer warranty only. Staining/Painting workmanship warranty is limited to 30 days for application defects; exclusions include normal aging, fading, environmental factors, or product performance." },
+                { title: "5. Liability", content: "LSFW is insured. Contractor is not liable for damages outside the work area unless caused by negligence. Client is responsible for securing pets and protecting landscaping/items within work zones." },
+                { title: "6. Termination", content: "Either party may terminate with 7 days written notice. Client remains responsible for payment for work performed and materials ordered." },
+                { title: "7. Governing Law", content: "Governed by the laws of the State of Texas." },
+                { title: "8. Entire Agreement", content: "Represents total understanding between Contractor and Client. No oral agreements are binding." },
+                { title: "9. Lawn and Landscaping", content: "LSFW is not liable for damage to lawns, plants, trees, sprinkler systems, or landscaping resulting from normal foot traffic, material storage, or equipment use. Contractor takes reasonable precautions but is not responsible for damage caused by expected levels of overspray, drift, or runoff during painting or staining." },
+                { title: "10. Spoil Haul-Off", content: "Spoil removal (excavated dirt, concrete, etc.) is not included in the base estimate. LSFW offers spoil haul-off for an additional flat fee of $250, upon request." },
+                { title: "11. Fence Length Tolerance", content: "All fence length estimates include a tolerance of ±5 feet. Final pricing may reflect minor adjustments based on actual field measurements." },
+                { title: "12. Weather Delays", content: "In the event of rain or inclement weather, the scheduled job date may be delayed. Each weather day may result in up to a 2-day delay to the original schedule." },
+                { title: "13. Fence Clearance & Swing Gap", content: "Due to natural variations in terrain, a gap of up to 3 inches between the bottom of the fence and the ground may be necessary for proper installation. Fence gates may have up to a 4-inch gap to allow for smooth swing and operation." },
+                { title: "14. Painting & Staining Surfaces", content: "Variations in color, tone, and absorption are natural due to wood grain, age, and moisture content. LSFW is not responsible for color inconsistencies. Application is weather-dependent; rain, humidity, or extreme temperature variations may affect final appearance or curing." }
               ].map((term, idx) => (
                 <div key={idx} className="space-y-2">
                   <p className="font-black text-american-blue uppercase tracking-widest">{term.title}</p>
