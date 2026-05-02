@@ -53,6 +53,13 @@ export default function CustomerContract({
 
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [localAiScope, setLocalAiScope] = useState<string>('');
+
+  useEffect(() => {
+    if (aiContractScope) {
+      setLocalAiScope(aiContractScope);
+    }
+  }, [aiContractScope]);
   
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
@@ -275,7 +282,11 @@ export default function CustomerContract({
             
             {aiContractScope ? (
               <div className="prose prose-sm max-w-none text-[#444444] leading-relaxed font-medium bg-[#F9F9F9] p-8 rounded-3xl border border-[#E5E5E5] ai-content-area">
-                <div dangerouslySetInnerHTML={{ __html: aiContractScope.replace(/\n/g, '<br/>') }} />
+                <textarea
+                    value={localAiScope}
+                    onChange={(e) => setLocalAiScope(e.target.value)}
+                    className="w-full h-96 bg-transparent outline-none resize-none"
+                />
               </div>
             ) : (
               <div className="p-8 rounded-3xl border-2 border-dashed border-[#E5E5E5] flex flex-col items-center justify-center gap-4 text-center">
@@ -337,25 +348,44 @@ export default function CustomerContract({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {projectBreakdown.map((run, i) => (
-                    <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
-                          <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.height}' {run.style}</p>
+                  {projectBreakdown.map((run, i) => {
+                    const [localTotal, setLocalTotal] = useState(run.totalFenceCharge);
+                    return (
+                      <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.height}' {run.style}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-black text-american-red">
+                              <input 
+                                type="number" 
+                                value={(localTotal / run.netLF).toFixed(2)}
+                                onChange={(e) => {
+                                  const newRate = parseFloat(e.target.value);
+                                  setLocalTotal(newRate * run.netLF);
+                                }}
+                                className="w-16 bg-transparent text-right"
+                              /> 
+                              <span className="opacity-40">/ FT</span>
+                            </p>
+                            <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs font-black text-american-red">{formatCurrency(run.pricePerFoot)} <span className="opacity-40">/ FT</span></p>
-                          <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
+                        
+                        <div className="mt-auto pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Section Total</span>
+                          <input 
+                            type="number" 
+                            value={localTotal.toFixed(2)}
+                            onChange={(e) => setLocalTotal(parseFloat(e.target.value))}
+                            className="font-bold text-american-blue text-right w-24"
+                          />
                         </div>
                       </div>
-                      
-                      <div className="mt-auto pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Section Total</span>
-                        <span className="font-bold text-american-blue">{formatCurrency(run.totalFenceCharge)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -418,7 +448,7 @@ export default function CustomerContract({
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10 text-[11px] leading-relaxed text-[#555555]">
               {[
-                { title: "1. Payment Terms", content: "Total Contract Price: $[Amount] | Deposit: [10%] due at signing. Balance: [90%] due upon completion. Invoiced via QuickBooks (check, ACH, credit card). 3% fee on credit card payments. Late fee of 5% per month on balances unpaid past 3 days." },
+                { title: "1. Payment Terms", content: `Total Contract Price: ${formatCurrency(grandTotal)} | Deposit: [10%] due at signing. Balance: [90%] due upon completion. Invoiced via QuickBooks (check, ACH, credit card). 3% fee on credit card payments. Late fee of 5% per month on balances unpaid past 3 days.` },
                 { title: "2. Change Orders", content: "Any changes to materials, layout, or additions requested after work begins must be agreed to in writing and may affect cost and timeline." },
                 { title: "3. Client Responsibilities", content: "Client warrants property ownership or legal authority, is responsible for identifying property lines (LSFW is not responsible for disputes), must ensure access, provide utility clearance (811 Call Before You Dig), and must clear the immediate work area (including vehicles, items, and plants) of obstructions prior to painting or staining." },
                 { title: "4. Warranty", content: "Workmanship is warranted for [1 year] from completion, covering installation defects. Exclusions: Normal wear/tear, settling, misuse, neglect, accidents, pets, vehicles, natural disasters. Materials covered by manufacturer warranty only. Staining/Painting workmanship warranty is limited to 30 days for application defects; exclusions include normal aging, fading, environmental factors, or product performance." },
@@ -486,6 +516,7 @@ export default function CustomerContract({
           .print\\:hidden { display: none !important; }
           #contract-view { border: 0 !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
           aside, nav { display: none !important; }
+           .ai-content-area textarea { border: none !important; outline: none !important; box-shadow: none !important; }
         }
       `}} />
     </div>
