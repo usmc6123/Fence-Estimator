@@ -120,55 +120,27 @@ export default function CustomerContract({
         Generate a detailed, contractor-grade Scope of Work that protects the contractor legally.
         
         Customer: ${estimate.customerName || 'Valued Customer'}
-        Project Type: ${estimate.projectType || 'Installation'}
         
-        Project Details:
-        ${data.runs.map(run => {
-          const isWood = run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine');
-          // Add info about whether posts are reused or staining only if available in run or projectDescription
+        Project Sections & Details:
+        ${data.runs.map((run, index) => {
+          const originalRun = estimate.runs?.[index];
           return `
-          Section: ${run.runName}
-          Specs: ${run.height}' ${run.styleName} ${isWood ? `(${run.picketStyle || 'Standard'})` : ''}
-          Length: ${run.linearFeet} LF (Gross)
-          Action: ${estimate.projectDescription || ''}
-          Gates: ${run.gates.map(g => `${g.width}' ${g.type}`).join(', ') || 'None'}
-          ${isWood ? `Features: ${run.hasRotBoard ? 'Rot Board included' : ''} ${run.hasTopCap ? 'Top Cap included' : ''} ${run.hasTrim ? 'Trim included' : ''}` : ''}
+          Section Name: ${run.runName}
+          Specs: ${run.height}' ${run.styleName}
+          Length: ${run.linearFeet} LF
+          Status: ${originalRun?.isExistingFence ? 'Existing Fence' : 'New Installation'}
+          Needs Staining: ${originalRun?.needsStain ? 'Yes' : 'No'}
+          Reuse Posts: ${originalRun?.reusePosts ? 'Yes' : 'No'}
+          
+          Generate a detailed Scope of Work for this specific section.
+          If this section is for staining only on existing fence, DO NOT describe it as a new installation. 
+          Focus on preparation, staining application, and inherent limitations (variations in wood, weather dependency, etc.).
+          
+          If this section indicates reusing posts (reusePosts: true), you MUST include: 
+          "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts."
         `}).join('\n')}
 
-        Structure the Scope of Work as follows (use Markdown with bold headers):
-        ### Project Overview
-        2-3 sentences max, professional tone. If the project involves reusing existing posts or staining-only, explicitly state this in the overview.
-        
-        ### Scope of Work & Installation Details
-        ${estimate.projectType === 'Staining Only' ? `
-        - Stain Application: Professionally apply stain using industry-standard methods.
-        - Natural Variations: Absorption, color, and tone variations are natural due to wood grain/age.
-        - Overspray Protection: Contractor takes reasonable precautions (covering nearby areas), but is not responsible for damage caused by expected levels of overspray, drift, or runoff.` : `
-        - Total LF and fence height.
-        - Post details: If reusing existing posts, state clearly: "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts." If new, state size, spacing, depth (assume 24"-36" depth for concrete set).
-        - Installation method.
-        - Layout: Follows property lines provided by customer; survey required for disputes.
-        - Utility: Customer must provide 811 utility clearance prior to digging.
-        - Grade/Dirt: Minor grade variations may cause small gaps; dirt from post holes will be left on-site and spread along fence line.
-        - Protection: Damage to unmarked underground utilities, irrigation, or landscaping is not the responsibility of the contractor.`}
-
-        ### Materials
-        Professional description of materials based on project specs (e.g., ${estimate.woodType || 'Selected Timber'}, Galvanized Steel Posts, etc.).
-
-        ### Gates
-        ${estimate.projectType === 'Staining Only' ? 'N/A' : 'For all gates: specify width, height, type, hinges, and latches.'}
-
-        ### Cleanup & Disposal
-        Standard removal of construction debris and fencing materials.
-
-        ### Exclusions & Limitations
-        ${estimate.projectType === 'Staining Only' ? 'Weather delays, existing surface contaminants not explicitly prepped.' : 'Rock excavation, permits (unless stated), and unforeseen conditions.'}
-
-        ### Customer Responsibilities
-        Ensure access, provide utility clearance, and clear immediate work area of vehicles, personal items, and plants.
-
-        ### Warranty & Workmanship
-        Contractor warrants workmanship for 1 year from completion. For painting or staining: workmanship/application warranty is limited to 30 days due to the nature of environmental factors (weathering, fading, natural wood movement).
+        Structure the final Scope of Work with Markdown bold headers to cover the entire project. Ensure the document clearly separates instructions and disclaimers for different sections (e.g., New Install vs Staining/Restoration). Clearly define warranty differences for new vs existing components.
       `;
 
 
