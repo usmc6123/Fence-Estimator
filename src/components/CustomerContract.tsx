@@ -120,6 +120,8 @@ export default function CustomerContract({
         Generate a detailed, contractor-grade Scope of Work that protects the contractor legally.
         
         Customer: ${estimate.customerName || 'Valued Customer'}
+        Project Type: ${estimate.projectType || 'Installation'}
+        
         Project Details:
         ${data.runs.map(run => {
           const isWood = run.styleName.includes('Wood') || run.styleName.includes('Cedar') || run.styleName.includes('Pine');
@@ -133,25 +135,32 @@ export default function CustomerContract({
 
         Structure the Scope of Work as follows (use Markdown with bold headers):
         ### Project Overview
-        2-3 sentences max, professional tone.
+        2-3 sentences max, professional tone. 
+        
         ### Scope of Work & Installation Details
+        ${estimate.projectType === 'Staining Only' ? `
+        - Stain Application: Professionally apply stain using industry-standard methods.
+        - Natural Variations: Absorption, color, and tone variations are natural due to wood grain/age.
+        - Overspray Protection: Contractor takes reasonable precautions (covering nearby areas), but is not responsible for damage caused by expected levels of overspray, drift, or runoff.` : `
         - Total LF and fence height.
         - Post details (size, spacing, depth - assume 24"-36" depth for concrete set).
         - Installation method.
         - Layout: Follows property lines provided by customer; survey required for disputes.
         - Utility: Customer must provide 811 utility clearance prior to digging.
         - Grade/Dirt: Minor grade variations may cause small gaps; dirt from post holes will be left on-site and spread along fence line.
-        - Protection: Damage to unmarked underground utilities, irrigation, or landscaping is not the responsibility of the contractor.
+        - Protection: Damage to unmarked underground utilities, irrigation, or landscaping is not the responsibility of the contractor.`}
 
         ### Materials
-        Professional description of materials based on project specs (e.g., #1 Grade ${estimate.woodType || 'Western Red Cedar'}, Galvanized Steel Posts, etc.).
+        Professional description of materials based on project specs (e.g., ${estimate.woodType || 'Selected Timber'}, Galvanized Steel Posts, etc.).
 
         ### Gates
-        For all gates: specify width, height, type, hinges, and latches.
+        ${estimate.projectType === 'Staining Only' ? 'N/A' : 'For all gates: specify width, height, type, hinges, and latches.'}
+
         ### Cleanup & Disposal
         Standard removal of construction debris and fencing materials.
+
         ### Exclusions & Limitations
-        Rock excavation, permits (unless stated), and unforeseen conditions.
+        ${estimate.projectType === 'Staining Only' ? 'Weather delays, existing surface contaminants not explicitly prepped.' : 'Rock excavation, permits (unless stated), and unforeseen conditions.'}
 
         ### Customer Responsibilities
         Ensure access, provide utility clearance, and clear immediate work area of vehicles, personal items, and plants.
