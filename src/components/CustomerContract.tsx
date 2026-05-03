@@ -59,6 +59,14 @@ export default function CustomerContract({
   useEffect(() => {
     if (aiContractScope) {
       setLocalAiScope(aiContractScope);
+      // Wait for DOM to render the textarea then resize
+      setTimeout(() => {
+        const textarea = document.querySelector('.ai-content-area textarea') as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.style.height = 'auto';
+          textarea.style.height = textarea.scrollHeight + 'px';
+        }
+      }, 0);
     }
   }, [aiContractScope]);
   
@@ -297,7 +305,11 @@ export default function CustomerContract({
                 <textarea
                     value={localAiScope}
                     onChange={(e) => setLocalAiScope(e.target.value)}
-                    className="w-full h-96 bg-transparent outline-none resize-none"
+                    onInput={(e) => {
+                      e.currentTarget.style.height = 'auto';
+                      e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                    }}
+                    className="w-full min-h-[300px] bg-transparent outline-none resize-none overflow-hidden"
                 />
               </div>
             ) : (
@@ -469,7 +481,7 @@ export default function CustomerContract({
                 { title: "7. Governing Law", content: "Governed by the laws of the State of Texas." },
                 { title: "8. Entire Agreement", content: "Represents total understanding between Contractor and Client. No oral agreements are binding." },
                 { title: "9. Lawn and Landscaping", content: "LSFW is not liable for damage to lawns, plants, trees, sprinkler systems, or landscaping resulting from normal foot traffic, material storage, or equipment use. Contractor takes reasonable precautions but is not responsible for damage caused by expected levels of overspray, drift, or runoff during painting or staining." },
-                { title: "10. Spoil Haul-Off", content: "Spoil removal (excavated dirt, concrete, etc.) is not included in the base estimate. LSFW offers spoil haul-off for an additional flat fee of $250, upon request." },
+                { title: "10. Spoil Haul-Off", content: "Spoil removal (excavated dirt, concrete, etc.) is not included in the base estimate. LSFW offers spoil haul-off for an additional fee that varies depending on the scope of the job, upon request." },
                 { title: "11. Fence Length Tolerance", content: "All fence length estimates include a tolerance of ±5 feet. Final pricing may reflect minor adjustments based on actual field measurements." },
                 { title: "12. Weather Delays", content: "In the event of rain or inclement weather, the scheduled job date may be delayed. Each weather day may result in up to a 2-day delay to the original schedule." },
                 { title: "13. Fence Clearance & Swing Gap", content: "Due to natural variations in terrain, a gap of up to 3 inches between the bottom of the fence and the ground may be necessary for proper installation. Fence gates may have up to a 4-inch gap to allow for smooth swing and operation." },
