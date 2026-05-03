@@ -210,7 +210,7 @@ export default function CustomerContract({
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
       {/* Action Header */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5] flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-[#E5E5E5] flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden print:hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5">
            <FileText size={120} className="text-american-blue" strokeWidth={1} />
         </div>
@@ -334,7 +334,7 @@ export default function CustomerContract({
             </h3>
             
             {aiContractScope ? (
-              <div className="prose prose-sm max-w-none text-[#444444] leading-relaxed font-medium bg-[#F9F9F9] p-8 rounded-3xl border border-[#E5E5E5] ai-content-area">
+              <div className="prose prose-sm max-w-none text-[#444444] leading-relaxed font-medium bg-[#F9F9F9] p-8 rounded-3xl border border-[#E5E5E5] ai-content-area print:p-0 print:border-0 print:bg-transparent">
                 <textarea
                     value={localAiScope}
                     onChange={(e) => setLocalAiScope(e.target.value)}
@@ -342,8 +342,11 @@ export default function CustomerContract({
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
                     }}
-                    className="w-full bg-transparent outline-none resize-none overflow-hidden"
+                    className="w-full bg-transparent outline-none resize-none overflow-hidden print:hidden"
                 />
+                <div className="hidden print:block whitespace-pre-wrap min-h-0 text-[13px]">
+                  {localAiScope}
+                </div>
               </div>
             ) : (
               <div className="p-8 rounded-3xl border-2 border-dashed border-[#E5E5E5] flex flex-col items-center justify-center gap-4 text-center">
@@ -367,7 +370,7 @@ export default function CustomerContract({
                 <span className="h-6 w-1 bg-american-red rounded-full" />
                 II. Cost Summary
               </span>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer print:hidden">
                 <input type="checkbox" checked={showCostBreakdown} onChange={(e) => setShowCostBreakdown(e.target.checked)} className="accent-american-blue" />
                 <span className="text-[10px] font-black text-[#999999] uppercase tracking-widest">Show Breakdown</span>
               </label>
