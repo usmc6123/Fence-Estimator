@@ -195,6 +195,8 @@ export default function CustomerContract({
         contractProjectDate: projectDate,
         contractScope: localAiScope
       });
+      // Sync the session buffer to match the persisted state
+      setAiContractScope(localAiScope);
       setHasUnsavedChanges(false);
       setShowSavedFeedback(true);
       setTimeout(() => setShowSavedFeedback(false), 3000);
@@ -259,77 +261,89 @@ export default function CustomerContract({
         {/* Top Row: Identity and Actions */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 w-full">
           <div>
-            <h2 className="text-2xl font-black text-american-blue tracking-tighter uppercase mb-1">Customer Agreement</h2>
-            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em] leading-tight">Client-Ready Professional Contract & Scope</p>
+            <h2 className="text-2xl font-black text-american-blue tracking-tighter uppercase mb-1 leading-none">Customer Agreement</h2>
+            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em] leading-tight opacity-80">Finalize and Print Professional Contract</p>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
               onClick={handlePrint}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg min-w-[140px]"
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[160px]"
             >
-              <Printer size={16} />
-              Print
+              <Printer size={18} />
+              Print Agreement
             </button>
             
             {hasUnsavedChanges && (
               <button 
                 onClick={handleSaveContract}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-green-600 text-white font-black text-xs uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-lg animate-pulse min-w-[160px]"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-green-600 text-white font-black text-xs uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-xl animate-pulse min-w-[180px]"
               >
-                <Download size={16} />
-                Save Changes
+                <Download size={18} />
+                Save All Changes
               </button>
             )}
 
             {showSavedFeedback && !hasUnsavedChanges && (
               <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2 bg-green-50 text-green-700 font-bold text-[10px] uppercase tracking-widest px-4 py-4 rounded-2xl border border-green-100"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 bg-green-50 text-green-700 font-bold text-[10px] uppercase tracking-widest px-6 py-5 rounded-2xl border-2 border-green-200 shadow-sm"
               >
-                <CheckCircle2 size={16} />
-                Contract Saved
+                <CheckCircle2 size={18} />
+                Saved Successfully
               </motion.div>
             )}
           </div>
         </div>
 
         {/* Bottom Row: AI Customization */}
-        <div className="flex flex-col gap-4 relative z-10 w-full pt-6 border-t border-dashed border-[#E5E5E5]">
-          <div className="w-full">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <label className="block text-[10px] font-black text-american-blue uppercase tracking-[0.2em] opacity-60">AI Scope Custom Instructions</label>
-              <span className="text-[8px] font-bold text-[#999999] uppercase tracking-widest">Optional Tuning</span>
+        <div className="relative z-10 w-full pt-8 border-t border-dashed border-[#E5E5E5]">
+          <div className="bg-american-blue group hover:bg-american-blue/95 transition-all p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
+            {/* Background Accent */}
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+              <Sparkles size={120} className="text-white" />
             </div>
-            
-            <div className="flex flex-col lg:flex-row items-stretch gap-4">
-              <div className="flex-1">
+
+            <div className="flex flex-col lg:flex-row items-center gap-8 relative z-10">
+              <div className="flex-1 w-full flex flex-col gap-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-american-red" />
+                    <label className="text-[10px] font-black text-white/80 uppercase tracking-[0.2em]">AI Scope Customization</label>
+                  </div>
+                  <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Natural Language Enhancement</span>
+                </div>
                 <textarea
                   placeholder="e.g., 'Emphasize the 1-year workmanship warranty and specify use of Japanese Cedar...' or 'Note that color variation is normal for new fences...'"
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
-                  className="w-full h-32 p-5 rounded-2xl text-sm border border-[#E5E5E5] resize-none focus:ring-4 focus:ring-american-blue/5 focus:border-american-blue outline-none transition-all bg-[#F9F9F9] font-medium text-american-blue placeholder:text-[#BBBBBB] shadow-inner"
+                  className="w-full h-36 p-6 rounded-2xl text-sm border-0 focus:ring-4 focus:ring-white/10 outline-none transition-all bg-white/10 text-white placeholder:text-white/30 font-medium leading-relaxed resize-none shadow-inner"
                 />
               </div>
               
-              <button 
-                onClick={handleGenerateAIScope}
-                disabled={isGenerating}
-                className={cn(
-                  "w-full lg:w-auto flex flex-col items-center justify-center gap-2 px-10 py-6 rounded-2xl font-black text-xs uppercase tracking-[0.15em] transition-all shadow-lg min-w-[220px]",
-                  isGenerating ? "bg-[#F5F5F5] text-[#999999]" : "bg-american-red text-white hover:bg-american-red/90 hover:shadow-american-red/20 hover:scale-[1.02] active:scale-[0.98]"
-                )}
-              >
-                {isGenerating ? (
-                  <Loader2 className="animate-spin" size={24} />
-                ) : (
-                  <Sparkles size={24} className="mb-1" />
-                )}
-                <span>
-                  {isGenerating ? 'Analyzing Project...' : (aiContractScope ? 'Regenerate Scope' : 'Generate AI Scope')}
-                </span>
-              </button>
+              <div className="w-full lg:w-auto flex flex-col items-center justify-center pt-2">
+                <button 
+                  onClick={handleGenerateAIScope}
+                  disabled={isGenerating}
+                  className={cn(
+                    "w-full lg:w-64 flex flex-col items-center justify-center gap-4 px-10 py-10 rounded-2xl font-black text-xs uppercase tracking-[0.15em] transition-all shadow-2xl border-b-4",
+                    isGenerating 
+                      ? "bg-white/10 text-white/40 border-transparent cursor-not-allowed" 
+                      : "bg-american-red text-white border-american-red/30 hover:bg-american-red/90 hover:-translate-y-1 active:translate-y-0"
+                  )}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="animate-spin" size={32} />
+                  ) : (
+                    <Sparkles size={32} />
+                  )}
+                  <span className="text-center">
+                    {isGenerating ? 'Drafting Technical Narrative...' : ( (aiContractScope || estimate.contractScope) ? 'Regenerate Agreement' : 'Generate AI Agreement')}
+                  </span>
+                </button>
+                <p className="mt-4 text-[9px] font-bold text-white/40 uppercase tracking-widest text-center">Powered by Project Intelligence</p>
+              </div>
             </div>
           </div>
         </div>
@@ -420,7 +434,7 @@ export default function CustomerContract({
               I. Scope of Work & Project Specifications
             </h3>
             
-            {aiContractScope ? (
+            { (aiContractScope || estimate.contractScope) ? (
               <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
                 <textarea
                     value={localAiScope}
