@@ -67,6 +67,7 @@ export default function CustomerContract({
   const [demoTotals, setDemoTotals] = useState<number[]>([]);
 
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(null);
+  const [projectDate, setProjectDate] = useState<string>(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
@@ -277,9 +278,15 @@ export default function CustomerContract({
           </div>
 
           <div className="text-right relative z-10">
-            <div className="inline-block px-4 py-2 rounded-xl bg-white/10 border border-white/20 mb-4">
+            <div className="inline-block px-4 py-2 rounded-xl bg-white/10 border border-white/20 mb-4 group transition-all hover:bg-white/20">
               <span className="text-[10px] font-black uppercase tracking-widest opacity-60 mr-2">Project Date:</span>
-              <span className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              <input 
+                type="text"
+                value={projectDate}
+                onChange={(e) => setProjectDate(e.target.value)}
+                className="text-sm font-bold bg-transparent border-none outline-none text-white text-right w-32 focus:ring-0 cursor-edit print:hidden"
+              />
+              <span className="hidden print:inline text-sm font-bold">{projectDate}</span>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-american-red italic">Fences with Character</p>
           </div>
@@ -334,7 +341,7 @@ export default function CustomerContract({
             </h3>
             
             {aiContractScope ? (
-              <div className="prose prose-sm max-w-none text-[#444444] leading-relaxed font-medium bg-[#F9F9F9] p-8 rounded-3xl border border-[#E5E5E5] ai-content-area print:p-0 print:border-0 print:bg-transparent">
+              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
                 <textarea
                     value={localAiScope}
                     onChange={(e) => setLocalAiScope(e.target.value)}
@@ -342,9 +349,9 @@ export default function CustomerContract({
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
                     }}
-                    className="w-full bg-transparent outline-none resize-none overflow-hidden print:hidden"
+                    className="w-full bg-transparent outline-none resize-none overflow-hidden print:hidden text-lg leading-relaxed font-semibold min-h-[400px]"
                 />
-                <div className="hidden print:block whitespace-pre-wrap min-h-0 text-[13px]">
+                <div className="hidden print:block whitespace-pre-wrap min-h-0 text-[13px] text-[#444444]">
                   {localAiScope}
                 </div>
               </div>
