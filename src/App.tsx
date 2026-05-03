@@ -353,6 +353,7 @@ export default function App() {
           quotes={quotes}
           aiContractScope={aiContractScope}
           setAiContractScope={setAiContractScope}
+          onUpdateEstimate={(update) => setEstimate(prev => ({ ...prev, ...update }))}
         />
       )}
       {activeTab === 'supplier-order' && (

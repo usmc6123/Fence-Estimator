@@ -175,6 +175,12 @@ export interface Estimate {
   selectedSupplier?: string;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
+  manualGrandTotal?: number | null;
+  manualSectionTotals?: number[];
+  manualGateTotals?: number[];
+  manualDemoTotals?: number[];
+  contractProjectDate?: string;
+  contractScope?: string;
   createdAt: string;
   version?: number;
   parentId?: string; // Links to the original version id

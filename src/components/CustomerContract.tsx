@@ -14,6 +14,7 @@ interface CustomerContractProps {
   quotes: SupplierQuote[];
   aiContractScope: string | null;
   setAiContractScope: (scope: string | null) => void;
+  onUpdateEstimate?: (update: Partial<Estimate>) => void;
 }
 
 export default function CustomerContract({ 
@@ -22,7 +23,8 @@ export default function CustomerContract({
   laborRates,
   quotes,
   aiContractScope,
-  setAiContractScope
+  setAiContractScope,
+  onUpdateEstimate
 }: CustomerContractProps) {
   // Resolve materials based on chosen strategy
   const pricingStrategy = estimate.pricingStrategy || 'best';
@@ -59,15 +61,17 @@ export default function CustomerContract({
   }, [estimate, resolvedMaterials, laborRates]);
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [localAiScope, setLocalAiScope] = useState<string>('');
+  const [localAiScope, setLocalAiScope] = useState<string>(estimate.contractScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
   const [showCostBreakdown, setShowCostBreakdown] = useState(true);
-  const [sectionTotals, setSectionTotals] = useState<number[]>([]);
-  const [gateTotals, setGateTotals] = useState<number[]>([]);
-  const [demoTotals, setDemoTotals] = useState<number[]>([]);
+  const [sectionTotals, setSectionTotals] = useState<number[]>(estimate.manualSectionTotals || []);
+  const [gateTotals, setGateTotals] = useState<number[]>(estimate.manualGateTotals || []);
+  const [demoTotals, setDemoTotals] = useState<number[]>(estimate.manualDemoTotals || []);
 
-  const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(null);
-  const [projectDate, setProjectDate] = useState<string>(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+  const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
+  const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const isInitialMount = React.useRef(true);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
@@ -107,11 +111,30 @@ export default function CustomerContract({
   }, [data.runs, markupFactor, taxFactor]);
 
   useEffect(() => {
-    // Only initialize section totals if they haven't been set or if the project structure changes
-    setSectionTotals(projectBreakdown.map(r => r.totalFenceCharge));
-    setGateTotals(projectBreakdown.map(r => r.totalGateCharge));
-    setDemoTotals(projectBreakdown.map(r => r.demoCharge));
+    // Only initialize section totals if they haven't been set
+    if (sectionTotals.length === 0 && projectBreakdown.length > 0) {
+      setSectionTotals(projectBreakdown.map(r => r.totalFenceCharge));
+    }
+    if (gateTotals.length === 0 && projectBreakdown.length > 0) {
+      setGateTotals(projectBreakdown.map(r => r.totalGateCharge));
+    }
+    if (demoTotals.length === 0 && projectBreakdown.length > 0) {
+      setDemoTotals(projectBreakdown.map(r => r.demoCharge));
+    }
   }, [projectBreakdown.length]); // Use length to avoid infinite loop from content changes
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setHasUnsavedChanges(true);
+  }, [localAiScope, sectionTotals, gateTotals, demoTotals, manualGrandTotal, projectDate]);
+
+  useEffect(() => {
+    // Initial load from estimate shouldn't trigger unsaved changes
+    setHasUnsavedChanges(false);
+  }, [estimate.id]);
 
   useEffect(() => {
     if (aiContractScope) {
@@ -159,6 +182,20 @@ export default function CustomerContract({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSaveContract = () => {
+    if (onUpdateEstimate) {
+      onUpdateEstimate({
+        manualSectionTotals: sectionTotals,
+        manualGateTotals: gateTotals,
+        manualDemoTotals: demoTotals,
+        manualGrandTotal: manualGrandTotal,
+        contractProjectDate: projectDate,
+        contractScope: localAiScope
+      });
+      setHasUnsavedChanges(false);
+    }
   };
 
   const handleGenerateAIScope = async () => {
@@ -252,6 +289,16 @@ export default function CustomerContract({
             <Printer size={16} />
             Print Agreement
           </button>
+          
+          {hasUnsavedChanges && (
+            <button 
+              onClick={handleSaveContract}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-green-600 text-white font-bold text-xs uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-lg animate-pulse"
+            >
+              <Download size={16} />
+              Save Changes
+            </button>
+          )}
         </div>
       </div>
 
