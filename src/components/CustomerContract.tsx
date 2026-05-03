@@ -28,33 +28,89 @@ export default function CustomerContract({
   const pricingStrategy = estimate.pricingStrategy || 'best';
   const selectedSupplier = estimate.selectedSupplier || '';
 
-  let resolvedMaterials = materials;
-  if (pricingStrategy === 'supplier' && selectedSupplier) {
-    const supplierQuotes = quotes
-      .filter(q => q.supplierName === selectedSupplier)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const resolvedMaterials = React.useMemo(() => {
+    let resolved = materials;
+    if (pricingStrategy === 'supplier' && selectedSupplier) {
+      const supplierQuotes = quotes
+        .filter(q => q.supplierName === selectedSupplier)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    resolvedMaterials = materials.map(m => {
-      let quotedPrice: number | undefined;
-      for (const quote of supplierQuotes) {
-        const item = quote.items.find(i => i.mappedMaterialId === m.id);
-        if (item) {
-          quotedPrice = item.unitPrice;
-          break;
+      resolved = materials.map(m => {
+        let quotedPrice: number | undefined;
+        for (const quote of supplierQuotes) {
+          const item = quote.items.find(i => i.mappedMaterialId === m.id);
+          if (item) {
+            quotedPrice = item.unitPrice;
+            break;
+          }
         }
-      }
 
-      if (quotedPrice !== undefined) {
-        return { ...m, cost: quotedPrice };
-      }
-      return m;
-    });
-  }
+        if (quotedPrice !== undefined) {
+          return { ...m, cost: quotedPrice };
+        }
+        return m;
+      });
+    }
+    return resolved;
+  }, [materials, pricingStrategy, selectedSupplier, quotes]);
 
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
+  const data: DetailedTakeOff = React.useMemo(() => {
+    return calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
+  }, [estimate, resolvedMaterials, laborRates]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>('');
   const [customInstructions, setCustomInstructions] = useState<string>('');
+  const [showCostBreakdown, setShowCostBreakdown] = useState(true);
+  const [sectionTotals, setSectionTotals] = useState<number[]>([]);
+  const [gateTotals, setGateTotals] = useState<number[]>([]);
+  const [demoTotals, setDemoTotals] = useState<number[]>([]);
+
+  const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(null);
+
+  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+  const taxFactor = (estimate.taxPercentage || 0) / 100;
+
+  // Calculate project financial breakdown for component use
+  const projectBreakdown = React.useMemo(() => {
+    return data.runs.map(run => {
+      // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
+      const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
+      const fenceTax = run.fenceMaterialCost * taxFactor;
+      const totalFenceCharge = baseFenceCharge + fenceTax;
+      
+      // Gate Charge
+      const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
+      const gateTax = run.gateMaterialCost * taxFactor;
+      const totalGateCharge = baseGateCharge + gateTax;
+
+      // Demo Charge
+      const demoCharge = run.demoCharge * markupFactor;
+
+      return {
+        name: run.runName,
+        netLF: run.netLF,
+        totalFenceCharge,
+        pricePerFoot: run.netLF > 0 ? totalFenceCharge / run.netLF : 0,
+        totalGateCharge,
+        demoCharge,
+        gates: run.gates,
+        style: run.styleName,
+        height: run.height,
+        hasRotBoard: run.hasRotBoard,
+        hasTopCap: run.hasTopCap,
+        hasTrim: run.hasTrim,
+        picketStyle: run.picketStyle
+      };
+    });
+  }, [data.runs, markupFactor, taxFactor]);
+
+  useEffect(() => {
+    // Only initialize section totals if they haven't been set or if the project structure changes
+    setSectionTotals(projectBreakdown.map(r => r.totalFenceCharge));
+    setGateTotals(projectBreakdown.map(r => r.totalGateCharge));
+    setDemoTotals(projectBreakdown.map(r => r.demoCharge));
+  }, [projectBreakdown.length]); // Use length to avoid infinite loop from content changes
 
   useEffect(() => {
     if (aiContractScope) {
@@ -69,41 +125,6 @@ export default function CustomerContract({
       }, 0);
     }
   }, [aiContractScope]);
-  
-  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
-  const taxFactor = (estimate.taxPercentage || 0) / 100;
-
-  // Calculate project financial breakdown for customer view
-  const projectBreakdown = data.runs.map(run => {
-    // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
-    const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
-    const fenceTax = run.fenceMaterialCost * taxFactor;
-    const totalFenceCharge = baseFenceCharge + fenceTax;
-    
-    // Gate Charge
-    const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
-    const gateTax = run.gateMaterialCost * taxFactor;
-    const totalGateCharge = baseGateCharge + gateTax;
-
-    // Demo Charge
-    const demoCharge = run.demoCharge * markupFactor;
-
-    return {
-      name: run.runName,
-      netLF: run.netLF,
-      totalFenceCharge,
-      pricePerFoot: run.netLF > 0 ? totalFenceCharge / run.netLF : 0,
-      totalGateCharge,
-      demoCharge,
-      gates: run.gates,
-      style: run.styleName,
-      height: run.height,
-      hasRotBoard: run.hasRotBoard,
-      hasTopCap: run.hasTopCap,
-      hasTrim: run.hasTrim,
-      picketStyle: run.picketStyle
-    };
-  });
 
   // Check if all runs are homogenous (same specs)
   const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => {
@@ -118,9 +139,21 @@ export default function CustomerContract({
       ));
   });
 
-  const totalFenceCharge = projectBreakdown.reduce((sum, r) => sum + r.totalFenceCharge, 0);
+  const totalFenceCharge = projectBreakdown.reduce((sum, r, i) => sum + (sectionTotals[i] ?? r.totalFenceCharge), 0);
   const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
-  const grandTotal = data.totals.grandTotal;
+  
+  // Calculate a dynamic grand total based on edited section totals
+  const editedGrandTotal = React.useMemo(() => {
+    const baseTotal = projectBreakdown.reduce((sum, r, i) => {
+      const fence = sectionTotals[i] ?? r.totalFenceCharge;
+      const gate = gateTotals[i] ?? r.totalGateCharge;
+      const demo = demoTotals[i] ?? r.demoCharge;
+      return sum + fence + gate + demo;
+    }, 0);
+    return baseTotal;
+  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals]);
+
+  const grandTotal = manualGrandTotal ?? editedGrandTotal;
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
   const handlePrint = () => {
@@ -309,7 +342,7 @@ export default function CustomerContract({
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
                     }}
-                    className="w-full min-h-[300px] bg-transparent outline-none resize-none overflow-hidden"
+                    className="w-full bg-transparent outline-none resize-none overflow-hidden"
                 />
               </div>
             ) : (
@@ -329,120 +362,202 @@ export default function CustomerContract({
 
           {/* Financial Breakdown (Client View) */}
           <div className="space-y-6">
-            <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center gap-3">
-              <span className="h-6 w-1 bg-american-red rounded-full" />
-              II. Cost Summary
+            <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center justify-between gap-3">
+              <span className="flex items-center gap-3">
+                <span className="h-6 w-1 bg-american-red rounded-full" />
+                II. Cost Summary
+              </span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={showCostBreakdown} onChange={(e) => setShowCostBreakdown(e.target.checked)} className="accent-american-blue" />
+                <span className="text-[10px] font-black text-[#999999] uppercase tracking-widest">Show Breakdown</span>
+              </label>
             </h3>
             
             <div className="space-y-6">
-              {isHomogeneous ? (
-                <div className="space-y-6">
-                  {/* Unified Project Rate Card */}
-                  <div className="bg-white rounded-3xl p-8 border-2 border-american-blue/5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
-                      <Sparkles size={120} />
-                    </div>
-                    
-                    <div className="relative z-10 text-center md:text-left">
-                      <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
-                        Project-Wide Rate
+              {showCostBreakdown ? (
+                isHomogeneous ? (
+                  <div className="space-y-6">
+                    {/* Unified Project Rate Card */}
+                    <div className="bg-white rounded-3xl p-8 border-2 border-american-blue/5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+                        <Sparkles size={120} />
                       </div>
-                      <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h4>
-                      <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">{projectBreakdown[0].height}' {projectBreakdown[0].style} Specification</p>
+                      
+                      <div className="relative z-10 text-center md:text-left">
+                        <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
+                          Project-Wide Rate
+                        </div>
+                        <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h4>
+                        <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">{projectBreakdown[0].height}' {projectBreakdown[0].style} Specification</p>
+                      </div>
+
+                      <div className="text-center md:text-right relative z-10">
+                        <div className="flex items-baseline justify-center md:justify-end gap-2">
+                          <span className="text-4xl font-black text-american-blue tabular-nums">{formatCurrency(globalPricePerFoot)}</span>
+                          <span className="text-sm font-black text-[#BBBBBB] uppercase tracking-widest">/ LF</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-american-red uppercase tracking-widest mt-1">Guaranteed Custom Rate</p>
+                      </div>
                     </div>
 
-                    <div className="text-center md:text-right relative z-10">
-                      <div className="flex items-baseline justify-center md:justify-end gap-2">
-                        <span className="text-4xl font-black text-american-blue tabular-nums">{formatCurrency(globalPricePerFoot)}</span>
-                        <span className="text-sm font-black text-[#BBBBBB] uppercase tracking-widest">/ LF</span>
-                      </div>
-                      <p className="text-[10px] font-bold text-american-red uppercase tracking-widest mt-1">Guaranteed Custom Rate</p>
+                    {/* Individual Footages for Clarity */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      {projectBreakdown.map((run, i) => (
+                        <div key={i} className="bg-[#F9F9F9] rounded-2xl p-4 border border-[#F0F0F0] flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.name}</span>
+                          <span className="text-sm font-bold text-american-blue">{run.netLF.toFixed(1)}'</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {projectBreakdown.map((run, i) => {
+                      return (
+                        <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col gap-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
+                              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.style} {run.height}'</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs font-black text-american-red">
+                                <input 
+                                  type="number" 
+                                  value={((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
+                                  onChange={(e) => {
+                                    const newRate = parseFloat(e.target.value) || 0;
+                                    const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
+                                    newTotals[i] = newRate * run.netLF;
+                                    setSectionTotals(newTotals);
+                                  }}
+                                  className="w-16 bg-transparent text-right outline-none"
+                                /> 
+                                <span className="opacity-40">/ FT</span>
+                              </p>
+                              <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
+                            </div>
+                          </div>
 
-                  {/* Individual Footages for Clarity */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    {projectBreakdown.map((run, i) => (
-                      <div key={i} className="bg-[#F9F9F9] rounded-2xl p-4 border border-[#F0F0F0] flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.name}</span>
-                        <span className="text-sm font-bold text-american-blue">{run.netLF.toFixed(1)}'</span>
-                      </div>
-                    ))}
+                          <div className="space-y-3 pt-4 border-t border-[#F5F5F5]">
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Total</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-american-blue">$</span>
+                                <input 
+                                  type="number" 
+                                  value={(sectionTotals[i] ?? run.totalFenceCharge).toFixed(2)}
+                                  onChange={(e) => {
+                                    const newVal = parseFloat(e.target.value) || 0;
+                                    const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
+                                    newTotals[i] = newVal;
+                                    setSectionTotals(newTotals);
+                                  }}
+                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates Total</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-american-blue">$</span>
+                                <input 
+                                  type="number" 
+                                  value={(gateTotals[i] ?? run.totalGateCharge).toFixed(2)}
+                                  onChange={(e) => {
+                                    const newVal = parseFloat(e.target.value) || 0;
+                                    const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
+                                    newTotals[i] = newVal;
+                                    setGateTotals(newTotals);
+                                  }}
+                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo Total</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-american-blue">$</span>
+                                <input 
+                                  type="number" 
+                                  value={(demoTotals[i] ?? run.demoCharge).toFixed(2)}
+                                  onChange={(e) => {
+                                    const newVal = parseFloat(e.target.value) || 0;
+                                    const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
+                                    newTotals[i] = newVal;
+                                    setDemoTotals(newTotals);
+                                  }}
+                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-auto pt-4 border-t-2 border-american-blue/5 flex justify-between items-center bg-american-blue/5 -mx-6 -mb-6 px-6 py-4 rounded-b-2xl">
+                            <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Section Total</span>
+                            <span className="font-black text-american-blue text-lg">
+                              {formatCurrency(
+                                (sectionTotals[i] ?? run.totalFenceCharge) + 
+                                (gateTotals[i] ?? run.totalGateCharge) + 
+                                (demoTotals[i] ?? run.demoCharge)
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                )
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {projectBreakdown.map((run, i) => {
-                    const [localTotal, setLocalTotal] = useState(run.totalFenceCharge);
-                    return (
-                      <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
-                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.height}' {run.style}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-black text-american-red">
-                              <input 
-                                type="number" 
-                                value={(localTotal / run.netLF).toFixed(2)}
-                                onChange={(e) => {
-                                  const newRate = parseFloat(e.target.value);
-                                  setLocalTotal(newRate * run.netLF);
-                                }}
-                                className="w-16 bg-transparent text-right"
-                              /> 
-                              <span className="opacity-40">/ FT</span>
-                            </p>
-                            <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-auto pt-4 border-t border-[#F5F5F5] flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Section Total</span>
-                          <input 
-                            type="number" 
-                            value={localTotal.toFixed(2)}
-                            onChange={(e) => setLocalTotal(parseFloat(e.target.value))}
-                            className="font-bold text-american-blue text-right w-24"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="bg-[#F9F9F9] rounded-3xl p-8 border border-[#E5E5E5] text-center">
+                  <p className="text-sm font-bold text-american-blue uppercase">Refer to Quickbooks Estimate for detailed breakdown.</p>
+                  <div className="mt-2 flex items-center justify-center gap-1">
+                    <span className="text-xl font-black text-american-blue">$</span>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                      onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
+                      className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
+                    />
+                  </div>
                 </div>
               )}
 
               {/* Gates Section - Listed Separately */}
-              <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5]">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="h-10 w-10 rounded-xl bg-american-blue flex items-center justify-center text-white">
-                    <Navigation size={20} />
+              {showCostBreakdown && (
+                <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5]">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="h-10 w-10 rounded-xl bg-american-blue flex items-center justify-center text-white">
+                      <Navigation size={20} />
+                    </div>
+                    <h4 className="font-black text-american-blue uppercase tracking-widest text-xs">Custom Gate Access Systems</h4>
                   </div>
-                  <h4 className="font-black text-american-blue uppercase tracking-widest text-xs">Custom Gate Access Systems</h4>
-                </div>
-                
-                <div className="space-y-3">
-                  {projectBreakdown.some(r => r.gates.length > 0) ? (
-                    projectBreakdown.flatMap(r => r.gates).map((gate, gIdx) => {
-                      // Estimate gate price
-                      const basePrice = (gate.items.reduce((sum, item) => sum + item.total, 0)) * markupFactor;
-                      const tax = (gate.items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + item.total, 0)) * taxFactor;
-                      return (
-                        <div key={gIdx} className="flex items-center justify-between py-3 border-b border-[#E5E5E5] last:border-0">
-                          <div>
-                            <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate</p>
-                            <p className="text-[10px] font-bold text-[#999999] uppercase">Custom-Built & Professionally Installed</p>
+                  
+                  <div className="space-y-3">
+                    {projectBreakdown.some(r => r.gates.length > 0) ? (
+                      projectBreakdown.flatMap(r => r.gates).map((gate, gIdx) => {
+                        // Estimate gate price
+                        const basePrice = (gate.items.reduce((sum, item) => sum + item.total, 0)) * markupFactor;
+                        const tax = (gate.items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + item.total, 0)) * taxFactor;
+                        return (
+                          <div key={gIdx} className="flex items-center justify-between py-3 border-b border-[#E5E5E5] last:border-0">
+                            <div>
+                              <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate</p>
+                              <p className="text-[10px] font-bold text-[#999999] uppercase">Custom-Built & Professionally Installed</p>
+                            </div>
+                            <p className="font-bold text-american-blue text-sm">{formatCurrency(basePrice + tax)}</p>
                           </div>
-                          <p className="font-bold text-american-blue text-sm">{formatCurrency(basePrice + tax)}</p>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs font-bold text-[#BBBBBB] uppercase italic tracking-widest">No custom gates included in this scope.</p>
-                  )}
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs font-bold text-[#BBBBBB] uppercase italic tracking-widest">No custom gates included in this scope.</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Grand Total */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
@@ -454,8 +569,15 @@ export default function CustomerContract({
                   <h3 className="text-3xl font-black tracking-tighter">TOTAL INVESTMENT</h3>
                 </div>
                 <div className="relative z-10 text-center md:text-right">
-                  <div className="text-5xl font-bold tracking-tighter tabular-nums mb-1">
-                    {formatCurrency(grandTotal)}
+                  <div className="flex items-center justify-center md:justify-end gap-1 mb-1">
+                    <span className="text-3xl font-black tabular-nums tracking-tighter self-center">$</span>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                      onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
+                      className="text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors"
+                    />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-american-red">Valid for 30 days from date of issue</p>
                 </div>
