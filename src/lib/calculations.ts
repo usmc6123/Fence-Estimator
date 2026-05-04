@@ -892,9 +892,12 @@ export function calculateDetailedTakeOff(
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
       if (runStyle.type === 'Metal') {
-        if (run.height === 4) panelMat = materials.find(m => m.id === 'm-panel-4x8') || panelMat;
-        else if (run.height === 5) panelMat = materials.find(m => m.id === 'm-panel-5x8') || panelMat;
-        else panelMat = materials.find(m => m.id === 'm-panel-std') || panelMat;
+        const height = run.height || 6;
+        const variation = run.visualStyleId === 'm-2rep' ? '2rep' : (run.visualStyleId === 'm-3rr' ? '3rr' : '2rft');
+        const panelId = `m-panel-${height}x8-${variation}`;
+        panelMat = materials.find(m => m.id === panelId) || 
+                   materials.find(m => m.id === `m-panel-${height}x8-2rft`) ||
+                   panelMat;
       } else if (runStyle.type === 'Pipe') {
         skipGenericInfill = true;
       }

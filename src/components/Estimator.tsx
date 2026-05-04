@@ -536,41 +536,17 @@ export default function Estimator({
                   )}
 
                   {defaultStyle.type === 'Metal' && (
-                    <>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Install Type</label>
-                         <select 
-                           value={estimate.ironInstallType}
-                           onChange={(e) => setEstimate({...estimate, ironInstallType: e.target.value as any})}
-                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
-                         >
-                           <option value="Bolt up">Bolt up</option>
-                           <option value="Weld up">Weld up</option>
-                         </select>
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Rail Count</label>
-                         <select 
-                           value={estimate.ironRails}
-                           onChange={(e) => setEstimate({...estimate, ironRails: e.target.value as any})}
-                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
-                         >
-                           <option value="2 rail">2 rail</option>
-                           <option value="3 rail">3 rail</option>
-                         </select>
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Top Finishing</label>
-                         <select 
-                           value={estimate.ironTop}
-                           onChange={(e) => setEstimate({...estimate, ironTop: e.target.value as any})}
-                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
-                         >
-                           <option value="Flat top">Flat top</option>
-                           <option value="Pressed point top">Pressed point top</option>
-                         </select>
-                      </div>
-                    </>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Install Type</label>
+                       <select 
+                         value={estimate.ironInstallType}
+                         onChange={(e) => setEstimate({...estimate, ironInstallType: e.target.value as any})}
+                         className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                       >
+                         <option value="Bolt up">Bolt up</option>
+                         <option value="Weld up">Weld up</option>
+                       </select>
+                    </div>
                   )}
                </div>
 

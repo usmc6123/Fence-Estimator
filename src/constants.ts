@@ -72,9 +72,31 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'm-post-4x4-10-hd', name: '4x4 x 10\' Wrought Iron Post (Heavy Wall)', category: 'Post', unit: 'each', cost: 158.00, description: 'Extra heavy wall thickness for large drive gates', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
   { id: 'm-bracket', name: 'Wrought Iron Mounting Bracket', category: 'Hardware', unit: 'each', cost: 4.50, description: '4 per panel required' },
   { id: 'm-screw-self-tap', name: '1/4" x 1" Self Tapping Screw', category: 'Hardware', unit: 'each', cost: 0.35, description: 'Required for mounting brackets' },
-  { id: 'm-panel-4x8', name: '4x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 165.00, description: 'Pre-welded 4ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-  { id: 'm-panel-5x8', name: '5x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 180.00, description: 'Pre-welded 5ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-  { id: 'm-panel-std', name: '6x8 Wrought Iron Panel', category: 'Panel', unit: 'each', cost: 195.00, description: 'Pre-welded 6ft section', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  
+  // 3ft Wrought Iron Panels
+  { id: 'm-panel-3x8-2rft', name: '3x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 150.00, description: 'Standard 2 rail flat top' },
+  { id: 'm-panel-3x8-2rep', name: '3x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 160.00, description: 'Extended pickets top' },
+  { id: 'm-panel-3x8-3rr', name: '3x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 175.00, description: '3 rail racking panel' },
+  
+  // 4ft Wrought Iron Panels
+  { id: 'm-panel-4x8-2rft', name: '4x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 165.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-4x8-2rep', name: '4x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 175.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-4x8-3rr', name: '4x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 190.00, description: '3 rail racking panel' },
+
+  // 5ft Wrought Iron Panels
+  { id: 'm-panel-5x8-2rft', name: '5x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 180.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-5x8-2rep', name: '5x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 190.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-5x8-3rr', name: '5x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 205.00, description: '3 rail racking panel' },
+
+  // 6ft Wrought Iron Panels
+  { id: 'm-panel-6x8-2rft', name: '6x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 195.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-6x8-2rep', name: '6x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 205.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-6x8-3rr', name: '6x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 220.00, description: '3 rail racking panel' },
+
+  // 7ft Wrought Iron Panels
+  { id: 'm-panel-7x8-2rft', name: '7x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 210.00, description: 'Standard 2 rail flat top' },
+  { id: 'm-panel-7x8-2rep', name: '7x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 220.00, description: 'Extended pickets top' },
+  { id: 'm-panel-7x8-3rr', name: '7x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 235.00, description: '3 rail racking panel' },
   
   // Farm Structure
   { id: 'f-post-t', name: '6\' Steel T-Post', category: 'Post', unit: 'each', cost: 8.25, description: 'Agricultural steel post', imageUrl: 'https://d2j6dbq0eux0bg.cloudfront.net/images/96378769/4289817609.jpg' },
@@ -265,8 +287,9 @@ export const FENCE_STYLES: FenceStyle[] = [
     availableWidths: [6, 8],
     availableColors: ['Black', 'Bronze', 'White'],
     visualStyles: [
-      { id: 'm-flat', name: 'Standard Panel', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-      { id: 'm-spear', name: 'Spear Top Panel', priceModifier: 6.50, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+      { id: 'm-2rft', name: 'Standard 2 Rail Flat Top', priceModifier: 0, imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+      { id: 'm-2rep', name: '2 Rail Extended Pickets', priceModifier: 0, imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+      { id: 'm-3rr', name: '3 Rail Racking', priceModifier: 0, imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
     ],
     calcLogic: { postsPerLF: 0.125, railsPerLF: 0, picketsPerLF: 0, concretePerPost: 1.5 },
     baseLaborRate: 19.50,
