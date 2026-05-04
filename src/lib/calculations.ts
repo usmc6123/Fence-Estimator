@@ -937,9 +937,9 @@ export function calculateDetailedTakeOff(
     if (!skipGenericInfill) {
       const panelUnitCost = panelMat.cost; 
       const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
-      const panelName = runStyle.type === 'Metal' 
-        ? `${run.height}'x8' Wrought Iron ${runVisualStyle.name}` 
-        : (runStyle.type === 'Wood' ? `${panelMat.name} (${runTopStyle})` : panelMat.name);
+      const panelName = runStyle.type === 'Wood' 
+        ? `${panelMat.name} (${runTopStyle})` 
+        : panelMat.name;
 
       const picketFormula = runStyle.type === 'Wood' 
         ? (run.visualStyleId === 'w-bob' 

@@ -65,26 +65,31 @@ export default function App() {
 
     const q = query(collection(db, 'materials'), where('companyId', '==', 'lonestarfence'));
     
-    // Check if we need to seed
-    const checkAndSeed = async () => {
+    // Check if we need to seed or sync missing items
+    const checkAndSync = async () => {
       try {
         const snapshot = await getDocs(q);
-        if (snapshot.empty) {
-          console.log('Seeding materials to Firestore...');
+        const existingMaterials = snapshot.docs.map(d => d.data() as MaterialItem);
+        const existingIds = new Set(existingMaterials.map(m => m.id));
+        
+        const missingItems = MATERIALS.filter(mat => !existingIds.has(mat.id));
+        
+        if (missingItems.length > 0) {
+          console.log(`Syncing ${missingItems.length} missing materials to Firestore...`);
           const batch = writeBatch(db);
-          MATERIALS.forEach((mat) => {
+          missingItems.forEach((mat) => {
             const docRef = doc(db, 'materials', mat.id);
             batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
           });
           await batch.commit();
-          console.log('Seeding complete.');
+          console.log('Sync complete.');
         }
       } catch (error) {
-        console.error('Seeding failed:', error);
+        console.error('Material sync failed:', error);
       }
     };
 
-    checkAndSeed();
+    checkAndSync();
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
