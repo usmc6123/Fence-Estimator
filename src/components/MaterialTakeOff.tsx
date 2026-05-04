@@ -52,7 +52,27 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
   // Resolve materials based on chosen strategy
   const resolvedMaterials = React.useMemo(() => {
-    if (pricingStrategy === 'best' || !selectedSupplier) return materials;
+    if (pricingStrategy === 'best') {
+      return materials.map(m => {
+        let bestPrice = m.cost;
+        let source = 'Library Price';
+
+        // Check all quotes for this material to find lower prices
+        quotes.forEach(quote => {
+          const item = quote.items.find(i => i.mappedMaterialId === m.id);
+          if (item && item.unitPrice > 0 && item.unitPrice < bestPrice) {
+            bestPrice = item.unitPrice;
+            source = quote.supplierName;
+          }
+        });
+
+        return { ...m, cost: bestPrice, priceSource: source };
+      });
+    }
+
+    if (!selectedSupplier) {
+      return materials.map(m => ({ ...m, priceSource: 'Library Price' }));
+    }
 
     const supplierQuotes = quotes
       .filter(q => q.supplierName === selectedSupplier)
@@ -60,18 +80,21 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
     return materials.map(m => {
       let quotedPrice: number | undefined;
+      let source = 'Library Price';
+      
       for (const quote of supplierQuotes) {
         const item = quote.items.find(i => i.mappedMaterialId === m.id);
         if (item) {
           quotedPrice = item.unitPrice;
+          source = quote.supplierName;
           break;
         }
       }
 
       if (quotedPrice !== undefined) {
-        return { ...m, cost: quotedPrice };
+        return { ...m, cost: quotedPrice, priceSource: source };
       }
-      return m;
+      return { ...m, priceSource: 'Library Price' };
     });
   }, [materials, quotes, pricingStrategy, selectedSupplier]);
 
@@ -593,6 +616,15 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                       <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
                                           <span>{item.name}</span>
+                                          {pricingStrategy === 'best' && item.priceSource && (
+                                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
+                                              item.priceSource === 'Library Price' 
+                                                ? 'bg-american-blue/10 text-american-blue' 
+                                                : 'bg-emerald-100 text-emerald-600'
+                                            }`}>
+                                              {item.priceSource}
+                                            </span>
+                                          )}
                                           {isFallback && showPrices && (
                                             <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[8px] font-black uppercase tracking-tighter rounded-md">
                                               Library Price
@@ -646,7 +678,20 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
                                   return (
                                     <tr key={`gate-${i}`} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
-                                      <td className="px-6 py-4">{item.name}</td>
+                                      <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                          <span>{item.name}</span>
+                                          {pricingStrategy === 'best' && item.priceSource && (
+                                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
+                                              item.priceSource === 'Library Price' 
+                                                ? 'bg-american-blue/10 text-american-blue' 
+                                                : 'bg-emerald-100 text-emerald-600'
+                                            }`}>
+                                              {item.priceSource}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
                                       <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
                                       <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
@@ -710,7 +755,20 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                             <ul className="space-y-2">
                               {gate.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition').map((gi, gii) => (
                                 <li key={gii} className="flex justify-between items-center group">
-                                  <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors">{gi.qty}x {gi.name}</span>
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors truncate">
+                                      {gi.qty}x {gi.name}
+                                    </span>
+                                    {pricingStrategy === 'best' && gi.priceSource && (
+                                      <span className={`w-fit px-1.5 py-0.5 text-[7px] font-black uppercase tracking-tighter rounded-sm ${
+                                        gi.priceSource === 'Library Price' 
+                                          ? 'bg-american-blue/5 text-american-blue/60' 
+                                          : 'bg-emerald-50 text-emerald-600/80'
+                                      }`}>
+                                        {gi.priceSource}
+                                      </span>
+                                    )}
+                                  </div>
                                   {showPrices && <span className="text-[11px] font-black text-american-blue">{formatCurrency(gi.total)}</span>}
                                 </li>
                               ))}
@@ -765,7 +823,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                           <td className="px-8 py-5 flex items-center gap-3">
                             <div className="w-1.5 h-1.5 rounded-full bg-american-blue/30" />
                             <div className="flex flex-col">
-                              <span>{item.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span>{item.name}</span>
+                                {pricingStrategy === 'best' && item.priceSource && (
+                                  <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
+                                    item.priceSource === 'Library Price' 
+                                      ? 'bg-american-blue/10 text-american-blue' 
+                                      : 'bg-emerald-100 text-emerald-600'
+                                  }`}>
+                                    {item.priceSource}
+                                  </span>
+                                )}
+                              </div>
                               {isFallback && showPrices && (
                                 <span className="text-[8px] font-black uppercase tracking-tighter text-orange-600 mt-0.5">
                                   Not in supplier quotes - Using library price

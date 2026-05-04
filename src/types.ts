@@ -7,6 +7,7 @@ export interface MaterialItem {
   category: MaterialCategory;
   unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip' | 'pint';
   cost: number;
+  priceSource?: string;
   description?: string;
   imageUrl?: string;
   aliases?: string[]; // Remembered naming conventions from supplier quotes

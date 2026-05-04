@@ -7,6 +7,7 @@ export interface TakeOffItem {
   qty: number;
   unit: string;
   unitCost: number;
+  priceSource?: string;
   total: number;
   category: string;
   formula?: string;
@@ -149,6 +150,7 @@ export function calculateDetailedTakeOff(
       qty: lf,
       unit: 'lf',
       unitCost: materialCostPerLF,
+      priceSource: 'Library Price',
       total: lf * materialCostPerLF,
       category: 'Infill'
     });
@@ -159,6 +161,7 @@ export function calculateDetailedTakeOff(
       qty: lf,
       unit: 'lf',
       unitCost: laborCostPerLF,
+      priceSource: 'Library Price',
       total: lf * laborCostPerLF,
       category: 'Labor'
     });
@@ -171,6 +174,7 @@ export function calculateDetailedTakeOff(
         qty: estimate.gateCount,
         unit: 'each',
         unitCost: gateCost,
+        priceSource: 'Library Price',
         total: estimate.gateCount * gateCost,
         category: 'Gate'
       });
@@ -240,6 +244,7 @@ export function calculateDetailedTakeOff(
         qty: r200,
         unit: 'each',
         unitCost: m200Cost,
+        priceSource: m200.priceSource,
         total: r200 * m200Cost,
         category: 'Infill'
       });
@@ -251,6 +256,7 @@ export function calculateDetailedTakeOff(
         qty: r100,
         unit: 'each',
         unitCost: m100Cost,
+        priceSource: m100.priceSource,
         total: r100 * m100Cost,
         category: 'Infill'
       });
@@ -272,6 +278,7 @@ export function calculateDetailedTakeOff(
         qty: totalGallons,
         unit: paintMat.unit,
         unitCost: paintMat.cost,
+        priceSource: paintMat.priceSource,
         total: totalPaintCost,
         category: 'Hardware'
       });
@@ -289,6 +296,7 @@ export function calculateDetailedTakeOff(
         qty: 1,
         unit: 'job',
         unitCost: 28,
+        priceSource: 'Library Rate',
         total: 28,
         category: 'SitePrep'
       });
@@ -302,6 +310,7 @@ export function calculateDetailedTakeOff(
         qty: Math.ceil(totalLF / 20),
         unit: 'units',
         unitCost: 58,
+        priceSource: 'Library Rate',
         total: clearingCost,
         category: 'SitePrep'
       });
@@ -386,6 +395,7 @@ export function calculateDetailedTakeOff(
                 qty: 1,
                 unit: sharkKit.unit,
                 unitCost: sharkKit.cost,
+                priceSource: sharkKit.priceSource,
                 total: sharkKit.cost,
                 category: 'Gate'
               });
@@ -400,6 +410,7 @@ export function calculateDetailedTakeOff(
                 qty: 2,
                 unit: caneBoltMat.unit,
                 unitCost: caneBoltMat.cost,
+                priceSource: caneBoltMat.priceSource,
                 total: 2 * caneBoltMat.cost,
                 category: 'Hardware'
               });
@@ -415,6 +426,7 @@ export function calculateDetailedTakeOff(
                 qty: 1,
                 unit: hingeKit.unit,
                 unitCost: hingeKit.cost,
+                priceSource: hingeKit.priceSource,
                 total: hingeKit.cost,
                 category: 'Gate'
               });
@@ -429,6 +441,7 @@ export function calculateDetailedTakeOff(
                 qty: 1,
                 unit: latchMat.unit,
                 unitCost: latchMat.cost,
+                priceSource: latchMat.priceSource,
                 total: latchMat.cost,
                 category: 'Hardware'
               });
@@ -441,6 +454,7 @@ export function calculateDetailedTakeOff(
               qty: 2,
               unit: 'each',
               unitCost: railMat.cost,
+              priceSource: railMat.priceSource,
               total: 2 * railMat.cost,
               category: 'Structure'
             });
@@ -457,6 +471,7 @@ export function calculateDetailedTakeOff(
               qty: 1,
               unit: gateMat.unit,
               unitCost: gateMat.cost,
+              priceSource: gateMat.priceSource,
               total: gateMat.cost,
               category: 'Gate'
             });
@@ -469,6 +484,7 @@ export function calculateDetailedTakeOff(
               qty: 1,
               unit: hwMat.unit,
               unitCost: hwMat.cost,
+              priceSource: hwMat.priceSource,
               total: hwMat.cost,
               category: 'Hardware'
             });
@@ -483,6 +499,7 @@ export function calculateDetailedTakeOff(
                 qty: 2,
                 unit: caneBoltMat.unit,
                 unitCost: caneBoltMat.cost,
+                priceSource: caneBoltMat.priceSource,
                 total: 2 * caneBoltMat.cost,
                 category: 'Hardware'
               });
@@ -498,6 +515,7 @@ export function calculateDetailedTakeOff(
               qty: 1,
               unit: gateMat.unit,
               unitCost: gateMat.cost,
+              priceSource: gateMat.priceSource,
               total: gateMat.cost,
               category: 'Gate'
             });
@@ -512,6 +530,7 @@ export function calculateDetailedTakeOff(
               qty: gate.type === 'Double' ? 2 : 1,
               unit: 'pair',
               unitCost: hingeMat.cost,
+              priceSource: hingeMat.priceSource,
               total: (gate.type === 'Double' ? 2 : 1) * hingeMat.cost,
               category: 'Hardware'
             });
@@ -525,6 +544,7 @@ export function calculateDetailedTakeOff(
               qty: 1,
               unit: latchMat.unit,
               unitCost: latchMat.cost,
+              priceSource: latchMat.priceSource,
               total: latchMat.cost,
               category: 'Hardware'
             });
@@ -539,6 +559,7 @@ export function calculateDetailedTakeOff(
                 qty: 2,
                 unit: caneBoltMat.unit,
                 unitCost: caneBoltMat.cost,
+                priceSource: caneBoltMat.priceSource,
                 total: 2 * caneBoltMat.cost,
                 category: 'Hardware'
               });
@@ -644,6 +665,7 @@ export function calculateDetailedTakeOff(
           qty: stdPostCount,
           unit: postMat.unit,
           unitCost: postMat.cost,
+          priceSource: postMat.priceSource,
           total: cost,
           category: 'Structure'
         });
@@ -675,6 +697,7 @@ export function calculateDetailedTakeOff(
                 qty: singleGatePostCount,
                 unit: gatePostMat.unit,
                 unitCost: gatePostMat.cost,
+                priceSource: gatePostMat.priceSource,
                 total: cost,
                 category: 'Structure'
               });
@@ -693,6 +716,7 @@ export function calculateDetailedTakeOff(
                 qty: driveGatePostCount,
                 unit: gatePostMat.unit,
                 unitCost: gatePostMat.cost,
+                priceSource: gatePostMat.priceSource,
                 total: cost,
                 category: 'Structure'
               });
@@ -716,6 +740,7 @@ export function calculateDetailedTakeOff(
               qty: gatePostCountForRun,
               unit: gatePostMat.unit,
               unitCost: gatePostMat.cost,
+              priceSource: gatePostMat.priceSource,
               total: cost,
               category: 'Structure'
             });
@@ -736,6 +761,7 @@ export function calculateDetailedTakeOff(
             qty: hingePostCount,
             unit: hingeMat.unit,
             unitCost: hingeMat.cost,
+            priceSource: hingeMat.priceSource,
             total: cost,
             category: 'Structure'
           });
@@ -761,6 +787,7 @@ export function calculateDetailedTakeOff(
           qty: capQty,
           unit: capMat.unit,
           unitCost: capMat.cost,
+          priceSource: capMat.priceSource,
           total: capCost,
           category: 'Hardware'
         });
@@ -794,6 +821,7 @@ export function calculateDetailedTakeOff(
           qty: concreteQty,
           unit: concreteMat.unit,
           unitCost: concreteMat.cost,
+          priceSource: concreteMat.priceSource,
           total: concreteCost,
           category: 'Installation'
         });
@@ -814,6 +842,7 @@ export function calculateDetailedTakeOff(
             qty: bracketQty,
             unit: bracketMat.unit,
             unitCost: bracketMat.cost,
+            priceSource: bracketMat.priceSource,
             total: bracketCost,
             category: 'Hardware',
             formula: bracketFormula
@@ -831,6 +860,7 @@ export function calculateDetailedTakeOff(
               qty: lagQty,
               unit: lagMat.unit,
               unitCost: lagMat.cost,
+              priceSource: lagMat.priceSource,
               total: lagCost,
               category: 'Hardware',
               formula: lagFormula
@@ -880,6 +910,7 @@ export function calculateDetailedTakeOff(
           qty: panelQty,
           unit: panelMat.unit,
           unitCost: picketUnitCost,
+          priceSource: panelMat.priceSource,
           total: totalPicketCost,
           category: 'Infill',
           formula: `${totalInches}" / 9" = ${backLayer} Back; ${backLayer}-1 = ${frontLayer} Front; +2 Waste`
@@ -924,6 +955,7 @@ export function calculateDetailedTakeOff(
         qty: panelQty,
         unit: panelMat.unit,
         unitCost: panelUnitCost,
+        priceSource: panelMat.priceSource,
         total: panelTotalCost,
         category: 'Infill',
         formula: picketFormula
@@ -944,6 +976,7 @@ export function calculateDetailedTakeOff(
               qty: bracketQty,
               unit: bracketMat.unit,
               unitCost: bracketMat.cost,
+              priceSource: bracketMat.priceSource,
               total: bracketCost,
               category: 'Hardware'
             });
@@ -959,6 +992,7 @@ export function calculateDetailedTakeOff(
                 qty: screwQty,
                 unit: screwMat.unit,
                 unitCost: screwMat.cost,
+                priceSource: screwMat.priceSource,
                 total: screwCost,
                 category: 'Hardware'
               });
@@ -1021,6 +1055,7 @@ export function calculateDetailedTakeOff(
         qty: railQty,
         unit: railMat.unit,
         unitCost: railMat.cost,
+        priceSource: railMat.priceSource,
         total: railCost,
         category: 'Structure',
         formula: railFormula
@@ -1042,6 +1077,7 @@ export function calculateDetailedTakeOff(
             qty: rotBoardQty,
             unit: rotBoardMat.unit,
             unitCost: rotBoardMat.cost,
+            priceSource: rotBoardMat.priceSource,
             total: rotBoardCost,
             category: 'Structure'
           });
@@ -1060,6 +1096,7 @@ export function calculateDetailedTakeOff(
           qty: nailCount,
           unit: 'nails',
           unitCost: nailsMat.cost,
+          priceSource: nailsMat.priceSource,
           total: nailCost,
           category: 'Hardware'
         });
@@ -1084,6 +1121,7 @@ export function calculateDetailedTakeOff(
               qty: trimQty,
               unit: 'each',
               unitCost: trimMat.cost,
+              priceSource: trimMat.priceSource,
               total: trimCost,
               category: 'Finishing'
             });
@@ -1103,6 +1141,7 @@ export function calculateDetailedTakeOff(
               qty: trimQty,
               unit: 'each',
               unitCost: doubleTrimMat.cost,
+              priceSource: doubleTrimMat.priceSource,
               total: trimCost,
               category: 'Finishing'
             });
@@ -1122,6 +1161,7 @@ export function calculateDetailedTakeOff(
               qty: topCapQty,
               unit: 'each',
               unitCost: topCapMat.cost,
+              priceSource: topCapMat.priceSource,
               total: topCapCost,
               category: 'Finishing'
             });
@@ -1150,6 +1190,7 @@ export function calculateDetailedTakeOff(
           qty: runLF,
           unit: railMat.unit,
           unitCost: railMat.cost,
+          priceSource: railMat.priceSource,
           total: railCost,
           category: 'Structure'
         });
@@ -1167,6 +1208,7 @@ export function calculateDetailedTakeOff(
           qty: tieQty,
           unit: tieMat.unit,
           unitCost: tieMat.cost,
+          priceSource: tieMat.priceSource,
           total: tieCost,
           category: 'Hardware'
         });
@@ -1371,6 +1413,7 @@ export function calculateDetailedTakeOff(
         qty: 1,
         unit: domeCapMat.unit,
         unitCost: domeCapMat.cost,
+        priceSource: domeCapMat.priceSource,
         total: domeCapMat.cost,
         category: 'Hardware'
       });
@@ -1399,6 +1442,7 @@ export function calculateDetailedTakeOff(
         qty,
         unit: 'each',
         unitCost: stickMat.cost,
+        priceSource: stickMat.priceSource,
         total: qty * stickMat.cost,
         category: 'Rail'
       };
@@ -1429,6 +1473,7 @@ export function calculateDetailedTakeOff(
           qty,
           unit: mat.unit,
           unitCost,
+          priceSource: mat.priceSource,
           total: qty * unitCost,
           category: mat.category
         });
