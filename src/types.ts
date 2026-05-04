@@ -122,6 +122,10 @@ export interface Estimate {
   customerEmail: string;
   customerPhone: string;
   customerAddress: string;
+  customerStreet?: string;
+  customerCity?: string;
+  customerState?: string;
+  customerZip?: string;
   date: string;
   
   // Measurements

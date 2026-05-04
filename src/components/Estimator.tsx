@@ -163,6 +163,22 @@ export default function Estimator({
 
   const results = calculateCosts();
 
+  // Handle migration of single address field to separate fields if they don't exist
+  React.useEffect(() => {
+    if (estimate.customerAddress && !estimate.customerStreet && !estimate.customerCity && !estimate.customerState && !estimate.customerZip) {
+      const parts = estimate.customerAddress.split(',').map(p => p.trim());
+      if (parts.length >= 1) {
+        setEstimate({
+          ...estimate,
+          customerStreet: parts[0] || '',
+          customerCity: parts[1] || '',
+          customerState: parts[2] || '',
+          customerZip: parts[3] || ''
+        });
+      }
+    }
+  }, [estimate.id]);
+
   const handleNext = () => setStep(s => Math.min(s + 1, 4));
   const handleBack = () => setStep(s => Math.max(s - 1, 1));
 
@@ -228,10 +244,10 @@ export default function Estimator({
               customerName: estimateToSave.customerName || 'N/A',
               customerEmail: estimateToSave.customerEmail || 'N/A',
               customerPhone: estimateToSave.customerPhone || 'N/A',
-              customerAddress: addressParts[0] || 'N/A',
-              customerCity: addressParts[1] || '',
-              customerState: addressParts[2] || '',
-              customerZip: addressParts[3] || '',
+              customerAddress: estimateToSave.customerStreet || 'N/A',
+              customerCity: estimateToSave.customerCity || '',
+              customerState: estimateToSave.customerState || '',
+              customerZip: estimateToSave.customerZip || '',
               projectScope: actualLF,
               fenceType: FENCE_STYLES.find(s => s.id === estimateToSave.defaultStyleId)?.name || 'Unknown',
               fenceHeight: estimateToSave.defaultHeight || 0,
@@ -353,15 +369,49 @@ export default function Estimator({
                     className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Project Site Address</label>
-                  <input 
-                    type="text" 
-                    value={estimate.customerAddress} 
-                    onChange={(e) => setEstimate({...estimate, customerAddress: e.target.value})} 
-                    placeholder="Street, City, State, Zip"
-                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
-                  />
+                <div className="md:col-span-2 space-y-4 pt-4 border-t border-dashed border-[#F0F0F0]">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Street Address</label>
+                    <input 
+                      type="text" 
+                      value={estimate.customerStreet} 
+                      onChange={(e) => setEstimate({...estimate, customerStreet: e.target.value, customerAddress: `${e.target.value}, ${estimate.customerCity || ''}, ${estimate.customerState || ''}, ${estimate.customerZip || ''}`})} 
+                      placeholder="123 Main St"
+                      className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">City</label>
+                      <input 
+                        type="text" 
+                        value={estimate.customerCity} 
+                        onChange={(e) => setEstimate({...estimate, customerCity: e.target.value, customerAddress: `${estimate.customerStreet || ''}, ${e.target.value}, ${estimate.customerState || ''}, ${estimate.customerZip || ''}`})} 
+                        placeholder="City"
+                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">State</label>
+                      <input 
+                        type="text" 
+                        value={estimate.customerState} 
+                        onChange={(e) => setEstimate({...estimate, customerState: e.target.value, customerAddress: `${estimate.customerStreet || ''}, ${estimate.customerCity || ''}, ${e.target.value}, ${estimate.customerZip || ''}`})} 
+                        placeholder="TX"
+                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Zip Code</label>
+                      <input 
+                        type="text" 
+                        value={estimate.customerZip} 
+                        onChange={(e) => setEstimate({...estimate, customerZip: e.target.value, customerAddress: `${estimate.customerStreet || ''}, ${estimate.customerCity || ''}, ${estimate.customerState || ''}, ${e.target.value}`})} 
+                        placeholder="12345"
+                        className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
