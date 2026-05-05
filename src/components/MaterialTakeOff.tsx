@@ -576,11 +576,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                   )}
 
                   {/* Run Materials */}
-                      <div className="overflow-hidden rounded-2xl border-2 border-american-blue/5">
-                        <table className="w-full text-left">
+                      <div className="overflow-x-auto rounded-2xl border-2 border-american-blue/5">
+                        <table className="min-w-[800px] w-full text-left">
                           <thead>
                             <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
-                              <th className="px-6 py-4">Item Specification</th>
+                              <th className="px-6 py-4 min-w-[200px]">Item Specification</th>
                               <th className="px-6 py-4 text-center">Quantity</th>
                               <th className="px-6 py-4">Unit</th>
                               {showPrices && <th className="px-6 py-4 text-right print:hidden">Raw Cost</th>}
@@ -783,6 +783,61 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
             </div>
           ))}
 
+          {/* Global Prep & Logistics Section */}
+          {data.totals.prep > 0 && (
+            <div className="space-y-4 takeoff-card">
+              <div className="flex items-center justify-between bg-american-red/5 p-4 rounded-2xl border border-american-red/10">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-american-red text-white flex items-center justify-center shadow-lg">
+                    <SettingsIcon size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-american-blue uppercase tracking-tight">Global Prep & Logistics</h3>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Site Prep • Marking • Coordination</p>
+                  </div>
+                </div>
+                {showPrices && (
+                  <div className="text-right">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-american-blue mb-1">Charge Total for Prep</p>
+                    <p className="text-xl font-black text-american-blue">
+                      {formatCurrency(data.totals.prep * (1 + (estimate.markupPercentage || 0) / 100))}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="pl-4 sm:pl-14">
+                <div className="overflow-x-auto rounded-2xl border-2 border-american-blue/5">
+                  <table className="min-w-[600px] w-full text-left">
+                    <thead>
+                      <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
+                        <th className="px-6 py-4">Preparation Item</th>
+                        <th className="px-6 py-4 text-center">Qty</th>
+                        <th className="px-6 py-4">Unit</th>
+                        {showPrices && <th className="px-6 py-4 text-right">Raw Cost</th>}
+                        {showPrices && <th className="px-6 py-4 text-right">Selling Price</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y-2 divide-[#F8F9FA]">
+                      {data.summary.filter(i => i.category === 'SitePrep').map((item, i) => {
+                        const sellingPrice = item.unitCost * (1 + (estimate.markupPercentage || 0) / 100);
+                        return (
+                          <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB]">
+                            <td className="px-6 py-4">{item.name}</td>
+                            <td className="px-6 py-4 text-center">{item.qty}</td>
+                            <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
+                            {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
+                            {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Master Inventory Summary */}
           <div className="pt-12 border-t-4 border-american-blue/5 space-y-8 takeoff-card">
             <div className="flex items-center gap-4">
@@ -795,8 +850,8 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
               </div>
             </div>
 
-            <div className="bg-white rounded-[32px] p-1 overflow-hidden border-2 border-american-blue/5 shadow-lg">
-              <table className="w-full text-left">
+            <div className="bg-white rounded-[32px] p-1 overflow-x-auto border-2 border-american-blue/5 shadow-lg">
+              <table className="min-w-[700px] w-full text-left">
                 <thead>
                   <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
                     <th className="px-8 py-6">Item Specification</th>
@@ -934,8 +989,22 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
               </div>
             </div>
 
-            <div className="bg-white rounded-[32px] p-1 overflow-hidden border-2 border-dashed border-american-red/20 shadow-lg">
-              <table className="w-full text-left">
+            <div className="bg-white rounded-[32px] p-1 overflow-x-auto border-2 border-dashed border-american-red/20 shadow-lg">
+              <div className="p-4 bg-american-red/[0.02] border-b-2 border-dashed border-american-red/10 flex justify-between items-center">
+                <span className="text-[10px] font-black uppercase tracking-widest text-american-red">Manual Item Detail</span>
+                {showPrices && (
+                  <div className="text-right">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-american-blue mb-1">Manual Additions Total (Inc. Markup/Tax)</p>
+                    <p className="text-lg font-black text-american-blue">
+                      {formatCurrency(
+                        data.manualSummary.reduce((sum, i) => sum + i.total, 0) * (1 + (estimate.markupPercentage || 0) / 100) + 
+                        data.manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0) * (estimate.taxPercentage || 0) / 100
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <table className="min-w-[700px] w-full text-left">
                 <thead>
                   <tr className="bg-[#FEF2F2] text-[10px] font-black uppercase tracking-widest text-american-red/60">
                     <th className="px-8 py-6">Manual Addition Specification</th>
@@ -1031,7 +1100,48 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                  </div>
                </div>
                
-               {/* Aggregated Totals Grid */}
+               {/* Financial Breakdown Table for User Verification */}
+              <div className="mt-8 pt-8 border-t-2 border-american-blue/5">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-american-blue mb-4">Math Verification (Sum of Sections)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-xl border border-american-blue/10">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Total from Runs</p>
+                    <p className="text-sm font-black text-american-blue">
+                      {formatCurrency(data.runs.reduce((sum, run) => {
+                        return sum + (
+                          ((run.fenceMaterialCost + run.fenceLaborCost + run.gateMaterialCost + run.gateLaborCost + run.demoCharge) * (1 + (estimate.markupPercentage || 0) / 100)) + 
+                          ((run.fenceMaterialCost + run.gateMaterialCost) * (estimate.taxPercentage || 0) / 100)
+                        );
+                      }, 0))}
+                    </p>
+                  </div>
+                  {data.totals.prep > 0 && (
+                    <div className="bg-white p-4 rounded-xl border border-american-blue/10">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Total from Prep</p>
+                      <p className="text-sm font-black text-american-blue">
+                        {formatCurrency(data.totals.prep * (1 + (estimate.markupPercentage || 0) / 100))}
+                      </p>
+                    </div>
+                  )}
+                  {data.manualSummary.length > 0 && (
+                    <div className="bg-white p-4 rounded-xl border border-american-blue/10">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Manual Additions</p>
+                      <p className="text-sm font-black text-american-blue">
+                        {formatCurrency(
+                          data.manualSummary.reduce((sum, i) => sum + i.total, 0) * (1 + (estimate.markupPercentage || 0) / 100) + 
+                          data.manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0) * (estimate.taxPercentage || 0) / 100
+                        )}
+                      </p>
+                    </div>
+                  )}
+                  <div className="bg-american-blue/[0.02] p-4 rounded-xl border-2 border-american-blue/20">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-american-blue mb-1">Calculated Job Total</p>
+                    <p className="text-sm font-black text-american-blue">{formatCurrency(data.totals.grandTotal)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aggregated Totals Grid */}
                <div className="bg-[#F8F9FA] rounded-[24px] p-8 flex flex-col md:flex-row justify-between gap-8 border-2 border-[#EEEEEE]">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 flex-1">
                    <div className="space-y-1">
