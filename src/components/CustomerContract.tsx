@@ -140,16 +140,16 @@ export default function CustomerContract({
   useEffect(() => {
     if (aiContractScope) {
       setLocalAiScope(aiContractScope);
-      // Wait for DOM to render the textarea then resize
-      setTimeout(() => {
-        const textarea = document.querySelector('.ai-content-area textarea') as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.style.height = 'auto';
-          textarea.style.height = textarea.scrollHeight + 'px';
-        }
-      }, 0);
     }
   }, [aiContractScope]);
+
+  useEffect(() => {
+    // If the estimate has a scope but we don't have one locally/globally, use the estimate's
+    if (estimate.contractScope && !aiContractScope && !localAiScope) {
+      setLocalAiScope(estimate.contractScope);
+      setAiContractScope(estimate.contractScope);
+    }
+  }, [estimate.contractScope]);
 
   // Check if all runs are homogenous (same specs)
   const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => {
@@ -241,6 +241,10 @@ export default function CustomerContract({
 
       const result = await generateAIScope(prompt);
       setAiContractScope(result);
+      setLocalAiScope(result);
+      if (onUpdateEstimate) {
+        onUpdateEstimate({ contractScope: result });
+      }
       localStorage.setItem('fence_pro_customer_contract_ai_scope', JSON.stringify(result));
     } catch (error) {
       console.error("AI Generation Error:", error);

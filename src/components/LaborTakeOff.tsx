@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2 } from 'lucide-react';
+import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2 } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -13,6 +13,7 @@ interface LaborTakeOffProps {
   quotes: SupplierQuote[];
   aiProjectScope: string | null;
   setAiProjectScope: (scope: string | null) => void;
+  onUpdateEstimate?: (update: Partial<Estimate>) => void;
 }
 
 export default function LaborTakeOff({ 
@@ -21,18 +22,46 @@ export default function LaborTakeOff({
   laborRates, 
   quotes,
   aiProjectScope,
-  setAiProjectScope
+  setAiProjectScope,
+  onUpdateEstimate
 }: LaborTakeOffProps) {
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [localAiScope, setLocalAiScope] = useState<string>(estimate.laborScope || aiProjectScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
+  const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   
+  // Update local scope when external scope changes (e.g. from generation or tab sync)
+  React.useEffect(() => {
+    if (aiProjectScope) {
+      setLocalAiScope(aiProjectScope);
+    }
+  }, [aiProjectScope]);
+
+  React.useEffect(() => {
+    if (estimate.laborScope && !aiProjectScope && !localAiScope) {
+       setLocalAiScope(estimate.laborScope);
+       setAiProjectScope(estimate.laborScope);
+    }
+  }, [estimate.laborScope]);
+
   // Filter for ONLY labor items for the internal manifest
   const laborSummary = data.summary.filter(item => item.category === 'Labor' || item.category === 'Demolition');
   const totalLaborRaw = laborSummary.reduce((sum, item) => sum + item.total, 0);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSaveLaborScope = () => {
+    if (onUpdateEstimate) {
+      onUpdateEstimate({
+        laborScope: localAiScope
+      });
+      setAiProjectScope(localAiScope);
+      setShowSavedFeedback(true);
+      setTimeout(() => setShowSavedFeedback(false), 3000);
+    }
   };
 
   const handleGenerateAIScope = async () => {
@@ -81,6 +110,10 @@ export default function LaborTakeOff({
 
       const result = await generateAIScope(prompt);
       setAiProjectScope(result);
+      setLocalAiScope(result);
+      if (onUpdateEstimate) {
+        onUpdateEstimate({ laborScope: result });
+      }
       
       // Explicitly save to localStorage for immediate cross-tab availability
       localStorage.setItem('fence_pro_ai_scope', JSON.stringify(result));
@@ -130,6 +163,19 @@ export default function LaborTakeOff({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {showSavedFeedback && (
+            <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-2">
+              <CheckCircle2 size={12} />
+              Saved
+            </div>
+          )}
+          <button
+            onClick={handleSaveLaborScope}
+            className="flex items-center gap-2 px-4 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform active:scale-95 shadow-md shadow-american-blue/10"
+          >
+            <Download size={16} />
+            Save Changes
+          </button>
           <button
             onClick={handleOpenNewTab}
             className="flex items-center gap-2 px-4 py-2 bg-[#F5F5F7] hover:bg-[#E5E5E7] rounded-xl text-xs font-black uppercase tracking-widest text-american-blue transition-colors"
@@ -402,8 +448,20 @@ export default function LaborTakeOff({
                     Clear Analysis
                   </button>
                 </div>
-                <div className="prose prose-sm max-w-none text-[#444444] whitespace-pre-line text-xs leading-relaxed font-medium">
-                  {aiProjectScope}
+                <div className="prose prose-sm max-w-none text-[#444444] whitespace-pre-line text-xs leading-relaxed font-medium bg-white p-6 rounded-2xl border border-american-blue/5 shadow-inner print:hidden">
+                  <textarea
+                    value={localAiScope}
+                    onChange={(e) => setLocalAiScope(e.target.value)}
+                    onInput={(e) => {
+                      e.currentTarget.style.height = 'auto';
+                      e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                    }}
+                    className="w-full bg-transparent outline-none resize-none overflow-hidden text-[#444444] leading-relaxed font-medium min-h-[200px]"
+                    placeholder="Enter installation directives here..."
+                  />
+                </div>
+                <div className="hidden print:block whitespace-pre-wrap text-[11px] leading-relaxed text-[#333333]">
+                  {localAiScope}
                 </div>
               </div>
             )}
@@ -412,7 +470,7 @@ export default function LaborTakeOff({
             <div className="hidden print:block mt-12 pt-12 border-t-4 border-dashed border-american-blue/10">
               <h2 className="text-xl font-black text-american-blue tracking-tight uppercase mb-6">Installation Directives & Safety Procedures</h2>
               <div className="text-[11px] leading-relaxed text-[#333333] whitespace-pre-line">
-                {aiProjectScope || "Standard installation procedures apply."}
+                {localAiScope || "Standard installation procedures apply."}
               </div>
             </div>
           </div>

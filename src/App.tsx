@@ -23,12 +23,51 @@ import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs } from 'firebase/firestore';
 
+// Helper to get state from Hash or LocalStorage
+const getInitialValue = (key: string, storageKey: string, defaultValue: any) => {
+  // 1. Try URL Hash (highest priority for new window bridging)
+  const hash = window.location.hash;
+  if (hash.startsWith('#state=')) {
+    try {
+      const decoded = JSON.parse(decodeURIComponent(hash.substring(7)));
+      if (decoded && typeof decoded === 'object' && key in decoded) {
+        const val = decoded[key];
+        // If we found a valid non-null value in hash, return it immediately
+        if (val !== undefined && val !== null) return val;
+      }
+    } catch (e) {
+      console.warn(`Failed to parse hash state for key "${key}":`, e);
+    }
+  }
+
+  // 2. Try LocalStorage (session persistence)
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved && saved !== 'undefined' && saved !== 'null') {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback for non-JSON strings
+        return saved;
+      }
+    }
+  } catch (e) {
+    console.warn(`Failed to parse localStorage for key "${storageKey}":`, e);
+  }
+  
+  return defaultValue;
+};
+
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
+  
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
-    const saved = localStorage.getItem('fence_pro_customer_contract_ai_scope');
-    return saved ? JSON.parse(saved) : null;
+    return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
+  });
+
+  const [aiProjectScope, setAiProjectScope] = React.useState<string | null>(() => {
+    return getInitialValue('aiProjectScope', 'fence_pro_ai_scope', null);
   });
 
   React.useEffect(() => {
@@ -132,41 +171,7 @@ export default function App() {
       console.error('Logout failed:', error);
     }
   };
-  // Helper to get state from Hash or LocalStorage
-  const getInitialValue = (key: string, storageKey: string, defaultValue: any) => {
-    // 1. Try URL Hash (highest priority for new window bridging)
-    const hash = window.location.hash;
-    if (hash.startsWith('#state=')) {
-      try {
-        const decoded = JSON.parse(decodeURIComponent(hash.substring(7)));
-        if (decoded && typeof decoded === 'object' && key in decoded) {
-          const val = decoded[key];
-          // If we found a valid non-null value in hash, return it immediately
-          if (val !== undefined && val !== null) return val;
-        }
-      } catch (e) {
-        console.warn(`Failed to parse hash state for key "${key}":`, e);
-      }
-    }
-
-    // 2. Try LocalStorage (session persistence)
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved && saved !== 'undefined' && saved !== 'null') {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          // Fallback for non-JSON strings
-          return saved;
-        }
-      }
-    } catch (e) {
-      console.warn(`Failed to parse localStorage for key "${storageKey}":`, e);
-    }
-    
-    return defaultValue;
-  };
-
+  
   const [activeTab, setActiveTab] = React.useState(() => {
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
@@ -177,10 +182,6 @@ export default function App() {
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
     return getInitialValue('quotes', 'fence_pro_quotes', []);
-  });
-
-  const [aiProjectScope, setAiProjectScope] = React.useState<string | null>(() => {
-    return getInitialValue('aiProjectScope', 'fence_pro_ai_scope', null);
   });
 
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
@@ -209,6 +210,16 @@ export default function App() {
     return initial;
   });
 
+  // Load scopes from estimate when it changes
+  React.useEffect(() => {
+    if (estimate.contractScope) {
+      setAiContractScope(estimate.contractScope);
+    }
+    if (estimate.laborScope) {
+      setAiProjectScope(estimate.laborScope);
+    }
+  }, [estimate.id]);
+
   // Global Sync to localStorage
   React.useEffect(() => {
     localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
@@ -219,7 +230,8 @@ export default function App() {
       localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     }
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
-  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, user]);
+    localStorage.setItem('fence_pro_customer_contract_ai_scope', JSON.stringify(aiContractScope));
+  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, aiContractScope, user]);
 
   // Sync state across tabs using the storage event (enables simultaneous updates)
   React.useEffect(() => {
@@ -234,6 +246,7 @@ export default function App() {
           case 'fence_pro_labor_rates': setLaborRates(parsed); break;
           case 'fence_pro_quotes': setQuotes(parsed); break;
           case 'fence_pro_ai_scope': setAiProjectScope(parsed); break;
+          case 'fence_pro_customer_contract_ai_scope': setAiContractScope(parsed); break;
           // Note: Avoid syncing activeTab across windows as they should be independent
         }
       } catch (err) {
@@ -348,6 +361,7 @@ export default function App() {
           quotes={quotes}
           aiProjectScope={aiProjectScope}
           setAiProjectScope={setAiProjectScope}
+          onUpdateEstimate={(update) => setEstimate(prev => ({ ...prev, ...update }))}
         />
       )}
       {activeTab === 'customer-contract' && (

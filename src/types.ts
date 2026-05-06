@@ -186,6 +186,7 @@ export interface Estimate {
   manualDemoTotals?: number[];
   contractProjectDate?: string;
   contractScope?: string;
+  laborScope?: string;
   createdAt: string;
   version?: number;
   parentId?: string; // Links to the original version id
