@@ -21,10 +21,10 @@ import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, where, onSnapshot, doc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc } from 'firebase/firestore';
 
 // Helper to get state from Hash or LocalStorage
-const getInitialValue = (key: string, storageKey: string, defaultValue: any) => {
+function getInitialValue(key: string, storageKey: string, defaultValue: any) {
   // 1. Try URL Hash (highest priority for new window bridging)
   const hash = window.location.hash;
   if (hash.startsWith('#state=')) {
@@ -56,7 +56,7 @@ const getInitialValue = (key: string, storageKey: string, defaultValue: any) => 
   }
   
   return defaultValue;
-};
+}
 
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
@@ -304,6 +304,30 @@ export default function App() {
     setActiveTab('estimator');
   };
 
+  const handleUpdateEstimate = async (update: Partial<Estimate>) => {
+    setEstimate(prev => ({ ...prev, ...update }));
+    
+    // If the estimate has an ID and the user is logged in, sync the specific update to Firestore
+    if (estimate.id && user) {
+      try {
+        const docRef = doc(db, 'estimates', estimate.id);
+        const updateWithTimestamp = {
+          ...update,
+          lastModified: new Date().toISOString()
+        };
+        // Clean undefined values
+        Object.keys(updateWithTimestamp).forEach(key => {
+          if ((updateWithTimestamp as any)[key] === undefined) {
+            delete (updateWithTimestamp as any)[key];
+          }
+        });
+        await updateDoc(docRef, updateWithTimestamp);
+      } catch (error) {
+        console.error('Failed to auto-sync estimate update:', error);
+      }
+    }
+  };
+
   return (
     <Layout 
       activeTab={activeTab} 
@@ -348,7 +372,7 @@ export default function App() {
           materials={materials} 
           laborRates={laborRates}
           quotes={quotes}
-          setEstimate={setEstimate}
+          setEstimate={handleUpdateEstimate}
           setMaterials={setMaterials}
           user={user}
         />
@@ -361,7 +385,7 @@ export default function App() {
           quotes={quotes}
           aiProjectScope={aiProjectScope}
           setAiProjectScope={setAiProjectScope}
-          onUpdateEstimate={(update) => setEstimate(prev => ({ ...prev, ...update }))}
+          onUpdateEstimate={handleUpdateEstimate}
         />
       )}
       {activeTab === 'customer-contract' && (
@@ -372,7 +396,7 @@ export default function App() {
           quotes={quotes}
           aiContractScope={aiContractScope}
           setAiContractScope={setAiContractScope}
-          onUpdateEstimate={(update) => setEstimate(prev => ({ ...prev, ...update }))}
+          onUpdateEstimate={handleUpdateEstimate}
         />
       )}
       {activeTab === 'supplier-order' && (

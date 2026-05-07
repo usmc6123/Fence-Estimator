@@ -49,6 +49,14 @@ export default function LaborTakeOff({
   const laborSummary = data.summary.filter(item => item.category === 'Labor' || item.category === 'Demolition');
   const totalLaborRaw = laborSummary.reduce((sum, item) => sum + item.total, 0);
 
+  const handleScopeChange = (val: string) => {
+    setLocalAiScope(val);
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ laborScope: val });
+    }
+    setAiProjectScope(val);
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -451,7 +459,7 @@ export default function LaborTakeOff({
                 <div className="prose prose-sm max-w-none text-[#444444] whitespace-pre-line text-xs leading-relaxed font-medium bg-white p-6 rounded-2xl border border-american-blue/5 shadow-inner print:hidden">
                   <textarea
                     value={localAiScope}
-                    onChange={(e) => setLocalAiScope(e.target.value)}
+                    onChange={(e) => handleScopeChange(e.target.value)}
                     onInput={(e) => {
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';

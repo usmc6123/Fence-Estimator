@@ -24,6 +24,7 @@ const CATEGORY_ICONS: Record<string, any> = {
   'Concrete': HardHat,
   'Labor': HardHat,
   'PostCap': ImageIcon,
+  'Metal': Layers,
 };
 
 // Price Freshness Logic
@@ -80,7 +81,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
   });
 
   const categories: (MaterialCategory | 'All')[] = [
-    'All', 'Post', 'Rail', 'Picket', 'Panel', 'Gate', 'PostCap', 'Hardware', 'Concrete', 'Labor', 'Demolition', 'SitePrep', 'Fastener', 'Finishing', 'Consumable'
+    'All', 'Post', 'Rail', 'Picket', 'Panel', 'Gate', 'PostCap', 'Hardware', 'Concrete', 'Labor', 'Demolition', 'SitePrep', 'Fastener', 'Finishing', 'Consumable', 'Metal'
   ];
 
   const filteredMaterials = materials.filter(item => {

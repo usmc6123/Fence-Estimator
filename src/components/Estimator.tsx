@@ -60,6 +60,9 @@ export default function Estimator({
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
 
+  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+  const taxFactor = (estimate.taxPercentage || 0) / 100;
+
   const calculateCosts = () => {
     // Resolve materials based on chosen strategy
     const pricingStrategy = estimate.pricingStrategy || 'best';
@@ -89,9 +92,6 @@ export default function Estimator({
     }
 
     const detailedData = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates);
-
-    const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
-    const taxFactor = (estimate.taxPercentage || 0) / 100;
 
     const runBreakdown = detailedData.runs.map(run => {
       const chargeTotal = ((run.fenceMaterialCost + run.fenceLaborCost) * markupFactor) + (run.fenceMaterialCost * taxFactor);
@@ -1347,6 +1347,23 @@ export default function Estimator({
                     />
                     <p className="text-[9px] text-white/40 italic">Applied only to hardware, structure, and infill costs.</p>
                   </div>
+
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-white/60">
+                      <label>Delivery Fee</label>
+                      <span>{formatCurrency(estimate.deliveryFee ?? 50)}</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold">$</span>
+                      <input 
+                        type="number" 
+                        value={estimate.deliveryFee} 
+                        onChange={(e) => setEstimate({...estimate, deliveryFee: Number(e.target.value)})} 
+                        className="w-full rounded-xl border-2 border-white/20 bg-white/10 px-7 py-2 text-sm font-bold text-white focus:border-white outline-none transition-all" 
+                        placeholder="50"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-white/10 grid grid-cols-2 gap-4">
@@ -1434,6 +1451,24 @@ export default function Estimator({
                     onChange={(e) => setEstimate({ ...estimate, taxPercentage: Number(e.target.value) })}
                     className="w-full accent-american-blue h-2.5 bg-american-blue/10 rounded-full appearance-none cursor-pointer"
                   />
+                </div>
+                <div className="space-y-6 md:col-span-2 pt-6 border-t border-dashed border-american-blue/10">
+                  <div className="flex justify-between items-center">
+                    <div className="space-y-1">
+                      <label className="text-xs font-black uppercase tracking-widest text-american-blue">Logistics Delivery Fee</label>
+                      <p className="text-[10px] text-[#999999] font-bold">Standard charge for site material mobilization</p>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-american-blue/40 font-black">$</span>
+                      <input 
+                        type="number" 
+                        value={estimate.deliveryFee} 
+                        onChange={(e) => setEstimate({ ...estimate, deliveryFee: Number(e.target.value) })}
+                        className="pl-8 pr-4 py-3 rounded-xl border-2 border-american-blue/10 bg-white text-lg font-black text-american-blue w-40 focus:border-american-blue outline-none transition-all shadow-sm"
+                        placeholder="50"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1638,6 +1673,10 @@ export default function Estimator({
                 <span className="text-[#999999]">Tax (Materials Only)</span>
                 <span className="font-mono">{formatCurrency(results.tax)}</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#999999]">Delivery Fee</span>
+                <span className="font-mono">{formatCurrency(estimate.deliveryFee ?? 50)}</span>
+              </div>
               
               <div className="flex justify-between pt-4 mt-4 border-t border-white/10 text-american-red font-black">
                 <span className="text-[10px] uppercase tracking-widest">Overall Price Per Foot</span>
@@ -1662,6 +1701,24 @@ export default function Estimator({
                       </div>
                     </div>
                   ))}
+                  {(results.sitePrepCost > 0 || (estimate.deliveryFee ?? 50) > 0) && (
+                    <div className="space-y-2 p-3 rounded-xl bg-american-red/5 border border-american-red/10">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-white">Logistics & Site Prep</span>
+                        <span className="font-mono text-sm font-bold">{formatCurrency(results.sitePrepCost * markupFactor + (estimate.deliveryFee ?? 50))}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-white/40 uppercase tracking-wider">
+                        <span>Project Mobilization Fee</span>
+                        <div className="flex gap-3">
+                          {results.sitePrepCost > 0 && <span>Prep: {formatCurrency(results.sitePrepCost * markupFactor)}</span>}
+                          <span>Delivery: {formatCurrency(estimate.deliveryFee ?? 50)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[9px] font-black italic text-american-red/80 uppercase tracking-widest px-2 pt-2 border-t border-white/5 text-center leading-relaxed">
+                    Verification: Job Total = Sum of Individual Runs + Logistics & Site Prep boxes above.
+                  </p>
                 </div>
               )}
             </div>

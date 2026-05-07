@@ -63,6 +63,13 @@ export default function CustomerContract({
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.contractScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
+
+  const handleScopeChange = (val: string) => {
+    setLocalAiScope(val);
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ contractScope: val });
+    }
+  };
   const [showCostBreakdown, setShowCostBreakdown] = useState(true);
   const [sectionTotals, setSectionTotals] = useState<number[]>(estimate.manualSectionTotals || []);
   const [gateTotals, setGateTotals] = useState<number[]>(estimate.manualGateTotals || []);
@@ -175,8 +182,12 @@ export default function CustomerContract({
       const demo = demoTotals[i] ?? r.demoCharge;
       return sum + fence + gate + demo;
     }, 0);
-    return baseTotal;
-  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals]);
+    
+    const sitePrep = data.totals.prep * markupFactor;
+    const deliveryFee = estimate.deliveryFee ?? 50;
+    
+    return baseTotal + sitePrep + deliveryFee;
+  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals, data.totals.prep, markupFactor, estimate.deliveryFee]);
 
   const grandTotal = manualGrandTotal ?? editedGrandTotal;
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
@@ -442,7 +453,7 @@ export default function CustomerContract({
               <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
                 <textarea
                     value={localAiScope}
-                    onChange={(e) => setLocalAiScope(e.target.value)}
+                    onChange={(e) => handleScopeChange(e.target.value)}
                     onInput={(e) => {
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
@@ -663,6 +674,24 @@ export default function CustomerContract({
                     ) : (
                       <p className="text-xs font-bold text-[#BBBBBB] uppercase italic tracking-widest">No custom gates included in this scope.</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Delivery & Logistics */}
+              {showCostBreakdown && (
+                <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5] mt-4">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-american-red flex items-center justify-center text-white">
+                        <Navigation size={20} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-american-blue uppercase tracking-widest text-xs">Logistics & Delivery</h4>
+                        <p className="text-[10px] font-bold text-[#999999] uppercase">Site material mobilization & deployment</p>
+                      </div>
+                    </div>
+                    <p className="font-bold text-american-blue text-sm">{formatCurrency(estimate.deliveryFee ?? 50)}</p>
                   </div>
                 </div>
               )}

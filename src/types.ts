@@ -1,4 +1,4 @@
-export type MaterialCategory = 'Post' | 'Rail' | 'Picket' | 'Panel' | 'Gate' | 'Hardware' | 'Concrete' | 'Labor' | 'PostCap' | 'Demolition' | 'SitePrep' | 'Fastener' | 'Finishing' | 'Consumable';
+export type MaterialCategory = 'Post' | 'Rail' | 'Picket' | 'Panel' | 'Gate' | 'Hardware' | 'Concrete' | 'Labor' | 'PostCap' | 'Demolition' | 'SitePrep' | 'Fastener' | 'Finishing' | 'Consumable' | 'Metal';
 
 export interface MaterialItem {
   id: string;
@@ -178,6 +178,7 @@ export interface Estimate {
   laborRates: LaborRates;
   pricingStrategy?: 'best' | 'supplier';
   selectedSupplier?: string;
+  deliveryFee: number;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   manualGrandTotal?: number | null;

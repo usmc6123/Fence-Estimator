@@ -1492,7 +1492,8 @@ export function calculateDetailedTakeOff(
   const subtotal = totalMaterial + totalLabor + totalDemo + totalPrep;
   const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
   const tax = totalMaterial * ((estimate.taxPercentage || 0) / 100);
-  const grandTotal = subtotal + markup + tax;
+  const deliveryFee = estimate.deliveryFee ?? 50;
+  const grandTotal = subtotal + markup + tax + deliveryFee;
 
   return {
     summary: calculatedSummary,

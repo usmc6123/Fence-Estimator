@@ -460,11 +460,16 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                       className="w-full px-5 py-3 bg-[#F5F5F7] border-none rounded-xl text-sm font-bold text-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all appearance-none"
                     >
                       <option value="Hardware">Hardware</option>
-                      <option value="Infill">Infill</option>
-                      <option value="Structure">Structure</option>
+                      <option value="Panel">Infill / Panel</option>
+                      <option value="Metal">Wrought Iron / Metal</option>
+                      <option value="Post">Post / Structure</option>
+                      <option value="Rail">Rail / Structure</option>
                       <option value="Concrete">Concrete</option>
                       <option value="Gate">Gate</option>
                       <option value="Labor">Labor</option>
+                      <option value="SitePrep">Site Prep</option>
+                      <option value="Demolition">Demolition</option>
+                      <option value="Fastener">Fastener</option>
                     </select>
                   </div>
                 </div>
@@ -1058,12 +1063,12 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                    <table className="w-full text-left">
                      <thead>
                        <tr className="bg-american-blue/5 text-[10px] font-black uppercase tracking-widest text-american-blue">
-                         <th className="px-6 py-3">Cost Category</th>
-                         <th className="px-6 py-3 text-right whitespace-nowrap">Raw Total</th>
-                         <th className="px-6 py-3 text-right whitespace-nowrap text-american-red">Markup</th>
-                         <th className="px-6 py-3 text-right whitespace-nowrap">Tax</th>
-                         <th className="px-6 py-3 text-right whitespace-nowrap text-american-blue">Final Adjusted Total</th>
-                       </tr>
+                        <th className="px-4 py-3">Cost Category</th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap">Raw Total</th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap text-american-red">Markup</th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap">Tax</th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap text-american-blue">Adjusted Total</th>
+                      </tr>
                      </thead>
                      <tbody className="divide-y divide-[#F8F9FA]">
                        <tr className="text-sm font-bold text-american-blue">
@@ -1095,6 +1100,15 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                            </td>
                          </tr>
                        )}
+                       <tr className="text-sm font-bold text-american-blue bg-american-blue/[0.02]">
+                         <td className="px-6 py-4">Logistics Delivery Fee</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-[#666666] font-medium">{formatCurrency(estimate.deliveryFee ?? 50)}</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-red/80">+$0.00</td>
+                         <td className="px-6 py-4 text-right tabular-nums text-american-blue/60">$0.00</td>
+                         <td className="px-6 py-4 text-right tabular-nums font-black">
+                           {formatCurrency(estimate.deliveryFee ?? 50)}
+                         </td>
+                       </tr>
                      </tbody>
                    </table>
                  </div>
@@ -1134,6 +1148,12 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                       </p>
                     </div>
                   )}
+                  <div className="bg-white p-4 rounded-xl border border-american-blue/10">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#999999] mb-1">Delivery Fee</p>
+                    <p className="text-sm font-black text-american-blue">
+                      {formatCurrency(estimate.deliveryFee ?? 50)}
+                    </p>
+                  </div>
                   <div className="bg-american-blue/[0.02] p-4 rounded-xl border-2 border-american-blue/20">
                     <p className="text-[9px] font-black uppercase tracking-widest text-american-blue mb-1">Calculated Job Total</p>
                     <p className="text-sm font-black text-american-blue">{formatCurrency(data.totals.grandTotal)}</p>

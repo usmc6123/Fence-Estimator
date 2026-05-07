@@ -74,29 +74,29 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'm-screw-self-tap', name: '1/4" x 1" Self Tapping Screw', category: 'Hardware', unit: 'each', cost: 0.35, description: 'Required for mounting brackets' },
   
   // 3ft Wrought Iron Panels
-  { id: 'm-panel-3x8-2rft', name: '3x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 150.00, description: 'Standard 2 rail flat top' },
-  { id: 'm-panel-3x8-2rep', name: '3x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 160.00, description: 'Extended pickets top' },
-  { id: 'm-panel-3x8-3rr', name: '3x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 175.00, description: '3 rail racking panel' },
+  { id: 'm-panel-3x8-2rft', name: '3x8 Wrought Iron - 2 Rail Flat Top', category: 'Metal', unit: 'each', cost: 150.00, description: 'Standard 2 rail flat top' },
+  { id: 'm-panel-3x8-2rep', name: '3x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Metal', unit: 'each', cost: 160.00, description: 'Extended pickets top' },
+  { id: 'm-panel-3x8-3rr', name: '3x8 Wrought Iron - 3 Rail Racking', category: 'Metal', unit: 'each', cost: 175.00, description: '3 rail racking panel' },
   
   // 4ft Wrought Iron Panels
-  { id: 'm-panel-4x8-2rft', name: '4x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 165.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-  { id: 'm-panel-4x8-2rep', name: '4x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 175.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
-  { id: 'm-panel-4x8-3rr', name: '4x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 190.00, description: '3 rail racking panel' },
+  { id: 'm-panel-4x8-2rft', name: '4x8 Wrought Iron - 2 Rail Flat Top', category: 'Metal', unit: 'each', cost: 165.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-4x8-2rep', name: '4x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Metal', unit: 'each', cost: 175.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-4x8-3rr', name: '4x8 Wrought Iron - 3 Rail Racking', category: 'Metal', unit: 'each', cost: 190.00, description: '3 rail racking panel' },
 
   // 5ft Wrought Iron Panels
-  { id: 'm-panel-5x8-2rft', name: '5x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 180.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-  { id: 'm-panel-5x8-2rep', name: '5x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 190.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
-  { id: 'm-panel-5x8-3rr', name: '5x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 205.00, description: '3 rail racking panel' },
+  { id: 'm-panel-5x8-2rft', name: '5x8 Wrought Iron - 2 Rail Flat Top', category: 'Metal', unit: 'each', cost: 180.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-5x8-2rep', name: '5x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Metal', unit: 'each', cost: 190.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-5x8-3rr', name: '5x8 Wrought Iron - 3 Rail Racking', category: 'Metal', unit: 'each', cost: 205.00, description: '3 rail racking panel' },
 
   // 6ft Wrought Iron Panels
-  { id: 'm-panel-6x8-2rft', name: '6x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 195.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
-  { id: 'm-panel-6x8-2rep', name: '6x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 205.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
-  { id: 'm-panel-6x8-3rr', name: '6x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 220.00, description: '3 rail racking panel' },
+  { id: 'm-panel-6x8-2rft', name: '6x8 Wrought Iron - 2 Rail Flat Top', category: 'Metal', unit: 'each', cost: 195.00, description: 'Standard 2 rail flat top', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_KcCIlYvrgCjlATncP9RCW6bgzc6Etl3Baw&s' },
+  { id: 'm-panel-6x8-2rep', name: '6x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Metal', unit: 'each', cost: 205.00, description: 'Extended pickets top', imageUrl: 'https://cdn.gorilladash.com/images/media/4706798/citywide-macedon-group-spear-top-fencing-original-605a8ba05e349.jpg' },
+  { id: 'm-panel-6x8-3rr', name: '6x8 Wrought Iron - 3 Rail Racking', category: 'Metal', unit: 'each', cost: 220.00, description: '3 rail racking panel' },
 
   // 7ft Wrought Iron Panels
-  { id: 'm-panel-7x8-2rft', name: '7x8 Wrought Iron - 2 Rail Flat Top', category: 'Panel', unit: 'each', cost: 210.00, description: 'Standard 2 rail flat top' },
-  { id: 'm-panel-7x8-2rep', name: '7x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Panel', unit: 'each', cost: 220.00, description: 'Extended pickets top' },
-  { id: 'm-panel-7x8-3rr', name: '7x8 Wrought Iron - 3 Rail Racking', category: 'Panel', unit: 'each', cost: 235.00, description: '3 rail racking panel' },
+  { id: 'm-panel-7x8-2rft', name: '7x8 Wrought Iron - 2 Rail Flat Top', category: 'Metal', unit: 'each', cost: 210.00, description: 'Standard 2 rail flat top' },
+  { id: 'm-panel-7x8-2rep', name: '7x8 Wrought Iron - 2 Rail Extended Pickets', category: 'Metal', unit: 'each', cost: 220.00, description: 'Extended pickets top' },
+  { id: 'm-panel-7x8-3rr', name: '7x8 Wrought Iron - 3 Rail Racking', category: 'Metal', unit: 'each', cost: 235.00, description: '3 rail racking panel' },
   
   // Farm Structure
   { id: 'f-post-t', name: '6\' Steel T-Post', category: 'Post', unit: 'each', cost: 8.25, description: 'Agricultural steel post', imageUrl: 'https://d2j6dbq0eux0bg.cloudfront.net/images/96378769/4289817609.jpg' },
@@ -215,6 +215,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   includeStain: false,
   markupPercentage: 20,
   taxPercentage: 8.25,
+  deliveryFee: 50,
   pricingStrategy: 'best',
   selectedSupplier: '',
   manualQuantities: {},
