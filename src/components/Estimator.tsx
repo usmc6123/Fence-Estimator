@@ -1106,6 +1106,7 @@ export default function Estimator({
                                   id: Math.random().toString(36).substr(2, 9), 
                                   type: 'Single', 
                                   width: 4,
+                                  construction: 'Pre-made',
                                   position: 0
                                 });
                                 newRuns[idx].gates = newRuns[idx].gateDetails!.length;
@@ -1149,17 +1150,39 @@ export default function Estimator({
                                         </>
                                       )}
                                     </select>
-                                    <button
-                                      onClick={() => {
-                                        const newRuns = [...estimate.runs!];
-                                        newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
-                                        newRuns[idx].gates = newRuns[idx].gateDetails!.length;
-                                        setEstimate({ ...estimate, runs: newRuns });
-                                      }}
-                                      className="text-[#CCCCCC] hover:text-american-red"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex bg-[#F0F0F0] p-0.5 rounded-lg">
+                                        {(['Pre-made', 'Welded'] as const).map(ctype => (
+                                          <button
+                                            key={ctype}
+                                            onClick={() => {
+                                              const newRuns = [...estimate.runs!];
+                                              newRuns[idx].gateDetails![gIdx].construction = ctype;
+                                              setEstimate({ ...estimate, runs: newRuns });
+                                            }}
+                                            className={cn(
+                                              "px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest transition-all",
+                                              (gate.construction || 'Pre-made') === ctype 
+                                                ? "bg-white text-american-blue shadow-sm" 
+                                                : "text-[#999999] hover:text-american-blue"
+                                            )}
+                                          >
+                                            {ctype}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          const newRuns = [...estimate.runs!];
+                                          newRuns[idx].gateDetails = newRuns[idx].gateDetails!.filter((_, i) => i !== gIdx);
+                                          newRuns[idx].gates = newRuns[idx].gateDetails!.length;
+                                          setEstimate({ ...estimate, runs: newRuns });
+                                        }}
+                                        className="text-[#CCCCCC] hover:text-american-red"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   </div>
                                   <div className="space-y-1">
                                     <div className="flex justify-between text-[8px] font-black uppercase text-[#BBBBBB]">

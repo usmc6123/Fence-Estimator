@@ -97,7 +97,7 @@ export default function LaborTakeOff({
           Cap: ${run.hasTopCap ? 'Yes' : 'No'}
           Trim: ${run.hasTrim ? 'Yes' : 'No'}
           Wood Type: ${run.woodType || 'N/A'}` : ''}
-          Gates: ${run.gates.map(g => `${g.width}' ${g.type}`).join(', ')}
+          Gates: ${run.gates.map(g => `${g.width}' ${g.type} (${g.construction || 'Standard'})`).join(', ')}
         `}).join('\n')}
 
         Requirements to include in the generated text:
