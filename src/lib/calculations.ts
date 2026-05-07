@@ -381,61 +381,166 @@ export function calculateDetailedTakeOff(
         gateLF += gate.width || 4;
         
         // Gate specific items
-        const gateItems: TakeOffItem[] = [];
+        let gateItems: TakeOffItem[] = [];
         const width = gate.width || 4;
         
-        if (runStyle.type === 'Wood') {
-          if (gate.type === 'Double') {
-            // Drive Gate (Shark kit includes hinges/latches usually, but let's be explicit per request)
-            const sharkKit = materials.find(m => m.id === 'g-kit-shark');
-            if (sharkKit) {
-              gateItems.push({
-                id: sharkKit.id,
-                name: sharkKit.name,
+        const generateDefaultGateItems = () => {
+          const items: TakeOffItem[] = [];
+          if (runStyle.type === 'Wood') {
+            if (gate.type === 'Double') {
+              // Drive Gate (Shark kit includes hinges/latches usually, but let's be explicit per request)
+              const sharkKit = materials.find(m => m.id === 'g-kit-shark');
+              if (sharkKit) {
+                items.push({
+                  id: sharkKit.id,
+                  name: sharkKit.name,
+                  qty: 1,
+                  unit: sharkKit.unit,
+                  unitCost: sharkKit.cost,
+                  priceSource: sharkKit.priceSource,
+                  total: sharkKit.cost,
+                  category: 'Gate'
+                });
+              }
+
+              // Cane Bolts
+              const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-48');
+              if (caneBoltMat) {
+                items.push({
+                  id: caneBoltMat.id,
+                  name: caneBoltMat.name,
+                  qty: 2,
+                  unit: caneBoltMat.unit,
+                  unitCost: caneBoltMat.cost,
+                  priceSource: caneBoltMat.priceSource,
+                  total: 2 * caneBoltMat.cost,
+                  category: 'Hardware'
+                });
+              }
+            } else {
+              // Walk Gate
+              let hasHingeKit = false;
+              const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge');
+              if (hingeKit) {
+                items.push({
+                  id: hingeKit.id,
+                  name: hingeKit.name,
+                  qty: 1,
+                  unit: hingeKit.unit,
+                  unitCost: hingeKit.cost,
+                  priceSource: hingeKit.priceSource,
+                  total: hingeKit.cost,
+                  category: 'Gate'
+                });
+                hasHingeKit = true;
+              }
+
+              const latchMat = materials.find(m => m.id === 'g-latch-std');
+              if (latchMat && !hasHingeKit) {
+                items.push({
+                  id: latchMat.id,
+                  name: latchMat.name,
+                  qty: 1,
+                  unit: latchMat.unit,
+                  unitCost: latchMat.cost,
+                  priceSource: latchMat.priceSource,
+                  total: latchMat.cost,
+                  category: 'Hardware'
+                });
+              }
+              
+              // Add (2) 2x4x12's for bracing
+              items.push({
+                id: railMat.id,
+                name: `${railMat.name} (Gate Bracing)`,
+                qty: 2,
+                unit: 'each',
+                unitCost: railMat.cost,
+                priceSource: railMat.priceSource,
+                total: 2 * railMat.cost,
+                category: 'Structure'
+              });
+            }
+          } else if (runStyle.type === 'Pipe') {
+            // Pipe Fence specific gates
+            const gateMat = materials.find(m => m.id === `p-gate-${width}ft`);
+            const hwMat = materials.find(m => m.id === `p-gate-hardware-${width}ft`);
+            
+            if (gateMat) {
+              items.push({
+                id: gateMat.id,
+                name: gateMat.name,
                 qty: 1,
-                unit: sharkKit.unit,
-                unitCost: sharkKit.cost,
-                priceSource: sharkKit.priceSource,
-                total: sharkKit.cost,
+                unit: gateMat.unit,
+                unitCost: gateMat.cost,
+                priceSource: gateMat.priceSource,
+                total: gateMat.cost,
                 category: 'Gate'
               });
             }
-
-            // Cane Bolts
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-48');
-            if (caneBoltMat) {
-              gateItems.push({
-                id: caneBoltMat.id,
-                name: caneBoltMat.name,
-                qty: 2,
-                unit: caneBoltMat.unit,
-                unitCost: caneBoltMat.cost,
-                priceSource: caneBoltMat.priceSource,
-                total: 2 * caneBoltMat.cost,
+            
+            if (hwMat) {
+              items.push({
+                id: hwMat.id,
+                name: hwMat.name,
+                qty: 1,
+                unit: hwMat.unit,
+                unitCost: hwMat.cost,
+                priceSource: hwMat.priceSource,
+                total: hwMat.cost,
                 category: 'Hardware'
               });
             }
-          } else {
-            // Walk Gate
-            let hasHingeKit = false;
-            const hingeKit = materials.find(m => m.id === 'g-kit-3-hinge');
-            if (hingeKit) {
-              gateItems.push({
-                id: hingeKit.id,
-                name: hingeKit.name,
+
+            if (gate.type === 'Double') {
+              const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
+              if (caneBoltMat) {
+                items.push({
+                  id: caneBoltMat.id,
+                  name: caneBoltMat.name,
+                  qty: 2,
+                  unit: caneBoltMat.unit,
+                  unitCost: caneBoltMat.cost,
+                  priceSource: caneBoltMat.priceSource,
+                  total: 2 * caneBoltMat.cost,
+                  category: 'Hardware'
+                });
+              }
+            }
+          } else if (runStyle.type === 'Metal') {
+            // Metal Gate
+            const gateMat = materials.find(m => m.category === 'Gate' && m.id === estimate.gateStyleId) || materials.find(m => m.category === 'Gate');
+            if (gateMat) {
+              items.push({
+                id: gateMat.id,
+                name: `${gateMat.name} (${width}')`,
                 qty: 1,
-                unit: hingeKit.unit,
-                unitCost: hingeKit.cost,
-                priceSource: hingeKit.priceSource,
-                total: hingeKit.cost,
+                unit: gateMat.unit,
+                unitCost: gateMat.cost,
+                priceSource: gateMat.priceSource,
+                total: gateMat.cost,
                 category: 'Gate'
               });
-              hasHingeKit = true;
             }
 
-            const latchMat = materials.find(m => m.id === 'g-latch-std');
-            if (latchMat && !hasHingeKit) {
-              gateItems.push({
+            // J-Bolt Hinges
+            const hingeMat = materials.find(m => m.id === 'g-hinge-jbolt');
+            if (hingeMat) {
+              items.push({
+                id: hingeMat.id,
+                name: hingeMat.name,
+                qty: gate.type === 'Double' ? 2 : 1,
+                unit: 'pair',
+                unitCost: hingeMat.cost,
+                priceSource: hingeMat.priceSource,
+                total: (gate.type === 'Double' ? 2 : 1) * hingeMat.cost,
+                category: 'Hardware'
+              });
+            }
+
+            const latchMat = materials.find(m => m.id === 'g-latch-grav');
+            if (latchMat) {
+              items.push({
                 id: latchMat.id,
                 name: latchMat.name,
                 qty: 1,
@@ -446,125 +551,34 @@ export function calculateDetailedTakeOff(
                 category: 'Hardware'
               });
             }
-            
-            // Add (2) 2x4x12's for bracing
-            gateItems.push({
-              id: railMat.id,
-              name: `${railMat.name} (Gate Bracing)`,
-              qty: 2,
-              unit: 'each',
-              unitCost: railMat.cost,
-              priceSource: railMat.priceSource,
-              total: 2 * railMat.cost,
-              category: 'Structure'
-            });
-          }
-        } else if (runStyle.type === 'Pipe') {
-          // Pipe Fence specific gates
-          const gateMat = materials.find(m => m.id === `p-gate-${width}ft`);
-          const hwMat = materials.find(m => m.id === `p-gate-hardware-${width}ft`);
-          
-          if (gateMat) {
-            gateItems.push({
-              id: gateMat.id,
-              name: gateMat.name,
-              qty: 1,
-              unit: gateMat.unit,
-              unitCost: gateMat.cost,
-              priceSource: gateMat.priceSource,
-              total: gateMat.cost,
-              category: 'Gate'
-            });
-          }
-          
-          if (hwMat) {
-            gateItems.push({
-              id: hwMat.id,
-              name: hwMat.name,
-              qty: 1,
-              unit: hwMat.unit,
-              unitCost: hwMat.cost,
-              priceSource: hwMat.priceSource,
-              total: hwMat.cost,
-              category: 'Hardware'
-            });
-          }
 
-          if (gate.type === 'Double') {
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
-            if (caneBoltMat) {
-              gateItems.push({
-                id: caneBoltMat.id,
-                name: caneBoltMat.name,
-                qty: 2,
-                unit: caneBoltMat.unit,
-                unitCost: caneBoltMat.cost,
-                priceSource: caneBoltMat.priceSource,
-                total: 2 * caneBoltMat.cost,
-                category: 'Hardware'
-              });
+            if (gate.type === 'Double') {
+              const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
+              if (caneBoltMat) {
+                items.push({
+                  id: caneBoltMat.id,
+                  name: caneBoltMat.name,
+                  qty: 2,
+                  unit: caneBoltMat.unit,
+                  unitCost: caneBoltMat.cost,
+                  priceSource: caneBoltMat.priceSource,
+                  total: 2 * caneBoltMat.cost,
+                  category: 'Hardware'
+                });
+              }
             }
           }
-        } else if (runStyle.type === 'Metal') {
-          // Metal Gate
-          const gateMat = materials.find(m => m.category === 'Gate' && m.id === estimate.gateStyleId) || materials.find(m => m.category === 'Gate');
-          if (gateMat) {
-            gateItems.push({
-              id: gateMat.id,
-              name: `${gateMat.name} (${width}')`,
-              qty: 1,
-              unit: gateMat.unit,
-              unitCost: gateMat.cost,
-              priceSource: gateMat.priceSource,
-              total: gateMat.cost,
-              category: 'Gate'
-            });
-          }
+          return items;
+        };
 
-          // J-Bolt Hinges
-          const hingeMat = materials.find(m => m.id === 'g-hinge-jbolt');
-          if (hingeMat) {
-            gateItems.push({
-              id: hingeMat.id,
-              name: hingeMat.name,
-              qty: gate.type === 'Double' ? 2 : 1,
-              unit: 'pair',
-              unitCost: hingeMat.cost,
-              priceSource: hingeMat.priceSource,
-              total: (gate.type === 'Double' ? 2 : 1) * hingeMat.cost,
-              category: 'Hardware'
-            });
-          }
-
-          const latchMat = materials.find(m => m.id === 'g-latch-grav');
-          if (latchMat) {
-            gateItems.push({
-              id: latchMat.id,
-              name: latchMat.name,
-              qty: 1,
-              unit: latchMat.unit,
-              unitCost: latchMat.cost,
-              priceSource: latchMat.priceSource,
-              total: latchMat.cost,
-              category: 'Hardware'
-            });
-          }
-
-          if (gate.type === 'Double') {
-            const caneBoltMat = materials.find(m => m.id === 'h-cane-bolt-24');
-            if (caneBoltMat) {
-              gateItems.push({
-                id: caneBoltMat.id,
-                name: caneBoltMat.name,
-                qty: 2,
-                unit: caneBoltMat.unit,
-                unitCost: caneBoltMat.cost,
-                priceSource: caneBoltMat.priceSource,
-                total: 2 * caneBoltMat.cost,
-                category: 'Hardware'
-              });
-            }
-          }
+        if (gate.customItems && gate.customItems.length > 0) {
+          gateItems = gate.customItems.map(ci => ({
+            ...ci,
+            total: ci.qty * ci.unitCost,
+            priceSource: 'Manual Override'
+          }));
+        } else {
+          gateItems = generateDefaultGateItems();
         }
 
         runGates.push({

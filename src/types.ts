@@ -42,6 +42,14 @@ export interface GateDetail {
   type: 'Single' | 'Double';
   width: number;
   position?: number; // Distance from start of run in feet
+  customItems?: {
+    id: string;
+    name: string;
+    qty: number;
+    unit: string;
+    unitCost: number;
+    category: string;
+  }[];
 }
 
 export interface FenceRun {

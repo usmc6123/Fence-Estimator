@@ -25,6 +25,8 @@ interface MaterialTakeOffProps {
 export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
+  const [editingGate, setEditingGate] = React.useState<{ runIndex: number, gateIndex: number, gateId: string } | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
   
   const pricingStrategy = estimate.pricingStrategy || 'best';
   const selectedSupplier = estimate.selectedSupplier || '';
@@ -99,6 +101,24 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
   }, [materials, quotes, pricingStrategy, selectedSupplier]);
 
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
+
+  const handleUpdateGateItems = (runIndex: number, gateIndex: number, newItems: any[]) => {
+    const newRuns = [...(estimate.runs || [])];
+    if (newRuns[runIndex] && newRuns[runIndex].gateDetails) {
+      newRuns[runIndex].gateDetails![gateIndex].customItems = newItems;
+      setEstimate({ ...estimate, runs: newRuns });
+    }
+  };
+
+  const handleResetGateItems = (runIndex: number, gateIndex: number) => {
+    const newRuns = [...(estimate.runs || [])];
+    if (newRuns[runIndex] && newRuns[runIndex].gateDetails) {
+      const updatedGate = { ...newRuns[runIndex].gateDetails![gateIndex] };
+      delete updatedGate.customItems;
+      newRuns[runIndex].gateDetails![gateIndex] = updatedGate;
+      setEstimate({ ...estimate, runs: newRuns });
+    }
+  };
   const [expandedRuns, setExpandedRuns] = React.useState<Record<string, boolean>>(
     data.runs.reduce((acc, run) => ({ ...acc, [run.runId]: true }), {})
   );
@@ -516,7 +536,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
         {/* Detailed Breakdown */}
         <div className="p-8 space-y-12">
-          {data.runs.map((run) => (
+          {data.runs.map((run, ri) => (
             <div key={run.runId} className="space-y-4 takeoff-card">
               <div 
                 className="flex items-center justify-between bg-american-blue/5 p-4 rounded-2xl cursor-pointer hover:bg-american-blue/10 transition-colors print:bg-[#F5F5F5]"
@@ -756,6 +776,13 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                 <Package size={16} />
                               </div>
                               <span className="text-xs font-black text-american-blue uppercase tracking-tight">{gate.type} Gate ({gate.width}')</span>
+                              <button
+                                onClick={() => setEditingGate({ runIndex: ri, gateIndex: gi, gateId: gate.gateId })}
+                                className="ml-auto p-1.5 rounded-lg bg-american-blue/5 text-american-blue/40 hover:bg-american-blue/10 hover:text-american-blue transition-all group/edit print:hidden"
+                                title="Edit gate components"
+                              >
+                                <SettingsIcon size={14} className="group-hover/edit:rotate-45 transition-transform" />
+                              </button>
                             </div>
                             <ul className="space-y-2">
                               {gate.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition').map((gi, gii) => (
@@ -1197,7 +1224,196 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
           <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Lone Star Fence Works • Precision Manufacturing & Strategic Deployment</p>
         </div>
       </div>
+      
+      {/* Gate Editor Modal */}
+      {editingGate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-american-blue/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-american-blue/10 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-american-blue text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
+                  <Package size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tight">Edit Gate Components</h3>
+                  <p className="text-xs font-bold text-white/60 tracking-widest uppercase">
+                    Run: {data.runs[editingGate.runIndex].runName} • Gate #{editingGate.gateIndex + 1}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingGate(null)}
+                className="h-10 w-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left Column: Material Library */}
+              <div className="w-1/3 border-r border-[#EEEEEE] flex flex-col shrink-0">
+                <div className="p-4 border-b border-[#F5F5F5]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Search materials..."
+                      className="w-full pl-10 pr-4 py-2 bg-[#F8F9FA] rounded-xl border-none text-sm font-bold placeholder:text-[#BBBBBB] focus:ring-2 focus:ring-american-blue/10"
+                      onChange={(e) => {
+                        const search = e.target.value.toLowerCase();
+                        setSearchTerm(search);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-[#FAFAFA]">
+                  {materials
+                    .filter(m => m.category !== 'Labor' && m.category !== 'Demolition' && (m.name.toLowerCase().includes(searchTerm) || m.category.toLowerCase().includes(searchTerm)))
+                    .map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          const existingItems = [...(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items)];
+                          const existing = existingItems.find(i => i.id === item.id);
+                          
+                          if (existing) {
+                            handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, 
+                              existingItems.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
+                            );
+                          } else {
+                            handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, [
+                              ...existingItems,
+                              {
+                                id: item.id,
+                                name: item.name,
+                                qty: 1,
+                                unit: item.unit,
+                                unitCost: item.cost,
+                                category: item.category
+                              }
+                            ]);
+                          }
+                        }}
+                        className="w-full p-3 flex flex-col text-left rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-american-blue/5 transition-all group"
+                      >
+                        <span className="text-xs font-black text-american-blue group-hover:text-american-red transition-colors">{item.name}</span>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{item.category}</span>
+                          <span className="text-[10px] font-black text-american-blue">{formatCurrency(item.cost)}</span>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* Right Column: Active Components */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                <div>
+                  <div className="flex items-baseline justify-between mb-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-american-red">Active Component List</h4>
+                    <button 
+                      onClick={() => handleResetGateItems(editingGate.runIndex, editingGate.gateIndex)}
+                      className="text-[10px] font-black uppercase tracking-widest text-[#999999] hover:text-american-red transition-colors"
+                    >
+                      Reset to Defaults
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || 
+                      data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))
+                      .map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-4 bg-[#F8F9FA] p-3 rounded-2xl border border-american-blue/5 group hover:bg-white hover:shadow-md transition-all">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-american-blue truncate">{item.name}</p>
+                          <p className="text-[9px] font-bold text-[#999999] uppercase tracking-widest">{item.category}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center bg-white rounded-lg border border-[#EEEEEE] overflow-hidden">
+                            <button 
+                              onClick={() => {
+                                const currentItems = [...(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))];
+                                if (item.qty > 1) {
+                                  handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, 
+                                    currentItems.map((ci, curIdx) => curIdx === idx ? { ...ci, qty: ci.qty - 1 } : ci)
+                                  );
+                                }
+                              }}
+                              className="p-1 px-2 hover:bg-[#F5F5F5] text-american-blue/40 hover:text-american-blue transition-colors"
+                            >-</button>
+                            <span className="px-2 text-xs font-black text-american-blue border-x border-[#EEEEEE] min-w-[30px] text-center">{item.qty}</span>
+                            <button 
+                              onClick={() => {
+                                const currentItems = [...(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))];
+                                handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, 
+                                  currentItems.map((ci, curIdx) => curIdx === idx ? { ...ci, qty: ci.qty + 1 } : ci)
+                                );
+                              }}
+                              className="p-1 px-2 hover:bg-[#F5F5F5] text-american-blue/40 hover:text-american-blue transition-colors"
+                            >+</button>
+                          </div>
+                          <div className="w-20 text-right">
+                            <input 
+                              type="number"
+                              value={item.unitCost}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const currentItems = [...(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))];
+                                handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, 
+                                  currentItems.map((ci, curIdx) => curIdx === idx ? { ...ci, unitCost: val } : ci)
+                                );
+                              }}
+                              className="w-full text-right bg-transparent border-none p-0 text-xs font-black text-american-blue focus:ring-0"
+                            />
+                            <p className="text-[9px] font-bold text-[#999999] uppercase tracking-widest underline decoration-dotted decoration-[#CCCCCC]">Total: {formatCurrency(item.qty * item.unitCost)}</p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              const currentItems = [...(estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))];
+                              handleUpdateGateItems(editingGate.runIndex, editingGate.gateIndex, 
+                                currentItems.filter((_, curIdx) => curIdx !== idx)
+                              );
+                            }}
+                            className="p-1.5 rounded-lg text-[#BBBBBB] hover:bg-american-red/10 hover:text-american-red transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-american-red/5 p-6 rounded-[24px] border border-american-red/10 flex items-center justify-between mt-auto">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-american-blue mb-1">Gate Logistics Total</p>
+                    <p className="text-sm font-bold text-[#666666]">Sum of all hardware, framing, and logistics for this gate.</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-black text-american-blue">
+                      {formatCurrency(
+                        (estimate.runs?.[editingGate.runIndex]?.gateDetails?.[editingGate.gateIndex]?.customItems || 
+                         data.runs[editingGate.runIndex].gates[editingGate.gateIndex].items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition'))
+                        .reduce((sum, i) => sum + (i.qty * i.unitCost), 0)
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-[#FBFBFB] border-t border-[#EEEEEE] flex justify-end gap-3">
+              <button 
+                onClick={() => setEditingGate(null)}
+                className="px-6 py-3 rounded-xl bg-american-blue text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                Confirm & Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
