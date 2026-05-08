@@ -998,7 +998,8 @@ export function calculateDetailedTakeOff(
 
       // Mesh
       const meshHeight = run.height || 6;
-      const meshMat = materials.find(m => m.id === `cl-mesh-galv-${meshHeight}`) || materials.find(m => m.id === 'cl-mesh-galv-6') || materials[0];
+      const meshGrade = grade === 'Commercial' ? 'comm' : 'res';
+      const meshMat = materials.find(m => m.id === `cl-mesh-${meshGrade}-${meshHeight}`) || materials.find(m => m.id === `cl-mesh-${meshGrade}-6`) || materials[0];
       const meshCost = runLF * meshMat.cost;
       runFenceMaterialCost += meshCost;
       runItems.push({
