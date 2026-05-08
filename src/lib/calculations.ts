@@ -994,12 +994,13 @@ export function calculateDetailedTakeOff(
       }
     } else if (runStyle.type === 'Chain Link') {
       const grade = run.chainLinkGrade || 'Residential';
-      const hasBottomRail = run.hasBottomRail && grade === 'Commercial';
+      const isCommercial = grade === 'Commercial';
+      const hasBottomRail = run.hasBottomRail && isCommercial;
+      const height = run.height || 6;
 
       // Mesh
-      const meshHeight = run.height || 6;
-      const meshGrade = grade === 'Commercial' ? 'comm' : 'res';
-      const meshMat = materials.find(m => m.id === `cl-mesh-${meshGrade}-${meshHeight}`) || materials.find(m => m.id === `cl-mesh-${meshGrade}-6`) || materials[0];
+      const meshGrade = isCommercial ? 'comm' : 'res';
+      const meshMat = materials.find(m => m.id === `cl-mesh-${meshGrade}-${height}`) || materials.find(m => m.id === `cl-mesh-${meshGrade}-6`) || materials[0];
       const meshCost = runLF * meshMat.cost;
       runFenceMaterialCost += meshCost;
       runItems.push({
@@ -1013,7 +1014,7 @@ export function calculateDetailedTakeOff(
       });
 
       // Top Rail
-      const railId = grade === 'Commercial' ? 'cl-rail-top-comm' : 'cl-rail-top';
+      const railId = isCommercial ? 'cl-rail-top-comm' : 'cl-rail-top';
       const topRailMat = materials.find(m => m.id === railId) || materials[0];
       const topRailCost = runLF * topRailMat.cost;
       runFenceMaterialCost += topRailCost;
@@ -1027,7 +1028,93 @@ export function calculateDetailedTakeOff(
         category: 'Structure'
       });
 
-      // Tension Wire or Bottom Rail
+      // Chain Link Hardware Implementation (Both Residential and Commercial)
+      // Dome Caps (1 per 2-3/8" Post)
+      const terminalCount = (runCornerPosts + startEndPosts) + (run.gateDetails?.length * 2 || 0);
+      const domeCapMat = materials.find(m => m.id === 'cl-hw-dome-238');
+      if (domeCapMat && terminalCount > 0) {
+        const dcCost = terminalCount * domeCapMat.cost;
+        runFenceMaterialCost += dcCost;
+        runItems.push({ id: domeCapMat.id, name: domeCapMat.name, qty: terminalCount, unit: 'each', unitCost: domeCapMat.cost, total: dcCost, category: 'Hardware' });
+      }
+
+      // Loop Caps (1 per Line Post - 1-7/8" Comm, 1-5/8" Res)
+      const loopCapId = isCommercial ? 'cl-hw-loop-178' : 'cl-hw-loop-158';
+      const loopCapMat = materials.find(m => m.id === loopCapId);
+      if (loopCapMat && runLinePosts > 0) {
+        const lcCost = runLinePosts * loopCapMat.cost;
+        runFenceMaterialCost += lcCost;
+        runItems.push({ id: loopCapMat.id, name: loopCapMat.name, qty: runLinePosts, unit: 'each', unitCost: loopCapMat.cost, total: lcCost, category: 'Hardware' });
+      }
+
+      // Tension Bars (2 per fence run)
+      const tensionBarId = `cl-hw-tension-bar-${height}`;
+      const barMat = materials.find(m => m.id === tensionBarId) || materials.find(m => m.id === 'cl-hw-tension-bar-6');
+      if (barMat) {
+        const barQty = 2;
+        const barCost = barQty * barMat.cost;
+        runFenceMaterialCost += barCost;
+        runItems.push({ id: barMat.id, name: barMat.name, qty: barQty, unit: 'each', unitCost: barMat.cost, total: barCost, category: 'Hardware' });
+      }
+
+      // Tension Bands (1 per 1' of height per bar - 2 3/8")
+      const tensionBandMat = materials.find(m => m.id === 'cl-hw-tension-band-238');
+      if (tensionBandMat) {
+        const bandQty = height * 2;
+        const bandCost = bandQty * tensionBandMat.cost;
+        runFenceMaterialCost += bandCost;
+        runItems.push({ id: tensionBandMat.id, name: tensionBandMat.name, qty: bandQty, unit: 'each', unitCost: tensionBandMat.cost, total: bandCost, category: 'Hardware' });
+      }
+
+      // Brace Bands (4 per fence run - 2 3/8")
+      const braceBandMat = materials.find(m => m.id === 'cl-hw-brace-band-238');
+      if (braceBandMat) {
+        const bbQty = 4;
+        const bbCost = bbQty * braceBandMat.cost;
+        runFenceMaterialCost += bbCost;
+        runItems.push({ id: braceBandMat.id, name: braceBandMat.name, qty: bbQty, unit: 'each', unitCost: braceBandMat.cost, total: bbCost, category: 'Hardware' });
+      }
+
+      // Rail End Cups (2 per fence run)
+      const cupId = isCommercial ? 'cl-hw-cup-comm' : 'cl-hw-cup-res';
+      const cupMat = materials.find(m => m.id === cupId);
+      if (cupMat) {
+        const cupQty = 2;
+        const cupCost = cupQty * cupMat.cost;
+        runFenceMaterialCost += cupCost;
+        runItems.push({ id: cupMat.id, name: cupMat.name, qty: cupQty, unit: 'each', unitCost: cupMat.cost, total: cupCost, category: 'Hardware' });
+      }
+
+      // Rail EZ Ties (1 per 2 LF) - 1-5/8" Comm, 1-3/8" Res
+      const railTieId = isCommercial ? 'cl-hw-ez-tie-158' : 'cl-hw-ez-tie-138';
+      const railTieMat = materials.find(m => m.id === railTieId);
+      if (railTieMat) {
+        const tieQty = Math.ceil(runLF / 2);
+        const tieCost = tieQty * railTieMat.cost;
+        runFenceMaterialCost += tieCost;
+        runItems.push({ id: railTieMat.id, name: railTieMat.name, qty: tieQty, unit: 'each', unitCost: railTieMat.cost, total: tieCost, category: 'Hardware' });
+      }
+
+      // Post EZ Ties (1 per 1' of height x total number of line posts) - 1-7/8" Comm, 1-5/8" Res
+      const postTieId = isCommercial ? 'cl-hw-ez-tie-178' : 'cl-hw-ez-tie-158';
+      const postTieMat = materials.find(m => m.id === postTieId);
+      if (postTieMat) {
+        const tieQty = height * runLinePosts;
+        const tieCost = tieQty * postTieMat.cost;
+        runFenceMaterialCost += tieCost;
+        runItems.push({ id: postTieMat.id, name: postTieMat.name, qty: tieQty, unit: 'each', unitCost: postTieMat.cost, total: tieCost, category: 'Hardware' });
+      }
+
+      // Hog Rings (1 for every 2 LF)
+      const hogRingMat = materials.find(m => m.id === 'cl-hw-hog-ring');
+      if (hogRingMat) {
+        const hrQty = Math.ceil(runLF / 2);
+        const hrCost = hrQty * hogRingMat.cost;
+        runFenceMaterialCost += hrCost;
+        runItems.push({ id: hogRingMat.id, name: hogRingMat.name, qty: hrQty, unit: 'each', unitCost: hogRingMat.cost, total: hrCost, category: 'Hardware' });
+      }
+
+      // Tension Wire OR Bottom Rail
       if (hasBottomRail) {
         const bottomRailMat = materials.find(m => m.id === 'cl-rail-bottom') || materials[0];
         const bottomRailCost = runLF * bottomRailMat.cost;
@@ -1058,27 +1145,8 @@ export function calculateDetailedTakeOff(
             category: 'Hardware'
           });
         }
-
-        // Extra hardware for terminal posts (brace band and rail end cup)
-        const terminalCount = runPostCount - runLinePosts;
-        if (terminalCount > 0) {
-          const cupMat = materials.find(m => m.id === 'cl-hw-cup-comm');
-          const braceMat = materials.find(m => m.id === 'cl-hw-brace-comm');
-          if (cupMat) {
-            const cQty = terminalCount;
-            const cCost = cQty * cupMat.cost;
-            runFenceMaterialCost += cCost;
-            runItems.push({ id: cupMat.id, name: cupMat.name, qty: cQty, unit: 'each', unitCost: cupMat.cost, total: cCost, category: 'Hardware' });
-          }
-          if (braceMat) {
-            const brQty = terminalCount;
-            const brCost = brQty * braceMat.cost;
-            runFenceMaterialCost += brCost;
-            runItems.push({ id: braceMat.id, name: braceMat.name, qty: brQty, unit: 'each', unitCost: braceMat.cost, total: brCost, category: 'Hardware' });
-          }
-        }
       } else {
-        // Tension Wire
+        // Tension Wire (Commercial uses LF match)
         const tensionMat = materials.find(m => m.id === 'cl-tension-wire');
         if (tensionMat) {
           const tensionCost = runLF * tensionMat.cost;
@@ -1093,15 +1161,6 @@ export function calculateDetailedTakeOff(
             category: 'Hardware'
           });
         }
-      }
-
-      // Chain Link Ties
-      const tieMat = materials.find(m => m.id === 'h-cl-tie');
-      if (tieMat) {
-        const tieQty = Math.ceil(runLF / 50);
-        const tieCost = tieQty * tieMat.cost;
-        runFenceMaterialCost += tieCost;
-        runItems.push({ id: tieMat.id, name: tieMat.name, qty: tieQty, unit: 'box', unitCost: tieMat.cost, total: tieCost, category: 'Hardware' });
       }
 
       skipGenericInfill = true;
