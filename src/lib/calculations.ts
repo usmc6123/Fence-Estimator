@@ -674,31 +674,73 @@ export function calculateDetailedTakeOff(
           postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
         } else if (runStyle.type === 'Chain Link') {
           const grade = run.chainLinkGrade || 'Residential';
-          postMat = materials.find(m => m.id === (grade === 'Commercial' ? 'cl-post-line-comm' : 'cl-post-line')) || postMat;
-        } else if (runStyle.type === 'Pipe') {
           const postHeight = (run.height || 4) + 2;
-          postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
-          // Collect for optimization
-          for (let i = 0; i < stdPostCount; i++) {
-            allPipeSegments.push(postHeight);
+          
+          // Line Posts
+          const linePostId = `cl-post-line-${grade === 'Commercial' ? 'comm' : 'res'}-${postHeight}`;
+          const linePostMat = materials.find(m => m.id === linePostId);
+          if (linePostMat && runLinePosts > 0) {
+            const lpCost = runLinePosts * linePostMat.cost;
+            runFenceMaterialCost += lpCost;
+            runItems.push({
+              id: linePostMat.id,
+              name: linePostMat.name,
+              qty: runLinePosts,
+              unit: linePostMat.unit,
+              unitCost: linePostMat.cost,
+              total: lpCost,
+              category: 'Structure'
+            });
           }
-        } else if (runStyle.type === 'Metal') {
-          const postHeight = (run.height || 4) + 2;
-          postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
+          
+          // Terminal Posts (Ends, Corners, and Gates)
+          const terminalPostId = `cl-post-term-${postHeight}`;
+          const termPostMat = materials.find(m => m.id === terminalPostId);
+          const tpCount = (runCornerPosts + startEndPosts) + (run.gateDetails?.length * 2 || 0);
+          
+          if (termPostMat && tpCount > 0) {
+            const tpCost = tpCount * termPostMat.cost;
+            runFenceMaterialCost += tpCost;
+            runItems.push({
+              id: termPostMat.id,
+              name: termPostMat.name,
+              qty: tpCount,
+              unit: termPostMat.unit,
+              unitCost: termPostMat.cost,
+              total: tpCost,
+              category: 'Structure'
+            });
+          }
         }
+        
+        // Universal Post Addition (Skip for Chain Link since we handled it above)
+        if (runStyle.type !== 'Chain Link') {
+          if (runStyle.type === 'Wood') {
+            postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+          } else if (runStyle.type === 'Pipe') {
+            const postHeight = (run.height || 4) + 2;
+            postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
+            for (let i = 0; i < stdPostCount; i++) {
+              allPipeSegments.push(postHeight);
+            }
+          } else if (runStyle.type === 'Metal') {
+            const postHeight = (run.height || 4) + 2;
+            postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
+          }
 
-        const cost = stdPostCount * postMat.cost;
-        runFenceMaterialCost += cost;
-        runItems.push({
-          id: postMat.id,
-          name: postMat.name,
-          qty: stdPostCount,
-          unit: postMat.unit,
-          unitCost: postMat.cost,
-          priceSource: postMat.priceSource,
-          total: cost,
-          category: 'Structure'
-        });
+          const cost = stdPostCount * postMat.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: postMat.id,
+            name: postMat.name,
+            qty: stdPostCount,
+            unit: postMat.unit,
+            unitCost: postMat.cost,
+            priceSource: postMat.priceSource,
+            total: cost,
+            category: 'Structure'
+          });
+        }
       }
 
       // Gate Posts for Pipe and Metal Fence
@@ -955,7 +997,8 @@ export function calculateDetailedTakeOff(
       const hasBottomRail = run.hasBottomRail && grade === 'Commercial';
 
       // Mesh
-      const meshMat = materials.find(m => m.id === 'cl-mesh-galv') || materials[0];
+      const meshHeight = run.height || 6;
+      const meshMat = materials.find(m => m.id === `cl-mesh-galv-${meshHeight}`) || materials.find(m => m.id === 'cl-mesh-galv-6') || materials[0];
       const meshCost = runLF * meshMat.cost;
       runFenceMaterialCost += meshCost;
       runItems.push({
