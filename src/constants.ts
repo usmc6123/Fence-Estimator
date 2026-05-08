@@ -65,9 +65,9 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'cl-post-line-comm-6', name: '1-7/8" x 6\' Line Post (Commercial)', category: 'Post', unit: 'each', cost: 38.50, description: 'For 4ft fence', imageUrl: 'https://images.thdstatic.com/productImages/697ae182-412a-4187-b72a-1547bd41ac71/svn/fencer-wire-chain-link-fence-accessories-lbp-10x1f58-64_600.jpg' },
   { id: 'cl-post-line-comm-7', name: '1-7/8" x 7\' Line Post (Commercial)', category: 'Post', unit: 'each', cost: 44.50, description: 'For 5ft fence' },
   { id: 'cl-post-line-comm-8', name: '1-7/8" x 8\' Line Post (Commercial)', category: 'Post', unit: 'each', cost: 50.50, description: 'For 6ft fence' },
-  { id: 'cl-rail-top', name: '1-3/8" Top Rail (Residential)', category: 'Rail', unit: 'lf', cost: 3.25, description: 'Horizontal top pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
-  { id: 'cl-rail-top-comm', name: '1-5/8" Top Rail (Commercial)', category: 'Rail', unit: 'lf', cost: 4.75, description: 'Commercial grade horizontal rail', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
-  { id: 'cl-rail-bottom', name: '1-5/8" Bottom Rail (Commercial)', category: 'Rail', unit: 'lf', cost: 4.75, description: 'Used instead of tension wire' },
+  { id: 'cl-rail-top', name: '1-3/8" x 21\' Top Rail (Residential)', category: 'Rail', unit: 'each', cost: 68.25, description: '21ft horizontal top pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'cl-rail-top-comm', name: '1-5/8" x 21\' Top Rail (Commercial)', category: 'Rail', unit: 'each', cost: 99.75, description: '21ft commercial grade horizontal rail', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'cl-rail-bottom', name: '1-5/8" x 21\' Bottom Rail (Commercial)', category: 'Rail', unit: 'each', cost: 99.75, description: '21ft used instead of tension wire' },
   // Residential Mesh (11 Gauge)
   { id: 'cl-mesh-res-3', name: '11ga Galv Mesh 3\' (Residential)', category: 'Picket', unit: 'lf', cost: 3.25, description: '3ft residential grade fabric' },
   { id: 'cl-mesh-res-4', name: '11ga Galv Mesh 4\' (Residential)', category: 'Picket', unit: 'lf', cost: 4.50, description: '4ft residential grade fabric' },

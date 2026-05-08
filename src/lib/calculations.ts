@@ -1016,12 +1016,13 @@ export function calculateDetailedTakeOff(
       // Top Rail
       const railId = isCommercial ? 'cl-rail-top-comm' : 'cl-rail-top';
       const topRailMat = materials.find(m => m.id === railId) || materials[0];
-      const topRailCost = runLF * topRailMat.cost;
+      const railQty = Math.ceil(runLF / 21);
+      const topRailCost = railQty * topRailMat.cost;
       runFenceMaterialCost += topRailCost;
       runItems.push({
         id: topRailMat.id,
         name: topRailMat.name,
-        qty: runLF,
+        qty: railQty,
         unit: topRailMat.unit,
         unitCost: topRailMat.cost,
         total: topRailCost,
@@ -1117,12 +1118,13 @@ export function calculateDetailedTakeOff(
       // Tension Wire OR Bottom Rail
       if (hasBottomRail) {
         const bottomRailMat = materials.find(m => m.id === 'cl-rail-bottom') || materials[0];
-        const bottomRailCost = runLF * bottomRailMat.cost;
+        const brQty = Math.ceil(runLF / 21);
+        const bottomRailCost = brQty * bottomRailMat.cost;
         runFenceMaterialCost += bottomRailCost;
         runItems.push({
           id: bottomRailMat.id,
           name: bottomRailMat.name,
-          qty: runLF,
+          qty: brQty,
           unit: bottomRailMat.unit,
           unitCost: bottomRailMat.cost,
           total: bottomRailCost,
