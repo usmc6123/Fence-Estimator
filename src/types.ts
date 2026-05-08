@@ -74,6 +74,8 @@ export interface FenceRun {
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
   topStyle?: 'Dog Ear' | 'Flat Top';
+  chainLinkGrade?: 'Residential' | 'Commercial';
+  hasBottomRail?: boolean;
   hasRotBoard?: boolean;
   hasDemolition?: boolean;
   demoLinearFeet?: number;
@@ -156,6 +158,8 @@ export interface Estimate {
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
   topStyle?: 'Dog Ear' | 'Flat Top';
+  defaultChainLinkGrade?: 'Residential' | 'Commercial';
+  defaultHasBottomRail?: boolean;
   isPreStained?: boolean;
   
   // Site Prep

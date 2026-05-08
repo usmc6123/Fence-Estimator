@@ -913,6 +913,54 @@ export default function Estimator({
                                 {runStyle.availableColors.map(c => <option key={c} value={c}>{c}</option>)}
                               </select>
                             </div>
+
+                            {runStyle.type === 'Chain Link' && (
+                              <div className="col-span-full grid grid-cols-2 gap-6 pt-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Fence Grade</label>
+                                  <div className="flex bg-[#F0F0F0] p-0.5 rounded-xl">
+                                    {(['Residential', 'Commercial'] as const).map(grade => (
+                                      <button 
+                                        key={grade}
+                                        onClick={() => {
+                                          const newRuns = [...estimate.runs!];
+                                          newRuns[idx].chainLinkGrade = grade;
+                                          setEstimate({ ...estimate, runs: newRuns });
+                                        }}
+                                        className={cn(
+                                          "flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                          (run.chainLinkGrade || 'Residential') === grade 
+                                            ? "bg-white text-american-blue shadow-sm" 
+                                            : "text-american-blue/40 hover:text-american-blue"
+                                        )}
+                                      >
+                                        {grade}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                {(run.chainLinkGrade === 'Commercial') && (
+                                  <div className="pt-6">
+                                    <button
+                                      onClick={() => {
+                                        const newRuns = [...estimate.runs!];
+                                        newRuns[idx].hasBottomRail = !newRuns[idx].hasBottomRail;
+                                        setEstimate({ ...estimate, runs: newRuns });
+                                      }}
+                                      className={cn(
+                                        "w-full px-3 py-2.5 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest transition-all",
+                                        run.hasBottomRail 
+                                          ? "border-american-blue bg-american-blue text-white" 
+                                          : "border-white bg-white text-[#BBBBBB]"
+                                      )}
+                                    >
+                                      {run.hasBottomRail ? "Bottom Rail Active" : "Add Bottom Rail"}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             <div className="pt-6">
                               <button
                                 onClick={() => {

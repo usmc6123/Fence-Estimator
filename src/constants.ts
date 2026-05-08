@@ -52,10 +52,16 @@ export const MATERIALS: MaterialItem[] = [
   
   // Chain Link Structure
   { id: 'cl-post-term', name: '2-3/8" Terminal Post', category: 'Post', unit: 'each', cost: 32.00, description: 'End/Corner/Gate post', imageUrl: 'https://us.evocdn.io/dealer/1459/catalog/product/images/171-5313-5332-1.webp' },
-  { id: 'cl-post-line', name: '1-5/8" Line Post', category: 'Post', unit: 'each', cost: 22.50, description: 'Intermediate post', imageUrl: 'https://images.thdstatic.com/productImages/697ae182-412a-4187-b72a-1547bd41ac71/svn/fencer-wire-chain-link-fence-accessories-lbp-10x1f58-64_600.jpg' },
-  { id: 'cl-rail-top', name: '1-3/8" Top Rail', category: 'Rail', unit: 'lf', cost: 3.25, description: 'Horizontal top pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'cl-post-line', name: '1-5/8" Line Post (Residential)', category: 'Post', unit: 'each', cost: 22.50, description: 'Intermediate post', imageUrl: 'https://images.thdstatic.com/productImages/697ae182-412a-4187-b72a-1547bd41ac71/svn/fencer-wire-chain-link-fence-accessories-lbp-10x1f58-64_600.jpg' },
+  { id: 'cl-post-line-comm', name: '1-7/8" Line Post (Commercial)', category: 'Post', unit: 'each', cost: 38.50, description: 'Commercial grade intermediate post', imageUrl: 'https://images.thdstatic.com/productImages/697ae182-412a-4187-b72a-1547bd41ac71/svn/fencer-wire-chain-link-fence-accessories-lbp-10x1f58-64_600.jpg' },
+  { id: 'cl-rail-top', name: '1-3/8" Top Rail (Residential)', category: 'Rail', unit: 'lf', cost: 3.25, description: 'Horizontal top pipe', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'cl-rail-top-comm', name: '1-5/8" Top Rail (Commercial)', category: 'Rail', unit: 'lf', cost: 4.75, description: 'Commercial grade horizontal rail', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSvhspKHpyyyB9YIYToMXfD01oTeYOHnSnpqA&s' },
+  { id: 'cl-rail-bottom', name: '1-5/8" Bottom Rail (Commercial)', category: 'Rail', unit: 'lf', cost: 4.75, description: 'Used instead of tension wire' },
   { id: 'cl-mesh-galv', name: '9ga Galv Mesh 6\'', category: 'Picket', unit: 'lf', cost: 7.75, description: 'Standard chain link fabric', imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
   { id: 'cl-tension-wire', name: 'Bottom Tension Wire', category: 'Hardware', unit: 'lf', cost: 0.65, description: 'Prevents mesh lifting', imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS_amSlsfxUJJ0Uvy1zk-95EIbBcJb3FEuDHQ&s' },
+  { id: 'cl-hw-boulevard', name: 'Boulevard Bracket (1-7/8" x 1-5/8")', category: 'Hardware', unit: 'each', cost: 8.50, description: 'Connects bottom rail to line posts' },
+  { id: 'cl-hw-brace-comm', name: '1-7/8" Brace Band', category: 'Hardware', unit: 'each', cost: 2.25, description: 'Commercial brace band' },
+  { id: 'cl-hw-cup-comm', name: '1-5/8" Rail End Cup', category: 'Hardware', unit: 'each', cost: 3.75, description: 'For connecting rail to terminal posts' },
   
   // Metal Structure
   { id: 'm-post-2x2-5', name: '2x2 x 5\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 32.00, description: 'For 3ft fence' },
@@ -226,6 +232,8 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   topStyle: 'Dog Ear',
   isPreStained: false,
   hasRotBoard: true,
+  defaultChainLinkGrade: 'Residential',
+  defaultHasBottomRail: false,
 };
 
 export const DEFAULT_LABOR_RATES = {

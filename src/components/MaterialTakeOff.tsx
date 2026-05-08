@@ -548,7 +548,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                   </div>
                   <div>
                     <h3 className="font-black text-american-blue uppercase tracking-tight">{run.runName}</h3>
-                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">{run.linearFeet} LF • {run.styleName}</p>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">
+                      {run.linearFeet} LF • {run.styleName}
+                      {run.chainLinkGrade ? ` (${run.chainLinkGrade})` : ''}
+                      {run.hasBottomRail ? ' • Bottom Rail' : ''}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">

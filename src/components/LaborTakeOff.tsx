@@ -97,6 +97,8 @@ export default function LaborTakeOff({
           Cap: ${run.hasTopCap ? 'Yes' : 'No'}
           Trim: ${run.hasTrim ? 'Yes' : 'No'}
           Wood Type: ${run.woodType || 'N/A'}` : ''}
+          ${run.chainLinkGrade ? `Grade: ${run.chainLinkGrade}
+          Bottom Rail: ${run.hasBottomRail ? 'Included' : 'None'}` : ''}
           Gates: ${run.gates.map(g => `${g.width}' ${g.type} (${g.construction || 'Standard'})`).join(', ')}
         `}).join('\n')}
 

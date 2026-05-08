@@ -41,6 +41,8 @@ export interface RunTakeOff {
   woodType?: string;
   stainSides?: string;
   picketStyle?: string;
+  chainLinkGrade?: string;
+  hasBottomRail?: boolean;
   items: TakeOffItem[];
   pipeCuttingGuide?: PipeCuttingGuide;
   fenceMaterialCost: number;
@@ -52,6 +54,7 @@ export interface RunTakeOff {
     gateId: string;
     type: string;
     width: number;
+    construction?: string;
     items: TakeOffItem[];
   }[];
 }
@@ -585,6 +588,7 @@ export function calculateDetailedTakeOff(
           gateId: gate.id,
           type: gate.type,
           width: gate.width || 4,
+          construction: gate.construction,
           items: gateItems
         });
 
@@ -636,7 +640,7 @@ export function calculateDetailedTakeOff(
     
     // 6' Wood Fence Specific Logic
     const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
-    const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : 8;
+    const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : (runStyle.type === 'Chain Link' ? (run.hasBottomRail ? 7 : 8) : 8);
     
     const nextRun = runs[idx + 1];
     const isLastOfSection = !nextRun || nextRun.isStartOfNewSection;
@@ -668,6 +672,9 @@ export function calculateDetailedTakeOff(
         let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
         if (runStyle.type === 'Wood') {
           postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+        } else if (runStyle.type === 'Chain Link') {
+          const grade = run.chainLinkGrade || 'Residential';
+          postMat = materials.find(m => m.id === (grade === 'Commercial' ? 'cl-post-line-comm' : 'cl-post-line')) || postMat;
         } else if (runStyle.type === 'Pipe') {
           const postHeight = (run.height || 4) + 2;
           postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
@@ -943,6 +950,117 @@ export function calculateDetailedTakeOff(
         // Side by Side: Exactly total inches / 5.5" then add waste
         panelQty = Math.ceil((totalInches / 5.5) * wasteFactor);
       }
+    } else if (runStyle.type === 'Chain Link') {
+      const grade = run.chainLinkGrade || 'Residential';
+      const hasBottomRail = run.hasBottomRail && grade === 'Commercial';
+
+      // Mesh
+      const meshMat = materials.find(m => m.id === 'cl-mesh-galv') || materials[0];
+      const meshCost = runLF * meshMat.cost;
+      runFenceMaterialCost += meshCost;
+      runItems.push({
+        id: meshMat.id,
+        name: meshMat.name,
+        qty: runLF,
+        unit: meshMat.unit,
+        unitCost: meshMat.cost,
+        total: meshCost,
+        category: 'Infill'
+      });
+
+      // Top Rail
+      const railId = grade === 'Commercial' ? 'cl-rail-top-comm' : 'cl-rail-top';
+      const topRailMat = materials.find(m => m.id === railId) || materials[0];
+      const topRailCost = runLF * topRailMat.cost;
+      runFenceMaterialCost += topRailCost;
+      runItems.push({
+        id: topRailMat.id,
+        name: topRailMat.name,
+        qty: runLF,
+        unit: topRailMat.unit,
+        unitCost: topRailMat.cost,
+        total: topRailCost,
+        category: 'Structure'
+      });
+
+      // Tension Wire or Bottom Rail
+      if (hasBottomRail) {
+        const bottomRailMat = materials.find(m => m.id === 'cl-rail-bottom') || materials[0];
+        const bottomRailCost = runLF * bottomRailMat.cost;
+        runFenceMaterialCost += bottomRailCost;
+        runItems.push({
+          id: bottomRailMat.id,
+          name: bottomRailMat.name,
+          qty: runLF,
+          unit: bottomRailMat.unit,
+          unitCost: bottomRailMat.cost,
+          total: bottomRailCost,
+          category: 'Structure'
+        });
+
+        // Boulevard Brackets (1 per line post)
+        const boulevardMat = materials.find(m => m.id === 'cl-hw-boulevard');
+        if (boulevardMat) {
+          const bQty = runLinePosts;
+          const bCost = bQty * boulevardMat.cost;
+          runFenceMaterialCost += bCost;
+          runItems.push({
+            id: boulevardMat.id,
+            name: boulevardMat.name,
+            qty: bQty,
+            unit: 'each',
+            unitCost: boulevardMat.cost,
+            total: bCost,
+            category: 'Hardware'
+          });
+        }
+
+        // Extra hardware for terminal posts (brace band and rail end cup)
+        const terminalCount = runPostCount - runLinePosts;
+        if (terminalCount > 0) {
+          const cupMat = materials.find(m => m.id === 'cl-hw-cup-comm');
+          const braceMat = materials.find(m => m.id === 'cl-hw-brace-comm');
+          if (cupMat) {
+            const cQty = terminalCount;
+            const cCost = cQty * cupMat.cost;
+            runFenceMaterialCost += cCost;
+            runItems.push({ id: cupMat.id, name: cupMat.name, qty: cQty, unit: 'each', unitCost: cupMat.cost, total: cCost, category: 'Hardware' });
+          }
+          if (braceMat) {
+            const brQty = terminalCount;
+            const brCost = brQty * braceMat.cost;
+            runFenceMaterialCost += brCost;
+            runItems.push({ id: braceMat.id, name: braceMat.name, qty: brQty, unit: 'each', unitCost: braceMat.cost, total: brCost, category: 'Hardware' });
+          }
+        }
+      } else {
+        // Tension Wire
+        const tensionMat = materials.find(m => m.id === 'cl-tension-wire');
+        if (tensionMat) {
+          const tensionCost = runLF * tensionMat.cost;
+          runFenceMaterialCost += tensionCost;
+          runItems.push({
+            id: tensionMat.id,
+            name: tensionMat.name,
+            qty: runLF,
+            unit: tensionMat.unit,
+            unitCost: tensionMat.cost,
+            total: tensionCost,
+            category: 'Hardware'
+          });
+        }
+      }
+
+      // Chain Link Ties
+      const tieMat = materials.find(m => m.id === 'h-cl-tie');
+      if (tieMat) {
+        const tieQty = Math.ceil(runLF / 50);
+        const tieCost = tieQty * tieMat.cost;
+        runFenceMaterialCost += tieCost;
+        runItems.push({ id: tieMat.id, name: tieMat.name, qty: tieQty, unit: 'box', unitCost: tieMat.cost, total: tieCost, category: 'Hardware' });
+      }
+
+      skipGenericInfill = true;
     } else {
       panelQty = Math.ceil((netLF / 8) * wasteFactor);
       if (runStyle.type === 'Metal') {
@@ -1291,6 +1409,9 @@ export function calculateDetailedTakeOff(
       runLaborRate = (run.ironInstallType === 'Weld up') ? laborRates.ironWeldUp : laborRates.ironBoltUp;
     } else if (runStyle.type === 'Chain Link') {
       runLaborRate = laborRates.chainLink;
+      if (run.hasBottomRail) {
+        runLaborRate += 1;
+      }
     } else {
       runLaborRate = laborRates.pipeFence;
     }
@@ -1393,6 +1514,8 @@ export function calculateDetailedTakeOff(
       woodType: run.woodType || estimate.woodType,
       stainSides: run.stainSides,
       picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : (run.visualStyleId === 'w-side' ? 'Side by Side' : run.visualStyleId),
+      chainLinkGrade: run.chainLinkGrade || (runStyle.type === 'Chain Link' ? 'Residential' : undefined),
+      hasBottomRail: run.hasBottomRail,
       items: runItems,
       fenceMaterialCost: runFenceMaterialCost,
       fenceLaborCost: runFenceLaborCost,
