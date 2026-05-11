@@ -1183,6 +1183,12 @@ export default function Estimator({
                                         const newRuns = [...estimate.runs!];
                                         newRuns[idx].gateDetails![gIdx].type = gType as 'Single' | 'Double';
                                         newRuns[idx].gateDetails![gIdx].width = Number(gWidth);
+                                        
+                                        // Default construction for Wrought Iron based on width
+                                        if (runStyle.type === 'Metal') {
+                                          newRuns[idx].gateDetails![gIdx].construction = Number(gWidth) === 4 ? 'Pre-made' : 'Welded';
+                                        }
+                                        
                                         setEstimate({ ...estimate, runs: newRuns });
                                       }}
                                       className="bg-transparent text-[10px] font-black uppercase text-american-blue focus:outline-none cursor-pointer"
@@ -1194,7 +1200,12 @@ export default function Estimator({
                                       ) : (
                                         <>
                                           <option value="Single-4">4' Walk Gate</option>
+                                          <option value="Single-5">5' Walk Gate</option>
+                                          <option value="Single-6">6' Walk Gate</option>
+                                          <option value="Single-8">8' Walk Gate</option>
+                                          <option value="Double-10">Double 5' Drive Gate</option>
                                           <option value="Double-12">Double 6' Drive Gate</option>
+                                          <option value="Double-16">Double 8' Drive Gate</option>
                                         </>
                                       )}
                                     </select>

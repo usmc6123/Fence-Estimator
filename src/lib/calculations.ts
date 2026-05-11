@@ -186,6 +186,11 @@ export function calculateDetailedTakeOff(
 
   const wasteFactor = 1 + (estimate.wastePercentage === undefined ? 10 : estimate.wastePercentage) / 100;
 
+  // New Concrete Logic: Total LF determines standard concrete type
+  const totalProjectLF = runs.reduce((sum, r) => sum + r.linearFeet, 0);
+  const autoConcreteType = totalProjectLF < 250 ? 'Quickset' : 'Maximizer';
+  const effectiveConcreteType = estimate.concreteType || autoConcreteType;
+
   const allPipeSegments: number[] = [];
   
   // Pass 1: Collect Wire and Paint Needs for Pipe Fences to calculate global roll aggregation
@@ -512,22 +517,53 @@ export function calculateDetailedTakeOff(
             }
           } else if (runStyle.type === 'Metal') {
             // Metal Gate
-            const gateMat = materials.find(m => m.category === 'Gate' && m.id === estimate.gateStyleId) || materials.find(m => m.category === 'Gate');
-            if (gateMat) {
-              items.push({
-                id: gateMat.id,
-                name: `${gateMat.name} (${width}')`,
-                qty: 1,
-                unit: gateMat.unit,
-                unitCost: gateMat.cost,
-                priceSource: gateMat.priceSource,
-                total: gateMat.cost,
-                category: 'Gate'
-              });
+            const isPreMade = gate.construction === 'Pre-made' || (width === 4 && gate.construction === undefined);
+            
+            if (isPreMade) {
+              const preMadeMat = materials.find(m => m.id === 'm-gate-4-pre');
+              if (preMadeMat) {
+                items.push({
+                  id: preMadeMat.id,
+                  name: preMadeMat.name,
+                  qty: 1,
+                  unit: preMadeMat.unit,
+                  unitCost: preMadeMat.cost,
+                  priceSource: preMadeMat.priceSource,
+                  total: preMadeMat.cost,
+                  category: 'Gate'
+                });
+              }
+            } else {
+              // Custom Welded Gate: 1 panel + (2) 1.5" x 6' gate ends
+              const panelMat = materials.find(m => m.category === 'Metal' && m.id.includes(`panel-${run.height}x8`)) || materials.find(m => m.category === 'Metal' && m.id.includes('panel-4x8'));
+              const gateEndMat = materials.find(m => m.id === 'm-gate-end-6');
+              
+              if (panelMat) {
+                items.push({
+                  id: panelMat.id,
+                  name: `${panelMat.name} (For Gate Frame)`,
+                  qty: 1,
+                  unit: 'each',
+                  unitCost: panelMat.cost,
+                  total: panelMat.cost,
+                  category: 'Structure'
+                });
+              }
+              if (gateEndMat) {
+                items.push({
+                  id: gateEndMat.id,
+                  name: gateEndMat.name,
+                  qty: 2,
+                  unit: 'each',
+                  unitCost: gateEndMat.cost,
+                  total: 2 * gateEndMat.cost,
+                  category: 'Structure'
+                });
+              }
             }
 
-            // J-Bolt Hinges
-            const hingeMat = materials.find(m => m.id === 'g-hinge-jbolt');
+            // Regular Barrel Hinges (Standard for all WI gates)
+            const hingeMat = materials.find(m => m.id === 'h-barrel-hinge');
             if (hingeMat) {
               items.push({
                 id: hingeMat.id,
@@ -866,7 +902,7 @@ export function calculateDetailedTakeOff(
       }
 
       // Concrete Calculation
-      const runConcreteType = run.concreteType || estimate.concreteType || 'Maximizer';
+      const runConcreteType = run.concreteType || effectiveConcreteType || 'Maximizer';
       const is8ftWood = runStyle.type === 'Wood' && run.height === 8;
       
       let bagsPerPost = 0.7; // Standard fallthrough
