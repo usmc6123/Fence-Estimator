@@ -70,6 +70,13 @@ service cloud.firestore {
         && data.cost is number;
     }
 
+    function isValidExpense(data) {
+      return data.companyId == 'lonestarfence'
+        && data.amount is number
+        && data.date is string
+        && data.description is string;
+    }
+
     function isValidSettings(data) {
       return data.id is string
         && (data.ghlWebhookUrl == null || data.ghlWebhookUrl is string);
@@ -81,6 +88,13 @@ service cloud.firestore {
       allow get, list: if isCompanyMember();
       allow create, update: if isCompanyMember() && isValidSettings(incoming());
       allow delete: if isCompanyMember();
+    }
+
+    match /expenses/{expenseId} {
+      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow create:    if isSignedIn() && isValidExpense(incoming());
+      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidExpense(incoming());
+      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
 
     match /estimates/{estimateId} {

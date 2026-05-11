@@ -466,6 +466,11 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
 
   const handleSave = async () => {
     if (!user) return;
+    if (!newExp.description || !newExp.amount || Number(newExp.amount) <= 0) {
+      alert("Please provide a description and a valid amount.");
+      return;
+    }
+
     try {
       await addDoc(collection(db, 'expenses'), {
         ...newExp,
