@@ -43,6 +43,8 @@ export interface RunTakeOff {
   picketStyle?: string;
   chainLinkGrade?: string;
   hasBottomRail?: boolean;
+  ironInstallType?: string;
+  ironPanelType?: string;
   items: TakeOffItem[];
   pipeCuttingGuide?: PipeCuttingGuide;
   fenceMaterialCost: number;
@@ -1665,6 +1667,8 @@ export function calculateDetailedTakeOff(
       picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : (run.visualStyleId === 'w-side' ? 'Side by Side' : run.visualStyleId),
       chainLinkGrade: run.chainLinkGrade || (runStyle.type === 'Chain Link' ? 'Residential' : undefined),
       hasBottomRail: run.hasBottomRail,
+      ironInstallType: run.ironInstallType || estimate.ironInstallType,
+      ironPanelType: run.ironPanelType || estimate.ironPanelType,
       items: runItems,
       fenceMaterialCost: runFenceMaterialCost,
       fenceLaborCost: runFenceLaborCost,

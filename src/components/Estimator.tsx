@@ -539,16 +539,29 @@ export default function Estimator({
                   )}
 
                   {defaultStyle.type === 'Metal' && (
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Install Type</label>
-                       <select 
-                         value={estimate.ironInstallType}
-                         onChange={(e) => setEstimate({...estimate, ironInstallType: e.target.value as any})}
-                         className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
-                       >
-                         <option value="Bolt up">Bolt up</option>
-                         <option value="Weld up">Weld up</option>
-                       </select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Install Type</label>
+                         <select 
+                           value={estimate.ironInstallType}
+                           onChange={(e) => setEstimate({...estimate, ironInstallType: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Bolt up">Bolt up</option>
+                           <option value="Weld up">Weld up</option>
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Panel Type</label>
+                         <select 
+                           value={estimate.ironPanelType}
+                           onChange={(e) => setEstimate({...estimate, ironPanelType: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Fixed">Fixed</option>
+                           <option value="Racking">Racking</option>
+                         </select>
+                      </div>
                     </div>
                   )}
                </div>
@@ -567,7 +580,8 @@ export default function Estimator({
                         woodType: estimate.woodType,
                         ironRails: estimate.ironRails,
                         ironTop: estimate.ironTop,
-                        ironInstallType: estimate.ironInstallType
+                        ironInstallType: estimate.ironInstallType,
+                        ironPanelType: estimate.ironPanelType
                       }));
                       setEstimate({...estimate, runs: newRuns});
                     }}
@@ -659,7 +673,8 @@ export default function Estimator({
                           color: estimate.defaultColor!,
                           isPreStained: estimate.isPreStained,
                           hasRotBoard: estimate.hasRotBoard,
-                          ironInstallType: estimate.ironInstallType
+                          ironInstallType: estimate.ironInstallType,
+                          ironPanelType: estimate.ironPanelType
                         };
                         setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
                       }}
@@ -854,6 +869,21 @@ export default function Estimator({
                                   >
                                     <option value="Bolt up">Bolt up</option>
                                     <option value="Weld up">Weld up</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Panel</label>
+                                  <select 
+                                    value={run.ironPanelType || estimate.ironPanelType}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].ironPanelType = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                  >
+                                    <option value="Fixed">Fixed</option>
+                                    <option value="Racking">Racking</option>
                                   </select>
                                 </div>
                                 <div className="space-y-2">

@@ -113,7 +113,9 @@ export default function CustomerContract({
         hasRotBoard: run.hasRotBoard,
         hasTopCap: run.hasTopCap,
         hasTrim: run.hasTrim,
-        picketStyle: run.picketStyle
+        picketStyle: run.picketStyle,
+        ironInstallType: run.ironInstallType,
+        ironPanelType: run.ironPanelType
       };
     });
   }, [data.runs, markupFactor, taxFactor]);
@@ -168,6 +170,10 @@ export default function CustomerContract({
         r.hasTopCap === projectBreakdown[0].hasTopCap &&
         r.hasTrim === projectBreakdown[0].hasTrim &&
         r.picketStyle === projectBreakdown[0].picketStyle
+      )) &&
+      (r.style !== 'Wrought Iron' || (
+        r.ironInstallType === projectBreakdown[0].ironInstallType &&
+        r.ironPanelType === projectBreakdown[0].ironPanelType
       ));
   });
 
@@ -507,7 +513,17 @@ export default function CustomerContract({
                           Project-Wide Rate
                         </div>
                         <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h4>
-                        <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">{projectBreakdown[0].height}' {projectBreakdown[0].style} Specification</p>
+                        <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">
+                          {projectBreakdown[0].height}' {projectBreakdown[0].style} Specification
+                          {projectBreakdown[0].style.includes('Iron') && (
+                            <>
+                              <span className="mx-2">•</span>
+                              {projectBreakdown[0].ironInstallType}
+                              <span className="mx-2">•</span>
+                              {projectBreakdown[0].ironPanelType} Panels
+                            </>
+                          )}
+                        </p>
                       </div>
 
                       <div className="text-center md:text-right relative z-10">
@@ -537,7 +553,17 @@ export default function CustomerContract({
                           <div className="flex justify-between items-start mb-2">
                             <div>
                               <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
-                              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.style} {run.height}'</p>
+                              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
+                                {run.style} {run.height}'
+                                {run.style.includes('Iron') && (
+                                  <>
+                                    <span className="mx-1">•</span>
+                                    {run.ironInstallType}
+                                    <span className="mx-1">•</span>
+                                    {run.ironPanelType}
+                                  </>
+                                )}
+                              </p>
                             </div>
                             <div className="text-right">
                               <p className="text-xs font-black text-american-red">

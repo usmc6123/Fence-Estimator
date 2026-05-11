@@ -90,6 +90,7 @@ export default function LaborTakeOff({
           Run: ${run.runName}
           Length: ${run.linearFeet} LF
           Style: ${run.styleName} ${isWood ? `- ${run.picketStyle} orientation` : ''}
+          ${run.styleName.includes('Iron') ? `Install: ${run.ironInstallType}\n          Panel Type: ${run.ironPanelType}` : ''}
           Height: ${run.height}'
           ${isWood ? `Rails: ${run.railCount}
           Rot Board: ${run.hasRotBoard ? 'Included' : 'None'}
@@ -319,7 +320,9 @@ export default function LaborTakeOff({
                               {item.name.includes('Installation') && (
                                 <>
                                   <span className="block mb-1 text-american-blue/80 font-bold underline">
-                                    Project Specs: {run.height}' Tall {run.styleName} {(run.styleName.includes('Wood') || run.styleName.includes('Cedar')) ? `(${run.picketStyle})` : ''}
+                                    Project Specs: {run.height}' Tall {run.styleName} 
+                                    {(run.styleName.includes('Wood') || run.styleName.includes('Cedar')) ? `(${run.picketStyle})` : ''}
+                                    {run.styleName.includes('Iron') && ` (${run.ironInstallType} • ${run.ironPanelType} Panels)`}
                                   </span>
                                   Includes: Layout, utility marking verification, digging to spec ({run.height === 8 ? '36"' : '24"'} min depth x 8" min width), post setting in wet concrete, {run.styleName.includes('Pipe') ? 'top rail installation' : (run.railCount > 0 ? `${run.railCount}x horizontal rail installation,` : '')} and {run.styleName.includes('Wood') ? 'picket' : (run.styleName.includes('Pipe') ? 'top rail' : 'panel')} attachment. 
                                   {run.picketStyle === 'Board on Board' && run.styleName.includes('Wood') && <span className="text-american-red font-bold">⚠️ BOARD ON BOARD: Pickets in the back layer MUST HAVE EXACTLY 3.5" SPACING between them. Front layer pickets must be centered over the gaps.</span>}

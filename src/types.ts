@@ -73,6 +73,7 @@ export interface FenceRun {
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
+  ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   chainLinkGrade?: 'Residential' | 'Commercial';
   hasBottomRail?: boolean;
@@ -175,6 +176,7 @@ export interface Estimate {
   ironRails?: '2 rail' | '3 rail';
   ironTop?: 'Flat top' | 'Pressed point top';
   ironInstallType?: 'Bolt up' | 'Weld up';
+  ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   defaultChainLinkGrade?: 'Residential' | 'Commercial';
   defaultHasBottomRail?: boolean;
