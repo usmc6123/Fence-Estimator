@@ -17,12 +17,13 @@ import {
   MoreVertical,
   Link as LinkIcon,
   X,
-  ChevronLeft
+  ChevronLeft,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { SavedEstimate, JobExpense, JobStatus } from '../../types';
-import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, storage } from '../../lib/firebase';
 import { 
   collection, 
   query, 
@@ -36,7 +37,9 @@ import {
   orderBy,
   serverTimestamp
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { User } from 'firebase/auth';
+import { analyzeReceiptDocument } from '../../services/geminiService';
 
 interface FinancialsProps {
   savedEstimates: SavedEstimate[];
@@ -405,11 +408,61 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
     amount: '',
     category: 'Material' as 'Material' | 'Labor' | 'Other',
     estimateId: initialJobId || '',
-    materialId: ''
+    materialId: '',
+    receiptUrl: ''
   });
   const [isUploading, setIsUploading] = React.useState(false);
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const handleFileUpload = async (file: File) => {
+    if (!user) return;
+    setIsUploading(true);
+    setIsAnalyzing(true);
+
+    try {
+      // 1. Upload to Storage
+      const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}-${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+      // 2. Base64 for Gemini
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+      });
+      reader.readAsDataURL(file);
+      const base64Data = await base64Promise;
+
+      // 3. AI Extraction
+      const extracted = await analyzeReceiptDocument(base64Data, file.type);
+      
+      setNewExp(prev => ({
+        ...prev,
+        description: extracted.merchantName + (extracted.description ? ` - ${extracted.description}` : ''),
+        amount: extracted.amount.toString(),
+        category: extracted.category as 'Material' | 'Labor' | 'Other',
+        date: extracted.date ? (extracted.date.includes('T') ? extracted.date.split('T')[0] : extracted.date) : prev.date,
+        receiptUrl: downloadUrl
+      }));
+    } catch (err) {
+      console.error("AI Analysis failed:", err);
+      // Fallback: just keep the upload URL if we have it
+    } finally {
+      setIsUploading(false);
+      setIsAnalyzing(false);
+    }
+  };
+
+  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -515,18 +568,64 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
           {/* Receipt Upload Zone */}
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#999999]">Attach Receipt (Drag & Drop)</label>
+            <input 
+              type="file" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={onFileSelect} 
+              accept="image/*,.pdf"
+            />
             <div 
               className={cn(
-                "border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center transition-all cursor-pointer",
-                isUploading ? "bg-american-blue/5 border-american-blue" : "bg-[#FBFBFB] border-american-blue/10 hover:border-american-blue/30"
+                "border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden",
+                (isUploading || isAnalyzing) ? "bg-american-blue/5 border-american-blue" : "bg-[#FBFBFB] border-american-blue/10 hover:border-american-blue/30"
               )}
-              onDragOver={(e) => { e.preventDefault(); setIsUploading(true); }}
-              onDragLeave={() => setIsUploading(false)}
-              onDrop={(e) => { e.preventDefault(); setIsUploading(false); /* Handle file drop */ }}
-              onClick={() => { /* Handle file select click */ }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFileUpload(file);
+              }}
+              onClick={() => fileInputRef.current?.click()}
             >
-              <Download size={24} className="text-american-blue/40 mb-2" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Click or drag receipt file</p>
+              {(isUploading || isAnalyzing) ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex gap-1">
+                    <motion.div 
+                      animate={{ scale: [1, 1.2, 1] }} 
+                      transition={{ repeat: Infinity, duration: 1 }}
+                      className="w-2 h-2 rounded-full bg-american-blue" 
+                    />
+                    <motion.div 
+                      animate={{ scale: [1, 1.2, 1] }} 
+                      transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
+                      className="w-2 h-2 rounded-full bg-american-blue" 
+                    />
+                    <motion.div 
+                      animate={{ scale: [1, 1.2, 1] }} 
+                      transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
+                      className="w-2 h-2 rounded-full bg-american-blue" 
+                    />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-american-blue">
+                    {isUploading ? "Uploading..." : "AI Intelligence Analyzing..."}
+                  </p>
+                </div>
+              ) : newExp.receiptUrl ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="p-2 bg-emerald-500 rounded-lg text-white">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Receipt Attached</p>
+                  <p className="text-[8px] text-[#999999] truncate max-w-full italic">Click to replace</p>
+                </div>
+              ) : (
+                <>
+                  <Download size={24} className="text-american-blue/40 mb-2" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Click or drag receipt file</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -585,9 +684,17 @@ function TransactionsView({ transactions, savedEstimates, onLink }: { transactio
                       <ArrowDownLeft size={16} />
                     </div>
                     <div>
-                      <p className="text-sm font-black text-american-blue uppercase tracking-tight">
-                        {txn.description}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-black text-american-blue uppercase tracking-tight">
+                          {txn.description}
+                        </p>
+                        {txn.receiptUrl && (
+                          <div className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-1">
+                            <Receipt size={8} />
+                            Receipt
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -617,11 +724,31 @@ function TransactionsView({ transactions, savedEstimates, onLink }: { transactio
                 </td>
                 <td className="px-6 py-6 text-center">
                   <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2 hover:bg-american-blue/5 rounded-lg text-american-blue transition-colors" title="View Receipt">
-                      <Receipt size={16} />
-                    </button>
-                    <button className="p-2 hover:bg-american-blue/5 rounded-lg text-american-red transition-colors" title="Delete Expense">
-                       <X size={16} onClick={async () => await deleteDoc(doc(db, 'expenses', txn.id))} />
+                    {txn.receiptUrl ? (
+                      <a 
+                        href={txn.receiptUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-american-blue/5 rounded-lg text-emerald-600 transition-colors" 
+                        title="View Receipt"
+                      >
+                        <Receipt size={16} />
+                      </a>
+                    ) : (
+                      <button className="p-2 text-[#CCCCCC] cursor-not-allowed" disabled>
+                        <Receipt size={16} />
+                      </button>
+                    )}
+                    <button 
+                      onClick={async () => {
+                        if (window.confirm("Delete this expense record?")) {
+                          await deleteDoc(doc(db, 'expenses', txn.id));
+                        }
+                      }}
+                      className="p-2 hover:bg-american-blue/5 rounded-lg text-american-red transition-colors" 
+                      title="Delete Expense"
+                    >
+                       <X size={16} />
                     </button>
                   </div>
                 </td>

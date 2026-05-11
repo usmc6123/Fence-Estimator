@@ -84,3 +84,49 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
     throw new Error("Failed to analyze quote document. Please ensure it is a clear image or PDF.");
   }
 }
+
+export async function analyzeReceiptDocument(fileData: string, mimeType: string): Promise<{ merchantName: string, date: string, amount: number, category: string, description: string }> {
+  try {
+    const ai = getGenAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          inlineData: {
+            data: fileData,
+            mimeType: mimeType,
+          },
+        },
+        {
+          text: "Extract the merchant name, date, total amount, implied category (Material, Labor, or Other), and a brief description from this receipt/invoice. Return the data in a structured JSON format.",
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            merchantName: { type: Type.STRING },
+            date: { type: Type.STRING, description: "ISO 8601 format if possible" },
+            amount: { type: Type.NUMBER },
+            category: { 
+              type: Type.STRING, 
+              enum: ["Material", "Labor", "Other"],
+              description: "Categorize as Material, Labor, or Other based on the items"
+            },
+            description: { type: Type.STRING },
+          },
+          required: ["merchantName", "amount", "category", "description"],
+        },
+      },
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    if (error instanceof Error && error.message === "GEMINI_API_KEY_MISSING") {
+      throw error;
+    }
+    console.error("Error analyzing receipt:", error);
+    throw new Error("Failed to analyze receipt. Please ensure it is a clear image or PDF.");
+  }
+}
