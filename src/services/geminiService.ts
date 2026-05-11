@@ -98,7 +98,14 @@ export async function analyzeReceiptDocument(fileData: string, mimeType: string)
           },
         },
         {
-          text: "Extract the merchant name, date, total amount, implied category (Material, Labor, or Other), and a brief description from this receipt/invoice. Return the data in a structured JSON format.",
+          text: "You are an expert financial analyst. Analyze this receipt or invoice with high precision. \n" +
+                "Extract the following:\n" +
+                "1. Merchant/Supplier Name.\n" +
+                "2. The exact Date of the transaction (use ISO format YYYY-MM-DD).\n" +
+                "3. The Grand Total Amount (as a number).\n" +
+                "4. Categorize the expense as 'Material', 'Labor', or 'Other' based on the line items.\n" +
+                "5. Provide a concise but detailed description summarizing the items purchased.\n\n" +
+                "Return the data in a structured JSON format.",
         },
       ],
       config: {

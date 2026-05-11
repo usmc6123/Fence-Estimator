@@ -104,6 +104,7 @@ export interface LaborRates {
   gateWoodWalk: number;
   gateWoodDrive: number;
   gateHangPreMade: number;
+  deliveryFee: number;
 }
 
 export interface QuoteItem {
@@ -224,6 +225,7 @@ export interface Estimate {
 
   // Supplier Quotes
   quotes?: SupplierQuote[];
+  customLaborItems?: { id: string; name: string; cost: number }[];
 }
 
 export interface SavedEstimate extends Estimate {

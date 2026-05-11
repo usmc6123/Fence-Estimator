@@ -1778,6 +1778,35 @@ export function calculateDetailedTakeOff(
 
   const allItems = [...calculatedSummary, ...manualSummary];
 
+  // Add delivery fee as labor item
+  const deliveryFee = estimate.deliveryFee ?? laborRates.deliveryFee ?? 50;
+  if (deliveryFee > 0) {
+    allItems.push({
+      id: 'labor-delivery',
+      name: 'Delivery Fee',
+      qty: 1,
+      unit: 'job',
+      unitCost: deliveryFee,
+      total: deliveryFee,
+      category: 'Labor'
+    });
+  }
+
+  // Add custom labor items
+  if (estimate.customLaborItems) {
+    estimate.customLaborItems.forEach(item => {
+      allItems.push({
+        id: item.id,
+        name: item.name,
+        qty: 1,
+        unit: 'each',
+        unitCost: item.cost,
+        total: item.cost,
+        category: 'Labor'
+      });
+    });
+  }
+
   // Re-calculate totals based on ALL items
   totalMaterial = allItems.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
   totalLabor = allItems.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
@@ -1787,11 +1816,12 @@ export function calculateDetailedTakeOff(
   const subtotal = totalMaterial + totalLabor + totalDemo + totalPrep;
   const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
   const tax = totalMaterial * ((estimate.taxPercentage || 0) / 100);
-  const deliveryFee = estimate.deliveryFee ?? 50;
-  const grandTotal = subtotal + markup + tax + deliveryFee;
+  
+  // deliveryFee is now included in totalLabor and subtotal
+  const grandTotal = subtotal + markup + tax;
 
   return {
-    summary: calculatedSummary,
+    summary: allItems.filter(i => !manualSummary.find(m => m.id === i.id)), // filter back to calculated
     manualSummary: manualSummary,
     runs: detailedRuns,
     pipeCuttingSummary,

@@ -56,6 +56,7 @@ export default function Estimator({
   const [leftTab, setLeftTab] = React.useState<'Dimensions' | 'Styles'>('Dimensions');
 
   const [showGhlSync, setShowGhlSync] = React.useState(false);
+  const [newCustomLabor, setNewCustomLabor] = React.useState({ name: '', cost: 0 });
 
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
@@ -565,7 +566,8 @@ export default function Estimator({
                         color: estimate.defaultColor!,
                         woodType: estimate.woodType,
                         ironRails: estimate.ironRails,
-                        ironTop: estimate.ironTop
+                        ironTop: estimate.ironTop,
+                        ironInstallType: estimate.ironInstallType
                       }));
                       setEstimate({...estimate, runs: newRuns});
                     }}
@@ -656,7 +658,8 @@ export default function Estimator({
                           height: estimate.defaultHeight!,
                           color: estimate.defaultColor!,
                           isPreStained: estimate.isPreStained,
-                          hasRotBoard: estimate.hasRotBoard
+                          hasRotBoard: estimate.hasRotBoard,
+                          ironInstallType: estimate.ironInstallType
                         };
                         setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
                       }}
@@ -1434,7 +1437,7 @@ export default function Estimator({
 
                   <div className="space-y-2 pt-2 border-t border-white/10">
                     <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-white/60">
-                      <label>Delivery Fee</label>
+                      <label>Delivery Fee (Labor)</label>
                       <span>{formatCurrency(estimate.deliveryFee ?? 50)}</span>
                     </div>
                     <div className="relative">
@@ -1447,6 +1450,7 @@ export default function Estimator({
                         placeholder="50"
                       />
                     </div>
+                    <p className="text-[9px] text-white/40 italic">Move to labor breakdown and applied to profit markup.</p>
                   </div>
                 </div>
 
@@ -1461,6 +1465,102 @@ export default function Estimator({
                       {defaultStyle.type === 'Wood' ? '2-3/8" Round' : `${estimate.postWidth}" x ${estimate.postThickness}"`}
                     </p>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Labor Manifest */}
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-blue/5">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-12 w-12 rounded-2xl bg-american-blue/10 flex items-center justify-center text-american-blue">
+                  <Plus size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Custom Labor Manifest</h3>
+                  <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Adjustments for unique site situations</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end bg-[#F9F9FB] p-6 rounded-2xl border border-[#F0F0F0]">
+                  <div className="sm:col-span-7 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Labor Item Name / Situation</label>
+                    <input 
+                      type="text" 
+                      value={newCustomLabor.name}
+                      onChange={(e) => setNewCustomLabor({ ...newCustomLabor, name: e.target.value })}
+                      placeholder="e.g., Hidden concrete removal, Grade adjustments"
+                      className="w-full rounded-xl border border-[#E5E5E5] bg-white px-4 py-3 text-xs font-bold focus:border-american-blue outline-none transition-all"
+                    />
+                  </div>
+                  <div className="sm:col-span-3 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Flat Cost ($)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#BBBBBB] font-bold">$</span>
+                      <input 
+                        type="number" 
+                        value={newCustomLabor.cost || ''}
+                        onChange={(e) => setNewCustomLabor({ ...newCustomLabor, cost: Number(e.target.value) })}
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-white pl-7 pr-4 py-3 text-xs font-bold focus:border-american-blue outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button 
+                      onClick={() => {
+                        if (!newCustomLabor.name || newCustomLabor.cost <= 0) return;
+                        const item = {
+                          id: `custom-labor-${Math.random().toString(36).substr(2, 9)}`,
+                          ...newCustomLabor
+                        };
+                        setEstimate({
+                          ...estimate,
+                          customLaborItems: [...(estimate.customLaborItems || []), item]
+                        });
+                        setNewCustomLabor({ name: '', cost: 0 });
+                      }}
+                      className="w-full h-[46px] rounded-xl bg-american-blue text-white text-[10px] font-black uppercase tracking-widest hover:bg-american-blue/90 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={14} />
+                      Add Item
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {estimate.customLaborItems?.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between p-4 rounded-xl border border-[#F0F0F0] bg-white hover:border-american-blue/20 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                          <CheckCircle2 size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-american-blue uppercase tracking-tight">{item.name}</p>
+                          <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Custom Situation Labor</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-black text-american-blue">{formatCurrency(item.cost)}</span>
+                        <button 
+                          onClick={() => {
+                            setEstimate({
+                              ...estimate,
+                              customLaborItems: estimate.customLaborItems?.filter(i => i.id !== item.id)
+                            });
+                          }}
+                          className="p-2 text-[#CCCCCC] hover:text-american-red transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(!estimate.customLaborItems || estimate.customLaborItems.length === 0) && (
+                    <div className="text-center py-6 border-2 border-dashed border-[#F0F0F0] rounded-2xl">
+                      <p className="text-[10px] font-bold text-[#CCCCCC] uppercase tracking-widest">No custom labor items added yet.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1539,7 +1639,7 @@ export default function Estimator({
                 <div className="space-y-6 md:col-span-2 pt-6 border-t border-dashed border-american-blue/10">
                   <div className="flex justify-between items-center">
                     <div className="space-y-1">
-                      <label className="text-xs font-black uppercase tracking-widest text-american-blue">Logistics Delivery Fee</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-american-blue">Logistics Delivery Fee (Labor)</label>
                       <p className="text-[10px] text-[#999999] font-bold">Standard charge for site material mobilization</p>
                     </div>
                     <div className="relative">
@@ -1757,11 +1857,7 @@ export default function Estimator({
                 <span className="text-[#999999]">Tax (Materials Only)</span>
                 <span className="font-mono">{formatCurrency(results.tax)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Delivery Fee</span>
-                <span className="font-mono">{formatCurrency(estimate.deliveryFee ?? 50)}</span>
-              </div>
-              
+               
               <div className="flex justify-between pt-4 mt-4 border-t border-white/10 text-american-red font-black">
                 <span className="text-[10px] uppercase tracking-widest">Overall Price Per Foot</span>
                 <span className="text-lg tabular-nums">{formatCurrency(results.overallPricePerFoot)}/ft</span>

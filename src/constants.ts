@@ -290,6 +290,7 @@ export const DEFAULT_LABOR_RATES = {
   gateWoodWalk: 100,
   gateWoodDrive: 150,
   gateHangPreMade: 50,
+  deliveryFee: 50,
 };
 
 export const FENCE_STYLES: FenceStyle[] = [

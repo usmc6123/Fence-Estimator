@@ -413,6 +413,7 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
   });
   const [isUploading, setIsUploading] = React.useState(false);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -425,24 +426,18 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
     setIsUploading(true);
     setIsAnalyzing(true);
 
-    let downloadUrl = '';
-
     try {
-      // 1. Convert to Base64 first (doesn't depend on external storage)
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
+      // 1. Convert to Base64 first
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
         reader.onload = () => {
           if (typeof reader.result === 'string') {
-            const base64 = reader.result.split(',')[1];
-            resolve(base64);
-          } else {
-            reject(new Error("Failed to read file as string"));
-          }
+            resolve(reader.result.split(',')[1]);
+          } else reject(new Error("Failed to read file"));
         };
-        reader.onerror = () => reject(new Error("FileReader error"));
+        reader.onerror = () => reject(new Error("Reader error"));
+        reader.readAsDataURL(file);
       });
-      reader.readAsDataURL(file);
-      const base64Data = await base64Promise;
 
       // 2. AI Extraction
       try {
@@ -451,37 +446,24 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
           ...prev,
           description: extracted.merchantName + (extracted.description ? ` - ${extracted.description}` : ''),
           amount: extracted.amount.toString(),
-          category: extracted.category as 'Material' | 'Labor' | 'Other',
+          category: extracted.category as any,
           date: extracted.date ? (extracted.date.includes('T') ? extracted.date.split('T')[0] : extracted.date) : prev.date
         }));
       } catch (aiErr: any) {
         console.error("AI Analysis failed:", aiErr);
-        if (aiErr.message === "GEMINI_API_KEY_MISSING") {
-          alert("Gemini API Key is missing. AI analysis disabled.");
-        } else {
-          alert("AI Analysis failed to read the receipt. You can still enter details manually.");
-        }
+        alert(aiErr.message === "GEMINI_API_KEY_MISSING" ? "Gemini API Key missing." : "AI could not read receipt details.");
       } finally {
         setIsAnalyzing(false);
       }
 
-      // 3. Upload to Storage (optional for the data part, but good for saving)
-      try {
-        const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}-${file.name}`);
-        const uploadResult = await uploadBytes(storageRef, file);
-        downloadUrl = await getDownloadURL(uploadResult.ref);
-        
-        setNewExp(prev => ({
-          ...prev,
-          receiptUrl: downloadUrl
-        }));
-      } catch (storageErr) {
-        console.error("Firebase Storage upload failed:", storageErr);
-        alert("Could not upload receipt file to storage, but data was extracted if AI was successful.");
-      }
+      // 3. Upload file
+      const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(uploadResult.ref);
+      setNewExp(prev => ({ ...prev, receiptUrl: downloadUrl, receiptName: file.name }));
 
     } catch (err) {
-      console.error("General upload error:", err);
+      console.error("Upload error:", err);
       alert("An error occurred during file processing.");
     } finally {
       setIsUploading(false);
@@ -495,12 +477,13 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || isSaving) return;
     if (!newExp.description || !newExp.amount || Number(newExp.amount) <= 0) {
       alert("Please provide a description and a valid amount.");
       return;
     }
 
+    setIsSaving(true);
     try {
       await addDoc(collection(db, 'expenses'), {
         ...newExp,
@@ -512,6 +495,8 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
       onClose();
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'expenses');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -666,7 +651,13 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
 
           <div className="pt-4 border-t border-american-blue/5 flex items-center justify-end gap-3">
              <button onClick={onClose} className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-[#999999] hover:bg-american-blue/5 transition-all">Cancel</button>
-             <button onClick={handleSave} className="px-8 py-3 rounded-xl bg-american-red text-white text-xs font-black uppercase tracking-widest hover:bg-american-red/90 transition-all shadow-lg shadow-american-red/20">Record Expense</button>
+             <button 
+               onClick={handleSave} 
+               disabled={isSaving || isUploading || isAnalyzing}
+               className="px-8 py-3 rounded-xl bg-american-red text-white text-xs font-black uppercase tracking-widest hover:bg-american-red/90 transition-all shadow-lg shadow-american-red/20 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {isSaving ? "Saving..." : "Record Expense"}
+             </button>
           </div>
         </div>
       </motion.div>

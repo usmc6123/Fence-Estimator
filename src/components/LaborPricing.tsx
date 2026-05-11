@@ -132,7 +132,8 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
               {[
                 { label: "Top Cap (/FT)", key: "topCap" },
                 { label: "Demo / Haul (/FT)", key: "demo" },
-                { label: "Stain (/SQ FT)", key: "washAndStain" }
+                { label: "Stain (/SQ FT)", key: "washAndStain" },
+                { label: "Delivery Fee ($)", key: "deliveryFee" }
               ].map((item) => (
                 <div key={item.key} className="group space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-[#666666] ml-2 group-hover:text-american-blue transition-colors">
