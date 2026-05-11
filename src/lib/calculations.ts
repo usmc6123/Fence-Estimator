@@ -630,6 +630,7 @@ export function calculateDetailedTakeOff(
           items: gateItems
         });
 
+        const sideCount = gate.type === 'Double' ? 2 : 1;
         let gateLaborAmount = 0;
         let gateLaborName = '';
 
@@ -650,15 +651,16 @@ export function calculateDetailedTakeOff(
           }
         }
 
-        runGateLaborCost += gateLaborAmount;
+        const totalGateLabor = gateLaborAmount * sideCount;
+        runGateLaborCost += totalGateLabor;
         
         gateItems.push({
           id: `labor-gate-${gate.id}`,
           name: gateLaborName,
-          qty: 1,
+          qty: sideCount,
           unit: 'each',
           unitCost: gateLaborAmount,
-          total: gateLaborAmount,
+          total: totalGateLabor,
           category: 'Labor'
         });
 
