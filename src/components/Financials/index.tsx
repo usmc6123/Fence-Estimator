@@ -418,41 +418,71 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
   if (!isOpen) return null;
 
   const handleFileUpload = async (file: File) => {
-    if (!user) return;
+    if (!user) {
+      alert("You must be signed in to upload receipts.");
+      return;
+    }
     setIsUploading(true);
     setIsAnalyzing(true);
 
-    try {
-      // 1. Upload to Storage
-      const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}-${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
+    let downloadUrl = '';
 
-      // 2. Base64 for Gemini
+    try {
+      // 1. Convert to Base64 first (doesn't depend on external storage)
       const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
+      const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          resolve(base64);
+          if (typeof reader.result === 'string') {
+            const base64 = reader.result.split(',')[1];
+            resolve(base64);
+          } else {
+            reject(new Error("Failed to read file as string"));
+          }
         };
+        reader.onerror = () => reject(new Error("FileReader error"));
       });
       reader.readAsDataURL(file);
       const base64Data = await base64Promise;
 
-      // 3. AI Extraction
-      const extracted = await analyzeReceiptDocument(base64Data, file.type);
-      
-      setNewExp(prev => ({
-        ...prev,
-        description: extracted.merchantName + (extracted.description ? ` - ${extracted.description}` : ''),
-        amount: extracted.amount.toString(),
-        category: extracted.category as 'Material' | 'Labor' | 'Other',
-        date: extracted.date ? (extracted.date.includes('T') ? extracted.date.split('T')[0] : extracted.date) : prev.date,
-        receiptUrl: downloadUrl
-      }));
+      // 2. AI Extraction
+      try {
+        const extracted = await analyzeReceiptDocument(base64Data, file.type);
+        setNewExp(prev => ({
+          ...prev,
+          description: extracted.merchantName + (extracted.description ? ` - ${extracted.description}` : ''),
+          amount: extracted.amount.toString(),
+          category: extracted.category as 'Material' | 'Labor' | 'Other',
+          date: extracted.date ? (extracted.date.includes('T') ? extracted.date.split('T')[0] : extracted.date) : prev.date
+        }));
+      } catch (aiErr: any) {
+        console.error("AI Analysis failed:", aiErr);
+        if (aiErr.message === "GEMINI_API_KEY_MISSING") {
+          alert("Gemini API Key is missing. AI analysis disabled.");
+        } else {
+          alert("AI Analysis failed to read the receipt. You can still enter details manually.");
+        }
+      } finally {
+        setIsAnalyzing(false);
+      }
+
+      // 3. Upload to Storage (optional for the data part, but good for saving)
+      try {
+        const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}-${file.name}`);
+        const uploadResult = await uploadBytes(storageRef, file);
+        downloadUrl = await getDownloadURL(uploadResult.ref);
+        
+        setNewExp(prev => ({
+          ...prev,
+          receiptUrl: downloadUrl
+        }));
+      } catch (storageErr) {
+        console.error("Firebase Storage upload failed:", storageErr);
+        alert("Could not upload receipt file to storage, but data was extracted if AI was successful.");
+      }
+
     } catch (err) {
-      console.error("AI Analysis failed:", err);
-      // Fallback: just keep the upload URL if we have it
+      console.error("General upload error:", err);
+      alert("An error occurred during file processing.");
     } finally {
       setIsUploading(false);
       setIsAnalyzing(false);
