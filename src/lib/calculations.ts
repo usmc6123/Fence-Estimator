@@ -517,7 +517,9 @@ export function calculateDetailedTakeOff(
             }
           } else if (runStyle.type === 'Metal') {
             // Metal Gate
-            const isPreMade = gate.construction === 'Pre-made' || (width === 4 && gate.construction === undefined);
+            const sideCount = gate.type === 'Double' ? 2 : 1;
+            const leafWidth = gate.type === 'Double' ? width / 2 : width;
+            const isPreMade = gate.construction === 'Pre-made' || (leafWidth === 4 && gate.construction === undefined);
             
             if (isPreMade) {
               const preMadeMat = materials.find(m => m.id === 'm-gate-4-pre');
@@ -525,16 +527,16 @@ export function calculateDetailedTakeOff(
                 items.push({
                   id: preMadeMat.id,
                   name: preMadeMat.name,
-                  qty: 1,
+                  qty: sideCount,
                   unit: preMadeMat.unit,
                   unitCost: preMadeMat.cost,
                   priceSource: preMadeMat.priceSource,
-                  total: preMadeMat.cost,
+                  total: sideCount * preMadeMat.cost,
                   category: 'Gate'
                 });
               }
             } else {
-              // Custom Welded Gate: 1 panel + (2) 1.5" x 6' gate ends
+              // Custom Welded Gate: 1 panel + (2) 1.5" x 6' gate ends per side
               const panelMat = materials.find(m => m.category === 'Metal' && m.id.includes(`panel-${run.height}x8`)) || materials.find(m => m.category === 'Metal' && m.id.includes('panel-4x8'));
               const gateEndMat = materials.find(m => m.id === 'm-gate-end-6');
               
@@ -542,10 +544,10 @@ export function calculateDetailedTakeOff(
                 items.push({
                   id: panelMat.id,
                   name: `${panelMat.name} (For Gate Frame)`,
-                  qty: 1,
+                  qty: sideCount,
                   unit: 'each',
                   unitCost: panelMat.cost,
-                  total: panelMat.cost,
+                  total: sideCount * panelMat.cost,
                   category: 'Structure'
                 });
               }
@@ -553,10 +555,10 @@ export function calculateDetailedTakeOff(
                 items.push({
                   id: gateEndMat.id,
                   name: gateEndMat.name,
-                  qty: 2,
+                  qty: 2 * sideCount,
                   unit: 'each',
                   unitCost: gateEndMat.cost,
-                  total: 2 * gateEndMat.cost,
+                  total: (2 * sideCount) * gateEndMat.cost,
                   category: 'Structure'
                 });
               }
@@ -568,11 +570,11 @@ export function calculateDetailedTakeOff(
               items.push({
                 id: hingeMat.id,
                 name: hingeMat.name,
-                qty: gate.type === 'Double' ? 2 : 1,
+                qty: sideCount,
                 unit: 'pair',
                 unitCost: hingeMat.cost,
                 priceSource: hingeMat.priceSource,
-                total: (gate.type === 'Double' ? 2 : 1) * hingeMat.cost,
+                total: sideCount * hingeMat.cost,
                 category: 'Hardware'
               });
             }
