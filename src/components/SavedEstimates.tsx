@@ -3,9 +3,9 @@ import {
   FileText, Search, Archive, RotateCcw, Trash2, 
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
-  Shield
+  Shield, Check, Briefcase
 } from 'lucide-react';
-import { SavedEstimate } from '../types';
+import { SavedEstimate, JobStatus } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -81,8 +81,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     try {
       await updateDoc(doc(db, 'estimates', id), {
         status: estimate.status === 'archived' ? 'active' : 'archived',
-        lastModified: new Date().toISOString(),
-        companyId: 'lonestarfence'
+        lastModified: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    }
+  };
+
+  const acceptJob = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      await updateDoc(doc(db, 'estimates', id), {
+        jobStatus: 'Accepted',
+        status: 'active', // Ensure it's not archived
+        lastModified: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
@@ -152,11 +167,18 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               )}
             >
               {/* Status Badge */}
-              <div className={cn(
-                "absolute top-4 right-4 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-                estimate.status === 'active' ? "bg-american-blue/10 text-american-blue" : "bg-[#999999]/10 text-[#999999]"
-              )}>
-                {estimate.status}
+              <div className="absolute top-4 right-4 flex gap-2">
+                {estimate.jobStatus && estimate.jobStatus !== 'Proposed' && (
+                  <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-600 border border-emerald-200">
+                    {estimate.jobStatus}
+                  </div>
+                )}
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                  estimate.status === 'active' ? "bg-american-blue/10 text-american-blue" : "bg-[#999999]/10 text-[#999999]"
+                )}>
+                  {estimate.status}
+                </div>
               </div>
 
               <div className="space-y-6">
@@ -186,7 +208,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
+                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -196,6 +218,16 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                     >
                       <ExternalLink size={18} className="pointer-events-none" />
                     </button>
+                    {(!estimate.jobStatus || estimate.jobStatus === 'Proposed' || estimate.jobStatus === 'Draft') && (
+                      <button
+                        type="button"
+                        onClick={(e) => acceptJob(estimate.id, e)}
+                        className="relative z-30 p-3 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all"
+                        title="Accept Job"
+                      >
+                        <Check size={18} className="pointer-events-none" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(estimate.id, e)}

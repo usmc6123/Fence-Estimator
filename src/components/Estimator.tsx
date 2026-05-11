@@ -219,6 +219,8 @@ export default function Estimator({
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
+      jobStatus: estimate.jobStatus || 'Proposed',
+      manualGrandTotal: results.total,
       userId: user.uid,
       companyId: 'lonestarfence'
     };

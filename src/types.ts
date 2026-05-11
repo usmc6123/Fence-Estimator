@@ -128,6 +128,19 @@ export interface SupplierQuote {
   fileType?: string;
 }
 
+export type JobStatus = 'Draft' | 'Proposed' | 'Accepted' | 'In Progress' | 'Completed' | 'Cancelled';
+
+export interface JobExpense {
+  id: string;
+  date: string;
+  amount: number;
+  description: string;
+  category: 'Material' | 'Labor' | 'Other';
+  receiptUrl?: string;
+  receiptName?: string;
+  materialId?: string; // Link to MaterialLibrary id
+}
+
 export interface Estimate {
   id: string;
   customerName: string;
@@ -139,6 +152,10 @@ export interface Estimate {
   customerState?: string;
   customerZip?: string;
   date: string;
+  
+  jobStatus?: JobStatus;
+  actualExpenses?: JobExpense[];
+  actualLaborCost?: number; // Manual entry for total labor payout
   
   // Measurements
   linearFeet: number;
