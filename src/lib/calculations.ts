@@ -1250,10 +1250,13 @@ export function calculateDetailedTakeOff(
       // Add mounting brackets and screws for Metal (Wrought Iron)
       if (runStyle.type === 'Metal') {
         const installType = run.ironInstallType || estimate.ironInstallType || 'Bolt up';
+        const railType = run.ironRails || estimate.ironRails || '2 rail';
+        const bracketsPerPanel = railType === '3 rail' ? 6 : 4;
+        
         if (installType !== 'Weld up') {
           const bracketMat = materials.find(m => m.id === 'm-bracket');
           if (bracketMat) {
-            const bracketQty = panelQty * 4;
+            const bracketQty = panelQty * bracketsPerPanel;
             const bracketCost = bracketQty * bracketMat.cost;
             runFenceMaterialCost += bracketCost;
             runItems.push({
@@ -1551,7 +1554,8 @@ export function calculateDetailedTakeOff(
       const runTopStyle = run.topStyle || estimate.topStyle || 'Dog Ear';
       if (estimate.hasTopCap) runLaborRate += laborRates.topCap;
     } else if (runStyle.type === 'Metal') {
-      runLaborRate = (run.ironInstallType === 'Weld up') ? laborRates.ironWeldUp : laborRates.ironBoltUp;
+      const installType = run.ironInstallType || estimate.ironInstallType || 'Bolt up';
+      runLaborRate = (installType === 'Weld up') ? laborRates.ironWeldUp : laborRates.ironBoltUp;
     } else if (runStyle.type === 'Chain Link') {
       runLaborRate = laborRates.chainLink;
       if (run.hasBottomRail) {
