@@ -301,10 +301,10 @@ export default function LaborTakeOff({
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
-                        <th className="px-6 py-4">Detailed Work Specification</th>
-                        <th className="px-6 py-4 text-center">Quantities</th>
-                        <th className="px-6 py-4 text-right print:hidden">Piece Rate</th>
-                        <th className="px-6 py-4 text-right print:hidden">Net Pay</th>
+                        <th className="px-4 py-4">Detailed Work Specification</th>
+                        <th className="px-4 py-4 text-center">Quantities</th>
+                        <th className="px-4 py-4 text-right">Piece Rate</th>
+                        <th className="px-4 py-4 text-right">Net Pay</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y-2 divide-[#F8F9FA]">
@@ -313,7 +313,7 @@ export default function LaborTakeOff({
                           "text-sm font-bold hover:bg-[#FBFBFB] transition-colors",
                           item.category === 'Demolition' ? "text-american-red/80 bg-american-red/5" : "text-american-blue/80"
                         )}>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4">
                             <div className="font-black">{item.name}</div>
                             <div className="text-[10px] font-normal opacity-60 mt-1 max-w-md leading-relaxed">
                               {item.name.includes('Installation') && (
@@ -333,22 +333,22 @@ export default function LaborTakeOff({
                               {item.name.includes('Stain') && `Includes: Power washing/cleaning surface followed by uniform application of selected stain. ${run.stainSides ? `Coverage: ${run.stainSides}` : ''}. No overspray on non-fence surfaces authorized.`}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center font-black">{item.qty} {item.unit}</td>
-                          <td className="px-6 py-4 text-right tabular-nums print:hidden">{formatCurrency(item.unitCost)}</td>
-                          <td className="px-6 py-4 text-right tabular-nums font-black print:hidden">{formatCurrency(item.total)}</td>
+                          <td className="px-4 py-4 text-center font-black">{item.qty} {item.unit}</td>
+                          <td className="px-4 py-4 text-right tabular-nums">{formatCurrency(item.unitCost)}</td>
+                          <td className="px-4 py-4 text-right tabular-nums font-black">{formatCurrency(item.total)}</td>
                         </tr>
                       ))}
                       {/* Gate Labor if nested */}
                       {run.gates.map((gate, gi) => (
                         gate.items.filter(i => i.category === 'Labor').map((item, ii) => (
                           <tr key={`${gi}-${ii}`} className="text-sm font-bold text-american-red/80 bg-american-red/[0.02] hover:bg-american-red/[0.05] transition-colors">
-                            <td className="px-6 py-4 flex items-center gap-2">
+                            <td className="px-4 py-4 flex items-center gap-2">
                               <span className="text-[10px] bg-american-red font-black text-white px-2 py-0.5 rounded">GATE</span>
                               {item.name}
                             </td>
-                            <td className="px-6 py-4 text-center font-black">{item.qty} {item.unit}</td>
-                            <td className="px-6 py-4 text-right tabular-nums print:hidden">{formatCurrency(item.unitCost)}</td>
-                            <td className="px-6 py-4 text-right tabular-nums font-black print:hidden">{formatCurrency(item.total)}</td>
+                            <td className="px-4 py-4 text-center font-black">{item.qty} {item.unit}</td>
+                            <td className="px-4 py-4 text-right tabular-nums">{formatCurrency(item.unitCost)}</td>
+                            <td className="px-4 py-4 text-right tabular-nums font-black">{formatCurrency(item.total)}</td>
                           </tr>
                         ))
                       ))}
@@ -375,29 +375,29 @@ export default function LaborTakeOff({
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-[#F8F9FA] text-[10px] font-black uppercase tracking-widest text-[#999999]">
-                    <th className="px-8 py-6">Operation / Task</th>
-                    <th className="px-8 py-6 text-center">Cumulative Volume</th>
-                    <th className="px-8 py-6 text-right print:hidden">Total Net Cost</th>
+                    <th className="px-4 py-6">Operation / Task</th>
+                    <th className="px-4 py-6 text-center">Cumulative Volume</th>
+                    <th className="px-4 py-6 text-right">Total Net Cost</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-[#F8F9FA]">
                   {laborSummary.map((item, i) => (
                     <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
-                      <td className="px-8 py-5 flex items-center gap-3">
+                      <td className="px-4 py-5 flex items-center gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-american-red" />
                         {item.name}
                       </td>
-                      <td className="px-8 py-5 text-center">
+                      <td className="px-4 py-5 text-center">
                         <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">{item.qty} {item.unit}</span>
                       </td>
-                      <td className="px-8 py-5 text-right font-black text-american-red print:hidden">{formatCurrency(item.total)}</td>
+                      <td className="px-4 py-5 text-right font-black text-american-red">{formatCurrency(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-american-blue text-white">
-                    <td colSpan={2} className="px-8 py-6 text-right font-black uppercase tracking-widest text-xs">Total Direct Labor Liability</td>
-                    <td className="px-8 py-6 text-right font-black text-2xl">{formatCurrency(totalLaborRaw)}</td>
+                    <td colSpan={2} className="px-4 py-6 text-right font-black uppercase tracking-widest text-xs">Total Direct Labor Liability</td>
+                    <td className="px-4 py-6 text-right font-black text-2xl">{formatCurrency(totalLaborRaw)}</td>
                   </tr>
                 </tfoot>
               </table>
