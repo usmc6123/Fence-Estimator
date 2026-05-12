@@ -195,6 +195,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
       // 3. Extract data with Gemini
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
+      
+      let supplierName = extractedData.supplierName || 'Unknown Supplier';
+      // Specific normalization requested by user
+      if (supplierName.toLowerCase().includes('forney fence')) {
+        supplierName = 'Forney Fence';
+      }
 
       const newQuoteId = Math.random().toString(36).substr(2, 9);
 
@@ -221,7 +227,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       const newQuote: SupplierQuote = {
         id: newQuoteId,
         companyId: 'lonestarfence',
-        supplierName: extractedData.supplierName || 'Unknown Supplier',
+        supplierName: supplierName,
         date: new Date().toISOString(),
         items: items,
         totalAmount: Number(extractedData.totalAmount) || items.reduce((sum, i) => sum + i.totalPrice, 0),
@@ -333,7 +339,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
   // Comparison Logic: Group by mapped materials
   const compareData = React.useMemo(() => {
-    const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string }[] }> = {};
+    const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string, fileUrl?: string }[] }> = {};
 
     quotes.forEach(quote => {
       quote.items.forEach(item => {
@@ -348,7 +354,8 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           comparison[item.mappedMaterialId].suppliers.push({
             supplierName: quote.supplierName,
             price: item.unitPrice,
-            quoteId: quote.id
+            quoteId: quote.id,
+            fileUrl: quote.fileUrl
           });
         }
       });
@@ -777,12 +784,26 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                   )}
                                   <div className="flex justify-between items-start mb-1">
                                     <p className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">{s.supplierName}</p>
-                                    <button 
-                                      onClick={() => updateMaterialPrice(item.id, s.price)}
-                                      className="text-[8px] font-black text-american-blue hover:text-american-red transition-colors uppercase tracking-widest"
-                                    >
-                                      Use Price
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      {s.fileUrl && (
+                                        <a 
+                                          href={s.fileUrl} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-[8px] font-black text-emerald-600 hover:text-american-blue transition-colors uppercase tracking-widest flex items-center gap-1"
+                                          title="View Original Quote"
+                                        >
+                                          <ExternalLink size={8} />
+                                          View Quote
+                                        </a>
+                                      )}
+                                      <button 
+                                        onClick={() => updateMaterialPrice(item.id, s.price)}
+                                        className="text-[8px] font-black text-american-blue hover:text-american-red transition-colors uppercase tracking-widest"
+                                      >
+                                        Use Price
+                                      </button>
+                                    </div>
                                   </div>
                                   <p className={cn(
                                     "text-xl font-black",

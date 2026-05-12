@@ -45,7 +45,8 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
           },
         },
         {
-          text: "Extract the supplier name, line items (name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.",
+          text: "Extract the supplier name, line items (name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.\n\n" +
+                "IMPORTANT: Normalize the supplier name. Use common/standard names (e.g., if it says 'Forney Fence Supply' or 'Forney Fence Co', just return 'Forney Fence').",
         },
       ],
       config: {
