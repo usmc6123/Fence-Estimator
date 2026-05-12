@@ -86,35 +86,37 @@ export default function Estimator({
 
       const result = await analyzeBlueprintDocument(base64Data, file.type);
       
-      const newRuns = result.runs.map(run => ({
-        id: Math.random().toString(36).substr(2, 9),
-        name: run.name,
-        linearFeet: run.linearFeet,
-        type: run.type,
-        corners: 0,
-        gates: run.type === 'gate' ? 1 : 0,
-        gateDetails: run.type === 'gate' ? [{
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'Single' as const,
-          width: run.linearFeet,
-          construction: 'Welded' as const,
-        }] : [],
-        styleId: estimate.defaultStyleId || 'wood-standard',
-        visualStyleId: estimate.defaultVisualStyleId || 'side-by-side',
-        height: estimate.defaultHeight || 6,
-        color: estimate.defaultColor || 'Natural',
-        isPreStained: estimate.isPreStained,
-        hasRotBoard: estimate.hasRotBoard,
-        ironInstallType: estimate.ironInstallType,
-        ironPanelType: estimate.ironPanelType
-      }));
+      const newRuns = result.runs.map(run => {
+        const runId = Math.random().toString(36).substr(2, 9);
+        return {
+          id: runId,
+          name: run.name,
+          linearFeet: run.linearFeet,
+          corners: 0,
+          gates: run.gates?.length || 0,
+          gateDetails: (run.gates || []).map(g => ({
+            id: Math.random().toString(36).substr(2, 9),
+            type: g.type,
+            width: g.width,
+            construction: 'Welded' as const,
+          })),
+          styleId: estimate.defaultStyleId || 'wood-standard',
+          visualStyleId: estimate.defaultVisualStyleId || 'side-by-side',
+          height: estimate.defaultHeight || 6,
+          color: estimate.defaultColor || 'Natural',
+          isPreStained: estimate.isPreStained,
+          hasRotBoard: estimate.hasRotBoard,
+          ironInstallType: estimate.ironInstallType,
+          ironPanelType: estimate.ironPanelType
+        };
+      });
 
       setEstimate({
         ...estimate,
         runs: [...(estimate.runs || []), ...newRuns as any]
       });
 
-      alert(`Successfully extracted ${newRuns.length} fence sections and gates from the blueprint.`);
+      alert(`Successfully extracted ${newRuns.length} fence sections and ${(result.runs.reduce((acc, r) => acc + (r.gates?.length || 0), 0))} gates from the blueprint.`);
     } catch (error: any) {
       console.error("Blueprint analysis failed:", error);
       alert(error.message === 'GEMINI_API_KEY_MISSING' 
@@ -365,8 +367,8 @@ export default function Estimator({
 
   const steps = [
     { id: 1, label: 'Customer', icon: Share2 },
-    { id: 2, label: 'Measurements & Styling', icon: Ruler },
-    { id: 3, label: 'Add-ons & Specs', icon: HardHat },
+    { id: 2, label: 'Add-ons & Specs', icon: HardHat },
+    { id: 3, label: 'Measurements & Styling', icon: Ruler },
     { id: 4, label: 'Review & Send', icon: Send },
   ];
 
@@ -482,12 +484,12 @@ export default function Estimator({
             </div>
           </div>
         );
-      case 2: // Consolidated Style & Measurements
+      case 3: // Consolidated Style & Measurements (Moved to Step 3)
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Tab navigation for Step 2 */}
+            {/* Tab navigation for Step 3 */}
             <div className="flex bg-[#F0F0F0] p-1.5 rounded-2xl w-fit">
-               {(['Dimensions', 'Styles'] as const).map(tab => (
+               {(['Styles', 'Dimensions'] as const).map(tab => (
                  <button
                    key={tab}
                    onClick={() => setLeftTab(tab)}
@@ -1398,7 +1400,7 @@ export default function Estimator({
             )}
           </div>
         );
-      case 3:
+      case 2: // Add-ons & Specs (Moved to Step 2)
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4">

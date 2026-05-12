@@ -139,7 +139,13 @@ export async function analyzeReceiptDocument(fileData: string, mimeType: string)
 }
 
 export async function analyzeBlueprintDocument(fileData: string, mimeType: string): Promise<{ 
-  runs: { name: string; linearFeet: number; type: 'fence' | 'gate'; description?: string }[] 
+  runs: { 
+    name: string; 
+    linearFeet: number; 
+    description?: string;
+    gates?: { type: 'Single' | 'Double'; width: number; description: string }[];
+    isEndOfRun?: boolean; // Based on blue circles
+  }[] 
 }> {
   try {
     const ai = getGenAI();
@@ -154,10 +160,11 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
         },
         {
           text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram.\n" +
-                "1. Identify all fence runs (marked in red lines usually) and their labeled measurements (e.g. 206'-0\").\n" +
-                "2. Identify all gates (marked in green usually) and their widths or descriptions.\n" +
-                "3. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate).\n" +
-                "4. Convert measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
+                "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
+                "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
+                "3. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections.\n" +
+                "4. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
+                "5. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
                 "Return the data as a list of runs in a structured JSON format.",
         },
       ],
@@ -171,15 +178,23 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  name: { type: Type.STRING, description: "e.g. North Perimeter, Front Gate" },
-                  linearFeet: { type: Type.NUMBER, description: "Length in feet" },
-                  type: { 
-                    type: Type.STRING, 
-                    enum: ["fence", "gate"]
-                  },
+                  name: { type: Type.STRING, description: "e.g. North Perimeter, Front Driveway Section" },
+                  linearFeet: { type: Type.NUMBER, description: "Total length of the red line section in feet" },
                   description: { type: Type.STRING, description: "Additional details from callouts" },
+                  gates: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        type: { type: Type.STRING, enum: ["Single", "Double"] },
+                        width: { type: Type.NUMBER },
+                        description: { type: Type.STRING }
+                      },
+                      required: ["type", "width"]
+                    }
+                  }
                 },
-                required: ["name", "linearFeet", "type"],
+                required: ["name", "linearFeet"],
               },
             },
           },
