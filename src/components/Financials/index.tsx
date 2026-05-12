@@ -169,30 +169,54 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
 }
 
 function JobListView({ estimates, onSelect }: { estimates: SavedEstimate[], onSelect: (id: string) => void }) {
-  const jobs = estimates.filter(e => e.jobStatus === 'Accepted' || e.jobStatus === 'In Progress' || e.jobStatus === 'Completed');
+  const [filter, setFilter] = React.useState<'active' | 'completed' | 'proposals'>('active');
+
+  const activeJobs = estimates.filter(e => e.jobStatus === 'Accepted' || e.jobStatus === 'In Progress');
+  const completedJobs = estimates.filter(e => e.jobStatus === 'Completed');
   const proposals = estimates.filter(e => !e.jobStatus || e.jobStatus === 'Proposed' || e.jobStatus === 'Draft');
+
+  const currentJobs = filter === 'active' ? activeJobs : filter === 'completed' ? completedJobs : proposals;
 
   return (
     <div className="space-y-8">
-      {jobs.length > 0 && (
-        <section className="space-y-4">
-          <h2 className="text-xl font-black text-american-blue uppercase tracking-tight">Active & Completed Jobs</h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {jobs.map(job => (
-              <JobCard key={job.id} job={job} onClick={() => onSelect(job.id)} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="space-y-4">
-        <h2 className="text-xl font-black text-[#999999] uppercase tracking-tight">Open Proposals</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {proposals.map(proposal => (
-            <JobCard key={proposal.id} job={proposal} onClick={() => onSelect(proposal.id)} />
+      {/* Search & Filter Header */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-6 rounded-3xl border-2 border-american-blue/5 shadow-sm">
+        <h2 className="text-xl font-black text-american-blue uppercase tracking-tight">
+          {filter === 'active' ? 'Active Jobs' : filter === 'completed' ? 'Completed Archive' : 'Open Proposals'}
+        </h2>
+        
+        <div className="flex bg-[#F5F5F7] p-1 rounded-xl">
+          {[
+            { id: 'active', label: 'In Progress' },
+            { id: 'completed', label: 'Completed' },
+            { id: 'proposals', label: 'Proposals' }
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id as any)}
+              className={cn(
+                "px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                filter === f.id 
+                  ? "bg-white text-american-blue shadow-sm" 
+                  : "text-[#999999] hover:text-american-blue"
+              )}
+            >
+              {f.label}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {currentJobs.map(job => (
+          <JobCard key={job.id} job={job} onClick={() => onSelect(job.id)} />
+        ))}
+        {currentJobs.length === 0 && (
+          <div className="col-span-full py-12 text-center border-2 border-dashed border-american-blue/5 rounded-3xl">
+            <p className="text-xs font-bold text-[#999999] uppercase tracking-widest italic">No {filter} found.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

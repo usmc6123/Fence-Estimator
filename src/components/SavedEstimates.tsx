@@ -3,7 +3,7 @@ import {
   FileText, Search, Archive, RotateCcw, Trash2, 
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
-  Shield, Check, Briefcase
+  Shield, Check, Briefcase, CheckCircle2
 } from 'lucide-react';
 import { SavedEstimate, JobStatus } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
@@ -21,7 +21,7 @@ interface SavedEstimatesProps {
 
 export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, user }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [filter, setFilter] = React.useState<'all' | 'active' | 'archived'>('active');
+  const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
 
   const filteredEstimates = savedEstimates.filter(est => {
@@ -29,7 +29,18 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     const address = est.customerAddress || 'No Address';
     const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          address.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filter === 'all' || est.status === filter;
+    
+    let matchesFilter = false;
+    if (filter === 'all') {
+      matchesFilter = true;
+    } else if (filter === 'active') {
+      matchesFilter = est.status === 'active' && est.jobStatus !== 'Completed';
+    } else if (filter === 'completed') {
+      matchesFilter = est.status === 'active' && est.jobStatus === 'Completed';
+    } else if (filter === 'archived') {
+      matchesFilter = est.status === 'archived';
+    }
+
     return matchesSearch && matchesFilter;
   });
 
@@ -103,6 +114,22 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
     }
   };
+  
+  const completeJob = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user) return;
+    
+    try {
+      await updateDoc(doc(db, 'estimates', id), {
+        jobStatus: 'Completed',
+        status: 'active',
+        lastModified: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-8">
@@ -133,7 +160,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
           {/* Filter */}
           <div className="flex bg-[#F5F5F7] p-1.5 rounded-2xl">
-            {(['active', 'archived', 'all'] as const).map((f) => (
+            {(['active', 'completed', 'archived', 'all'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -226,6 +253,16 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                         title="Accept Job"
                       >
                         <Check size={18} className="pointer-events-none" />
+                      </button>
+                    )}
+                    {(estimate.jobStatus === 'Accepted' || estimate.jobStatus === 'In Progress') && (
+                      <button
+                        type="button"
+                        onClick={(e) => completeJob(estimate.id, e)}
+                        className="relative z-30 p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
+                        title="Mark Completed"
+                      >
+                        <CheckCircle2 size={18} className="pointer-events-none" />
                       </button>
                     )}
                     <button
