@@ -1990,23 +1990,22 @@ export default function Estimator({
                       </div>
                     </div>
                   ))}
-                  {(results.sitePrepCost > 0 || (estimate.deliveryFee ?? 50) > 0) && (
+                  {results.sitePrepCost > 0 && (
                     <div className="space-y-2 p-3 rounded-xl bg-american-red/5 border border-american-red/10">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-white">Logistics & Site Prep</span>
-                        <span className="font-mono text-sm font-bold">{formatCurrency(results.sitePrepCost * markupFactor + (estimate.deliveryFee ?? 50))}</span>
+                        <span className="text-xs font-bold text-white">Site Preparation</span>
+                        <span className="font-mono text-sm font-bold">{formatCurrency(results.sitePrepCost * markupFactor)}</span>
                       </div>
                       <div className="flex justify-between text-[10px] text-white/40 uppercase tracking-wider">
-                        <span>Project Mobilization Fee</span>
+                        <span>Project Mobilization & Prep</span>
                         <div className="flex gap-3">
-                          {results.sitePrepCost > 0 && <span>Prep: {formatCurrency(results.sitePrepCost * markupFactor)}</span>}
-                          <span>Delivery: {formatCurrency(estimate.deliveryFee ?? 50)}</span>
+                          <span>Prep: {formatCurrency(results.sitePrepCost * markupFactor)}</span>
                         </div>
                       </div>
                     </div>
                   )}
                   <p className="text-[9px] font-black italic text-american-red/80 uppercase tracking-widest px-2 pt-2 border-t border-white/5 text-center leading-relaxed">
-                    Verification: Job Total = Sum of Individual Runs + Logistics & Site Prep boxes above.
+                    Verification: Job Total = Sum of Individual Runs + Site Prep box above.
                   </p>
                 </div>
               )}

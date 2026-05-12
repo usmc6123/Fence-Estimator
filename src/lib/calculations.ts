@@ -32,6 +32,7 @@ export interface RunTakeOff {
   linearFeet: number;
   netLF: number;
   styleName: string;
+  styleType: string;
   height: number;
   railCount: number;
   hasRotBoard: boolean;
@@ -1656,6 +1657,7 @@ export function calculateDetailedTakeOff(
       linearFeet: runLF,
       netLF,
       styleName: runStyle.name,
+      styleType: runStyle.type,
       height: run.height || estimate.defaultHeight || 6,
       railCount: (run.height === 8 ? 4 : 3),
       hasRotBoard: !!(run.hasRotBoard ?? estimate.hasRotBoard),

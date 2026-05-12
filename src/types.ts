@@ -218,6 +218,7 @@ export interface Estimate {
   manualSectionTotals?: number[];
   manualGateTotals?: number[];
   manualDemoTotals?: number[];
+  manualGatePrices?: Record<string, number>;
   contractProjectDate?: string;
   contractScope?: string;
   laborScope?: string;

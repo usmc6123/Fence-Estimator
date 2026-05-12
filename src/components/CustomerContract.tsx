@@ -77,6 +77,7 @@ export default function CustomerContract({
 
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
   const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+  const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(estimate.manualGatePrices || {});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const isInitialMount = React.useRef(true);
@@ -86,19 +87,13 @@ export default function CustomerContract({
 
   // Calculate project financial breakdown for component use
   const projectBreakdown = React.useMemo(() => {
-    const totalLF = data.runs.reduce((sum, r) => sum + r.netLF, 0);
-    const deliveryPerLF = totalLF > 0 ? (estimate.deliveryFee ?? 50) / totalLF : 0;
-
     return data.runs.map(run => {
       // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
       const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
       const fenceTax = run.fenceMaterialCost * taxFactor;
+      const totalFenceCharge = baseFenceCharge + fenceTax;
       
-      // Spread delivery fee across fence runs
-      const runDeliverySpread = run.netLF * deliveryPerLF;
-      const totalFenceCharge = baseFenceCharge + fenceTax + runDeliverySpread;
-      
-      // Gate Charge - Keep strictly separate from LF calculation
+      // Gate Charge
       const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
       const gateTax = run.gateMaterialCost * taxFactor;
       const totalGateCharge = baseGateCharge + gateTax;
@@ -115,6 +110,7 @@ export default function CustomerContract({
         demoCharge,
         gates: run.gates,
         style: run.styleName,
+        styleType: run.styleType,
         height: run.height,
         hasRotBoard: run.hasRotBoard,
         hasTopCap: run.hasTopCap,
@@ -124,7 +120,7 @@ export default function CustomerContract({
         ironPanelType: run.ironPanelType
       };
     });
-  }, [data.runs, markupFactor, taxFactor, estimate.deliveryFee]);
+  }, [data.runs, markupFactor, taxFactor]);
 
   useEffect(() => {
     // Only initialize section totals if they haven't been set
@@ -145,7 +141,7 @@ export default function CustomerContract({
       return;
     }
     setHasUnsavedChanges(true);
-  }, [localAiScope, sectionTotals, gateTotals, demoTotals, manualGrandTotal, projectDate]);
+  }, [localAiScope, sectionTotals, gateTotals, demoTotals, manualGrandTotal, projectDate, manualGatePrices]);
 
   useEffect(() => {
     // Initial load from estimate shouldn't trigger unsaved changes
@@ -196,13 +192,30 @@ export default function CustomerContract({
     }, 0);
     
     const sitePrep = data.totals.prep * markupFactor;
+    const deliveryFee = estimate.deliveryFee ?? 50;
     
-    // Delivery fee is now spread across section fence charges
-    return baseTotal + sitePrep;
-  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals, data.totals.prep, markupFactor]);
+    return baseTotal + sitePrep + deliveryFee;
+  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals, data.totals.prep, markupFactor, estimate.deliveryFee]);
 
   const grandTotal = manualGrandTotal ?? editedGrandTotal;
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
+
+  const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
+    const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
+    setManualGatePrices(updatedPrices);
+
+    // Calculate new total for this run
+    const run = projectBreakdown[runIdx];
+    const newRunGateTotal = run.gates.reduce((sum, g) => {
+      const calculatedPrice = (g.items.reduce((acc, i) => acc + i.total, 0) * markupFactor) + 
+                           (g.items.filter(i => i.category !== 'Labor').reduce((acc, i) => acc + i.total, 0) * taxFactor);
+      return sum + (updatedPrices[g.gateId] ?? calculatedPrice);
+    }, 0);
+
+    const newGateTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
+    newGateTotals[runIdx] = newRunGateTotal;
+    setGateTotals(newGateTotals);
+  };
 
   const handlePrint = () => {
     window.print();
@@ -216,7 +229,8 @@ export default function CustomerContract({
         manualDemoTotals: demoTotals,
         manualGrandTotal: manualGrandTotal,
         contractProjectDate: projectDate,
-        contractScope: localAiScope
+        contractScope: localAiScope,
+        manualGatePrices: manualGatePrices
       });
       // Sync the session buffer to match the persisted state
       setAiContractScope(localAiScope);
@@ -541,27 +555,6 @@ export default function CustomerContract({
                       </div>
                     </div>
 
-                    {/* Integrated Gate Logic for Homogeneous View */}
-                    {projectBreakdown.some(r => r.gates.length > 0) && (
-                      <div className="bg-emerald-500/5 border-2 border-emerald-500/10 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="h-12 w-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                            <Navigation size={24} />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black text-american-blue uppercase italic">Integrated Gate Systems</h4>
-                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{projectBreakdown.reduce((sum, r) => sum + r.gates.length, 0)} Total Gates Across Project</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-emerald-600">
-                             {formatCurrency(projectBreakdown.reduce((sum, r, i) => sum + (gateTotals[i] ?? r.totalGateCharge), 0))}
-                          </p>
-                          <p className="text-[9px] font-bold text-[#999999] uppercase tracking-widest">Combined Gate Investment</p>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Individual Footages for Clarity */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                       {projectBreakdown.map((run, i) => (
@@ -582,7 +575,7 @@ export default function CustomerContract({
                               <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
                               <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
                                 {run.style} {run.height}'
-                                {run.style.includes('Iron') && (
+                                {(run.styleType === 'Metal' || (run.style || '').includes('Iron')) && (
                                   <>
                                     <span className="mx-1">•</span>
                                     {run.ironInstallType}
@@ -710,80 +703,36 @@ export default function CustomerContract({
                   
                   <div className="space-y-3">
                     {projectBreakdown.some(r => r.gates.length > 0) ? (
-                      projectBreakdown.map((run, runIdx) => (
+                      projectBreakdown.map((run, rIdx) => 
                         run.gates.map((gate, gIdx) => {
-                          // Note: We use the run's gate total for editing since multiple gates in a run are bundled
-                          const isOnlyGate = run.gates.length === 1;
-                          const basePrice = (gate.items.reduce((sum, item) => sum + item.total, 0)) * markupFactor;
-                          const tax = (gate.items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + item.total, 0)) * taxFactor;
+                          // Estimate gate price
+                          const calculatedPrice = (gate.items.reduce((sum, item) => sum + item.total, 0)) * markupFactor + 
+                                               (gate.items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + item.total, 0)) * taxFactor;
+                          const displayPrice = manualGatePrices[gate.gateId] ?? calculatedPrice;
                           
                           return (
-                            <div key={`${runIdx}-${gIdx}`} className="flex items-center justify-between py-3 border-b border-[#E5E5E5] last:border-0">
+                            <div key={gate.gateId} className="flex items-center justify-between py-4 border-b border-[#E5E5E5] last:border-0 hover:bg-american-blue/[0.02] -mx-4 px-4 rounded-xl transition-colors">
                               <div>
-                                <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate ({run.name})</p>
-                                <p className="text-[10px] font-bold text-[#999999] uppercase">Custom-Built & Professionally Installed</p>
+                                <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate</p>
+                                <p className="text-[10px] font-bold text-[#999999] uppercase tracking-wider">{run.name} • Professionally Installed</p>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-bold text-[#BBBBBB]">$</span>
+                              <div className="flex items-center gap-1 bg-white border border-[#E5E5E5] rounded-xl px-4 py-2 shadow-sm">
+                                <span className="text-xs font-black text-american-blue">$</span>
                                 <input 
                                   type="number"
-                                  value={isOnlyGate ? (gateTotals[runIdx] ?? (basePrice + tax)).toFixed(2) : (basePrice + tax).toFixed(2)}
-                                  disabled={!isOnlyGate}
-                                  onChange={(e) => {
-                                    if (isOnlyGate) {
-                                      const newVal = parseFloat(e.target.value) || 0;
-                                      const newGateTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
-                                      newGateTotals[runIdx] = newVal;
-                                      setGateTotals(newGateTotals);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "font-black text-american-blue text-sm text-right w-24 outline-none transition-all print:hidden",
-                                    isOnlyGate ? "hover:bg-american-blue/5 focus:bg-white rounded px-1" : "bg-transparent opacity-60"
-                                  )}
+                                  value={displayPrice.toFixed(2)}
+                                  onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
+                                  className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
+                                  step="0.01"
                                 />
-                                <span className="hidden print:inline font-bold text-american-blue text-sm">
-                                  {formatCurrency(isOnlyGate ? (gateTotals[runIdx] ?? (basePrice + tax)) : (basePrice + tax))}
-                                </span>
                               </div>
                             </div>
                           );
                         })
-                      ))
+                      )
                     ) : (
                       <p className="text-xs font-bold text-[#BBBBBB] uppercase italic tracking-widest">No custom gates included in this scope.</p>
                     )}
-                  </div>
-                </div>
-              )}
-
-              {/* Delivery & Logistics */}
-              {showCostBreakdown && (
-                <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5] mt-4 group">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-american-red flex items-center justify-center text-white">
-                        <Navigation size={20} />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-american-blue uppercase tracking-widest text-xs">Logistics & Delivery</h4>
-                        <p className="text-[10px] font-bold text-[#999999] uppercase">Site material mobilization & deployment (Spread across LF)</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-bold text-american-blue">$</span>
-                      <input 
-                        type="number"
-                        value={estimate.deliveryFee ?? 50}
-                        onChange={(e) => {
-                          if (onUpdateEstimate) {
-                            onUpdateEstimate({ deliveryFee: parseFloat(e.target.value) || 0 });
-                          }
-                        }}
-                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-100 focus:bg-white rounded px-2 transition-all print:hidden"
-                      />
-                      <span className="hidden print:inline font-bold text-american-blue text-sm">{formatCurrency(estimate.deliveryFee ?? 50)}</span>
-                    </div>
                   </div>
                 </div>
               )}
