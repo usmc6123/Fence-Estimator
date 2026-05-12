@@ -137,3 +137,63 @@ export async function analyzeReceiptDocument(fileData: string, mimeType: string)
     throw new Error("Failed to analyze receipt. Please ensure it is a clear image or PDF.");
   }
 }
+
+export async function analyzeBlueprintDocument(fileData: string, mimeType: string): Promise<{ 
+  runs: { name: string; linearFeet: number; type: 'fence' | 'gate'; description?: string }[] 
+}> {
+  try {
+    const ai = getGenAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          inlineData: {
+            data: fileData,
+            mimeType: mimeType,
+          },
+        },
+        {
+          text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram.\n" +
+                "1. Identify all fence runs (marked in red lines usually) and their labeled measurements (e.g. 206'-0\").\n" +
+                "2. Identify all gates (marked in green usually) and their widths or descriptions.\n" +
+                "3. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate).\n" +
+                "4. Convert measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
+                "Return the data as a list of runs in a structured JSON format.",
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            runs: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING, description: "e.g. North Perimeter, Front Gate" },
+                  linearFeet: { type: Type.NUMBER, description: "Length in feet" },
+                  type: { 
+                    type: Type.STRING, 
+                    enum: ["fence", "gate"]
+                  },
+                  description: { type: Type.STRING, description: "Additional details from callouts" },
+                },
+                required: ["name", "linearFeet", "type"],
+              },
+            },
+          },
+          required: ["runs"],
+        },
+      },
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    if (error instanceof Error && error.message === "GEMINI_API_KEY_MISSING") {
+      throw error;
+    }
+    console.error("Error analyzing blueprint:", error);
+    throw new Error("Failed to analyze diagram. Please ensure it is a clear image or PDF with legible measurements.");
+  }
+}

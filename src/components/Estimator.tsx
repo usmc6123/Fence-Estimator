@@ -4,7 +4,7 @@ import {
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map as MapIcon, X, Printer, Share2, Trees, Droplets,
-  TrendingUp, RotateCcw, Package, Navigation
+  TrendingUp, RotateCcw, Package, Navigation, Image
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote } from '../types';
@@ -15,6 +15,7 @@ import SiteMeasurement from './SiteMeasurement';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { analyzeBlueprintDocument } from '../services/geminiService';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -54,6 +55,8 @@ export default function Estimator({
   const [showSupplierForm, setShowSupplierForm] = React.useState(false);
   const [showDiagram, setShowDiagram] = React.useState(false);
   const [leftTab, setLeftTab] = React.useState<'Dimensions' | 'Styles'>('Dimensions');
+  const [isAnalyzingBlueprint, setIsAnalyzingBlueprint] = React.useState(false);
+  const blueprintInputRef = React.useRef<HTMLInputElement>(null);
 
   const [showGhlSync, setShowGhlSync] = React.useState(false);
   const [newCustomLabor, setNewCustomLabor] = React.useState({ name: '', cost: 0 });
@@ -63,6 +66,65 @@ export default function Estimator({
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
+
+  const handleBlueprintUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsAnalyzingBlueprint(true);
+    try {
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result.split(',')[1]);
+          } else reject(new Error("Failed to read file"));
+        };
+        reader.onerror = () => reject(new Error("Reader error"));
+        reader.readAsDataURL(file);
+      });
+
+      const result = await analyzeBlueprintDocument(base64Data, file.type);
+      
+      const newRuns = result.runs.map(run => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: run.name,
+        linearFeet: run.linearFeet,
+        type: run.type,
+        corners: 0,
+        gates: run.type === 'gate' ? 1 : 0,
+        gateDetails: run.type === 'gate' ? [{
+          id: Math.random().toString(36).substr(2, 9),
+          type: 'Single' as const,
+          width: run.linearFeet,
+          construction: 'Welded' as const,
+        }] : [],
+        styleId: estimate.defaultStyleId || 'wood-standard',
+        visualStyleId: estimate.defaultVisualStyleId || 'side-by-side',
+        height: estimate.defaultHeight || 6,
+        color: estimate.defaultColor || 'Natural',
+        isPreStained: estimate.isPreStained,
+        hasRotBoard: estimate.hasRotBoard,
+        ironInstallType: estimate.ironInstallType,
+        ironPanelType: estimate.ironPanelType
+      }));
+
+      setEstimate({
+        ...estimate,
+        runs: [...(estimate.runs || []), ...newRuns as any]
+      });
+
+      alert(`Successfully extracted ${newRuns.length} fence sections and gates from the blueprint.`);
+    } catch (error: any) {
+      console.error("Blueprint analysis failed:", error);
+      alert(error.message === 'GEMINI_API_KEY_MISSING' 
+        ? "Gemini API Key is missing. Manual entry required." 
+        : "Failed to analyze diagram. Please ensure it is clear and has legible measurements.");
+    } finally {
+      setIsAnalyzingBlueprint(false);
+      if (blueprintInputRef.current) blueprintInputRef.current.value = '';
+    }
+  };
 
   const calculateCosts = () => {
     // Resolve materials based on chosen strategy
@@ -652,6 +714,21 @@ export default function Estimator({
                     <p className="text-[10px] font-bold text-american-red uppercase tracking-widest">Mix & Match Styles per Run</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
+                    <input 
+                      type="file" 
+                      ref={blueprintInputRef} 
+                      className="hidden" 
+                      accept="application/pdf,image/*"
+                      onChange={handleBlueprintUpload}
+                    />
+                    <button 
+                      onClick={() => blueprintInputRef.current?.click()}
+                      disabled={isAnalyzingBlueprint}
+                      className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-emerald-500/10 text-emerald-600 text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 hover:scale-105 active:scale-95 transition-all border-2 border-emerald-500/10 disabled:opacity-50"
+                    >
+                      <Image size={16} />
+                      {isAnalyzingBlueprint ? 'Analyzing...' : 'AI Blueprint Import'}
+                    </button>
                     <button 
                       onClick={() => setShowMap(true)}
                       className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-red/5 text-american-red text-xs font-black uppercase tracking-widest hover:bg-american-red/10 hover:scale-105 active:scale-95 transition-all border-2 border-american-red/10"
