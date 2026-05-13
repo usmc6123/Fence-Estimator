@@ -145,5 +145,12 @@ service cloud.firestore {
       allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidMaterial(incoming());
       allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
     }
+
+    match /schedule_events/{eventId} {
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create:    if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update:    if isSignedIn() && existing().userId == request.auth.uid;
+      allow delete:    if isSignedIn() && existing().userId == request.auth.uid;
+    }
   }
 }

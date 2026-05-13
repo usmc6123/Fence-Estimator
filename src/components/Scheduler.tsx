@@ -27,7 +27,8 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
-  MapPin
+  MapPin,
+  Printer
 } from 'lucide-react';
 import { SavedEstimate, ScheduleEvent, JobStatus } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -83,6 +84,10 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   const handleDayClick = (day: Date) => {
     setSelectedDate(day);
@@ -196,6 +201,14 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                 <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Vacant</span>
             </div>
           </div>
+
+          <button 
+            onClick={handlePrint}
+            className="flex items-center gap-2 bg-american-blue text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-american-red transition-all shadow-lg no-print"
+          >
+            <Printer size={16} />
+            Print Calendar
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -546,6 +559,22 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
       </AnimatePresence>
 
       <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+          .min-h-full { background: white !important; padding: 0 !important; }
+          .max-w-7xl { max-width: 100% !important; margin: 0 !important; }
+          .lg\\:col-span-8 { width: 100% !important; grid-column: span 12 / span 12 !important; }
+          .lg\\:col-span-4 { display: none !important; }
+          .bg-white { border: 1px solid #eee !important; box-shadow: none !important; }
+          .shadow-xl { box-shadow: none !important; }
+          .rounded-3xl { border-radius: 0 !important; }
+          .min-h-\\[120px\\] { min-height: 80px !important; }
+          .p-6, .lg\\:p-10 { padding: 0 !important; }
+          .grid-cols-7 { gap: 0 !important; }
+          .bg-\\[#E5E5E5\\] { background: transparent !important; }
+          .border { border-color: #eee !important; }
+        }
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }
