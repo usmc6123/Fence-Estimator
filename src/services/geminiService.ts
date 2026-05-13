@@ -163,10 +163,11 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
           text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram.\n" +
                 "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
                 "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
-                "3. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections.\n" +
-                "4. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
-                "5. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
-                "Return the data as a list of runs in a structured JSON format.",
+                "3. DIRECTIONAL ORDERING: Extract the runs in a logical sequence following the visual circuit of the fence (e.g., start at the top-left corner and proceed clockwise). Do NOT return them in random order.\n" +
+                "4. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections and identifying contiguous perimeters.\n" +
+                "5. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
+                "6. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
+                "Return the data as a list of runs in a structured JSON format. Preserve the logical 'walk-around' order of the runs.",
         },
       ],
       config: {
