@@ -145,7 +145,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
     linearFeet: number; 
     description?: string;
     gates?: { type: 'Single' | 'Double'; width: number; description: string }[];
-    isEndOfRun?: boolean; // Based on blue circles
+    isStartOfNewSection?: boolean;
     orientation?: 'North' | 'South' | 'East' | 'West' | 'Northeast' | 'Northwest' | 'Southeast' | 'Southwest';
   }[] 
 }> {
@@ -167,8 +167,9 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                 "3. DIRECTIONAL ORDERING: Extract the runs in a logical sequence following the visual circuit of the fence (e.g., start at the top-left corner and proceed clockwise). Do NOT return them in random order.\n" +
                 "4. ORIENTATION: For each run, determine its visual orientation relative to the image (North=Top, South=Bottom, East=Right, West=Left). If it's a corner, use combined (e.g., Northeast).\n" +
                 "5. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections and identifying contiguous perimeters.\n" +
-                "6. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
-                "7. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
+                "6. If a run does NOT connect to the previous run (e.g., there is a physical gap or a house in between), set 'isStartOfNewSection' to true for that run.\n" +
+                "7. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
+                "8. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
                 "Return the data as a list of runs in a structured JSON format. Preserve the logical 'walk-around' order of the runs.",
         },
       ],
@@ -189,6 +190,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                     type: Type.STRING, 
                     enum: ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"] 
                   },
+                  isStartOfNewSection: { type: Type.BOOLEAN, description: "True if this run starts a new non-contiguous fence segment" },
                   gates: {
                     type: Type.ARRAY,
                     items: {

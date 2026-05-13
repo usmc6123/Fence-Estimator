@@ -105,6 +105,7 @@ export default function Estimator({
           height: estimate.defaultHeight || 6,
           color: estimate.defaultColor || 'Natural',
           orientation: run.orientation,
+          isStartOfNewSection: run.isStartOfNewSection,
           isPreStained: estimate.isPreStained,
           hasRotBoard: estimate.hasRotBoard,
           ironInstallType: estimate.ironInstallType,
@@ -2451,14 +2452,14 @@ export default function Estimator({
                             } else {
                               const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
                               const orientationMap: Record<string, number[]> = {
-                                'North': [0, -1],
-                                'South': [0, 1],
-                                'East': [1, 0],
-                                'West': [-1, 0],
-                                'Northeast': [0.707, -0.707],
-                                'Northwest': [-0.707, -0.707],
-                                'Southeast': [0.707, 0.707],
-                                'Southwest': [-0.707, 0.707]
+                                'North': [1, 0],   // Top edge goes right
+                                'South': [-1, 0],  // Bottom edge goes left
+                                'East': [0, 1],    // Right edge goes down
+                                'West': [0, -1],   // Left edge goes up
+                                'Northeast': [0.707, 0.707],
+                                'Northwest': [0.707, -0.707],
+                                'Southeast': [-0.707, 0.707],
+                                'Southwest': [-0.707, -0.707]
                               };
                               const dir = run.orientation ? orientationMap[run.orientation] : directions[i % 4];
                               const length = run.linearFeet || 0;
@@ -2476,14 +2477,14 @@ export default function Estimator({
                         let currentY = 0;
                         const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
                         const orientationMap: Record<string, number[]> = {
-                          'North': [0, -1],
-                          'South': [0, 1],
-                          'East': [1, 0],
-                          'West': [-1, 0],
-                          'Northeast': [0.707, -0.707],
-                          'Northwest': [-0.707, -0.707],
-                          'Southeast': [0.707, 0.707],
-                          'Southwest': [-0.707, 0.707]
+                          'North': [1, 0],   // Top edge goes right
+                          'South': [-1, 0],  // Bottom edge goes left
+                          'East': [0, 1],    // Right edge goes down
+                          'West': [0, -1],   // Left edge goes up
+                          'Northeast': [0.707, 0.707],
+                          'Northwest': [0.707, -0.707],
+                          'Southeast': [-0.707, 0.707],
+                          'Southwest': [-0.707, -0.707]
                         };
 
                         sectionRuns.forEach((run, i) => {
@@ -2626,10 +2627,17 @@ export default function Estimator({
                                   const totalPostsOnRun = finalSortedPosts.length;
                                   
                                   let tOX = 0, tOY = 0, tA = "middle";
-                                  if (dirIndex === 0) tOY = -80;
-                                  else if (dirIndex === 1) { tOX = 80; tA = "start"; }
-                                  else if (dirIndex === 2) tOY = 95;
-                                  else if (dirIndex === 3) { tOX = -80; tA = "end"; }
+                                  const orient = run.orientation;
+                                  if (orient === 'North') tOY = -80;
+                                  else if (orient === 'East') { tOX = 80; tA = "start"; }
+                                  else if (orient === 'South') tOY = 95;
+                                  else if (orient === 'West') { tOX = -80; tA = "end"; }
+                                  else {
+                                    if (dirIndex === 0) tOY = -80;
+                                    else if (dirIndex === 1) { tOX = 80; tA = "start"; }
+                                    else if (dirIndex === 2) tOY = 95;
+                                    else if (dirIndex === 3) { tOX = -80; tA = "end"; }
+                                  }
                                   
                                   return (
                                     <g key={`l-${section.id}-${i}`}>
