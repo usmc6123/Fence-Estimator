@@ -15,6 +15,7 @@ import SupplierOrderForm from './components/SupplierOrderForm';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
 import SavedEstimates from './components/SavedEstimates';
+import Scheduler from './components/Scheduler';
 import Financials from './components/Financials';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
@@ -347,6 +348,12 @@ export default function App() {
           setSavedEstimates={setSavedEstimates}
           user={user}
           setActiveTab={setActiveTab}
+        />
+      )}
+      {activeTab === 'scheduler' && (
+        <Scheduler 
+          savedEstimates={savedEstimates} 
+          user={user}
         />
       )}
       {activeTab === 'dossiers' && (

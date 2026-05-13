@@ -227,9 +227,25 @@ export interface Estimate {
   version?: number;
   parentId?: string; // Links to the original version id
 
+  scheduledStartDate?: string;
+  scheduledEndDate?: string;
+  scheduledDuration?: number; // Days
+
   // Supplier Quotes
   quotes?: SupplierQuote[];
   customLaborItems?: { id: string; name: string; cost: number }[];
+}
+
+export interface ScheduleEvent {
+  id: string;
+  type: 'Job' | 'Blackout';
+  title: string;
+  startDate: string;
+  endDate: string;
+  estimateId?: string;
+  subcontractorId?: string;
+  notes?: string;
+  userId: string;
 }
 
 export interface SavedEstimate extends Estimate {
