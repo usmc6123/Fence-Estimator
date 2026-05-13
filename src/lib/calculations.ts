@@ -547,10 +547,10 @@ export function calculateDetailedTakeOff(
                 items.push({
                   id: panelMat.id,
                   name: `${panelMat.name} (For Gate Frame)`,
-                  qty: sideCount,
+                  qty: 1, // Exactly 1 panel per gate as per user instructions
                   unit: 'each',
                   unitCost: panelMat.cost,
-                  total: sideCount * panelMat.cost,
+                  total: panelMat.cost,
                   category: 'Structure'
                 });
               }
@@ -791,51 +791,21 @@ export function calculateDetailedTakeOff(
         const postHeight = (run.height || 4) + 3;
         
         if (runStyle.type === 'Metal') {
-          // Wrought Iron: Distinguish between Single and Double (Drive) gates
-          let driveGatePostCount = 0;
-          let singleGatePostCount = 0;
-          
-          run.gateDetails?.forEach(gate => {
-            if (gate.type === 'Double') driveGatePostCount += 2;
-            else singleGatePostCount += 1;
-          });
-
-          // Single Gate Posts (2x2)
-          if (singleGatePostCount > 0) {
-            const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`);
-            if (gatePostMat) {
-              const cost = singleGatePostCount * gatePostMat.cost;
-              runFenceMaterialCost += cost;
-              runItems.push({
-                id: gatePostMat.id,
-                name: `${gatePostMat.name} (Single Gate Post)`,
-                qty: singleGatePostCount,
-                unit: gatePostMat.unit,
-                unitCost: gatePostMat.cost,
-                priceSource: gatePostMat.priceSource,
-                total: cost,
-                category: 'Structure'
-              });
-            }
-          }
-
-          // Drive Gate Posts (4x4)
-          if (driveGatePostCount > 0) {
-            const gatePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-${postHeight - 1}`);
-            if (gatePostMat) {
-              const cost = driveGatePostCount * gatePostMat.cost;
-              runFenceMaterialCost += cost;
-              runItems.push({
-                id: gatePostMat.id,
-                name: `${gatePostMat.name} (Drive Gate Post)`,
-                qty: driveGatePostCount,
-                unit: gatePostMat.unit,
-                unitCost: gatePostMat.cost,
-                priceSource: gatePostMat.priceSource,
-                total: cost,
-                category: 'Structure'
-              });
-            }
+          // Wrought Iron: Use 2x2 posts for all gates (Single or Double)
+          const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`);
+          if (gatePostMat) {
+            const cost = gatePostCountForRun * gatePostMat.cost;
+            runFenceMaterialCost += cost;
+            runItems.push({
+              id: gatePostMat.id,
+              name: `${gatePostMat.name} (Gate Post)`,
+              qty: gatePostCountForRun,
+              unit: gatePostMat.unit,
+              unitCost: gatePostMat.cost,
+              priceSource: gatePostMat.priceSource,
+              total: cost,
+              category: 'Structure'
+            });
           }
         } else {
           // Pipe Fence logic remains the same
