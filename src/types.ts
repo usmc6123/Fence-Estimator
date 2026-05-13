@@ -86,6 +86,7 @@ export interface FenceRun {
   isStartOfNewSection?: boolean;
   needsStain?: boolean;
   stainSides?: 'One Side' | 'Both Sides';
+  orientation?: 'North' | 'South' | 'East' | 'West' | 'Northeast' | 'Northwest' | 'Southeast' | 'Southwest';
 }
 
 export interface LaborRates {

@@ -146,6 +146,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
     description?: string;
     gates?: { type: 'Single' | 'Double'; width: number; description: string }[];
     isEndOfRun?: boolean; // Based on blue circles
+    orientation?: 'North' | 'South' | 'East' | 'West' | 'Northeast' | 'Northwest' | 'Southeast' | 'Southwest';
   }[] 
 }> {
   try {
@@ -164,9 +165,10 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                 "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
                 "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
                 "3. DIRECTIONAL ORDERING: Extract the runs in a logical sequence following the visual circuit of the fence (e.g., start at the top-left corner and proceed clockwise). Do NOT return them in random order.\n" +
-                "4. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections and identifying contiguous perimeters.\n" +
-                "5. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
-                "6. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
+                "4. ORIENTATION: For each run, determine its visual orientation relative to the image (North=Top, South=Bottom, East=Right, West=Left). If it's a corner, use combined (e.g., Northeast).\n" +
+                "5. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections and identifying contiguous perimeters.\n" +
+                "6. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
+                "7. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
                 "Return the data as a list of runs in a structured JSON format. Preserve the logical 'walk-around' order of the runs.",
         },
       ],
@@ -183,6 +185,10 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                   name: { type: Type.STRING, description: "e.g. North Perimeter, Front Driveway Section" },
                   linearFeet: { type: Type.NUMBER, description: "Total length of the red line section in feet" },
                   description: { type: Type.STRING, description: "Additional details from callouts" },
+                  orientation: { 
+                    type: Type.STRING, 
+                    enum: ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"] 
+                  },
                   gates: {
                     type: Type.ARRAY,
                     items: {

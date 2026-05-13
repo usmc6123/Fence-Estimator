@@ -104,6 +104,7 @@ export default function Estimator({
           visualStyleId: estimate.defaultVisualStyleId || 'side-by-side',
           height: estimate.defaultHeight || 6,
           color: estimate.defaultColor || 'Natural',
+          orientation: run.orientation,
           isPreStained: estimate.isPreStained,
           hasRotBoard: estimate.hasRotBoard,
           ironInstallType: estimate.ironInstallType,
@@ -2449,7 +2450,17 @@ export default function Estimator({
                               currentLng = endPt.lng;
                             } else {
                               const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-                              const dir = directions[i % 4];
+                              const orientationMap: Record<string, number[]> = {
+                                'North': [0, -1],
+                                'South': [0, 1],
+                                'East': [1, 0],
+                                'West': [-1, 0],
+                                'Northeast': [0.707, -0.707],
+                                'Northwest': [-0.707, -0.707],
+                                'Southeast': [0.707, 0.707],
+                                'Southwest': [-0.707, 0.707]
+                              };
+                              const dir = run.orientation ? orientationMap[run.orientation] : directions[i % 4];
                               const length = run.linearFeet || 0;
                               const prevX = rawPoints[rawPoints.length - 1][0];
                               const prevY = rawPoints[rawPoints.length - 1][1];
@@ -2464,18 +2475,22 @@ export default function Estimator({
                         let currentX = 0;
                         let currentY = 0;
                         const directions = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-                        const isClosedFour = sectionRuns.length === 4;
+                        const orientationMap: Record<string, number[]> = {
+                          'North': [0, -1],
+                          'South': [0, 1],
+                          'East': [1, 0],
+                          'West': [-1, 0],
+                          'Northeast': [0.707, -0.707],
+                          'Northwest': [-0.707, -0.707],
+                          'Southeast': [0.707, 0.707],
+                          'Southwest': [-0.707, 0.707]
+                        };
 
                         sectionRuns.forEach((run, i) => {
-                          if (isClosedFour && i === 3) {
-                            currentX = 0;
-                            currentY = 0;
-                          } else {
-                            const dir = directions[i % 4];
-                            const length = Math.max(run.linearFeet, 1);
-                            currentX += dir[0] * length;
-                            currentY += dir[1] * length;
-                          }
+                          const dir = run.orientation ? orientationMap[run.orientation] : directions[i % 4];
+                          const length = Math.max(run.linearFeet, 1);
+                          currentX += dir[0] * length;
+                          currentY += dir[1] * length;
                           rawPoints.push([currentX, currentY]);
                         });
                       }
