@@ -147,6 +147,8 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
     gates?: { type: 'Single' | 'Double'; width: number; description: string }[];
     isStartOfNewSection?: boolean;
     orientation?: 'North' | 'South' | 'East' | 'West' | 'Northeast' | 'Northwest' | 'Southeast' | 'Southwest';
+    startPoint?: { x: number; y: number };
+    endPoint?: { x: number; y: number };
   }[] 
 }> {
   try {
@@ -164,13 +166,12 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
           text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram.\n" +
                 "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
                 "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
-                "3. DIRECTIONAL ORDERING: Extract the runs in a logical sequence following the visual circuit of the fence (e.g., start at the top-left corner and proceed clockwise). Do NOT return them in random order.\n" +
-                "4. ORIENTATION: For each run, determine its visual orientation relative to the image (North=Top, South=Bottom, East=Right, West=Left). If it's a corner, use combined (e.g., Northeast).\n" +
-                "5. Use the blue circles to determine where runs start, end, or meet. This helps in distinguishing separate sections and identifying contiguous perimeters.\n" +
-                "6. If a run does NOT connect to the previous run (e.g., there is a physical gap or a house in between), set 'isStartOfNewSection' to true for that run.\n" +
-                "7. Pay close attention to callout arrows and boxes (e.g. 12' Wide Double Drive Gate) to determine gate type and width.\n" +
-                "8. Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5).\n\n" +
-                "Return the data as a list of runs in a structured JSON format. Preserve the logical 'walk-around' order of the runs.",
+                "3. COORDINATE MAPPING: For every fence line (red line), identify its start point and end point coordinates on a normalized scale of 0 to 1000 (where 0,0 is Top-Left and 1000,1000 is Bottom-Right of the image).\n" +
+                "4. SEQUENCING: Return the runs in a logical clockwise order. Ensure that if two runs are connected at a corner, the 'endPoint' of the first run matches the 'startPoint' of the second run.\n" +
+                "5. DISCONTINUITY: Set 'isStartOfNewSection' to true ONLY if there is a significant physical gap between the current run's startPoint and the previous run's endPoint.\n" +
+                "6. MEASUREMENTS: Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5). Accuracy is paramount.\n" +
+                "7. LABELS: Use text labels in the image (e.g. 'North Perimeter', '131-0\"') to identify the name and length of each run.\n\n" +
+                "Return the data as a list of runs in a structured JSON format.",
         },
       ],
       config: {
@@ -191,6 +192,20 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                     enum: ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"] 
                   },
                   isStartOfNewSection: { type: Type.BOOLEAN, description: "True if this run starts a new non-contiguous fence segment" },
+                  startPoint: {
+                    type: Type.OBJECT,
+                    properties: {
+                      x: { type: Type.NUMBER },
+                      y: { type: Type.NUMBER }
+                    }
+                  },
+                  endPoint: {
+                    type: Type.OBJECT,
+                    properties: {
+                      x: { type: Type.NUMBER },
+                      y: { type: Type.NUMBER }
+                    }
+                  },
                   gates: {
                     type: Type.ARRAY,
                     items: {
@@ -198,9 +213,10 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                       properties: {
                         type: { type: Type.STRING, enum: ["Single", "Double"] },
                         width: { type: Type.NUMBER },
+                        positionPercent: { type: Type.NUMBER, description: "Position along the run from start to end (0.0 to 1.0)" },
                         description: { type: Type.STRING }
                       },
-                      required: ["type", "width"]
+                      required: ["type", "width", "positionPercent"]
                     }
                   }
                 },

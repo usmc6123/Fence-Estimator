@@ -98,6 +98,7 @@ export default function Estimator({
             id: Math.random().toString(36).substr(2, 9),
             type: g.type,
             width: g.width,
+            position: g.positionPercent * run.linearFeet,
             construction: 'Welded' as const,
           })),
           styleId: estimate.defaultStyleId || 'wood-standard',
@@ -106,6 +107,8 @@ export default function Estimator({
           color: estimate.defaultColor || 'Natural',
           orientation: run.orientation,
           isStartOfNewSection: run.isStartOfNewSection,
+          startPoint: run.startPoint,
+          endPoint: run.endPoint,
           isPreStained: estimate.isPreStained,
           hasRotBoard: estimate.hasRotBoard,
           ironInstallType: estimate.ironInstallType,
@@ -2429,8 +2432,19 @@ export default function Estimator({
                       const sectionRuns = section.runs;
                       const rawPoints: [number, number][] = [];
                       const hasMapPoints = sectionRuns.some(r => r.points && r.points.length >= 2);
+                      const hasCoordinates = sectionRuns.some(r => r.startPoint && r.endPoint);
 
-                      if (hasMapPoints) {
+                      if (hasCoordinates) {
+                        // Use AI-extracted coordinates (normalized 0-1000)
+                        sectionRuns.forEach((run, i) => {
+                          if (i === 0 && run.startPoint) {
+                            rawPoints.push([run.startPoint.x, run.startPoint.y]);
+                          }
+                          if (run.endPoint) {
+                            rawPoints.push([run.endPoint.x, run.endPoint.y]);
+                          }
+                        });
+                      } else if (hasMapPoints) {
                         const firstPt = sectionRuns.find(r => r.points && r.points.length >= 2)?.points![0];
                         if (firstPt) {
                           const latScale = 364000;
@@ -2627,7 +2641,27 @@ export default function Estimator({
                                   const totalPostsOnRun = finalSortedPosts.length;
                                   
                                   let tOX = 0, tOY = 0, tA = "middle";
-                                  const orient = run.orientation;
+                                  let orient = run.orientation;
+                                  
+                                  // Derive orientation if missing but we have points
+                                  if (!orient && scaledPoints[i] && scaledPoints[i+1]) {
+                                    const p1 = scaledPoints[i];
+                                    const p2 = scaledPoints[i+1];
+                                    const dx = p2[0] - p1[0];
+                                    const dy = p2[1] - p1[1];
+                                    if (Math.abs(dx) > Math.abs(dy)) {
+                                      orient = dy > 0 ? 'South' : 'North'; // Wait, this depends on which side it's on
+                                    } else {
+                                      orient = dx > 0 ? 'East' : 'West';
+                                    }
+                                    // Actually, simpler: if it's horizontal, check if it's top or bottom half of diagram
+                                    if (Math.abs(dx) > Math.abs(dy)) {
+                                      orient = midY < 425 ? 'North' : 'South';
+                                    } else {
+                                      orient = midX > 550 ? 'East' : 'West';
+                                    }
+                                  }
+
                                   if (orient === 'North') tOY = -80;
                                   else if (orient === 'East') { tOX = 80; tA = "start"; }
                                   else if (orient === 'South') tOY = 95;
