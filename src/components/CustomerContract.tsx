@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -245,6 +245,8 @@ export default function CustomerContract({
   }, [data.totals.grandTotal, projectBreakdown, sectionTotals, gateTotals, demoTotals]);
 
   const grandTotal = manualGrandTotal ?? editedGrandTotal;
+  const isGrandTotalOverridden = manualGrandTotal !== null;
+  const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
   const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
@@ -340,6 +342,29 @@ export default function CustomerContract({
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
+      {/* Warning if overrides are active */}
+      {(isGrandTotalOverridden || hasSectionOverrides) && (
+        <div className="mb-6 p-4 bg-american-red/10 border-2 border-american-red rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-american-red text-white rounded-lg">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-black text-american-red uppercase tracking-tight">Manual Price Overrides Active</p>
+              <p className="text-[10px] font-bold text-american-red/80 uppercase tracking-widest">
+                The total investment shown below has been manually adjusted and may not match calculated material costs.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={handleResetManualOverrides}
+            className="px-4 py-2 bg-white border-2 border-american-red/20 text-american-red text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-american-red hover:text-white transition-all shadow-sm"
+          >
+            Reset to Calculated
+          </button>
+        </div>
+      )}
+
       {/* Action Header */}
       <div className="bg-white rounded-3xl p-8 shadow-md border border-[#E5E5E5] flex flex-col gap-6 relative overflow-hidden print:hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -800,18 +825,28 @@ export default function CustomerContract({
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50 mb-1">Guaranteed Project Quoted Total</p>
                   <h3 className="text-3xl font-black tracking-tighter">TOTAL INVESTMENT</h3>
                 </div>
-                <div className="relative z-10 text-center md:text-right">
-                  <div className="flex items-center justify-center md:justify-end gap-1 mb-1">
+                <div className="relative z-10 text-center md:text-right w-full md:w-auto">
+                  <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
                     <span className="text-3xl font-black tabular-nums tracking-tighter self-center">$</span>
                     <input 
                       type="number"
                       step="0.01"
                       value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
-                      onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
-                      className="text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                        setManualGrandTotal(val);
+                        if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
+                      }}
+                      className={cn(
+                        "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
+                        isGrandTotalOverridden ? "text-american-red italic" : "text-white"
+                      )}
                     />
                   </div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-american-red">Valid for 30 days from date of issue</p>
+                  {isGrandTotalOverridden && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(editedGrandTotal)}</p>
+                  )}
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Valid for 30 days from date of issue</p>
                 </div>
               </div>
             </div>

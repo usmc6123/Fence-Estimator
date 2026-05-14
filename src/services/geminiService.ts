@@ -154,7 +154,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-pro-latest",
       contents: [
         {
           inlineData: {
@@ -163,14 +163,14 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
           },
         },
         {
-          text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram.\n" +
-                "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
-                "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
-                "3. COORDINATE MAPPING: For every fence line (red line), identify its start point and end point coordinates on a normalized scale of 0 to 1000 (where 0,0 is Top-Left and 1000,1000 is Bottom-Right of the image).\n" +
-                "4. SEQUENCING & CONNECTIVITY: Return the runs in a strict logical perimeter sequence (usually clockwise). If two runs are physically contiguous in the diagram, ensure they are consecutive in the list. If a run ends where another begins, the 'endPoint' of Run A MUST be the 'startPoint' of Run B.\n" +
-                "5. PROXIMITY RULE: If the gap between two segments is less than 5% of the total project size, they should be considered connected unless clearly labeled as separate. Do NOT separate connected runs into multiple sections.\n" +
-                "6. MEASUREMENTS: Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5). Accuracy is paramount. Use the scale bar if present.\n" +
-                "7. LABELS: Use text labels in the image (e.g. 'North Perimeter', '131-0\"') to identify the name and length of each run.\n\n" +
+          text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram with extreme precision.\n" +
+                "1. Identify all fence runs represented by solid red lines in the diagram.\n" +
+                "2. Extract length measurements for each run. IMPORTANT: These measurements are often labeled with PINK text and pink arrow lines (e.g. 226'-0\", 131'-0\"). If a segment has a pink measurement, use it. If not, use other nearby text or the scale bar.\n" +
+                "3. Identify gates. These are usually indicated by GREEN lines or GREEN callouts (e.g. '4' gate', '10ft Gate'). If a gate is within a fence run, include it as a 'gate' property within that run.\n" +
+                "4. COORDINATE MAPPING: For every run, identify its start and end points on a normalized scale of 0 to 1000 (0,0 is Top-Left, 1000,1000 is Bottom-Right).\n" +
+                "5. SEQUENCING: Return the runs in a sequential perimeter order. If segments are physically connected at a vertex, ensure they are consecutive in your list and share common coordinates (Run A's endPoint = Run B's startPoint).\n" +
+                "6. PROXIMITY: Do NOT separate consecutive connected segments into different sections. They should be part of one continuous perimeter flow.\n" +
+                "7. MEASUREMENTS: Convert all measurements to decimal feet. accuracy is the highest priority.\n\n" +
                 "Return the data as a list of runs in a structured JSON format.",
         },
       ],

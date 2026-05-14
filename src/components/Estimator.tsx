@@ -116,22 +116,37 @@ export default function Estimator({
         };
       });
 
-      if (runs.length > 0) {
+      if ((estimate.runs || []).length > 0) {
         if (confirm('A blueprint has been analyzed. Would you like to REPLACE your current fence runs with the blueprint data? (Recommended for accuracy)')) {
           setEstimate({
             ...estimate,
-            runs: newRuns as any
+            runs: newRuns as any,
+            manualSectionTotals: [],
+            manualGateTotals: [],
+            manualDemoTotals: [],
+            manualGrandTotal: null,
+            manualGatePrices: {}
           });
         } else {
           setEstimate({
             ...estimate,
-            runs: [...(estimate.runs || []), ...newRuns as any]
+            runs: [...(estimate.runs || []), ...newRuns as any],
+            manualSectionTotals: [],
+            manualGateTotals: [],
+            manualDemoTotals: [],
+            manualGrandTotal: null,
+            manualGatePrices: {}
           });
         }
       } else {
         setEstimate({
           ...estimate,
-          runs: newRuns as any
+          runs: newRuns as any,
+          manualSectionTotals: [],
+          manualGateTotals: [],
+          manualDemoTotals: [],
+          manualGrandTotal: null,
+          manualGatePrices: {}
         });
       }
 
