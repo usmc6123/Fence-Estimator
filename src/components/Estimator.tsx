@@ -153,9 +153,11 @@ export default function Estimator({
       alert(`Successfully extracted ${newRuns.length} fence sections and ${(result.runs.reduce((acc, r) => acc + (r.gates?.length || 0), 0))} gates from the blueprint.`);
     } catch (error: any) {
       console.error("Blueprint analysis failed:", error);
-      alert(error.message === 'GEMINI_API_KEY_MISSING' 
-        ? "Gemini API Key is missing. Manual entry required." 
-        : "Failed to analyze diagram. Please ensure it is clear and has legible measurements.");
+      if (error.message === 'GEMINI_API_KEY_MISSING') {
+        alert("Gemini API Key is missing. Manual entry required.");
+      } else {
+        alert(error.message || "Failed to analyze diagram. Please ensure it is clear and has legible measurements.");
+      }
     } finally {
       setIsAnalyzingBlueprint(false);
       if (blueprintInputRef.current) blueprintInputRef.current.value = '';
