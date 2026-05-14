@@ -207,15 +207,27 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       // 3. Prepare quote object with explicit mapping to avoid garbage fields
       const items = (extractedData.items || []).map((item: any) => {
         const itemNameLower = (item.materialName || '').toLowerCase();
-        const match = materials.find(m => 
-          m.name.toLowerCase().includes(itemNameLower) ||
-          itemNameLower.includes(m.name.toLowerCase()) ||
-          m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)
-        );
+        const partNumberLower = (item.partNumber || '').toLowerCase();
+
+        const match = materials.find(m => {
+          // 1. Part Number Exact Match (Highest confidence)
+          if (partNumberLower && m.sku && m.sku.toLowerCase() === partNumberLower) return true;
+          
+          // 2. Alias Match (User-learned memory)
+          if (m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)) return true;
+          if (partNumberLower && m.aliases?.some(alias => alias.toLowerCase() === partNumberLower)) return true;
+
+          // 3. Name Match (Fuzzy)
+          if (m.name.toLowerCase() === itemNameLower) return true;
+          if (m.name.toLowerCase().includes(itemNameLower) || itemNameLower.includes(m.name.toLowerCase())) return true;
+          
+          return false;
+        });
         
         return {
           id: Math.random().toString(36).substr(2, 9),
           materialName: item.materialName || 'Unknown Material',
+          partNumber: item.partNumber || null,
           qty: Number(item.qty) || 0,
           unit: item.unit || 'each',
           unitPrice: Number(item.unitPrice) || 0,
@@ -301,16 +313,36 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         const mat = materials.find(m => m.id === materialId);
         if (mat) {
           const currentAliases = mat.aliases || [];
-          if (!currentAliases.includes(item.materialName)) {
-            const nextAliases = [...currentAliases, item.materialName];
+          const nextAliases = [...currentAliases];
+          let updated = false;
+
+          // Learn materialName as alias
+          if (!nextAliases.includes(item.materialName)) {
+            nextAliases.push(item.materialName);
+            updated = true;
+          }
+
+          // Learn partNumber as alias or SKU
+          if (item.partNumber && !nextAliases.includes(item.partNumber)) {
+            nextAliases.push(item.partNumber);
+            updated = true;
+          }
+
+          if (updated) {
+            const updates: any = { aliases: nextAliases };
+            // If SKU is not set, set it from the partNumber
+            if (item.partNumber && !mat.sku) {
+              updates.sku = item.partNumber;
+            }
+
             if (user) {
-              updateDoc(doc(db, 'materials', materialId), { aliases: nextAliases }).catch(err => {
+              updateDoc(doc(db, 'materials', materialId), updates).catch(err => {
                 handleFirestoreError(err, OperationType.UPDATE, `materials/${materialId}`);
               });
             } else {
               setMaterials(prev => prev.map(m => {
                 if (m.id === materialId) {
-                  return { ...m, aliases: nextAliases };
+                  return { ...m, ...updates };
                 }
                 return m;
               }));
@@ -619,7 +651,14 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                 <tr key={item.id} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors">
                                   <td className="px-6 py-5">
                                     <div className="space-y-1">
-                                      <p>{item.materialName}</p>
+                                      <div className="flex items-center gap-2">
+                                        <p>{item.materialName}</p>
+                                        {item.partNumber && (
+                                          <span className="px-1.5 py-0.5 bg-american-blue/5 text-[9px] font-black text-american-blue/40 rounded uppercase tracking-tighter">
+                                            PN: {item.partNumber}
+                                          </span>
+                                        )}
+                                      </div>
                                       {mat ? (
                                         <div className="flex items-center gap-1.5 text-[10px] text-emerald-600">
                                           <CheckCircle2 size={12} />

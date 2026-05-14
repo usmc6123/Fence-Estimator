@@ -45,8 +45,11 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
           },
         },
         {
-          text: "Extract the supplier name, line items (name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.\n\n" +
-                "IMPORTANT: Normalize the supplier name. Use common/standard names (e.g., if it says 'Forney Fence Supply' or 'Forney Fence Co', just return 'Forney Fence').",
+          text: "Extract the supplier name, line items (part number, name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.\n\n" +
+                "IMPORTANT: \n" +
+                "1. Normalize the supplier name to its standard form.\n" +
+                "2. Extract part numbers or SKUs precisely if they exist. These are often in a dedicated 'Item Number', 'Part #', or 'SKU' column.\n" +
+                "3. Ensure the 'materialName' is descriptive and captured exactly as printed.",
         },
       ],
       config: {
@@ -62,6 +65,7 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
                 type: Type.OBJECT,
                 properties: {
                   materialName: { type: Type.STRING },
+                  partNumber: { type: Type.STRING, description: "Part number, SKU, or Item ID" },
                   qty: { type: Type.NUMBER },
                   unit: { type: Type.STRING },
                   unitPrice: { type: Type.NUMBER },

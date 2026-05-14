@@ -76,6 +76,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
     category: 'Post',
     unit: 'each',
     cost: 0,
+    sku: '',
     description: '',
     imageUrl: '',
   });
@@ -281,6 +282,9 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                       <PriceIndicator status={getPriceStatus(item.lastPriceUpdate)} />
                     </div>
                     <h3 className="text-lg font-bold text-[#1A1A1A] leading-tight line-clamp-2">{item.name}</h3>
+                    {item.sku && (
+                      <p className="text-[10px] font-mono text-american-blue uppercase tracking-tighter">SKU: {item.sku}</p>
+                    )}
                   </div>
 
                   <div className="mt-6 pt-6 border-t border-[#F5F5F5] flex items-center justify-between">
@@ -336,6 +340,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                         )}
                         <div className="flex flex-col">
                           <span className="font-bold text-[#1A1A1A]">{item.name}</span>
+                          {item.sku && <span className="text-[9px] font-mono text-american-blue/60 uppercase">SKU: {item.sku}</span>}
                           <PriceIndicator status={getPriceStatus(item.lastPriceUpdate)} />
                         </div>
                       </div>
@@ -461,6 +466,16 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                       step="0.001"
                       value={formData.cost}
                       onChange={(e) => setFormData({...formData, cost: Number(e.target.value)})}
+                      className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">SKU / Part Number</label>
+                    <input 
+                      type="text" 
+                      value={formData.sku || ''}
+                      onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                      placeholder="e.g. 100-32-6"
                       className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none"
                     />
                   </div>

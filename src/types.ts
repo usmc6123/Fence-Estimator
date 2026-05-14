@@ -11,6 +11,7 @@ export interface MaterialItem {
   description?: string;
   imageUrl?: string;
   aliases?: string[]; // Remembered naming conventions from supplier quotes
+  sku?: string; // Part number or SKU
   lastPriceUpdate?: string; // ISO string 
 }
 
@@ -116,6 +117,7 @@ export interface QuoteItem {
   unit: string;
   unitPrice: number;
   totalPrice: number;
+  partNumber?: string; // Extracted part number
   mappedMaterialId?: string; // Links to our MaterialLibrary
 }
 
