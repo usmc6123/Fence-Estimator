@@ -2668,38 +2668,41 @@ export default function Estimator({
                                     .sort((a,b) => a.dist - b.dist);
                                   const totalPostsOnRun = finalSortedPosts.length;
                                   
-                                  let tOX = 0, tOY = 0, tA = "middle";
-                                  let orient = run.orientation;
+                                  // Calculate Label Positioning - Push outwards from center to prevent overlaps
+                                  const dx = nextP[0] - p[0];
+                                  const dy = nextP[1] - p[1];
+                                  const runLen = Math.sqrt(dx * dx + dy * dy);
                                   
-                                  // Derive orientation if missing but we have points
-                                  if (!orient && scaledPoints[i] && scaledPoints[i+1]) {
-                                    const p1 = scaledPoints[i];
-                                    const p2 = scaledPoints[i+1];
-                                    const dx = p2[0] - p1[0];
-                                    const dy = p2[1] - p1[1];
-                                    if (Math.abs(dx) > Math.abs(dy)) {
-                                      orient = dy > 0 ? 'South' : 'North'; // Wait, this depends on which side it's on
-                                    } else {
-                                      orient = dx > 0 ? 'East' : 'West';
-                                    }
-                                    // Actually, simpler: if it's horizontal, check if it's top or bottom half of diagram
-                                    if (Math.abs(dx) > Math.abs(dy)) {
-                                      orient = midY < 425 ? 'North' : 'South';
-                                    } else {
-                                      orient = midX > 550 ? 'East' : 'West';
-                                    }
+                                  // Normal vector (perpendicular to run)
+                                  let nx = -dy / runLen;
+                                  let ny = dx / runLen;
+                                  
+                                  // Center of the diagram
+                                  const diagramCenterX = 550;
+                                  const diagramCenterY = 425;
+                                  
+                                  // Vector from diagram center to segment midpoint
+                                  const vx = midX - diagramCenterX;
+                                  const vy = midY - diagramCenterY;
+                                  
+                                  // Flip normal if it points towards the center
+                                  const dot = nx * vx + ny * vy;
+                                  if (dot < 0) {
+                                    nx = -nx;
+                                    ny = -ny;
                                   }
+                                  
+                                  const labelOffset = run.linearFeet < 60 ? 45 : 85;
+                                  const stagger = (i % 2 === 0) ? 0 : 35; // Stagger labels to prevent direct overlap
+                                  const tOX = nx * (labelOffset + stagger);
+                                  const tOY = ny * (labelOffset + stagger);
+                                  const tA = "middle";
 
-                                  if (orient === 'North') tOY = -80;
-                                  else if (orient === 'East') { tOX = 80; tA = "start"; }
-                                  else if (orient === 'South') tOY = 95;
-                                  else if (orient === 'West') { tOX = -80; tA = "end"; }
-                                  else {
-                                    if (dirIndex === 0) tOY = -80;
-                                    else if (dirIndex === 1) { tOX = 80; tA = "start"; }
-                                    else if (dirIndex === 2) tOY = 95;
-                                    else if (dirIndex === 3) { tOX = -80; tA = "end"; }
-                                  }
+                                  // Adjust font size for short segments
+                                  const isShort = run.linearFeet < 40;
+                                  const titleSize = isShort ? "14px" : "18px";
+                                  const subtitleSize = isShort ? "10px" : "14px";
+                                  const specSize = isShort ? "9px" : "12px";
                                   
                                   return (
                                     <g key={`l-${section.id}-${i}`}>
@@ -2749,10 +2752,10 @@ export default function Estimator({
                                           />
                                         );
                                       })}
-                                      <text x={midX + tOX} y={midY + tOY} textAnchor={tA as any} className="text-[16px] font-bold fill-american-blue" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '5px' }}>
-                                        <tspan x={midX + tOX} dy="0" className="text-[18px] font-black">{run?.name} ({run?.linearFeet}')</tspan>
-                                        <tspan x={midX + tOX} dy="20" className="text-[14px] fill-american-blue/80 font-bold">{runStyle.name} - {runVisualStyle.name}</tspan>
-                                        <tspan x={midX + tOX} dy="18" className="text-[12px] fill-american-red font-black uppercase tracking-tighter">{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(panelWidth)} OC</tspan>
+                                      <text x={midX + tOX} y={midY + tOY} textAnchor={tA as any} className="font-bold fill-american-blue" style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: '6px' }}>
+                                        <tspan x={midX + tOX} dy="0" className="font-black" style={{ fontSize: titleSize }}>{run?.name} ({run?.linearFeet}')</tspan>
+                                        <tspan x={midX + tOX} dy="20" className="fill-american-blue/80 font-bold" style={{ fontSize: subtitleSize }}>{runStyle.name} - {runVisualStyle.name}</tspan>
+                                        <tspan x={midX + tOX} dy="18" className="fill-american-red font-black uppercase tracking-tighter" style={{ fontSize: specSize }}>{(run.height || estimate.defaultHeight)}' H | Spacing: {formatFeetInches(panelWidth)} OC</tspan>
                                       </text>
                                     </g>
                                   );

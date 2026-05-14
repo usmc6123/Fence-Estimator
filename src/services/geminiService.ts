@@ -154,7 +154,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-pro-latest",
       contents: [
         {
           inlineData: {
@@ -167,15 +167,15 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                 "VISUAL KEYS:\n" +
                 "- RED LINES: These represent the physical fence runs. Identify every solid red segment.\n" +
                 "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Use these for the 'linearFeet' property. Match each pink measurement to the corresponding red run it spans.\n" +
-                "- GREEN LINES/CALLOUTS: These represent gates (e.g., '4' gate', '10ft Gate').\n" +
-                "- BLUE 'Start' & 'End' CALLOUTS: These indicate the beginning and end of the fence project sequence.\n\n" +
+                "- GREEN LINES/MARKERS: These represent GATES. Look for green line segments, green callouts, or green arrows pointing to the fence line. These often have white text box labels like '4\' gate'.\n" +
+                "- BLUE 'Start' & 'End' CALLOUTS: These indicate the beginning and end of the project sequence.\n\n" +
                 "RULES:\n" +
-                "1. START AT 'Start': Begin your list of runs at the vertex marked with the 'Start' pointer.\n" +
-                "2. SEQUENTIAL FLOW: Follow the red lines in a continuous, sequential path until you reach the 'End' pointer. Continuity is key.\n" +
-                "3. ACCURATE MEASUREMENTS: Convert all text labels (e.g., 226'-0\") to decimal feet. The pink arrow lines define the exact extent of the measurement.\n" +
-                "4. GATES: If a green gate is on a red run, include it in that run's 'gates' list with an estimated 'positionPercent' (0.0 to 1.0).\n" +
-                "5. COORDINATES: Map each vertex to 0-1000 scale. If Run A and Run B meet at a corner, Run A's endPoint must be Run B's startPoint.\n" +
-                "6. NAMES: Give descriptive names (e.g., 'Top Run (226ft)', 'West Boundary').\n\n" +
+                "1. START AT 'Start': Begin your sequence at the vertex marked 'Start'.\n" +
+                "2. SEQUENTIAL FLOW: Follow the red lines in a continuous path until you reach 'End'.\n" +
+                "3. ACCURATE MEASUREMENTS: Convert all text labels (e.g., 226'-0\") to decimal feet. Match pink arrows to the red segments they span.\n" +
+                "4. GATES ARE CRITICAL: If a green marker exists, you MUST include a gate object for that specific segment. Estimate positionPercent (0.0 at segment start to 1.0 at segment end).\n" +
+                "5. COORDINATES: Map each vertex to 0-1000 scale. Run continuity (Start of B = End of A) is strictly required.\n" +
+                "6. NAMES: Use descriptive names based on measurements (e.g., 'West Perimeter (131ft)').\n\n" +
                 "Return the results in valid JSON format.",
         },
       ],
