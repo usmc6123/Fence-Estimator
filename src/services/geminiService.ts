@@ -47,7 +47,13 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
         {
           text: "Extract the supplier name, line items (part number, name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.\n\n" +
                 "IMPORTANT: \n" +
-                "1. NORMALIZE SUPPLIER NAME: Strip 'Company', 'Co', 'Supply', 'Inc', 'LLC', 'Corp' from the name. For example, 'Viking Fence Company' or 'Viking Fence Co' should BOTH be returned as 'Viking Fence'. 'Forney Fence Supply' should be 'Forney Fence'.\n" +
+                "1. NORMALIZE SUPPLIER NAME: This is CRITICAL. Strip common company suffixes like 'Company', 'Co', 'Supply', 'Inc', 'Ltd', 'LLC', 'Corp', 'Corporation', 'Fence', 'Fencing' from the end of the name to find the base brand. \n" +
+                "   EXAMPLES:\n" +
+                "   - 'Viking Fence Company' -> 'Viking Fence'\n" +
+                "   - 'Viking Fence Co' -> 'Viking Fence'\n" +
+                "   - 'Forney Fence Supply' -> 'Forney Fence'\n" +
+                "   - 'Forney Fence' -> 'Forney Fence'\n" +
+                "   - 'Binary Fence LLC' -> 'Binary Fence'\n" +
                 "2. Extract part numbers or SKUs precisely if they exist. These are often in a dedicated 'Item Number', 'Part #', or 'SKU' column.\n" +
                 "3. Ensure the 'materialName' is descriptive and captured exactly as printed.",
         },
@@ -170,17 +176,16 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
           text: "You are an expert fence estimator. Analyze this satellite diagram or blueprint with extreme precision.\n\n" +
                 "VISUAL KEYS:\n" +
                 "- RED LINES: These represent the physical fence runs. Identify every solid red segment.\n" +
-                "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Use these for the 'linearFeet' property. Match each pink measurement to the corresponding red run it spans.\n" +
-                "- GREEN LINES/MARKERS: These represent GATES. Look for green line segments, green callouts, or green arrows pointing to the fence line. These often have white text box labels like '4\' gate'.\n" +
-                "- BLUE 'Start' & 'End' CALLOUTS: These indicate the beginning and end of the project sequence.\n\n" +
+                "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Match each pink measurement to the corresponding red run it spans.\n" +
+                "- GREEN LINES/MARKERS: These represent GATES. Look for green line segments, green boxes, or green arrows. \n" +
+                "  - '4\\' gate' -> Single 4ft gate.\n" +
+                "  - 'Double 4\\' gate' or '8\\' double gate' -> Double gate (width 8, total of two 4ft leaves).\n" +
+                "- BLUE 'Start' & 'End' CALLOUTS: Indicate sequence flow.\n\n" +
                 "RULES:\n" +
-                "1. START AT 'Start': Begin your sequence at the vertex marked 'Start'.\n" +
-                "2. SEQUENTIAL FLOW: Follow the red lines in a continuous path until you reach 'End'.\n" +
-                "3. ACCURATE MEASUREMENTS: Convert all text labels (e.g., 226'-0\") to decimal feet. Match pink arrows to the red segments they span.\n" +
-                "4. GATES ARE CRITICAL: If a green marker exists, you MUST include a gate object for that specific segment. Estimate positionPercent (0.0 at segment start to 1.0 at segment end).\n" +
-                "5. COORDINATES: Map each vertex to 0-1000 scale. Run continuity (Start of B = End of A) is strictly required.\n" +
-                "6. NAMES: Use descriptive names based on measurements (e.g., 'West Perimeter (131ft)').\n\n" +
-                "Return the results in valid JSON format.",
+                "1. SCAN FOR ALL GATES: Every green marker MUST be captured as a gate object. Pay attention to labels for 'Double'.\n" +
+                "2. START AT 'Start': Begin sequence at the vertex marked 'Start'.\n" +
+                "3. SEQUENTIAL FLOW: Path to 'End'.\n" +
+                "4. COORDINATES: Map each vertex to 0-1000 scale.",
         },
       ],
       config: {

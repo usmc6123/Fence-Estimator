@@ -197,7 +197,7 @@ export default function Estimator({
     const runBreakdown = detailedData.runs.map(run => {
       const chargeTotal = ((run.fenceMaterialCost + run.fenceLaborCost) * markupFactor) + (run.fenceMaterialCost * taxFactor);
       const gateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor + (run.gateMaterialCost * taxFactor);
-      const total = chargeTotal + gateCharge + (run.demoCharge * markupFactor);
+      const total = chargeTotal + gateCharge;
       const fenceChargePerFoot = run.netLF > 0 ? chargeTotal / run.netLF : 0;
 
       return {
@@ -239,6 +239,18 @@ export default function Estimator({
     const totalFenceLabor = calculatedFenceLabor + manualFenceLabor;
 
     const totalFenceCharge = (totalFenceMaterial + totalFenceLabor) * markupFactor + (totalFenceMaterial * taxFactor);
+    
+    // Calculate Gate Specific Totals
+    const totalGateMaterial = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.gateMaterialCost, 0)
+      : detailedData.summary.filter(i => i.category === 'Gate').reduce((sum, i) => sum + i.total, 0);
+    const totalGateLabor = (estimate.runs && estimate.runs.length > 0)
+      ? detailedData.runs.reduce((sum, r) => sum + r.gateLaborCost, 0)
+      : 0;
+    const totalGateCharge = (totalGateMaterial + totalGateLabor) * markupFactor + (totalGateMaterial * taxFactor);
+
+    const totalDemoCharge = detailedData.totals.demo * markupFactor;
+    const totalPrepCharge = detailedData.totals.prep * markupFactor;
 
     const gateCount = detailedData.runs.reduce((sum, r) => sum + r.gates.length, 0) || estimate.gateCount || 0;
     const postCount = detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
@@ -248,7 +260,11 @@ export default function Estimator({
       materialSubtotal: detailedData.totals.material,
       laborCost: detailedData.totals.labor,
       demoCost: detailedData.totals.demo,
-      sitePrepCost: detailedData.totals.prep,
+      demoTotal: totalDemoCharge,
+      prepCost: detailedData.totals.prep,
+      prepTotal: totalPrepCharge,
+      gateTotal: totalGateCharge,
+      fenceTotal: totalFenceCharge,
       subtotal: detailedData.totals.subtotal,
       markup: detailedData.totals.markup,
       tax: detailedData.totals.tax,
@@ -1979,32 +1995,38 @@ export default function Estimator({
 
             <div className="space-y-4 border-t border-white/10 pt-6">
               <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Materials Subtotal</span>
-                <span className="font-mono">{formatCurrency(results.materialSubtotal)}</span>
+                <span className="text-white/60">Fence Installation</span>
+                <span className="font-mono font-bold">{formatCurrency(results.fenceTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Demolition Cost</span>
-                <span className="font-mono">{formatCurrency(results.demoCost)}</span>
+                <span className="text-white/60">Access Gates</span>
+                <span className="font-mono font-bold">{formatCurrency(results.gateTotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Site Prep Cost</span>
-                <span className="font-mono">{formatCurrency(results.sitePrepCost)}</span>
+              
+              <div className="pt-2">
+                <div className="px-3 py-2 rounded-xl bg-american-red/10 border border-american-red/20 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-american-red font-black uppercase tracking-widest text-[9px]">Demolition Services</span>
+                    <span className="font-mono font-bold text-american-red">{formatCurrency(results.demoTotal)}</span>
+                  </div>
+                  <p className="text-[8px] text-american-red/60 uppercase tracking-widest leading-tight">
+                    Charged separately. Not included in price per foot metric.
+                  </p>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Labor Cost</span>
-                <span className="font-mono">{formatCurrency(results.laborCost)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Markup (Profit)</span>
-                <span className="font-mono">{formatCurrency(results.markup)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#999999]">Tax (Materials Only)</span>
-                <span className="font-mono">{formatCurrency(results.tax)}</span>
-              </div>
+
+              {results.prepTotal > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/60">Site Prep & Clearing</span>
+                  <span className="font-mono font-bold">{formatCurrency(results.prepTotal)}</span>
+                </div>
+              )}
                
               <div className="flex justify-between pt-4 mt-4 border-t border-white/10 text-american-red font-black">
-                <span className="text-[10px] uppercase tracking-widest">Overall Price Per Foot</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-widest">Fence PNF</span>
+                  <span className="text-[8px] text-white/40 uppercase tracking-widest -mt-1 font-bold">Price per Foot</span>
+                </div>
                 <span className="text-lg tabular-nums">{formatCurrency(results.overallPricePerFoot)}/ft</span>
               </div>
 
@@ -2015,27 +2037,31 @@ export default function Estimator({
                     <div key={run.id} className="space-y-2 p-3 rounded-xl bg-white/5 border border-white/5 order-1">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-white">{run.name}</span>
-                        <span className="font-mono text-sm font-bold">{formatCurrency(run.total)}</span>
+                        <div className="text-right flex flex-col items-end">
+                          <span className="font-mono text-sm font-bold">{formatCurrency(run.total + run.demoCharge)}</span>
+                          {run.demoCharge > 0 && (
+                            <span className="text-[8px] font-black text-american-red uppercase tracking-widest leading-none mt-1">Incl {formatCurrency(run.demoCharge)} Demo</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex justify-between text-[10px] text-white/40 uppercase tracking-wider">
                         <span>{run.netLF.toFixed(1)} LF @ {formatCurrency(run.fenceChargePerFoot)}/ft</span>
                         <div className="flex gap-3">
                           {run.gateCharge > 0 && <span>Gates: {formatCurrency(run.gateCharge)}</span>}
-                          {run.demoCharge > 0 && <span className="text-american-red/60">Demo: {formatCurrency(run.demoCharge)}</span>}
                         </div>
                       </div>
                     </div>
                   ))}
-                  {results.sitePrepCost > 0 && (
+                  {results.prepCost > 0 && (
                     <div className="space-y-2 p-3 rounded-xl bg-american-red/5 border border-american-red/10">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-white">Site Preparation</span>
-                        <span className="font-mono text-sm font-bold">{formatCurrency(results.sitePrepCost * markupFactor)}</span>
+                        <span className="font-mono text-sm font-bold">{formatCurrency(results.prepTotal)}</span>
                       </div>
                       <div className="flex justify-between text-[10px] text-white/40 uppercase tracking-wider">
                         <span>Project Mobilization & Prep</span>
                         <div className="flex gap-3">
-                          <span>Prep: {formatCurrency(results.sitePrepCost * markupFactor)}</span>
+                          <span>Prep: {formatCurrency(results.prepTotal)}</span>
                         </div>
                       </div>
                     </div>

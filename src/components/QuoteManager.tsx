@@ -199,24 +199,26 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       const normalizeName = (name: string) => {
         return name
           .toLowerCase()
-          .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
+          .replace(/ (company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing|supply co|fence co)$/g, '')
           .replace(/[^\w\s]/g, '')
           .trim();
       };
 
       let supplierName = extractedData.supplierName || 'Unknown Supplier';
       
-      // Match against existing suppliers to prevent duplicates
-      const normalizedNew = normalizeName(supplierName);
-      const existingSuppliers = Array.from(new Set(quotes.map(q => q.supplierName)));
-      const bestMatch = existingSuppliers.find(existing => normalizeName(existing) === normalizedNew);
-
-      if (bestMatch) {
-        supplierName = bestMatch;
-      } else if (supplierName.toLowerCase().includes('forney fence')) {
-        supplierName = 'Forney Fence';
-      } else if (supplierName.toLowerCase().includes('viking fence')) {
-        supplierName = 'Viking Fence';
+      // Special known mappings for this customer
+      const lowerName = supplierName.toLowerCase();
+      if (lowerName.includes('viking fence')) supplierName = 'Viking Fence';
+      else if (lowerName.includes('forney fence')) supplierName = 'Forney Fence';
+      else if (lowerName.includes('dallas fence')) supplierName = 'Dallas Fence';
+      else {
+        // Match against existing suppliers to prevent duplicates
+        const normalizedNew = normalizeName(supplierName);
+        const existingSuppliers = Array.from(new Set(quotes.map(q => q.supplierName)));
+        const bestMatch = existingSuppliers.find(existing => normalizeName(existing) === normalizedNew);
+        if (bestMatch) {
+          supplierName = bestMatch;
+        }
       }
 
       const newQuoteId = Math.random().toString(36).substr(2, 9);
