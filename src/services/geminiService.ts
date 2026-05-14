@@ -144,7 +144,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
     name: string; 
     linearFeet: number; 
     description?: string;
-    gates?: { type: 'Single' | 'Double'; width: number; description: string }[];
+    gates?: { type: 'Single' | 'Double'; width: number; description: string; positionPercent: number }[];
     isStartOfNewSection?: boolean;
     orientation?: 'North' | 'South' | 'East' | 'West' | 'Northeast' | 'Northwest' | 'Southeast' | 'Southwest';
     startPoint?: { x: number; y: number };

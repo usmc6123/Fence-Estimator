@@ -184,18 +184,24 @@ export default function CustomerContract({
   
   // Calculate a dynamic grand total based on edited section totals
   const editedGrandTotal = React.useMemo(() => {
-    const baseTotal = projectBreakdown.reduce((sum, r, i) => {
-      const fence = sectionTotals[i] ?? r.totalFenceCharge;
-      const gate = gateTotals[i] ?? r.totalGateCharge;
-      const demo = demoTotals[i] ?? r.demoCharge;
-      return sum + fence + gate + demo;
+    // Start with the correctly calculated grand total from the library
+    let total = data.totals.grandTotal;
+
+    // Apply deltas for manual overrides in the contract sections
+    const overrideDelta = projectBreakdown.reduce((sum, r, i) => {
+      // We only want to apply the delta if the value in sectionTotals/gateTotals/demoTotals 
+      // differs from the initial calculated value for that run.
+      // Note: sectionTotals etc are initialized in useEffect to r.totalFenceCharge etc.
+      
+      const fenceDelta = (sectionTotals[i] !== undefined) ? (sectionTotals[i] - r.totalFenceCharge) : 0;
+      const gateDelta = (gateTotals[i] !== undefined) ? (gateTotals[i] - r.totalGateCharge) : 0;
+      const demoDelta = (demoTotals[i] !== undefined) ? (demoTotals[i] - r.demoCharge) : 0;
+      
+      return sum + fenceDelta + gateDelta + demoDelta;
     }, 0);
     
-    const sitePrep = data.totals.prep * markupFactor;
-    const deliveryFee = estimate.deliveryFee ?? 50;
-    
-    return baseTotal + sitePrep + deliveryFee;
-  }, [projectBreakdown, sectionTotals, gateTotals, demoTotals, data.totals.prep, markupFactor, estimate.deliveryFee]);
+    return total + overrideDelta;
+  }, [data.totals.grandTotal, projectBreakdown, sectionTotals, gateTotals, demoTotals]);
 
   const grandTotal = manualGrandTotal ?? editedGrandTotal;
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
