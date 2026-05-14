@@ -154,7 +154,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-pro-latest",
+      model: "gemini-1.5-flash",
       contents: [
         {
           inlineData: {
@@ -163,15 +163,19 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
           },
         },
         {
-          text: "You are an expert fence estimator. Analyze this satellite blueprint or hand-drawn diagram with extreme precision.\n" +
-                "1. Identify all fence runs represented by solid red lines in the diagram.\n" +
-                "2. Extract length measurements for each run. IMPORTANT: These measurements are often labeled with PINK text and pink arrow lines (e.g. 226'-0\", 131'-0\"). If a segment has a pink measurement, use it. If not, use other nearby text or the scale bar.\n" +
-                "3. Identify gates. These are usually indicated by GREEN lines or GREEN callouts (e.g. '4' gate', '10ft Gate'). If a gate is within a fence run, include it as a 'gate' property within that run.\n" +
-                "4. COORDINATE MAPPING: For every run, identify its start and end points on a normalized scale of 0 to 1000 (0,0 is Top-Left, 1000,1000 is Bottom-Right).\n" +
-                "5. SEQUENCING: Return the runs in a sequential perimeter order. If segments are physically connected at a vertex, ensure they are consecutive in your list and share common coordinates (Run A's endPoint = Run B's startPoint).\n" +
-                "6. PROXIMITY: Do NOT separate consecutive connected segments into different sections. They should be part of one continuous perimeter flow.\n" +
-                "7. MEASUREMENTS: Convert all measurements to decimal feet. accuracy is the highest priority.\n\n" +
-                "Return the data as a list of runs in a structured JSON format.",
+          text: "You are an expert fence estimator. Analyze this satellite diagram or blueprint with extreme precision.\n\n" +
+                "VISUAL KEYS:\n" +
+                "- RED LINES: These represent the physical fence runs. Identify every segment.\n" +
+                "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Match each pink measurement to the red line it describes.\n" +
+                "- GREEN LINES/ARROWS: These represent gates (e.g., '4' gate', '10ft Gate').\n\n" +
+                "RULES:\n" +
+                "1. Extract each red line segment as a 'run'.\n" +
+                "2. Convert measurements to decimal feet (e.g., 226'-0\" = 226, 131'-6\" = 131.5).\n" +
+                "3. If multiple segments are connected at corners, list them in sequence (e.g., clockwise).\n" +
+                "4. If a gate is located on a fence run, include it in the 'gates' array for that run. Estimate 'positionPercent' (0.0 to 1.0) along the run.\n" +
+                "5. Assign a name to each run based on its location (e.g., 'North Perimeter', 'East Interior').\n" +
+                "6. Determine compass orientation if possible.\n\n" +
+                "Return the results in valid JSON format.",
         },
       ],
       config: {
@@ -184,14 +188,14 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  name: { type: Type.STRING, description: "e.g. North Perimeter, Front Driveway Section" },
-                  linearFeet: { type: Type.NUMBER, description: "Total length of the red line section in feet" },
-                  description: { type: Type.STRING, description: "Additional details from callouts" },
+                  name: { type: Type.STRING },
+                  linearFeet: { type: Type.NUMBER },
+                  description: { type: Type.STRING },
                   orientation: { 
                     type: Type.STRING, 
                     enum: ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"] 
                   },
-                  isStartOfNewSection: { type: Type.BOOLEAN, description: "True if this run starts a new non-contiguous fence segment" },
+                  isStartOfNewSection: { type: Type.BOOLEAN },
                   startPoint: {
                     type: Type.OBJECT,
                     properties: {
@@ -213,7 +217,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                       properties: {
                         type: { type: Type.STRING, enum: ["Single", "Double"] },
                         width: { type: Type.NUMBER },
-                        positionPercent: { type: Type.NUMBER, description: "Position along the run from start to end (0.0 to 1.0)" },
+                        positionPercent: { type: Type.NUMBER },
                         description: { type: Type.STRING }
                       },
                       required: ["type", "width", "positionPercent"]
@@ -229,12 +233,17 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
       },
     });
 
+    if (!response.text) {
+      throw new Error("No response text from AI");
+    }
+
     return JSON.parse(response.text);
   } catch (error) {
     if (error instanceof Error && error.message === "GEMINI_API_KEY_MISSING") {
       throw error;
     }
     console.error("Error analyzing blueprint:", error);
-    throw new Error("Failed to analyze diagram. Please ensure it is a clear image or PDF with legible measurements.");
+    // Include the actual error message in the console for the user/me to see in the logs if they could
+    throw new Error(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please ensure the image is clear.`);
   }
 }
