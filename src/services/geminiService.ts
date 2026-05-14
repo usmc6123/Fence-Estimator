@@ -165,16 +165,17 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
         {
           text: "You are an expert fence estimator. Analyze this satellite diagram or blueprint with extreme precision.\n\n" +
                 "VISUAL KEYS:\n" +
-                "- RED LINES: These represent the physical fence runs. Identify every segment.\n" +
-                "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Match each pink measurement to the red line it describes.\n" +
-                "- GREEN LINES/ARROWS: These represent gates (e.g., '4' gate', '10ft Gate').\n\n" +
+                "- RED LINES: These represent the physical fence runs. Identify every solid red segment.\n" +
+                "- PINK TEXT & PINK ARROWS: These are length measurements (e.g., 226'-0\", 131'-0\"). Use these for the 'linearFeet' property. Match each pink measurement to the corresponding red run it spans.\n" +
+                "- GREEN LINES/CALLOUTS: These represent gates (e.g., '4' gate', '10ft Gate').\n" +
+                "- BLUE 'Start' & 'End' CALLOUTS: These indicate the beginning and end of the fence project sequence.\n\n" +
                 "RULES:\n" +
-                "1. Extract each red line segment as a 'run'.\n" +
-                "2. Convert measurements to decimal feet (e.g., 226'-0\" = 226, 131'-6\" = 131.5).\n" +
-                "3. If multiple segments are connected at corners, list them in sequence (e.g., clockwise).\n" +
-                "4. If a gate is located on a fence run, include it in the 'gates' array for that run. Estimate 'positionPercent' (0.0 to 1.0) along the run.\n" +
-                "5. Assign a name to each run based on its location (e.g., 'North Perimeter', 'East Interior').\n" +
-                "6. Determine compass orientation if possible.\n\n" +
+                "1. START AT 'Start': Begin your list of runs at the vertex marked with the 'Start' pointer.\n" +
+                "2. SEQUENTIAL FLOW: Follow the red lines in a continuous, sequential path until you reach the 'End' pointer. Continuity is key.\n" +
+                "3. ACCURATE MEASUREMENTS: Convert all text labels (e.g., 226'-0\") to decimal feet. The pink arrow lines define the exact extent of the measurement.\n" +
+                "4. GATES: If a green gate is on a red run, include it in that run's 'gates' list with an estimated 'positionPercent' (0.0 to 1.0).\n" +
+                "5. COORDINATES: Map each vertex to 0-1000 scale. If Run A and Run B meet at a corner, Run A's endPoint must be Run B's startPoint.\n" +
+                "6. NAMES: Give descriptive names (e.g., 'Top Run (226ft)', 'West Boundary').\n\n" +
                 "Return the results in valid JSON format.",
         },
       ],
