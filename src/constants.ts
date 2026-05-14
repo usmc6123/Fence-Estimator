@@ -156,6 +156,7 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'g-kit-shark', name: 'Metal Frame Shark Hinge Gate Kit', category: 'Gate', unit: 'each', cost: 145.00, description: 'Heavy duty double gate kit', imageUrl: 'https://images.thdstatic.com/productImages/600a0d27-8862-4f49-bb9f-acee28329316/svn/afoxsos-specialty-hardware-59sa05453-64_600.jpg' },
   { id: 'g-latch-grav', name: 'Gravity Latch', category: 'Gate', unit: 'each', cost: 26.50, description: 'Pool-safe closure', imageUrl: 'https://static.grainger.com/rp/s/is/image/Grainger/1XMP1_AS01?$adapimg$&hei=536&wid=536' },
   { id: 'm-gate-4-pre', name: "4' Pre-made Wrought Iron Gate", category: 'Hardware', unit: 'each', cost: 185.00, description: 'Pre-fabricated metal gate' },
+  { id: 'm-gate-8-double', name: "8' Double Wrought Iron Gate (4' x 2)", category: 'Hardware', unit: 'each', cost: 425.00, description: 'Double pre-fabricated metal gate kit' },
   { id: 'm-gate-end-6', name: "1.5\" x 6' Gate End", category: 'Structure', unit: 'each', cost: 22.50, description: 'For custom gate frame' },
   { id: 'h-barrel-hinge', name: 'Regular Barrel Hinge', category: 'Hardware', unit: 'pair', cost: 18.00, description: 'Heavy duty weld-on hinge' },
   { id: 'h-jbolt-hinge', name: 'J-Bolt Barrel Hinge 7" (PR)', category: 'Hardware', unit: 'each', cost: 48.00, description: 'Heavy duty weld-on hinges' },

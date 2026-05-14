@@ -1350,6 +1350,7 @@ export default function Estimator({
                                           <option value="Single-5">5' Walk Gate</option>
                                           <option value="Single-6">6' Walk Gate</option>
                                           <option value="Single-8">8' Walk Gate</option>
+                                          <option value="Double-8">Double 4' Gate</option>
                                           <option value="Double-10">Double 5' Drive Gate</option>
                                           <option value="Double-12">Double 6' Drive Gate</option>
                                           <option value="Double-16">Double 8' Drive Gate</option>

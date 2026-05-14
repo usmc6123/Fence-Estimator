@@ -525,18 +525,32 @@ export function calculateDetailedTakeOff(
             const isPreMade = gate.construction === 'Pre-made' || (leafWidth === 4 && gate.construction === undefined);
             
             if (isPreMade) {
-              const preMadeMat = materials.find(m => m.id === 'm-gate-4-pre');
-              if (preMadeMat) {
+              const double8Mat = gate.type === 'Double' && width === 8 ? materials.find(m => m.id === 'm-gate-8-double') : null;
+              if (double8Mat) {
                 items.push({
-                  id: preMadeMat.id,
-                  name: preMadeMat.name,
-                  qty: sideCount,
-                  unit: preMadeMat.unit,
-                  unitCost: preMadeMat.cost,
-                  priceSource: preMadeMat.priceSource,
-                  total: sideCount * preMadeMat.cost,
+                  id: double8Mat.id,
+                  name: double8Mat.name,
+                  qty: 1,
+                  unit: double8Mat.unit,
+                  unitCost: double8Mat.cost,
+                  priceSource: double8Mat.priceSource,
+                  total: double8Mat.cost,
                   category: 'Gate'
                 });
+              } else {
+                const preMadeMat = materials.find(m => m.id === 'm-gate-4-pre');
+                if (preMadeMat) {
+                  items.push({
+                    id: preMadeMat.id,
+                    name: preMadeMat.name,
+                    qty: sideCount,
+                    unit: preMadeMat.unit,
+                    unitCost: preMadeMat.cost,
+                    priceSource: preMadeMat.priceSource,
+                    total: sideCount * preMadeMat.cost,
+                    category: 'Gate'
+                  });
+                }
               }
             } else {
               // Custom Welded Gate: 1 panel total + (2) 1.5" x 6' gate ends per side
