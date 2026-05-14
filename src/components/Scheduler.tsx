@@ -117,10 +117,10 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
-    const startDateStr = date.toISOString();
+    const startDateStr = format(date, 'yyyy-MM-dd');
     const duration = selectedDuration; 
     const endDate = addDays(date, duration - 1);
-    const endDateStr = endDate.toISOString();
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
 
     try {
       const docRef = doc(db, 'estimates', estimateId);
@@ -138,13 +138,14 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
 
   const addBlackout = async (date: Date) => {
     if (!user) return;
-    const id = `blackout-${Date.now()}`;
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const id = `blackout-${dateKey}-${user.uid}`;
     const newEvent: ScheduleEvent = {
         id,
         type: 'Blackout',
         title: 'Subcontractor Busy',
-        startDate: date.toISOString(),
-        endDate: date.toISOString(),
+        startDate: dateKey,
+        endDate: dateKey,
         userId: user.uid
     };
 
@@ -253,11 +254,12 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
               {/* Grid */}
               <div className="grid grid-cols-7 gap-px bg-[#E5E5E5] border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-inner">
                 {calendarDays.map((day, idx) => {
-                  const dayEvents = events.filter(e => isSameDay(parseISO(e.startDate), day));
+                  const dateKey = format(day, 'yyyy-MM-dd');
+                  const dayEvents = events.filter(e => e.startDate.startsWith(dateKey));
                   const jobs = scheduledEstimates.filter(est => {
-                    const start = parseISO(est.scheduledStartDate!);
-                    const end = est.scheduledEndDate ? parseISO(est.scheduledEndDate) : start;
-                    return isWithinInterval(day, { start, end });
+                    const start = est.scheduledStartDate!;
+                    const end = est.scheduledEndDate || start;
+                    return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
                   });
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isToday = isSameDay(day, new Date());
@@ -561,19 +563,24 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; }
+          body { background: white !important; font-size: 10pt; }
           .min-h-full { background: white !important; padding: 0 !important; }
           .max-w-7xl { max-width: 100% !important; margin: 0 !important; }
           .lg\\:col-span-8 { width: 100% !important; grid-column: span 12 / span 12 !important; }
           .lg\\:col-span-4 { display: none !important; }
-          .bg-white { border: 1px solid #eee !important; box-shadow: none !important; }
+          .bg-white { border: 1px solid #ccc !important; box-shadow: none !important; }
           .shadow-xl { box-shadow: none !important; }
-          .rounded-3xl { border-radius: 0 !important; }
-          .min-h-\\[120px\\] { min-height: 80px !important; }
-          .p-6, .lg\\:p-10 { padding: 0 !important; }
-          .grid-cols-7 { gap: 0 !important; }
+          .rounded-3xl, .rounded-2xl, .rounded-xl { border-radius: 4px !important; }
+          .min-h-\\[120px\\] { min-height: 1.5in !important; }
+          .p-6, .lg\\:p-10, .p-8 { padding: 4px !important; }
+          .grid-cols-7 { gap: 0 !important; border-collapse: collapse; }
           .bg-\\[#E5E5E5\\] { background: transparent !important; }
-          .border { border-color: #eee !important; }
+          .border { border-color: #ccc !important; }
+          .flex { display: flex !important; }
+          .hidden { display: none !important; }
+          h1, h2 { color: black !important; }
+          .bg-american-blue { background-color: #f0f0f0 !important; color: black !important; border: 1px solid #ddd !important; }
+          .text-white { color: black !important; }
         }
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;

@@ -167,9 +167,9 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
                 "1. Identify all fence runs (marked in red lines) and their labeled measurements (e.g. 206'-0\").\n" +
                 "2. Identify all gates (marked in green). IMPORTANT: If a green gate line is overlaying or positioned within a red fence run line, do NOT create a separate run for it. Instead, include it as a 'gate' property within that fence run.\n" +
                 "3. COORDINATE MAPPING: For every fence line (red line), identify its start point and end point coordinates on a normalized scale of 0 to 1000 (where 0,0 is Top-Left and 1000,1000 is Bottom-Right of the image).\n" +
-                "4. SEQUENCING: Return the runs in a logical clockwise order. Ensure that if two runs are connected at a corner, the 'endPoint' of the first run matches the 'startPoint' of the second run.\n" +
-                "5. DISCONTINUITY: Set 'isStartOfNewSection' to true ONLY if there is a significant physical gap between the current run's startPoint and the previous run's endPoint.\n" +
-                "6. MEASUREMENTS: Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5). Accuracy is paramount.\n" +
+                "4. SEQUENCING & CONNECTIVITY: Return the runs in a strict logical perimeter sequence (usually clockwise). If two runs are physically contiguous in the diagram, ensure they are consecutive in the list. If a run ends where another begins, the 'endPoint' of Run A MUST be the 'startPoint' of Run B.\n" +
+                "5. PROXIMITY RULE: If the gap between two segments is less than 5% of the total project size, they should be considered connected unless clearly labeled as separate. Do NOT separate connected runs into multiple sections.\n" +
+                "6. MEASUREMENTS: Convert all measurements to decimal feet (e.g. 206'-6\" = 206.5). Accuracy is paramount. Use the scale bar if present.\n" +
                 "7. LABELS: Use text labels in the image (e.g. 'North Perimeter', '131-0\"') to identify the name and length of each run.\n\n" +
                 "Return the data as a list of runs in a structured JSON format.",
         },

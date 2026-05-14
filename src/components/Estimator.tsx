@@ -116,10 +116,24 @@ export default function Estimator({
         };
       });
 
-      setEstimate({
-        ...estimate,
-        runs: [...(estimate.runs || []), ...newRuns as any]
-      });
+      if (runs.length > 0) {
+        if (confirm('A blueprint has been analyzed. Would you like to REPLACE your current fence runs with the blueprint data? (Recommended for accuracy)')) {
+          setEstimate({
+            ...estimate,
+            runs: newRuns as any
+          });
+        } else {
+          setEstimate({
+            ...estimate,
+            runs: [...(estimate.runs || []), ...newRuns as any]
+          });
+        }
+      } else {
+        setEstimate({
+          ...estimate,
+          runs: newRuns as any
+        });
+      }
 
       alert(`Successfully extracted ${newRuns.length} fence sections and ${(result.runs.reduce((acc, r) => acc + (r.gates?.length || 0), 0))} gates from the blueprint.`);
     } catch (error: any) {
@@ -290,7 +304,6 @@ export default function Estimator({
       lastModified: now,
       status: 'active',
       jobStatus: estimate.jobStatus || 'Proposed',
-      manualGrandTotal: results.total,
       userId: user.uid,
       companyId: 'lonestarfence'
     };

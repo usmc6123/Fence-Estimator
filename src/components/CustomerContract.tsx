@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -71,9 +71,9 @@ export default function CustomerContract({
     }
   };
   const [showCostBreakdown, setShowCostBreakdown] = useState(true);
-  const [sectionTotals, setSectionTotals] = useState<number[]>(estimate.manualSectionTotals || []);
-  const [gateTotals, setGateTotals] = useState<number[]>(estimate.manualGateTotals || []);
-  const [demoTotals, setDemoTotals] = useState<number[]>(estimate.manualDemoTotals || []);
+  const [sectionTotals, setSectionTotals] = useState<(number | null)[]>(estimate.manualSectionTotals || []);
+  const [gateTotals, setGateTotals] = useState<(number | null)[]>(estimate.manualGateTotals || []);
+  const [demoTotals, setDemoTotals] = useState<(number | null)[]>(estimate.manualDemoTotals || []);
 
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
   const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
@@ -122,18 +122,62 @@ export default function CustomerContract({
     });
   }, [data.runs, markupFactor, taxFactor]);
 
+  // Sync state if estimate changes (e.g. from Estimator tab)
   useEffect(() => {
-    // Only initialize section totals if they haven't been set
-    if (sectionTotals.length === 0 && projectBreakdown.length > 0) {
-      setSectionTotals(projectBreakdown.map(r => r.totalFenceCharge));
+    if (estimate.manualSectionTotals) setSectionTotals(estimate.manualSectionTotals);
+    if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
+    if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
+    if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
+  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal]);
+
+  const handleResetManualOverrides = () => {
+    if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
+      setSectionTotals([]);
+      setGateTotals([]);
+      setDemoTotals([]);
+      setManualGrandTotal(null);
+      setManualGatePrices({});
+      if (onUpdateEstimate) {
+        onUpdateEstimate({
+          manualSectionTotals: [],
+          manualGateTotals: [],
+          manualDemoTotals: [],
+          manualGrandTotal: null,
+          manualGatePrices: {}
+        });
+      }
     }
-    if (gateTotals.length === 0 && projectBreakdown.length > 0) {
-      setGateTotals(projectBreakdown.map(r => r.totalGateCharge));
+  };
+
+  const handleSectionTotalChange = (idx: number, val: number) => {
+    const newTotals = [...sectionTotals];
+    while (newTotals.length <= idx) newTotals.push(null);
+    newTotals[idx] = val;
+    setSectionTotals(newTotals);
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ manualSectionTotals: newTotals });
     }
-    if (demoTotals.length === 0 && projectBreakdown.length > 0) {
-      setDemoTotals(projectBreakdown.map(r => r.demoCharge));
+  };
+
+  const handleGateTotalChange = (idx: number, val: number) => {
+    const newTotals = [...gateTotals];
+    while (newTotals.length <= idx) newTotals.push(null);
+    newTotals[idx] = val;
+    setGateTotals(newTotals);
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ manualGateTotals: newTotals });
     }
-  }, [projectBreakdown.length]); // Use length to avoid infinite loop from content changes
+  };
+
+  const handleDemoTotalChange = (idx: number, val: number) => {
+    const newTotals = [...demoTotals];
+    while (newTotals.length <= idx) newTotals.push(null);
+    newTotals[idx] = val;
+    setDemoTotals(newTotals);
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ manualDemoTotals: newTotals });
+    }
+  };
 
   useEffect(() => {
     if (isInitialMount.current) {
@@ -187,15 +231,12 @@ export default function CustomerContract({
     // Start with the correctly calculated grand total from the library
     let total = data.totals.grandTotal;
 
-    // Apply deltas for manual overrides in the contract sections
+    // Apply deltas ONLY for sections that actually have an override
     const overrideDelta = projectBreakdown.reduce((sum, r, i) => {
-      // We only want to apply the delta if the value in sectionTotals/gateTotals/demoTotals 
-      // differs from the initial calculated value for that run.
-      // Note: sectionTotals etc are initialized in useEffect to r.totalFenceCharge etc.
-      
-      const fenceDelta = (sectionTotals[i] !== undefined) ? (sectionTotals[i] - r.totalFenceCharge) : 0;
-      const gateDelta = (gateTotals[i] !== undefined) ? (gateTotals[i] - r.totalGateCharge) : 0;
-      const demoDelta = (demoTotals[i] !== undefined) ? (demoTotals[i] - r.demoCharge) : 0;
+      // Check if user explicitly set a value that differs from the calculated one
+      const fenceDelta = (sectionTotals[i] !== undefined && sectionTotals[i] !== null) ? (sectionTotals[i]! - r.totalFenceCharge) : 0;
+      const gateDelta = (gateTotals[i] !== undefined && gateTotals[i] !== null) ? (gateTotals[i]! - r.totalGateCharge) : 0;
+      const demoDelta = (demoTotals[i] !== undefined && demoTotals[i] !== null) ? (demoTotals[i]! - r.demoCharge) : 0;
       
       return sum + fenceDelta + gateDelta + demoDelta;
     }, 0);
@@ -312,35 +353,42 @@ export default function CustomerContract({
             <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em] leading-tight opacity-80">Finalize and Print Professional Contract</p>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <button
+              onClick={handleResetManualOverrides}
+              className="px-6 py-5 bg-[#F5F5F5] hover:bg-[#EAEAEA] text-american-blue rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-[#DDD]"
+            >
+              Reset Pricing
+            </button>
             <button 
               onClick={handlePrint}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[160px]"
+              className="flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[160px]"
             >
               <Printer size={18} />
-              Print Agreement
+              Print
             </button>
             
-            {hasUnsavedChanges && (
-              <button 
-                onClick={handleSaveContract}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-green-600 text-white font-black text-xs uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-xl animate-pulse min-w-[180px]"
-              >
-                <Download size={18} />
-                Save All Changes
-              </button>
-            )}
-
-            {showSavedFeedback && !hasUnsavedChanges && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 bg-green-50 text-green-700 font-bold text-[10px] uppercase tracking-widest px-6 py-5 rounded-2xl border-2 border-green-200 shadow-sm"
-              >
-                <CheckCircle2 size={18} />
-                Saved Successfully
-              </motion.div>
-            )}
+            <button 
+              onClick={handleSaveContract}
+              disabled={!hasUnsavedChanges}
+              className={`flex items-center justify-center gap-2 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl min-w-[180px] ${
+                hasUnsavedChanges 
+                ? 'bg-american-red text-white hover:scale-105 animate-pulse' 
+                : 'bg-green-600 text-white cursor-default'
+              }`}
+            >
+              {hasUnsavedChanges ? (
+                <>
+                  <Save size={18} />
+                  Save Changes
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} />
+                  Saved
+                </>
+              )}
+            </button>
           </div>
         </div>
 

@@ -539,15 +539,16 @@ export function calculateDetailedTakeOff(
                 });
               }
             } else {
-              // Custom Welded Gate: 1 panel + (2) 1.5" x 6' gate ends per side
+              // Custom Welded Gate: 1 panel total + (2) 1.5" x 6' gate ends per side
+              // We use 1 panel total because an 8ft panel can frame even a large double gate (2x4ft leaves)
               const panelMat = materials.find(m => m.category === 'Metal' && m.id.includes(`panel-${run.height}x8`)) || materials.find(m => m.category === 'Metal' && m.id.includes('panel-4x8'));
               const gateEndMat = materials.find(m => m.id === 'm-gate-end-6');
               
               if (panelMat) {
                 items.push({
                   id: panelMat.id,
-                  name: `${panelMat.name} (For Gate Frame)`,
-                  qty: 1, // Exactly 1 panel per gate as per user instructions
+                  name: `${panelMat.name} (Gate Frame Panel)`,
+                  qty: 1, // One additional panel as frame for the gate
                   unit: 'each',
                   unitCost: panelMat.cost,
                   total: panelMat.cost,

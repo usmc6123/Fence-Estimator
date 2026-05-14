@@ -216,9 +216,9 @@ export interface Estimate {
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   manualGrandTotal?: number | null;
-  manualSectionTotals?: number[];
-  manualGateTotals?: number[];
-  manualDemoTotals?: number[];
+  manualSectionTotals?: (number | null)[];
+  manualGateTotals?: (number | null)[];
+  manualDemoTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
   contractProjectDate?: string;
   contractScope?: string;
