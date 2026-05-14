@@ -16,10 +16,13 @@ interface SavedEstimatesProps {
   savedEstimates: SavedEstimate[];
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
   onLoadEstimate: (estimate: SavedEstimate) => void;
+  setActiveTab: (tab: string) => void;
   user: User | null;
 }
 
-export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, user }: SavedEstimatesProps) {
+const STATUS_FLOW: JobStatus[] = ['Estimate Pending', 'Estimate Sent', 'Accepted', 'Completed'];
+
+export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
@@ -61,6 +64,22 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       </div>
     );
   }
+
+  const updateJobStatus = async (id: string, status: JobStatus, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      await updateDoc(doc(db, 'estimates', id), {
+        jobStatus: status,
+        status: 'active',
+        lastModified: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    }
+  };
 
   const deleteEstimate = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -193,18 +212,36 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                 estimate.status === 'archived' ? "border-dashed border-[#EEEEEE] opacity-75" : "border-transparent hover:border-american-blue/10"
               )}
             >
-              {/* Status Badge */}
-              <div className="absolute top-4 right-4 flex gap-2">
-                {estimate.jobStatus && estimate.jobStatus !== 'Proposed' && (
-                  <div className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-600 border border-emerald-200">
-                    {estimate.jobStatus}
-                  </div>
-                )}
-                <div className={cn(
-                  "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-                  estimate.status === 'active' ? "bg-american-blue/10 text-american-blue" : "bg-[#999999]/10 text-[#999999]"
-                )}>
-                  {estimate.status}
+              {/* Status Flow Visualization */}
+              <div className="pb-4">
+                <div className="flex justify-between items-center mb-2 px-1">
+                  <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Workflow State</span>
+                  <span className={cn(
+                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
+                    estimate.jobStatus === 'Completed' ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
+                    estimate.jobStatus === 'Accepted' ? "bg-blue-100 text-blue-600 border-blue-200" :
+                    estimate.jobStatus === 'Estimate Sent' ? "bg-amber-100 text-amber-600 border-amber-200" :
+                    "bg-american-red/10 text-american-red border-american-red/20"
+                  )}>
+                    {estimate.jobStatus || 'Estimate Pending'}
+                  </span>
+                </div>
+                <div className="flex gap-1.5 h-1.5 px-0.5">
+                  {STATUS_FLOW.slice(0, 4).map((status, i) => {
+                    const currentIndex = STATUS_FLOW.indexOf(estimate.jobStatus || 'Estimate Pending');
+                    const isActive = i <= currentIndex;
+                    return (
+                      <div 
+                        key={status}
+                        className={cn(
+                          "flex-1 rounded-full transition-all duration-500",
+                          isActive 
+                            ? (estimate.jobStatus === 'Completed' ? "bg-emerald-500" : "bg-american-red") 
+                            : "bg-[#EEEEEE]"
+                        )}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -236,42 +273,65 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                 </div>
 
                  <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onLoadEstimate(estimate)}
-                      className="relative z-30 p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
-                      title="Open in Estimator"
+                      className="p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
+                      title="Open Estimate"
                     >
-                      <ExternalLink size={18} className="pointer-events-none" />
+                      <ExternalLink size={18} />
                     </button>
-                    {(!estimate.jobStatus || estimate.jobStatus === 'Proposed' || estimate.jobStatus === 'Draft') && (
+
+                    {/* Workflow Actions */}
+                    {(estimate.jobStatus === 'Estimate Pending' || !estimate.jobStatus) && (
                       <button
                         type="button"
-                        onClick={(e) => acceptJob(estimate.id, e)}
-                        className="relative z-30 p-3 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all"
-                        title="Accept Job"
+                        onClick={(e) => updateJobStatus(estimate.id, 'Estimate Sent', e)}
+                        className="p-3 bg-american-red text-white rounded-xl shadow-lg shadow-american-red/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
                       >
-                        <Check size={18} className="pointer-events-none" />
+                        Send Est
                       </button>
                     )}
-                    {(estimate.jobStatus === 'Accepted' || estimate.jobStatus === 'In Progress') && (
+                    {estimate.jobStatus === 'Estimate Sent' && (
                       <button
                         type="button"
-                        onClick={(e) => completeJob(estimate.id, e)}
-                        className="relative z-30 p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
-                        title="Mark Completed"
+                        onClick={(e) => updateJobStatus(estimate.id, 'Accepted', e)}
+                        className="p-3 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
                       >
-                        <CheckCircle2 size={18} className="pointer-events-none" />
+                        Mark Accepted
                       </button>
                     )}
+                    {estimate.jobStatus === 'Accepted' && (
+                      <button
+                        type="button"
+                        onClick={(e) => updateJobStatus(estimate.id, 'Completed', e)}
+                        className="p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
+                      >
+                        Mark Done
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setActiveTab('scheduler');
+                      }}
+                      className="p-3 bg-american-blue/5 text-american-blue rounded-xl hover:bg-american-blue/10 hover:scale-110 active:scale-95 transition-all"
+                      title="Schedule"
+                    >
+                      <Calendar size={18} />
+                    </button>
+
                     <button
                       type="button"
                       onClick={(e) => toggleArchive(estimate.id, e)}
-                      className="relative z-30 p-3 bg-[#F5F5F7] text-[#999999] hover:text-american-blue rounded-xl hover:scale-110 active:scale-95 transition-all"
+                      className="p-3 bg-[#F5F5F7] text-[#999999] hover:text-american-blue rounded-xl hover:scale-110 active:scale-95 transition-all"
                       title={estimate.status === 'active' ? 'Archive' : 'Restore'}
                     >
-                      {estimate.status === 'active' ? <Archive size={18} className="pointer-events-none" /> : <RotateCcw size={18} className="pointer-events-none" />}
+                      {estimate.status === 'active' ? <Archive size={18} /> : <RotateCcw size={18} />}
                     </button>
                   </div>
                   <button

@@ -361,6 +361,7 @@ export default function App() {
           savedEstimates={savedEstimates} 
           setSavedEstimates={setSavedEstimates}
           onLoadEstimate={handleLoadEstimate}
+          setActiveTab={setActiveTab}
           user={user}
         />
       )}

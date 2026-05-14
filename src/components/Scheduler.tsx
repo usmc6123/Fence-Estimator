@@ -15,6 +15,7 @@ import {
   isWithinInterval
 } from 'date-fns';
 import { 
+  Settings as SettingsIcon, Filter as FilterIcon,
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon, 
@@ -30,9 +31,9 @@ import {
   MapPin,
   Printer
 } from 'lucide-react';
-import { SavedEstimate, ScheduleEvent, JobStatus } from '../types';
+import { SavedEstimate, ScheduleEvent, JobStatus, SchedulerConfig } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -51,16 +52,39 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
+  const [isAddingEstimate, setIsAddingEstimate] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(2);
+  
+  const [config, setConfig] = useState<SchedulerConfig>({
+    appointmentDuration: 60, // 60 mins
+    startHour: 8,
+    endHour: 17,
+    viewFilter: 'both'
+  });
 
   // Sync scheduled jobs with estimates
   const scheduledEstimates = savedEstimates.filter(est => est.scheduledStartDate);
+  const pendingDossiers = savedEstimates.filter(est => est.jobStatus === 'Estimate Pending' || est.jobStatus === 'Estimate Sent');
   const acceptedUnscheduled = savedEstimates.filter(est => est.jobStatus === 'Accepted' && !est.scheduledStartDate);
 
   useEffect(() => {
     if (!user) return;
+
+    // Load config
+    const loadConfig = async () => {
+      try {
+        const configDoc = await getDoc(doc(db, 'companySettings', 'scheduler'));
+        if (configDoc.exists()) {
+          setConfig(configDoc.data() as SchedulerConfig);
+        }
+      } catch (err) {
+        console.error('Failed to load scheduler config:', err);
+      }
+    };
+    loadConfig();
 
     const q = query(collection(db, 'schedule_events'), where('userId', '==', user.uid));
     const unsubscribe = onSnapshot(q, 
@@ -71,6 +95,16 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     );
     return () => unsubscribe();
   }, [user]);
+
+  const saveConfig = async (newConfig: SchedulerConfig) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'companySettings', 'scheduler'), { ...newConfig, userId: user.uid });
+      setConfig(newConfig);
+    } catch (err) {
+      console.error('Failed to save config:', err);
+    }
+  };
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -110,6 +144,32 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
       });
     } else {
       setSelectedEvent(null);
+    }
+  };
+
+  const scheduleEstimate = async (estimateId: string, date: Date) => {
+    const estimate = savedEstimates.find(e => e.id === estimateId);
+    if (!estimate || !user) return;
+
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const id = `estimate-${estimateId}-${dateKey}`;
+    const newEvent: ScheduleEvent = {
+        id,
+        type: 'Estimate',
+        title: `EST: ${estimate.customerName}`,
+        startDate: dateKey,
+        endDate: dateKey,
+        estimateId: estimate.id,
+        userId: user.uid,
+        notes: `Estimate appointment set for ${estimate.customerName}`
+    };
+
+    try {
+        await setDoc(doc(db, 'schedule_events', id), newEvent);
+        setIsAddingEstimate(false);
+        setShowEventModal(false);
+    } catch (error) {
+        console.error('Failed to schedule estimate:', error);
     }
   };
 
@@ -158,8 +218,8 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     }
   };
 
-  const deleteEvent = async (id: string, type: 'Job' | 'Blackout') => {
-    if (type === 'Blackout') {
+  const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout') => {
+    if (type === 'Blackout' || type === 'Estimate') {
         await deleteDoc(doc(db, 'schedule_events', id));
     } else {
         const docRef = doc(db, 'estimates', id);
@@ -188,28 +248,42 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
             <p className="text-sm font-medium text-[#666666]">Manage installs, blackout dates, and subcontractor capacity.</p>
           </div>
           
-          <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-[#E5E5E5]">
-            <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                <div className="w-3 h-3 rounded-full bg-american-blue" />
-                <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Installs</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-[#E5E5E5] no-print">
+              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
+                  <div className="w-3 h-3 rounded-full bg-american-blue" />
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Installs</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
+                  <div className="w-3 h-3 rounded-full bg-amber-500" />
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Appointments</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
+                  <div className="w-3 h-3 rounded-full bg-american-red" />
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Blackouts</span>
+              </div>
+              <div className="flex items-center gap-2 px-3">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Vacant</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                <div className="w-3 h-3 rounded-full bg-american-red" />
-                <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Blackouts</span>
-            </div>
-            <div className="flex items-center gap-2 px-3">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Vacant</span>
-            </div>
-          </div>
 
-          <button 
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-american-blue text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-american-red transition-all shadow-lg no-print"
-          >
-            <Printer size={16} />
-            Print Calendar
-          </button>
+            <button 
+              onClick={() => setShowSettingsModal(true)}
+              className="p-3 bg-white text-american-blue hover:text-american-red rounded-2xl shadow-lg border border-[#E5E5E5] transition-all no-print"
+              title="Scheduler Settings"
+            >
+              <SettingsIcon size={20} />
+            </button>
+
+            <button 
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-american-blue text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-american-red transition-all shadow-lg no-print"
+            >
+              <Printer size={16} />
+              Print
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -255,12 +329,18 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
               <div className="grid grid-cols-7 gap-px bg-[#E5E5E5] border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-inner">
                 {calendarDays.map((day, idx) => {
                   const dateKey = format(day, 'yyyy-MM-dd');
-                  const dayEvents = events.filter(e => e.startDate.startsWith(dateKey));
-                  const jobs = scheduledEstimates.filter(est => {
+                  const dayEvents = events.filter(e => {
+                    if (e.startDate !== dateKey) return false;
+                    if (config.viewFilter === 'estimates' && e.type !== 'Estimate') return false;
+                    if (config.viewFilter === 'jobs' && e.type === 'Estimate') return false;
+                    return true;
+                  });
+                  const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
+                  const jobs = showJobs ? scheduledEstimates.filter(est => {
                     const start = est.scheduledStartDate!;
                     const end = est.scheduledEndDate || start;
                     return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
-                  });
+                  }) : [];
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isToday = isSameDay(day, new Date());
                   
@@ -290,10 +370,14 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                             key={event.id}
                             className={cn(
                               "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate",
-                              event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : "bg-american-blue/10 text-american-blue border border-american-blue/20"
+                              event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : 
+                              event.type === 'Estimate' ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                              "bg-american-blue/10 text-american-blue border border-american-blue/20"
                             )}
                           >
-                            {event.type === 'Blackout' ? <AlertCircle size={8} /> : <Briefcase size={8} />}
+                            {event.type === 'Blackout' ? <AlertCircle size={8} /> : 
+                             event.type === 'Estimate' ? <CalendarIcon size={8} /> :
+                             <Briefcase size={8} />}
                             {event.title}
                           </div>
                         ))}
@@ -319,13 +403,73 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
             
             <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
               <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Pending Estimates</h3>
+                <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
+                  {pendingDossiers.length}
+                </div>
+              </div>
+
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {pendingDossiers.length > 0 ? (
+                    pendingDossiers.map(est => (
+                        <div 
+                          key={est.id} 
+                          className="p-4 rounded-2xl border border-[#E5E5E5] bg-[#F8F9FA] hover:border-american-blue transition-all group cursor-default"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                             <div>
+                                <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
+                                <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
+                             </div>
+                             <div className="text-[10px] font-black text-white bg-american-red px-2 py-1 rounded-lg">
+                                {Math.round(est.linearFeet)}'
+                             </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-4">
+                            <div className="flex items-center gap-1 ">
+                                <Clock size={10} className="text-[#999999]" />
+                                <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">{config.appointmentDuration} Min Appt</span>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setSelectedDate(new Date());
+                                    setIsAddingEstimate(true);
+                                    setSelectedEvent({
+                                        id: est.id,
+                                        type: 'Estimate',
+                                        title: est.customerName,
+                                        startDate: '',
+                                        endDate: '',
+                                        estimateId: est.id,
+                                        userId: user.uid
+                                    });
+                                    setShowEventModal(true);
+                                }}
+                                className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
+                            >
+                                Schedule
+                            </button>
+                          </div>
+                        </div>
+                    ))
+                ) : (
+                    <div className="text-center py-10 opacity-30">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#999999]">No pending estimates</p>
+                    </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Unscheduled Orders</h3>
                 <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
                   {acceptedUnscheduled.length}
                 </div>
               </div>
 
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {acceptedUnscheduled.length > 0 ? (
                     acceptedUnscheduled.map(est => (
                         <div 
@@ -427,7 +571,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <h3 className="text-2xl font-black text-american-blue uppercase tracking-tight">
-                        {isAddingBlackout ? 'Add Blackout' : selectedEvent?.type === 'Job' ? 'Schedule Job' : selectedEvent?.type === 'Blackout' ? 'Manage Blackout' : 'Day Actions'}
+                        {isAddingBlackout ? 'Add Blackout' : isAddingEstimate ? 'Schedule Appointment' : selectedEvent?.type === 'Job' ? 'Schedule Job' : selectedEvent?.type === 'Blackout' ? 'Manage Blackout' : selectedEvent?.type === 'Estimate' ? 'Manage Appointment' : 'Day Actions'}
                     </h3>
                     <p className="text-xs font-bold text-[#999999] uppercase tracking-widest mt-1">
                         {format(selectedDate, 'EEEE, MMM do, yyyy')}
@@ -437,6 +581,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                     onClick={() => {
                         setShowEventModal(false);
                         setIsAddingBlackout(false);
+                        setIsAddingEstimate(false);
                         setSelectedEvent(null);
                     }}
                     className="h-10 w-10 rounded-xl bg-[#F5F7FA] flex items-center justify-center text-[#999999] hover:text-american-red transition-colors"
@@ -462,6 +607,30 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                             >
                                 Lock Date
                             </button>
+                        </div>
+                    ) : isAddingEstimate ? (
+                        <div className="space-y-6">
+                            <div className="p-6 bg-amber-50 border border-amber-200 rounded-3xl">
+                                <div className="flex items-center gap-3 text-amber-600 mb-2">
+                                    <CalendarIcon size={20} />
+                                    <h4 className="font-black uppercase text-xs tracking-widest">Estimate Appointment</h4>
+                                </div>
+                                <p className="text-xs text-amber-800 leading-relaxed font-bold">Duration: {config.appointmentDuration} Minutes</p>
+                                <p className="text-[10px] text-amber-700/60 mt-1 uppercase tracking-widest font-black">Available Between {config.startHour}:00 - {config.endHour}:00</p>
+                            </div>
+                            <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">Select Estimate Dossier</h4>
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                {pendingDossiers.map(est => (
+                                    <button 
+                                        key={est.id}
+                                        onClick={() => scheduleEstimate(est.id, selectedDate)}
+                                        className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
+                                    >
+                                        <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
+                                        <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     ) : selectedEvent ? (
                         <div className="space-y-6">

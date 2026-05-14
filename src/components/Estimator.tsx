@@ -336,7 +336,7 @@ export default function Estimator({
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
-      jobStatus: estimate.jobStatus || 'Proposed',
+      jobStatus: estimate.jobStatus || 'Estimate Pending',
       userId: user.uid,
       companyId: 'lonestarfence'
     };

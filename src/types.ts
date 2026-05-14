@@ -133,7 +133,7 @@ export interface SupplierQuote {
   fileType?: string;
 }
 
-export type JobStatus = 'Draft' | 'Proposed' | 'Accepted' | 'In Progress' | 'Completed' | 'Cancelled';
+export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled';
 
 export interface JobExpense {
   id: string;
@@ -240,7 +240,7 @@ export interface Estimate {
 
 export interface ScheduleEvent {
   id: string;
-  type: 'Job' | 'Blackout';
+  type: 'Job' | 'Estimate' | 'Blackout';
   title: string;
   startDate: string;
   endDate: string;
@@ -248,6 +248,13 @@ export interface ScheduleEvent {
   subcontractorId?: string;
   notes?: string;
   userId: string;
+}
+
+export interface SchedulerConfig {
+  appointmentDuration: number; // in minutes
+  startHour: number; // 0-23
+  endHour: number; // 0-23
+  viewFilter: 'estimates' | 'jobs' | 'both';
 }
 
 export interface SavedEstimate extends Estimate {
