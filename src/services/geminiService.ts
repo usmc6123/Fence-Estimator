@@ -47,7 +47,7 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
         {
           text: "Extract the supplier name, line items (part number, name, quantity, unit, unit price, and total price), and the grand total from this quote document. Return the data in a structured JSON format.\n\n" +
                 "IMPORTANT: \n" +
-                "1. Normalize the supplier name to its standard form.\n" +
+                "1. NORMALIZE SUPPLIER NAME: Strip 'Company', 'Co', 'Supply', 'Inc', 'LLC', 'Corp' from the name. For example, 'Viking Fence Company' or 'Viking Fence Co' should BOTH be returned as 'Viking Fence'. 'Forney Fence Supply' should be 'Forney Fence'.\n" +
                 "2. Extract part numbers or SKUs precisely if they exist. These are often in a dedicated 'Item Number', 'Part #', or 'SKU' column.\n" +
                 "3. Ensure the 'materialName' is descriptive and captured exactly as printed.",
         },

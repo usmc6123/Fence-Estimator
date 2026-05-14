@@ -196,10 +196,27 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       // 3. Extract data with Gemini
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
       
+      const normalizeName = (name: string) => {
+        return name
+          .toLowerCase()
+          .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
+          .replace(/[^\w\s]/g, '')
+          .trim();
+      };
+
       let supplierName = extractedData.supplierName || 'Unknown Supplier';
-      // Specific normalization requested by user
-      if (supplierName.toLowerCase().includes('forney fence')) {
+      
+      // Match against existing suppliers to prevent duplicates
+      const normalizedNew = normalizeName(supplierName);
+      const existingSuppliers = Array.from(new Set(quotes.map(q => q.supplierName)));
+      const bestMatch = existingSuppliers.find(existing => normalizeName(existing) === normalizedNew);
+
+      if (bestMatch) {
+        supplierName = bestMatch;
+      } else if (supplierName.toLowerCase().includes('forney fence')) {
         supplierName = 'Forney Fence';
+      } else if (supplierName.toLowerCase().includes('viking fence')) {
+        supplierName = 'Viking Fence';
       }
 
       const newQuoteId = Math.random().toString(36).substr(2, 9);
@@ -373,6 +390,14 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const compareData = React.useMemo(() => {
     const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string, fileUrl?: string }[] }> = {};
 
+    const normalizeName = (name: string) => {
+      return name
+        .toLowerCase()
+        .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
+        .replace(/[^\w\s]/g, '')
+        .trim();
+    };
+
     quotes.forEach(quote => {
       quote.items.forEach(item => {
         if (item.mappedMaterialId) {
@@ -383,12 +408,28 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
               suppliers: []
             };
           }
-          comparison[item.mappedMaterialId].suppliers.push({
-            supplierName: quote.supplierName,
-            price: item.unitPrice,
-            quoteId: quote.id,
-            fileUrl: quote.fileUrl
-          });
+
+          // Consolidate supplier variations in view
+          const normSupplier = normalizeName(quote.supplierName);
+          const existingInMat = comparison[item.mappedMaterialId].suppliers.find(s => normalizeName(s.supplierName) === normSupplier);
+          
+          if (existingInMat) {
+            // If multiple quotes from same supplier, keep the newest one for comparison
+            const existingQuote = quotes.find(q => q.id === existingInMat.quoteId);
+            if (existingQuote && new Date(quote.date) > new Date(existingQuote.date)) {
+              existingInMat.price = item.unitPrice;
+              existingInMat.quoteId = quote.id;
+              existingInMat.supplierName = quote.supplierName;
+              existingInMat.fileUrl = quote.fileUrl;
+            }
+          } else {
+            comparison[item.mappedMaterialId].suppliers.push({
+              supplierName: quote.supplierName,
+              price: item.unitPrice,
+              quoteId: quote.id,
+              fileUrl: quote.fileUrl
+            });
+          }
         }
       });
     });
@@ -405,6 +446,14 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const historyData = React.useMemo(() => {
     const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId: string }[] }> = {};
 
+    const normalizeName = (name: string) => {
+      return name
+        .toLowerCase()
+        .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
+        .replace(/[^\w\s]/g, '')
+        .trim();
+    };
+
     quotes.forEach(quote => {
       quote.items.forEach(item => {
         if (item.mappedMaterialId) {
@@ -415,8 +464,19 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
               entries: []
             };
           }
+
+          // Use normalized name to ensure consistency in history view
+          let displayName = quote.supplierName;
+          const normCurrent = normalizeName(quote.supplierName);
+          
+          // If we already have a display name for this normalized supplier in this material's history, use it
+          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent);
+          if (existingEntry) {
+            displayName = existingEntry.supplierName;
+          }
+
           history[item.mappedMaterialId].entries.push({
-            supplierName: quote.supplierName,
+            supplierName: displayName,
             price: item.unitPrice,
             date: quote.date,
             quoteId: quote.id
