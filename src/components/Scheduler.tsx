@@ -137,26 +137,12 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
 
   const handleDayClick = (day: Date) => {
     setSelectedDate(day);
+    setIsAddingBlackout(false);
+    setIsAddingEstimate(false);
+    setIsAddingBusy(false);
+    setIsCreatingNewDossier(false);
+    setSelectedEvent(null);
     setShowEventModal(true);
-    // Find event on this day
-    const event = events.find(e => isSameDay(parseISO(e.startDate), day));
-    const job = scheduledEstimates.find(est => est.scheduledStartDate && isSameDay(parseISO(est.scheduledStartDate), day));
-    
-    if (event) setSelectedEvent(event);
-    else if (job) {
-      // Create a virtual event for the modal
-      setSelectedEvent({
-        id: job.id,
-        type: 'Job',
-        title: job.customerName,
-        startDate: job.scheduledStartDate!,
-        endDate: job.scheduledEndDate || job.scheduledStartDate!,
-        estimateId: job.id,
-        userId: user.uid
-      });
-    } else {
-      setSelectedEvent(null);
-    }
   };
 
   const scheduleEstimate = async (estimateId: string, date: Date) => {
@@ -517,8 +503,14 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                         {dayEvents.map(event => (
                           <div 
                             key={event.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDate(day);
+                              setSelectedEvent(event);
+                              setShowEventModal(true);
+                            }}
                             className={cn(
-                              "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate",
+                              "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate cursor-pointer transition-all hover:scale-105 active:scale-95",
                               event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : 
                               event.type === 'Estimate' ? "bg-amber-100 text-amber-700 border border-amber-200" :
                               event.type === 'Busy' ? "bg-purple-100 text-purple-700 border border-purple-200" :
@@ -535,7 +527,21 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                         {jobs.map(job => (
                           <div 
                             key={job.id}
-                            className="text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate bg-american-blue text-white shadow-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDate(day);
+                              setSelectedEvent({
+                                id: job.id,
+                                type: 'Job',
+                                title: job.customerName,
+                                startDate: job.scheduledStartDate!,
+                                endDate: job.scheduledEndDate || job.scheduledStartDate!,
+                                estimateId: job.id,
+                                userId: user.uid
+                              });
+                              setShowEventModal(true);
+                            }}
+                            className="text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate bg-american-blue text-white shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95"
                           >
                             <CheckCircle2 size={8} />
                             {job.customerName}
@@ -682,14 +688,18 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                  <p className="text-xs text-white/70 leading-relaxed mb-6">Mark dates as blackout to prevent overlaps or overbooking your installation teams.</p>
                  <button 
                     onClick={() => {
-                        setSelectedDate(new Date());
+                        const today = new Date();
+                        setSelectedDate(today);
                         setIsAddingBlackout(true);
+                        setIsAddingEstimate(false);
+                        setIsAddingBusy(false);
+                        setSelectedEvent(null);
                         setShowEventModal(true);
                     }}
                     className="w-full bg-american-red hover:bg-white hover:text-american-red text-white transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
                  >
-                    <Plus size={16} />
-                    Add Blackout Date
+                    <AlertCircle size={16} />
+                    Blackout Today
                  </button>
             </div>
 
