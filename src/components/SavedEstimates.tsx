@@ -3,9 +3,10 @@ import {
   FileText, Search, Archive, RotateCcw, Trash2, 
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
-  Shield, Check, Briefcase, CheckCircle2
+  Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
+  FolderOpen, ArrowLeft
 } from 'lucide-react';
-import { SavedEstimate, JobStatus } from '../types';
+import { SavedEstimate, JobStatus, JobPhoto } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -26,6 +27,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
+  const [view, setView] = React.useState<'list' | 'files'>('list');
+  const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
 
   const filteredEstimates = savedEstimates.filter(est => {
     const name = est.customerName || 'Unnamed Prospect';
@@ -164,7 +167,25 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex bg-[#F5F5F7] p-1.5 rounded-2xl">
+            {(['list', 'files'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => {
+                  setView(v);
+                  if (v === 'list') setSelectedJobPhotos(null);
+                }}
+                className={cn(
+                  "px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                  view === v ? "bg-white text-american-blue shadow-lg" : "text-[#999999] hover:text-american-blue"
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4">
           {/* Search */}
           <div className="relative group w-full sm:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-american-blue/30 group-focus-within:text-american-blue transition-colors" size={18} />
@@ -177,29 +198,39 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             />
           </div>
 
-          {/* Filter */}
-          <div className="flex bg-[#F5F5F7] p-1.5 rounded-2xl">
-            {(['active', 'completed', 'archived', 'all'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                  filter === f 
-                    ? "bg-white text-american-blue shadow-lg shadow-american-blue/5 scale-105" 
-                    : "text-[#999999] hover:text-american-blue"
-                )}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence mode="popLayout">
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {view === 'list' ? (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            {/* Filter */}
+            <div className="flex bg-[#F5F5F7] p-1.5 rounded-2xl w-fit">
+              {(['active', 'completed', 'archived', 'all'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                    filter === f 
+                      ? "bg-white text-american-blue shadow-lg shadow-american-blue/5 scale-105" 
+                      : "text-[#999999] hover:text-american-blue"
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <AnimatePresence mode="popLayout">
           {filteredEstimates.map((estimate) => (
             <motion.div
               layout
@@ -325,6 +356,19 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
+                        setView('files');
+                        setSelectedJobPhotos(estimate);
+                      }}
+                      className="p-3 bg-american-blue/5 text-american-blue rounded-xl hover:bg-american-blue/10 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
+                    >
+                      Photos
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
                         setActiveTab('scheduler');
                       }}
                       className="p-3 bg-american-blue/5 text-american-blue rounded-xl hover:bg-american-blue/10 hover:scale-110 active:scale-95 transition-all"
@@ -377,7 +421,98 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             </div>
           </div>
         )}
-      </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="files"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            {selectedJobPhotos ? (
+              <div className="space-y-6">
+                <button 
+                  onClick={() => setSelectedJobPhotos(null)}
+                  className="flex items-center gap-2 text-american-blue hover:text-american-red transition-colors text-[10px] font-black uppercase tracking-widest"
+                >
+                  <ArrowLeft size={16} />
+                  Back to Files
+                </button>
+                
+                <div className="bg-white p-8 rounded-[40px] shadow-xl border-2 border-american-blue/10">
+                   <div className="flex items-center gap-4 mb-8">
+                      <div className="h-14 w-14 rounded-2xl bg-american-blue/10 flex items-center justify-center text-american-blue">
+                        <ImageIcon size={28} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-american-blue uppercase tracking-tighter">{selectedJobPhotos.customerName}</h3>
+                        <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{selectedJobPhotos.customerAddress}</p>
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      {selectedJobPhotos.photos && selectedJobPhotos.photos.length > 0 ? (
+                        selectedJobPhotos.photos.map(photo => (
+                          <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden shadow-lg hover:scale-105 transition-all cursor-zoom-in">
+                            <img src={photo.url} className="w-full h-full object-cover" alt="Job site" />
+                            <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                               <p className="text-[9px] font-black text-white uppercase tracking-widest">{photo.category || 'Site'}</p>
+                               <p className="text-[7px] text-white/60 font-bold uppercase">{new Date(photo.timestamp).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full py-20 flex flex-col items-center justify-center opacity-30 italic">
+                          <ImageIcon size={48} className="mb-4" />
+                          <p className="text-xs font-black uppercase tracking-widest">No photos for this dossier</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {savedEstimates.filter(est => est.photos && est.photos.length > 0).map(est => (
+                  <button
+                    key={est.id}
+                    onClick={() => setSelectedJobPhotos(est)}
+                    className="group bg-white p-6 rounded-[32px] border-2 border-american-blue/5 hover:border-american-blue/20 transition-all text-left shadow-xl hover:shadow-2xl"
+                  >
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="h-14 w-14 rounded-2xl bg-american-blue/10 flex items-center justify-center text-american-blue group-hover:bg-american-blue group-hover:text-white transition-all scale-95 group-hover:scale-100">
+                        <FolderOpen size={28} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-american-blue uppercase tracking-tighter truncate max-w-[150px]">{est.customerName}</h4>
+                        <p className="text-[9px] font-bold text-[#999999] uppercase tracking-widest truncate max-w-[150px]">{est.customerAddress}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t border-dashed border-[#F0F0F0]">
+                      <div className="flex items-center gap-1.5 text-american-red">
+                        <ImageIcon size={14} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">{est.photos?.length || 0} Files</span>
+                      </div>
+                      <ChevronRight size={16} className="text-american-blue/20 group-hover:text-american-blue transition-colors" />
+                    </div>
+                  </button>
+                ))}
+                {savedEstimates.filter(est => est.photos && est.photos.length > 0).length === 0 && (
+                  <div className="col-span-full py-40 flex flex-col items-center justify-center space-y-4 opacity-30">
+                    <ImageIcon size={64} className="text-american-blue" />
+                    <div className="text-center">
+                      <p className="text-xl font-black text-american-blue uppercase tracking-tighter">No Project Files Discovered</p>
+                      <p className="text-xs font-bold text-[#999999] uppercase tracking-widest mt-1">Upload photos in the Estimator to generate files</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

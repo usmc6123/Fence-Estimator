@@ -15,6 +15,7 @@ import SiteMeasurement from './SiteMeasurement';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
+import FileGallery from './FileGallery';
 import { analyzeBlueprintDocument } from '../services/geminiService';
 
 interface EstimatorProps {
@@ -532,6 +533,25 @@ export default function Estimator({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Photos Section */}
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-blue/10">
+              <FileGallery 
+                photos={estimate.photos || []}
+                onAddPhoto={(photo) => {
+                  setEstimate({
+                    ...estimate,
+                    photos: [...(estimate.photos || []), photo]
+                  });
+                }}
+                onRemovePhoto={(id) => {
+                  setEstimate({
+                    ...estimate,
+                    photos: (estimate.photos || []).filter(p => p.id !== id)
+                  });
+                }}
+              />
             </div>
           </div>
         );

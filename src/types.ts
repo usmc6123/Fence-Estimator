@@ -236,6 +236,7 @@ export interface Estimate {
   // Supplier Quotes
   quotes?: SupplierQuote[];
   customLaborItems?: { id: string; name: string; cost: number }[];
+  photos?: JobPhoto[];
 }
 
 export interface ScheduleEvent {
@@ -257,9 +258,20 @@ export interface SchedulerConfig {
   viewFilter: 'estimates' | 'jobs' | 'both';
 }
 
+export interface JobPhoto {
+  id: string;
+  url: string; // Base64 or URL
+  timestamp: string;
+  note?: string;
+  category?: 'Site' | 'Reference' | 'Progress' | 'Completed';
+}
+
 export interface SavedEstimate extends Estimate {
   status: 'active' | 'archived';
   lastModified: string;
+  userId?: string;
+  companyId?: string;
+  photos?: JobPhoto[];
 }
 
 export interface CompanyInfo {
