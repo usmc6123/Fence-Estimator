@@ -53,6 +53,18 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
   const [isAddingEstimate, setIsAddingEstimate] = useState(false);
+  const [isAddingBusy, setIsAddingBusy] = useState(false);
+  const [isCreatingNewDossier, setIsCreatingNewDossier] = useState(false);
+  const [newDossierData, setNewDossierData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    email: ''
+  });
+  const [busyAllDay, setBusyAllDay] = useState(true);
+  const [busyStart, setBusyStart] = useState("09:00");
+  const [busyEnd, setBusyEnd] = useState("17:00");
+  const [estimateTime, setEstimateTime] = useState("09:00");
   const [showEventModal, setShowEventModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
@@ -151,17 +163,32 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
+    // Check for Busy (Estimate Blockers)
     const dateKey = format(date, 'yyyy-MM-dd');
-    const id = `estimate-${estimateId}-${dateKey}`;
+    const conflicts = events.filter(e => e.type === 'Busy' && e.startDate.startsWith(dateKey));
+    
+    const hasAllDayConflict = conflicts.some(c => c.isAllDay);
+    const hasTimeConflict = conflicts.some(c => {
+        if (!c.startTime || !c.endTime) return false;
+        return estimateTime >= c.startTime && estimateTime < c.endTime;
+    });
+
+    if (hasAllDayConflict || hasTimeConflict) {
+        alert("This time overlaps with a busy period.");
+        return;
+    }
+
+    const id = `estimate-${estimateId}-${dateKey}-${estimateTime.replace(':', '')}`;
     const newEvent: ScheduleEvent = {
         id,
         type: 'Estimate',
         title: `EST: ${estimate.customerName}`,
         startDate: dateKey,
         endDate: dateKey,
+        startTime: estimateTime,
         estimateId: estimate.id,
         userId: user.uid,
-        notes: `Estimate appointment set for ${estimate.customerName}`
+        notes: `Estimate appointment @ ${estimateTime} for ${estimate.customerName}`
     };
 
     try {
@@ -173,11 +200,102 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     }
   };
 
+  const quickCreateAndSchedule = async () => {
+    if (!user || !selectedDate) return;
+    if (!newDossierData.name || !newDossierData.phone || !newDossierData.address) {
+        alert("Please fill in Name, Phone, and Address.");
+        return;
+    }
+
+    const dossierId = `quick-${Date.now()}-${user.uid}`;
+    const newDossier: SavedEstimate = {
+        id: dossierId,
+        customerName: newDossierData.name,
+        customerPhone: newDossierData.phone,
+        customerAddress: newDossierData.address,
+        customerEmail: newDossierData.email,
+        customerCity: '',
+        customerState: '',
+        customerZip: '',
+        customerStreet: '',
+        date: new Date().toISOString().split('T')[0],
+        jobStatus: 'Estimate Pending',
+        status: 'active',
+        lastModified: new Date().toISOString(),
+        userId: user.uid,
+        linearFeet: 0,
+        corners: 0,
+        height: 6,
+        width: 3,
+        runs: [],
+        defaultStyleId: 'standard-cedar',
+        defaultVisualStyleId: 'side-by-side',
+        defaultHeight: 6,
+        defaultColor: 'Natural',
+        hasSitePrep: false,
+        needsClearing: false,
+        needsMarking: false,
+        obstacleRemoval: false,
+        postCapId: 'none',
+        hasCapAndTrim: false,
+        gateCount: 0,
+        gateStyleId: 'standard',
+        wastePercentage: 10,
+        includeStain: false,
+        footingType: 'Cylindrical',
+        concreteType: 'Quickset',
+        postWidth: 4,
+        postThickness: 4,
+        markupPercentage: 35,
+        taxPercentage: 8,
+        laborRates: {
+            woodSideBySide6: 8,
+            woodBoardOnBoard6: 12,
+            woodSideBySide8: 10,
+            woodBoardOnBoard8: 14,
+            ironBoltUp: 10,
+            ironWeldUp: 15,
+            chainLink: 6,
+            pipeFence: 12,
+            topCap: 2,
+            additionalRailPipe: 1,
+            demo: 3,
+            washAndStain: 1.5,
+            gateWeldedFrame: 150,
+            gateWoodWalk: 75,
+            gateWoodDrive: 150,
+            gateHangPreMade: 50,
+            deliveryFee: 75
+        },
+        deliveryFee: 75,
+        manualQuantities: {},
+        manualPrices: {},
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        await setDoc(doc(db, 'estimates', dossierId), newDossier);
+        await scheduleEstimate(dossierId, selectedDate);
+        setNewDossierData({ name: '', phone: '', address: '', email: '' });
+        setIsCreatingNewDossier(false);
+    } catch (error) {
+        console.error('Failed to quick create and schedule:', error);
+    }
+  };
+
   const scheduleJob = async (estimateId: string, date: Date) => {
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
     const startDateStr = format(date, 'yyyy-MM-dd');
+    
+    // Check for Job Blackouts
+    const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(startDateStr));
+    if (isBlackedOut) {
+        alert("This day is a designated blackout for installs.");
+        return;
+    }
+
     const duration = selectedDuration; 
     const endDate = addDays(date, duration - 1);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -203,7 +321,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     const newEvent: ScheduleEvent = {
         id,
         type: 'Blackout',
-        title: 'Subcontractor Busy',
+        title: 'Job Blackout',
         startDate: dateKey,
         endDate: dateKey,
         userId: user.uid
@@ -218,8 +336,33 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     }
   };
 
-  const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout') => {
-    if (type === 'Blackout' || type === 'Estimate') {
+  const addBusy = async (date: Date, title: string) => {
+    if (!user) return;
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const id = `busy-${Date.now()}-${user.uid}`;
+    const newEvent: ScheduleEvent = {
+        id,
+        type: 'Busy',
+        title: title || (busyAllDay ? 'Out of Office' : 'Busy'),
+        startDate: dateKey,
+        endDate: dateKey,
+        userId: user.uid,
+        isAllDay: busyAllDay,
+        startTime: busyAllDay ? undefined : busyStart,
+        endTime: busyAllDay ? undefined : busyEnd
+    };
+
+    try {
+        await setDoc(doc(db, 'schedule_events', id), newEvent);
+        setIsAddingBusy(false);
+        setShowEventModal(false);
+    } catch (error) {
+        console.error('Failed to add busy time:', error);
+    }
+  };
+
+  const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout' | 'Busy') => {
+    if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         await deleteDoc(doc(db, 'schedule_events', id));
     } else {
         const docRef = doc(db, 'estimates', id);
@@ -249,18 +392,22 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-[#E5E5E5] no-print">
+              <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-[#E5E5E5] no-print">
               <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
                   <div className="w-3 h-3 rounded-full bg-american-blue" />
                   <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Installs</span>
               </div>
               <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
                   <div className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Appointments</span>
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Appts</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
+                  <div className="w-3 h-3 rounded-full bg-purple-500" />
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Busy</span>
               </div>
               <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
                   <div className="w-3 h-3 rounded-full bg-american-red" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Blackouts</span>
+                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Job Blk</span>
               </div>
               <div className="flex items-center gap-2 px-3">
                   <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -331,8 +478,10 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                   const dateKey = format(day, 'yyyy-MM-dd');
                   const dayEvents = events.filter(e => {
                     if (e.startDate !== dateKey) return false;
-                    if (config.viewFilter === 'estimates' && e.type !== 'Estimate') return false;
-                    if (config.viewFilter === 'jobs' && e.type === 'Estimate') return false;
+                    const view = config.viewFilter;
+                    if (view === 'both') return true;
+                    if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
+                    if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
                     return true;
                   });
                   const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
@@ -372,13 +521,15 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                               "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate",
                               event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : 
                               event.type === 'Estimate' ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                              event.type === 'Busy' ? "bg-purple-100 text-purple-700 border border-purple-200" :
                               "bg-american-blue/10 text-american-blue border border-american-blue/20"
                             )}
                           >
                             {event.type === 'Blackout' ? <AlertCircle size={8} /> : 
                              event.type === 'Estimate' ? <CalendarIcon size={8} /> :
+                             event.type === 'Busy' ? <Clock size={8} /> :
                              <Briefcase size={8} />}
-                            {event.title}
+                            {event.title} {!event.isAllDay && event.startTime ? `(${event.startTime})` : ''}
                           </div>
                         ))}
                         {jobs.map(job => (
@@ -671,7 +822,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                 <div className="flex items-center justify-between mb-8">
                   <div>
                     <h3 className="text-2xl font-black text-american-blue uppercase tracking-tight">
-                        {isAddingBlackout ? 'Add Blackout' : isAddingEstimate ? 'Schedule Appointment' : selectedEvent?.type === 'Job' ? 'Schedule Job' : selectedEvent?.type === 'Blackout' ? 'Manage Blackout' : selectedEvent?.type === 'Estimate' ? 'Manage Appointment' : 'Day Actions'}
+                        {isAddingBlackout ? 'Job Blackout' : isAddingBusy ? 'Busy Appointment' : isAddingEstimate ? 'Schedule Appointment' : selectedEvent?.type === 'Job' ? 'Schedule Job' : selectedEvent?.type === 'Blackout' ? 'Manage Blackout' : selectedEvent?.type === 'Estimate' ? 'Manage Appointment' : selectedEvent?.type === 'Busy' ? 'Manage Busy Time' : 'Day Actions'}
                     </h3>
                     <p className="text-xs font-bold text-[#999999] uppercase tracking-widest mt-1">
                         {format(selectedDate, 'EEEE, MMM do, yyyy')}
@@ -682,6 +833,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                         setShowEventModal(false);
                         setIsAddingBlackout(false);
                         setIsAddingEstimate(false);
+                        setIsAddingBusy(false);
                         setSelectedEvent(null);
                     }}
                     className="h-10 w-10 rounded-xl bg-[#F5F7FA] flex items-center justify-center text-[#999999] hover:text-american-red transition-colors"
@@ -697,15 +849,93 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                             <div className="p-6 bg-american-red/5 border border-american-red/10 rounded-3xl">
                                 <div className="flex items-center gap-3 text-american-red mb-2">
                                     <AlertCircle size={20} />
-                                    <h4 className="font-black uppercase text-xs tracking-widest">Confirm Blackout</h4>
+                                    <h4 className="font-black uppercase text-xs tracking-widest">Confirm Job Blackout</h4>
                                 </div>
-                                <p className="text-xs text-[#666666] leading-relaxed">This will mark this day as unavailable for any new fence installations.</p>
+                                <p className="text-xs text-[#666666] leading-relaxed">This will mark this day as unavailable for any new fence installations. Estimates can still be scheduled.</p>
                             </div>
                             <button 
                                 onClick={() => addBlackout(selectedDate)}
                                 className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all"
                             >
-                                Lock Date
+                                Lock Jobs
+                            </button>
+                        </div>
+                    ) : isAddingBusy ? (
+                        <div className="space-y-6">
+                            <div className="p-6 bg-purple-50 border border-purple-100 rounded-3xl">
+                                <div className="flex items-center gap-3 text-purple-700 mb-2">
+                                    <Clock size={20} />
+                                    <h4 className="font-black uppercase text-xs tracking-widest">Custom Appointment / Busy</h4>
+                                </div>
+                                <p className="text-xs text-purple-800/70 leading-relaxed font-bold">Block time for estimate appointments (Vacations/Personal time).</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Reason / Description</label>
+                                    <input 
+                                        type="text" 
+                                        id="busy-title"
+                                        placeholder="e.g. Doctor Appt, Vacation..."
+                                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5]">
+                                    <label className="text-xs font-bold text-american-blue">All Day Window</label>
+                                    <button 
+                                        onClick={() => setBusyAllDay(!busyAllDay)}
+                                        className={cn(
+                                            "w-12 h-6 rounded-full transition-all relative p-1",
+                                            busyAllDay ? "bg-american-blue" : "bg-[#E5E5E5]"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                                            busyAllDay ? "translate-x-6" : "translate-x-0"
+                                        )} />
+                                    </button>
+                                </div>
+
+                                <AnimatePresence>
+                                    {!busyAllDay && (
+                                        <motion.div 
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="grid grid-cols-2 gap-4 overflow-hidden"
+                                        >
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Start</label>
+                                                <input 
+                                                    type="time" 
+                                                    value={busyStart}
+                                                    onChange={(e) => setBusyStart(e.target.value)}
+                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">End</label>
+                                                <input 
+                                                    type="time" 
+                                                    value={busyEnd}
+                                                    onChange={(e) => setBusyEnd(e.target.value)}
+                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                                />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            <button 
+                                onClick={() => {
+                                    const title = (document.getElementById('busy-title') as HTMLInputElement).value;
+                                    addBusy(selectedDate, title);
+                                }}
+                                className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all font-sans"
+                            >
+                                {busyAllDay ? 'Block Full Day' : 'Block Selected Time'}
                             </button>
                         </div>
                     ) : isAddingEstimate ? (
@@ -718,23 +948,109 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                 <p className="text-xs text-amber-800 leading-relaxed font-bold">Duration: {config.appointmentDuration} Minutes</p>
                                 <p className="text-[10px] text-amber-700/60 mt-1 uppercase tracking-widest font-black">Available Between {config.startHour}:00 - {config.endHour}:00</p>
                             </div>
-                            <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">Select Estimate Dossier</h4>
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                {pendingDossiers.length > 0 ? (
-                                    pendingDossiers.map(est => (
-                                        <button 
-                                            key={est.id}
-                                            onClick={() => scheduleEstimate(est.id, selectedDate)}
-                                            className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
-                                        >
-                                            <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
-                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
-                                        </button>
-                                    ))
-                                ) : (
-                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending dossiers available.</p>
-                                )}
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Appointment Time</label>
+                                <input 
+                                    type="time" 
+                                    value={estimateTime}
+                                    onChange={(e) => setEstimateTime(e.target.value)}
+                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                />
                             </div>
+
+                            <div className="flex items-center justify-between mb-2 mt-4">
+                               <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">
+                                   {isCreatingNewDossier ? 'New Lead Details' : 'Select Estimate Dossier'}
+                               </h4>
+                               <button 
+                                 onClick={() => {
+                                     setIsCreatingNewDossier(!isCreatingNewDossier);
+                                     setNewDossierData({ name: '', phone: '', address: '', email: '' });
+                                 }}
+                                 className="text-[9px] font-black text-american-blue uppercase tracking-widest hover:text-american-red transition-colors"
+                               >
+                                   {isCreatingNewDossier ? 'Cancel & Select Existing' : '+ Add New'}
+                               </button>
+                            </div>
+
+                            {isCreatingNewDossier ? (
+                                <div className="space-y-3 p-6 bg-american-blue/5 rounded-3xl border border-american-blue/10">
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Customer Name*</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Full Name"
+                                            value={newDossierData.name}
+                                            onChange={(e) => setNewDossierData({...newDossierData, name: e.target.value})}
+                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Phone*</label>
+                                            <input 
+                                                type="tel" 
+                                                placeholder="(000) 000-0000"
+                                                value={newDossierData.phone}
+                                                onChange={(e) => setNewDossierData({...newDossierData, phone: e.target.value})}
+                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Email (Optional)</label>
+                                            <input 
+                                                type="email" 
+                                                placeholder="email@example.com"
+                                                value={newDossierData.email}
+                                                onChange={(e) => setNewDossierData({...newDossierData, email: e.target.value})}
+                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Site Address*</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="123 Fence Way, City, TX"
+                                            value={newDossierData.address}
+                                            onChange={(e) => setNewDossierData({...newDossierData, address: e.target.value})}
+                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={quickCreateAndSchedule}
+                                        className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-american-red transition-all mt-2"
+                                    >
+                                        Create & Schedule
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {pendingDossiers.length > 0 ? (
+                                        pendingDossiers.map(est => (
+                                            <button 
+                                                key={est.id}
+                                                onClick={() => scheduleEstimate(est.id, selectedDate)}
+                                                className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
+                                            >
+                                                <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
+                                                <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-6 px-4">
+                                            <p className="text-xs italic text-[#999999] mb-4">No pending dossiers available.</p>
+                                            <button 
+                                              onClick={() => setIsCreatingNewDossier(true)}
+                                              className="text-[10px] font-black text-american-blue uppercase tracking-widest bg-american-blue/5 px-6 py-3 rounded-xl hover:bg-american-blue hover:text-white transition-all shadow-sm border border-american-blue/10"
+                                            >
+                                              + Quick Add Lead
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ) : selectedEvent ? (
                         <div className="space-y-6">
@@ -743,13 +1059,18 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                      <div className={cn(
                                          "h-12 w-12 rounded-2xl flex items-center justify-center text-white",
                                          selectedEvent.type === 'Blackout' ? 'bg-american-red' : 
-                                         selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 'bg-american-blue'
+                                         selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 
+                                         selectedEvent.type === 'Busy' ? 'bg-purple-500' : 'bg-american-blue'
                                      )}>
-                                         {selectedEvent.type === 'Blackout' ? <AlertCircle size={24} /> : <Briefcase size={24} />}
+                                         {selectedEvent.type === 'Blackout' ? <AlertCircle size={24} /> : 
+                                          selectedEvent.type === 'Busy' ? <Clock size={24} /> :
+                                          <Briefcase size={24} />}
                                      </div>
                                      <div>
                                          <h4 className="font-black text-american-blue uppercase text-sm">{selectedEvent.title}</h4>
-                                         <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{selectedEvent.type}</p>
+                                         <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
+                                             {selectedEvent.type} {selectedEvent.isAllDay ? '(All Day)' : selectedEvent.startTime ? `(${selectedEvent.startTime} - ${selectedEvent.endTime})` : ''}
+                                         </p>
                                      </div>
                                 </div>
                                 
@@ -764,7 +1085,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                             <span className="text-xs text-[#666666] font-medium">
                                                 {selectedEvent.type === 'Job' 
                                                   ? `${savedEstimates.find(e => e.id === selectedEvent.estimateId)?.scheduledDuration || 2} Day Installation`
-                                                  : `${config.appointmentDuration} Minute Appointment`}
+                                                  : `${config.appointmentDuration} Minute Appointment ${selectedEvent.startTime ? `@ ${selectedEvent.startTime}` : ''}`}
                                             </span>
                                         </div>
                                     </div>
@@ -777,25 +1098,33 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                             >
                                 <Trash2 size={16} />
                                 {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 
+                                 selectedEvent.type === 'Busy' ? 'Remove Appointment' :
                                  selectedEvent.type === 'Estimate' ? 'Cancel Appointment' : 'Unschedule Job'}
                             </button>
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-3 gap-3">
                                 <button 
                                   onClick={() => setIsAddingEstimate(true)}
-                                  className="flex flex-col items-center gap-2 p-6 rounded-3xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all"
+                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all"
                                 >
-                                  <CalendarIcon size={24} />
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">Schedule Est</span>
+                                  <CalendarIcon size={20} />
+                                  <span className="text-[9px] font-bold uppercase tracking-tight">Est</span>
+                                </button>
+                                <button 
+                                  onClick={() => setIsAddingBusy(true)}
+                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all"
+                                >
+                                  <Clock size={20} />
+                                  <span className="text-[9px] font-bold uppercase tracking-tight">Busy</span>
                                 </button>
                                 <button 
                                   onClick={() => setIsAddingBlackout(true)}
-                                  className="flex flex-col items-center gap-2 p-6 rounded-3xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all"
+                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all"
                                 >
-                                  <AlertCircle size={24} />
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">Blackout</span>
+                                  <AlertCircle size={20} />
+                                  <span className="text-[9px] font-bold uppercase tracking-tight">Blk Out</span>
                                 </button>
                             </div>
 

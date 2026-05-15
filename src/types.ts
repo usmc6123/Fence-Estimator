@@ -241,7 +241,7 @@ export interface Estimate {
 
 export interface ScheduleEvent {
   id: string;
-  type: 'Job' | 'Estimate' | 'Blackout';
+  type: 'Job' | 'Estimate' | 'Blackout' | 'Busy';
   title: string;
   startDate: string;
   endDate: string;
@@ -249,6 +249,9 @@ export interface ScheduleEvent {
   subcontractorId?: string;
   notes?: string;
   userId: string;
+  isAllDay?: boolean;
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
 }
 
 export interface SchedulerConfig {
