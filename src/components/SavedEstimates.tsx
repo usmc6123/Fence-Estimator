@@ -216,15 +216,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               <div className="pb-4">
                 <div className="flex justify-between items-center mb-2 px-1">
                   <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Workflow State</span>
-                  <span className={cn(
-                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                    estimate.jobStatus === 'Completed' ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
-                    estimate.jobStatus === 'Accepted' ? "bg-blue-100 text-blue-600 border-blue-200" :
-                    estimate.jobStatus === 'Estimate Sent' ? "bg-amber-100 text-amber-600 border-amber-200" :
-                    "bg-american-red/10 text-american-red border-american-red/20"
-                  )}>
-                    {estimate.jobStatus || 'Estimate Pending'}
-                  </span>
+                  <select 
+                    value={estimate.jobStatus || 'Estimate Pending'}
+                    onChange={(e) => updateJobStatus(estimate.id, e.target.value as JobStatus, e as any)}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border outline-none cursor-pointer appearance-none transition-colors text-center",
+                      estimate.jobStatus === 'Completed' ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
+                      estimate.jobStatus === 'Accepted' ? "bg-blue-100 text-blue-600 border-blue-200" :
+                      estimate.jobStatus === 'Estimate Sent' ? "bg-amber-100 text-amber-600 border-amber-200" :
+                      "bg-american-red/10 text-american-red border-american-red/20"
+                    )}
+                  >
+                    {STATUS_FLOW.map(status => (
+                      <option key={status} value={status} className="bg-white text-american-blue">{status}</option>
+                    ))}
+                    {/* Add others if needed like Draft/Proposed but flow is preferred */}
+                  </select>
                 </div>
                 <div className="flex gap-1.5 h-1.5 px-0.5">
                   {STATUS_FLOW.slice(0, 4).map((status, i) => {

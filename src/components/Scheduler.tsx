@@ -546,6 +546,105 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
         </div>
       </div>
 
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setShowSettingsModal(false)}
+               className="absolute inset-0 bg-american-blue/60 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-10">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Calendar Settings</h3>
+                  <button onClick={() => setShowSettingsModal(false)}>
+                    <XCircle size={20} className="text-[#999999]" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest">View Filter</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['estimates', 'jobs', 'both'] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => saveConfig({ ...config, viewFilter: f })}
+                          className={cn(
+                            "py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            config.viewFilter === f ? "bg-american-blue text-white shadow-lg" : "bg-[#F5F7FA] text-[#999999]"
+                          )}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest">Appt. Duration (Mins)</label>
+                    <select 
+                      value={config.appointmentDuration}
+                      onChange={(e) => saveConfig({ ...config, appointmentDuration: Number(e.target.value) })}
+                      className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                    >
+                      <option value={30}>30 Minutes</option>
+                      <option value={45}>45 Minutes</option>
+                      <option value={60}>1 Hour</option>
+                      <option value={90}>1.5 Hours</option>
+                      <option value={120}>2 Hours</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest">Start Hour</label>
+                      <select 
+                        value={config.startHour}
+                        onChange={(e) => saveConfig({ ...config, startHour: Number(e.target.value) })}
+                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                      >
+                        {Array.from({ length: 24 }).map((_, i) => (
+                          <option key={i} value={i}>{i}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest">End Hour</label>
+                      <select 
+                        value={config.endHour}
+                        onChange={(e) => saveConfig({ ...config, endHour: Number(e.target.value) })}
+                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                      >
+                        {Array.from({ length: 24 }).map((_, i) => (
+                          <option key={i} value={i}>{i}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowSettingsModal(false)}
+                    className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl mt-4"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Event/Scheduling Modal */}
       <AnimatePresence>
         {showEventModal && selectedDate && (
@@ -557,6 +656,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                onClick={() => {
                    setShowEventModal(false);
                    setIsAddingBlackout(false);
+                   setIsAddingEstimate(false);
                    setSelectedEvent(null);
                }}
                className="absolute inset-0 bg-american-blue/60 backdrop-blur-md" 
@@ -620,16 +720,20 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                             </div>
                             <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">Select Estimate Dossier</h4>
                             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                {pendingDossiers.map(est => (
-                                    <button 
-                                        key={est.id}
-                                        onClick={() => scheduleEstimate(est.id, selectedDate)}
-                                        className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
-                                    >
-                                        <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
-                                        <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
-                                    </button>
-                                ))}
+                                {pendingDossiers.length > 0 ? (
+                                    pendingDossiers.map(est => (
+                                        <button 
+                                            key={est.id}
+                                            onClick={() => scheduleEstimate(est.id, selectedDate)}
+                                            className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
+                                        >
+                                            <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
+                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending dossiers available.</p>
+                                )}
                             </div>
                         </div>
                     ) : selectedEvent ? (
@@ -638,7 +742,8 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                 <div className="flex items-center gap-4 mb-4">
                                      <div className={cn(
                                          "h-12 w-12 rounded-2xl flex items-center justify-center text-white",
-                                         selectedEvent.type === 'Blackout' ? 'bg-american-red' : 'bg-american-blue'
+                                         selectedEvent.type === 'Blackout' ? 'bg-american-red' : 
+                                         selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 'bg-american-blue'
                                      )}>
                                          {selectedEvent.type === 'Blackout' ? <AlertCircle size={24} /> : <Briefcase size={24} />}
                                      </div>
@@ -657,7 +762,9 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                         <div className="flex items-center gap-3">
                                             <Clock size={14} className="text-[#999999]" />
                                             <span className="text-xs text-[#666666] font-medium">
-                                                {savedEstimates.find(e => e.id === selectedEvent.estimateId)?.scheduledDuration || 2} Day Installation
+                                                {selectedEvent.type === 'Job' 
+                                                  ? `${savedEstimates.find(e => e.id === selectedEvent.estimateId)?.scheduledDuration || 2} Day Installation`
+                                                  : `${config.appointmentDuration} Minute Appointment`}
                                             </span>
                                         </div>
                                     </div>
@@ -669,11 +776,38 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                 className="w-full bg-american-red/5 hover:bg-american-red hover:text-white border border-american-red/20 text-american-red py-4 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
                             >
                                 <Trash2 size={16} />
-                                {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 'Unschedule Job'}
+                                {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 
+                                 selectedEvent.type === 'Estimate' ? 'Cancel Appointment' : 'Unschedule Job'}
                             </button>
                         </div>
                     ) : (
                         <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <button 
+                                  onClick={() => setIsAddingEstimate(true)}
+                                  className="flex flex-col items-center gap-2 p-6 rounded-3xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all"
+                                >
+                                  <CalendarIcon size={24} />
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">Schedule Est</span>
+                                </button>
+                                <button 
+                                  onClick={() => setIsAddingBlackout(true)}
+                                  className="flex flex-col items-center gap-2 p-6 rounded-3xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all"
+                                >
+                                  <AlertCircle size={24} />
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">Blackout</span>
+                                </button>
+                            </div>
+
+                            <div className="relative">
+                              <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-[#E5E5E5] text-center"></div>
+                              </div>
+                              <div className="relative flex justify-center text-[10px]">
+                                <span className="px-2 bg-white text-[#999999] uppercase font-bold tracking-widest">Schedule Job</span>
+                              </div>
+                            </div>
+
                             <div className="p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5]">
                                 <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest mb-3 text-center">Set Default Duration (Days)</p>
                                 <div className="flex items-center justify-center gap-4">
@@ -694,8 +828,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                 </div>
                             </div>
 
-                            <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">Select an available job</h4>
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                                 {acceptedUnscheduled.length > 0 ? (
                                     acceptedUnscheduled.map(est => (
                                         <button 
@@ -708,17 +841,8 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                         </button>
                                     ))
                                 ) : (
-                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending jobs available to schedule.</p>
+                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending jobs available.</p>
                                 )}
-                            </div>
-                            
-                            <div className="pt-4 border-t border-[#E5E5E5]">
-                                <button 
-                                    onClick={() => addBlackout(selectedDate)}
-                                    className="w-full py-4 text-xs font-black text-american-red uppercase tracking-widest hover:bg-american-red/5 rounded-2xl transition-all"
-                                >
-                                    Mark as Blackout
-                                </button>
                             </div>
                         </div>
                     )}
