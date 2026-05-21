@@ -17,6 +17,8 @@ import Settings from './components/Settings';
 import SavedEstimates from './components/SavedEstimates';
 import Scheduler from './components/Scheduler';
 import Financials from './components/Financials';
+import EmployeePortal from './components/EmployeePortal';
+import ManageEmployees from './components/ManageEmployees';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
@@ -62,6 +64,8 @@ function getInitialValue(key: string, storageKey: string, defaultValue: any) {
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
+  
+  const isEmployeeView = new URLSearchParams(window.location.search).get('portal') === 'employee';
   
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
     return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
@@ -329,6 +333,10 @@ export default function App() {
     }
   };
 
+  if (isEmployeeView) {
+    return <EmployeePortal />;
+  }
+
   return (
     <Layout 
       activeTab={activeTab} 
@@ -420,6 +428,7 @@ export default function App() {
         />
       )}
       {activeTab === 'settings' && <Settings />}
+      {activeTab === 'employees' && <ManageEmployees />}
     </Layout>
   );
 }

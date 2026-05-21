@@ -11,16 +11,32 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'usmc6123@gmail.com';
+    }
+
+    function isEmployee() {
+      return isSignedIn() && exists(/databases/$(database)/documents/employees/$(request.auth.token.email));
+    }
+
+    function getEmployeePermission() {
+      return get(/databases/$(database)/documents/employees/$(request.auth.token.email)).data.permission;
+    }
+
+    function canEmployeeEdit() {
+      return isEmployee() && getEmployeePermission() == 'Can Edit';
+    }
+
     function isCompanyMember() {
-      return isSignedIn();
+      return isAdmin() || isEmployee();
+    }
+
+    function canWriteData() {
+      return isAdmin() || canEmployeeEdit();
     }
 
     function incoming() {
       return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
     }
 
     // --- Validation Helpers ---
@@ -82,75 +98,92 @@ service cloud.firestore {
         && (data.ghlWebhookUrl == null || data.ghlWebhookUrl is string);
     }
 
+    function isValidEmployee(data) {
+      return data.email is string
+        && data.permission in ['View Only', 'Can Edit'];
+    }
+
+    function isValidEvent(data) {
+      return data.id is string
+        && data.title is string
+        && data.type in ['Job', 'Estimate', 'Blackout', 'Busy']
+        && data.startDate is string;
+    }
+
     // --- Collection Routes ---
+
+    match /employees/{email} {
+      allow get, list: if isCompanyMember();
+      allow write: if isAdmin() && isValidEmployee(incoming());
+    }
 
     match /companySettings/{settingId} {
       allow get, list: if isCompanyMember();
-      allow create, update: if isCompanyMember() && isValidSettings(incoming());
-      allow delete: if isCompanyMember();
+      allow create, update: if canWriteData() && isValidSettings(incoming());
+      allow delete: if isAdmin();
     }
 
     match /expenses/{expenseId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidExpense(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidExpense(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidExpense(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidExpense(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /estimates/{estimateId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidEstimate(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidEstimate(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidEstimate(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidEstimate(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /bankAccounts/{accountId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidBankAccount(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidBankAccount(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidBankAccount(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidBankAccount(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /transactions/{transactionId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidTransaction(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidTransaction(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidTransaction(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidTransaction(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /inventory/{inventoryId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidInventory(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidInventory(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidInventory(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidInventory(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /journalEntries/{entryId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidJournal(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidJournal(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidJournal(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidJournal(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /quotes/{quoteId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidQuote(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidQuote(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidQuote(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidQuote(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /materials/{materialId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if isSignedIn() && isValidMaterial(incoming());
-      allow update:    if isCompanyMember() && existing().companyId == 'lonestarfence' && isValidMaterial(incoming());
-      allow delete:    if isCompanyMember() && existing().companyId == 'lonestarfence';
+      allow create:    if canWriteData() && isValidMaterial(incoming());
+      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidMaterial(incoming());
+      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /schedule_events/{eventId} {
-      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create:    if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update:    if isSignedIn() && existing().userId == request.auth.uid;
-      allow delete:    if isSignedIn() && existing().userId == request.auth.uid;
+      allow get, list: if isCompanyMember();
+      allow create:    if canWriteData() && isValidEvent(incoming());
+      allow update:    if canWriteData() && isValidEvent(incoming());
+      allow delete:    if canWriteData();
     }
   }
 }

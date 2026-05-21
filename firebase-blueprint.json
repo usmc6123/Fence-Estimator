@@ -134,6 +134,18 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "A company employee with portal credentials and permissions",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "permission": { "type": "string", "enum": ["View Only", "Can Edit"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "password": { "type": "string" }
+      },
+      "required": ["email", "permission"]
     }
   },
   "firestore": {
@@ -168,6 +180,10 @@
     "/companySettings/{settingId}": {
       "schema": "CompanySettings",
       "description": "Global settings for the company"
+    },
+    "/employees/{email}": {
+      "schema": "Employee",
+      "description": "Registered company employees"
     }
   }
 }

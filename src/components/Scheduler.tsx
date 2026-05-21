@@ -45,9 +45,10 @@ function cn(...inputs: ClassValue[]) {
 interface SchedulerProps {
   savedEstimates: SavedEstimate[];
   user: any;
+  readOnly?: boolean;
 }
 
-export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
+export default function Scheduler({ savedEstimates, user, readOnly = false }: SchedulerProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -98,7 +99,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
     };
     loadConfig();
 
-    const q = query(collection(db, 'schedule_events'), where('userId', '==', user.uid));
+    const q = query(collection(db, 'schedule_events'));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
         setEvents(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ScheduleEvent)));
@@ -136,6 +137,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
   };
 
   const handleDayClick = (day: Date) => {
+    if (readOnly) return;
     setSelectedDate(day);
     setIsAddingBlackout(false);
     setIsAddingEstimate(false);
@@ -401,13 +403,15 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
               </div>
             </div>
 
-            <button 
-              onClick={() => setShowSettingsModal(true)}
-              className="p-3 bg-white text-american-blue hover:text-american-red rounded-2xl shadow-lg border border-[#E5E5E5] transition-all no-print"
-              title="Scheduler Settings"
-            >
-              <SettingsIcon size={20} />
-            </button>
+            {!readOnly && (
+              <button 
+                onClick={() => setShowSettingsModal(true)}
+                className="p-3 bg-white text-american-blue hover:text-american-red rounded-2xl shadow-lg border border-[#E5E5E5] transition-all no-print"
+                title="Scheduler Settings"
+              >
+                <SettingsIcon size={20} />
+              </button>
+            )}
 
             <button 
               onClick={handlePrint}
@@ -422,7 +426,7 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
           {/* Main Calendar View */}
-          <div className="lg:col-span-8 flex flex-col gap-6">
+          <div className={cn("flex flex-col gap-6", readOnly ? "lg:col-span-12" : "lg:col-span-8")}>
             <div className="bg-white rounded-3xl p-8 shadow-xl shadow-american-blue/5 border border-[#E5E5E5]">
               {/* Month Selector */}
               <div className="flex items-center justify-between mb-10">
@@ -556,154 +560,156 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
           </div>
 
           {/* Side Panel: Unscheduled Jobs */}
-          <div className="lg:col-span-4 flex flex-col gap-8">
-            
-            <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Pending Estimates</h3>
-                <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
-                  {pendingDossiers.length}
+          {!readOnly && (
+            <div className="lg:col-span-4 flex flex-col gap-8">
+              
+              <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Pending Estimates</h3>
+                  <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
+                    {pendingDossiers.length}
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {pendingDossiers.length > 0 ? (
+                      pendingDossiers.map(est => (
+                          <div 
+                            key={est.id} 
+                            className="p-4 rounded-2xl border border-[#E5E5E5] bg-[#F8F9FA] hover:border-american-blue transition-all group cursor-default"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                               <div>
+                                  <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
+                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
+                               </div>
+                               <div className="text-[10px] font-black text-white bg-american-red px-2 py-1 rounded-lg">
+                                  {Math.round(est.linearFeet)}'
+                               </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between mt-4">
+                              <div className="flex items-center gap-1 ">
+                                  <Clock size={10} className="text-[#999999]" />
+                                  <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">{config.appointmentDuration} Min Appt</span>
+                              </div>
+                              <button 
+                                  onClick={() => {
+                                      setSelectedDate(new Date());
+                                      setIsAddingEstimate(true);
+                                      setSelectedEvent({
+                                          id: est.id,
+                                          type: 'Estimate',
+                                          title: est.customerName,
+                                          startDate: '',
+                                          endDate: '',
+                                          estimateId: est.id,
+                                          userId: user.uid
+                                      });
+                                      setShowEventModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
+                              >
+                                  Schedule
+                              </button>
+                            </div>
+                          </div>
+                      ))
+                  ) : (
+                      <div className="text-center py-10 opacity-30">
+                          <p className="text-xs font-bold uppercase tracking-widest text-[#999999]">No pending estimates</p>
+                      </div>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {pendingDossiers.length > 0 ? (
-                    pendingDossiers.map(est => (
-                        <div 
-                          key={est.id} 
-                          className="p-4 rounded-2xl border border-[#E5E5E5] bg-[#F8F9FA] hover:border-american-blue transition-all group cursor-default"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                             <div>
-                                <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
-                                <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
-                             </div>
-                             <div className="text-[10px] font-black text-white bg-american-red px-2 py-1 rounded-lg">
-                                {Math.round(est.linearFeet)}'
-                             </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between mt-4">
-                            <div className="flex items-center gap-1 ">
-                                <Clock size={10} className="text-[#999999]" />
-                                <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">{config.appointmentDuration} Min Appt</span>
-                            </div>
-                            <button 
-                                onClick={() => {
-                                    setSelectedDate(new Date());
-                                    setIsAddingEstimate(true);
-                                    setSelectedEvent({
-                                        id: est.id,
-                                        type: 'Estimate',
-                                        title: est.customerName,
-                                        startDate: '',
-                                        endDate: '',
-                                        estimateId: est.id,
-                                        userId: user.uid
-                                    });
-                                    setShowEventModal(true);
-                                }}
-                                className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
-                            >
-                                Schedule
-                            </button>
-                          </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-center py-10 opacity-30">
-                        <p className="text-xs font-bold uppercase tracking-widest text-[#999999]">No pending estimates</p>
-                    </div>
-                )}
-              </div>
-            </div>
+              <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Unscheduled Orders</h3>
+                  <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
+                    {acceptedUnscheduled.length}
+                  </div>
+                </div>
 
-            <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Unscheduled Orders</h3>
-                <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
-                  {acceptedUnscheduled.length}
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {acceptedUnscheduled.length > 0 ? (
+                      acceptedUnscheduled.map(est => (
+                          <div 
+                            key={est.id} 
+                            className="p-4 rounded-2xl border border-[#E5E5E5] bg-[#F8F9FA] hover:border-american-blue transition-all group cursor-default"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                               <div>
+                                  <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
+                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
+                               </div>
+                               <div className="text-[10px] font-black text-american-blue bg-white px-2 py-1 rounded-lg border border-[#E5E5E5]">
+                                  {Math.round(est.linearFeet)}' LF
+                               </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between mt-4">
+                              <div className="flex items-center gap-1 ">
+                                  <Clock size={10} className="text-[#999999]" />
+                                  <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">Approx. {est.scheduledDuration || 2} Days</span>
+                              </div>
+                              <button 
+                                  onClick={() => {
+                                      setSelectedDate(new Date());
+                                      setSelectedEvent({
+                                          id: est.id,
+                                          type: 'Job',
+                                          title: est.customerName,
+                                          startDate: '',
+                                          endDate: '',
+                                          estimateId: est.id,
+                                          userId: user.uid
+                                      });
+                                      setShowEventModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
+                              >
+                                  Assign Slot
+                              </button>
+                            </div>
+                          </div>
+                      ))
+                  ) : (
+                      <div className="text-center py-10 opacity-30">
+                          <CalendarIcon size={40} className="mx-auto mb-4" />
+                          <p className="text-xs font-bold uppercase tracking-widest leading-relaxed">All active contracts are<br/>currently scheduled.</p>
+                      </div>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {acceptedUnscheduled.length > 0 ? (
-                    acceptedUnscheduled.map(est => (
-                        <div 
-                          key={est.id} 
-                          className="p-4 rounded-2xl border border-[#E5E5E5] bg-[#F8F9FA] hover:border-american-blue transition-all group cursor-default"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                             <div>
-                                <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
-                                <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
-                             </div>
-                             <div className="text-[10px] font-black text-american-blue bg-white px-2 py-1 rounded-lg border border-[#E5E5E5]">
-                                {Math.round(est.linearFeet)}' LF
-                             </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between mt-4">
-                            <div className="flex items-center gap-1 ">
-                                <Clock size={10} className="text-[#999999]" />
-                                <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">Approx. {est.scheduledDuration || 2} Days</span>
-                            </div>
-                            <button 
-                                onClick={() => {
-                                    setSelectedDate(new Date());
-                                    setSelectedEvent({
-                                        id: est.id,
-                                        type: 'Job',
-                                        title: est.customerName,
-                                        startDate: '',
-                                        endDate: '',
-                                        estimateId: est.id,
-                                        userId: user.uid
-                                    });
-                                    setShowEventModal(true);
-                                }}
-                                className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
-                            >
-                                Assign Slot
-                            </button>
-                          </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-center py-10 opacity-30">
-                        <CalendarIcon size={40} className="mx-auto mb-4" />
-                        <p className="text-xs font-bold uppercase tracking-widest leading-relaxed">All active contracts are<br/>currently scheduled.</p>
-                    </div>
-                )}
+              {/* Subcontractor Status Card */}
+              <div className="bg-american-blue p-8 rounded-3xl text-white relative overflow-hidden shadow-xl">
+                   <div className="absolute top-0 right-0 p-6 opacity-10">
+                      <User size={60} />
+                   </div>
+                   <h4 className="text-xs font-black uppercase tracking-[0.2em] mb-2 opacity-60">Subcontractor Pool</h4>
+                   <p className="text-xl font-black mb-4">Availability Management</p>
+                   <p className="text-xs text-white/70 leading-relaxed mb-6">Mark dates as blackout to prevent overlaps or overbooking your installation teams.</p>
+                   <button 
+                      onClick={() => {
+                          const today = new Date();
+                          setSelectedDate(today);
+                          setIsAddingBlackout(true);
+                          setIsAddingEstimate(false);
+                          setIsAddingBusy(false);
+                          setSelectedEvent(null);
+                          setShowEventModal(true);
+                      }}
+                      className="w-full bg-american-red hover:bg-white hover:text-american-red text-white transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                   >
+                      <AlertCircle size={16} />
+                      Blackout Today
+                   </button>
               </div>
-            </div>
 
-            {/* Subcontractor Status Card */}
-            <div className="bg-american-blue p-8 rounded-3xl text-white relative overflow-hidden shadow-xl">
-                 <div className="absolute top-0 right-0 p-6 opacity-10">
-                    <User size={60} />
-                 </div>
-                 <h4 className="text-xs font-black uppercase tracking-[0.2em] mb-2 opacity-60">Subcontractor Pool</h4>
-                 <p className="text-xl font-black mb-4">Availability Management</p>
-                 <p className="text-xs text-white/70 leading-relaxed mb-6">Mark dates as blackout to prevent overlaps or overbooking your installation teams.</p>
-                 <button 
-                    onClick={() => {
-                        const today = new Date();
-                        setSelectedDate(today);
-                        setIsAddingBlackout(true);
-                        setIsAddingEstimate(false);
-                        setIsAddingBusy(false);
-                        setSelectedEvent(null);
-                        setShowEventModal(true);
-                    }}
-                    className="w-full bg-american-red hover:bg-white hover:text-american-red text-white transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
-                 >
-                    <AlertCircle size={16} />
-                    Blackout Today
-                 </button>
             </div>
-
-          </div>
+          )}
         </div>
       </div>
 
@@ -1102,15 +1108,17 @@ export default function Scheduler({ savedEstimates, user }: SchedulerProps) {
                                 )}
                             </div>
 
-                            <button 
-                                onClick={() => deleteEvent(selectedEvent.id, selectedEvent.type)}
-                                className="w-full bg-american-red/5 hover:bg-american-red hover:text-white border border-american-red/20 text-american-red py-4 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
-                            >
-                                <Trash2 size={16} />
-                                {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 
-                                 selectedEvent.type === 'Busy' ? 'Remove Appointment' :
-                                 selectedEvent.type === 'Estimate' ? 'Cancel Appointment' : 'Unschedule Job'}
-                            </button>
+                            {!readOnly && (
+                              <button 
+                                  onClick={() => deleteEvent(selectedEvent.id, selectedEvent.type)}
+                                  className="w-full bg-american-red/5 hover:bg-american-red hover:text-white border border-american-red/20 text-american-red py-4 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                              >
+                                  <Trash2 size={16} />
+                                  {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 
+                                   selectedEvent.type === 'Busy' ? 'Remove Appointment' :
+                                   selectedEvent.type === 'Estimate' ? 'Cancel Appointment' : 'Unschedule Job'}
+                              </button>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-6">

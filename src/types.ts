@@ -277,6 +277,13 @@ export interface SavedEstimate extends Estimate {
   photos?: JobPhoto[];
 }
 
+export interface Employee {
+  email: string;
+  permission: 'View Only' | 'Can Edit';
+  createdAt: string;
+  password?: string;
+}
+
 export interface CompanyInfo {
   name: string;
   logo: string;

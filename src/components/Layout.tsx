@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon } from 'lucide-react';
+import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -31,6 +31,11 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const isAdmin = user && user.email === 'usmc6123@gmail.com';
+  const displayItems = isAdmin 
+    ? [...navItems, { id: 'employees', label: 'Manage Employees', icon: Users }] 
+    : navItems;
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#1A1A1A]">
       {/* Sidebar - Desktop */}
@@ -54,7 +59,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
         
         <nav className="p-4">
           <ul className="space-y-1">
-            {navItems.map((item) => (
+            {displayItems.map((item) => (
               <li key={item.id}>
                 <button
                   onClick={() => setActiveTab(item.id)}
@@ -143,7 +148,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
             className="fixed inset-x-0 top-16 z-40 border-b border-[#E5E5E5] bg-white p-4 lg:hidden"
           >
             <ul className="space-y-2">
-              {navItems.map((item) => (
+              {displayItems.map((item) => (
                 <li key={item.id}>
                   <button
                     onClick={() => {
