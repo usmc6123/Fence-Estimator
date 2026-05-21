@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Upload, FileText, Trash2, TrendingUp, AlertCircle, 
   CheckCircle2, Loader2, ChevronRight, Scale, ExternalLink,
-  Plus, History, DollarSign, Search, ChevronDown
+  Plus, History, DollarSign, Search, ChevronDown, GitMerge
 } from 'lucide-react';
 import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
 import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
@@ -111,6 +111,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const [compareSearch, setCompareSearch] = React.useState("");
   const [toast, setToast] = React.useState<string | null>(null);
 
+  // States for Manual Supplier Merge
+  const [showMergeModal, setShowMergeModal] = React.useState(false);
+  const [sourceSupplier, setSourceSupplier] = React.useState("");
+  const [destinationSupplier, setDestinationSupplier] = React.useState("");
+  const [customDestination, setCustomDestination] = React.useState("");
+
   const selectedQuote = React.useMemo(() => 
     quotes.find(q => q.id === selectedQuoteId) || null
   , [quotes, selectedQuoteId]);
@@ -118,6 +124,53 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const showToast = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const uniqueSuppliers = React.useMemo(() => {
+    return Array.from(new Set(quotes.map(q => q.supplierName))).filter(Boolean).sort();
+  }, [quotes]);
+
+  const handleMergeSuppliers = async () => {
+    const dest = destinationSupplier === "__custom__" ? customDestination.trim() : destinationSupplier;
+    if (!sourceSupplier || !dest) {
+      showToast("Please select both source and destination");
+      return;
+    }
+    const finalDest = getCanonicalSupplierName(dest);
+    
+    if (sourceSupplier === finalDest) {
+      showToast("Source and target are already identical");
+      return;
+    }
+
+    try {
+      const quotesToMerge = quotes.filter(q => q.supplierName === sourceSupplier);
+      
+      if (user) {
+        const batch = writeBatch(db);
+        quotesToMerge.forEach(quote => {
+          batch.update(doc(db, 'quotes', quote.id), {
+            supplierName: finalDest
+          });
+        });
+        await batch.commit();
+      }
+
+      setQuotes(prev => prev.map(q => 
+        q.supplierName === sourceSupplier 
+          ? { ...q, supplierName: finalDest } 
+          : q
+      ));
+
+      showToast(`Merged all from "${sourceSupplier}" to "${finalDest}"`);
+      setShowMergeModal(false);
+      setSourceSupplier("");
+      setDestinationSupplier("");
+      setCustomDestination("");
+    } catch (error) {
+      console.error("Error merging suppliers:", error);
+      showToast("Failed to merge suppliers");
+    }
   };
 
   const syncAllPrices = async () => {
@@ -558,6 +611,15 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                 <p className="text-xs font-bold leading-relaxed">{error}</p>
               </div>
             )}
+
+            <button 
+              type="button"
+              onClick={() => setShowMergeModal(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-american-blue/5 hover:bg-american-blue/10 active:scale-95 text-xs font-black uppercase tracking-widest text-american-blue transition-all cursor-pointer mt-2"
+            >
+              <GitMerge size={16} />
+              Merge / Combine Suppliers
+            </button>
           </div>
 
           <div className="bg-white rounded-[40px] p-8 shadow-xl border-2 border-american-blue/5 space-y-6">
@@ -1017,6 +1079,129 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                   )}
                 </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Merge Suppliers Modal Overlay */}
+          <AnimatePresence>
+            {showMergeModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-american-blue/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-american-blue/10 animate-in zoom-in-95 duration-200">
+                  {/* Header */}
+                  <div className="p-6 bg-american-blue text-white flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                        <GitMerge size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black uppercase tracking-tight">Combine / Merge Suppliers</h3>
+                        <p className="text-[10px] font-bold text-white/70 tracking-wider uppercase">Unify multi-quote nomenclature</p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setShowMergeModal(false);
+                        setSourceSupplier("");
+                        setDestinationSupplier("");
+                        setCustomDestination("");
+                      }}
+                      className="h-8 w-8 rounded-lg hover:bg-white/15 flex items-center justify-center transition-colors text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-8 space-y-6 text-left">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Supplier to Merge (Source)</label>
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        All quotes currently matching this supplier will be renamed.
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={sourceSupplier}
+                          onChange={(e) => setSourceSupplier(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#FAF9F6] border-2 border-[#E5E5E5] rounded-2xl text-sm font-bold text-american-blue focus:border-american-blue outline-none transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="">-- Select Source Supplier --</option>
+                          {uniqueSuppliers.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#999999]">
+                          <ChevronDown size={16} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Target Destination Supplier</label>
+                      <p className="text-xs text-[#666666] leading-relaxed">
+                        Select an existing supplier to merge into or add a new clean name.
+                      </p>
+                      <div className="relative">
+                        <select
+                          value={destinationSupplier}
+                          onChange={(e) => setDestinationSupplier(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#FAF9F6] border-2 border-[#E5E5E5] rounded-2xl text-sm font-bold text-american-blue focus:border-american-blue outline-none transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="">-- Select Target --</option>
+                          {uniqueSuppliers.filter(s => s !== sourceSupplier).map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                          <option value="__custom__">+ Enter A Custom Clean Name...</option>
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#999999]">
+                          <ChevronDown size={16} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {destinationSupplier === "__custom__" && (
+                      <div className="space-y-2 animate-in slide-in-from-top-4 duration-200">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-[#888888]">New Clean Supplier Name</label>
+                        <input
+                          type="text"
+                          value={customDestination}
+                          onChange={(e) => setCustomDestination(e.target.value)}
+                          placeholder="e.g. Forney Fence"
+                          className="w-full px-4 py-3 border-2 border-[#E5E5E5] rounded-2xl text-sm font-bold text-american-blue outline-none focus:border-american-blue focus:ring-0"
+                        />
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100/60 text-xs text-amber-800 leading-relaxed font-medium">
+                      <strong>Warning:</strong> This will batch-update all quote files, comparisons, and logs linked to the source supplier to use the updated name. This action is irreversible.
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-6 bg-[#FBFBFB] border-t border-[#EEEEEE] flex justify-end gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMergeModal(false);
+                        setSourceSupplier("");
+                        setDestinationSupplier("");
+                        setCustomDestination("");
+                      }}
+                      className="px-6 py-2.5 rounded-xl border border-[#E5E5E5] text-xs font-black uppercase tracking-widest text-[#777777] hover:bg-gray-50 transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleMergeSuppliers}
+                      disabled={!sourceSupplier || (!destinationSupplier && destinationSupplier !== "__custom__") || (destinationSupplier === "__custom__" && !customDestination)}
+                      className="px-6 py-2.5 rounded-xl bg-american-blue text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-american-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                    >
+                      Merge & Combine
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </AnimatePresence>
         </div>

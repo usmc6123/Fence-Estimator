@@ -79,9 +79,16 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   });
 
   // Sync scheduled jobs with estimates
-  const scheduledEstimates = savedEstimates.filter(est => est.scheduledStartDate);
-  const pendingDossiers = savedEstimates.filter(est => est.jobStatus === 'Estimate Pending' || est.jobStatus === 'Estimate Sent');
-  const acceptedUnscheduled = savedEstimates.filter(est => est.jobStatus === 'Accepted' && !est.scheduledStartDate);
+  const scheduledEstimates = savedEstimates.filter(est => est.scheduledStartDate && est.status !== 'archived');
+  const pendingDossiers = savedEstimates.filter(est => 
+    est.status !== 'archived' && 
+    (!est.jobStatus || 
+     est.jobStatus === 'Draft' || 
+     est.jobStatus === 'Proposed' || 
+     est.jobStatus === 'Estimate Pending' || 
+     est.jobStatus === 'Estimate Sent')
+  );
+  const acceptedUnscheduled = savedEstimates.filter(est => est.jobStatus === 'Accepted' && !est.scheduledStartDate && est.status !== 'archived');
 
   useEffect(() => {
     if (!user) return;
