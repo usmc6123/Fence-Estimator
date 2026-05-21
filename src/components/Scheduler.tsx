@@ -85,8 +85,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     (!est.jobStatus || 
      est.jobStatus === 'Draft' || 
      est.jobStatus === 'Proposed' || 
-     est.jobStatus === 'Estimate Pending' || 
-     est.jobStatus === 'Estimate Sent')
+     est.jobStatus === 'Estimate Pending')
   );
   const acceptedUnscheduled = savedEstimates.filter(est => est.jobStatus === 'Accepted' && !est.scheduledStartDate && est.status !== 'archived');
 
