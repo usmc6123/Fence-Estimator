@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Printer, Eye, EyeOff, FileText, ChevronDown, ChevronRight, 
   Package, Hammer, Trash2, Settings as SettingsIcon, ExternalLink,
-  Plus, Search, X
+  Plus, Search, X, AlertTriangle, Clock, ClipboardList, CheckCircle2
 } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
@@ -101,6 +101,52 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
   }, [materials, quotes, pricingStrategy, selectedSupplier]);
 
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
+
+  const getPriceStatusLocal = (lastUpdate?: string) => {
+    if (!lastUpdate) return 'generic' as const;
+    const updateDate = new Date(lastUpdate);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - updateDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 30) return 'fresh' as const;
+    return 'stale' as const;
+  };
+
+  const renderPriceStatusBadge = (item: { id: string; name: string }) => {
+    const orig = materials.find(m => m.id === item.id || m.name.toLowerCase() === item.name.toLowerCase());
+    let status: 'fresh' | 'stale' | 'generic' = 'generic';
+    let title = 'Generic/Legacy price (never updated)';
+    if (orig && orig.lastPriceUpdate) {
+      status = getPriceStatusLocal(orig.lastPriceUpdate);
+      if (status === 'fresh') {
+        title = `Current price (updated less than 30 days ago: ${new Date(orig.lastPriceUpdate).toLocaleDateString()})`;
+      } else {
+        title = `Stale price (updated over 30 days ago: ${new Date(orig.lastPriceUpdate).toLocaleDateString()})`;
+      }
+    }
+    
+    if (status === 'fresh') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase tracking-widest border border-emerald-200" title={title}>
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Current
+        </span>
+      );
+    }
+    if (status === 'stale') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[8px] font-black uppercase tracking-widest border border-amber-200" title={title}>
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Stale
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[8px] font-black uppercase tracking-widest border border-red-200" title={title}>
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        Legacy
+      </span>
+    );
+  };
 
   const handleUpdateGateItems = (runIndex: number, gateIndex: number, newItems: any[]) => {
     const newRuns = [...(estimate.runs || [])];
@@ -643,9 +689,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                   <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
                                     <td className="px-6 py-4">
                                       <div className="flex flex-col">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                           <span>{item.name}</span>
-                                          {pricingStrategy === 'best' && item.priceSource && (
+                                          {renderPriceStatusBadge(item)}
+                                          {item.priceSource && (
                                             <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
                                               item.priceSource === 'Library Price' 
                                                 ? 'bg-american-blue/10 text-american-blue' 
@@ -708,17 +755,20 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                   return (
                                     <tr key={`gate-${i}`} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
                                       <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                          <span>{item.name}</span>
-                                          {pricingStrategy === 'best' && item.priceSource && (
-                                            <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
-                                              item.priceSource === 'Library Price' 
-                                                ? 'bg-american-blue/10 text-american-blue' 
-                                                : 'bg-emerald-100 text-emerald-600'
-                                            }`}>
-                                              {item.priceSource}
-                                            </span>
-                                          )}
+                                        <div className="flex flex-col">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span>{item.name}</span>
+                                            {renderPriceStatusBadge(item)}
+                                            {item.priceSource && (
+                                              <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
+                                                item.priceSource === 'Library Price' 
+                                                  ? 'bg-american-blue/10 text-american-blue' 
+                                                  : 'bg-emerald-100 text-emerald-600'
+                                              }`}>
+                                                {item.priceSource}
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
@@ -792,9 +842,12 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                               {gate.items.filter(i => i.category !== 'Labor' && i.category !== 'Demolition').map((gi, gii) => (
                                 <li key={gii} className="flex justify-between items-center group">
                                   <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors truncate">
-                                      {gi.qty}x {gi.name}
-                                    </span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors truncate">
+                                        {gi.qty}x {gi.name}
+                                      </span>
+                                      {renderPriceStatusBadge(gi)}
+                                    </div>
                                     {pricingStrategy === 'best' && gi.priceSource && (
                                       <span className={`w-fit px-1.5 py-0.5 text-[7px] font-black uppercase tracking-tighter rounded-sm ${
                                         gi.priceSource === 'Library Price' 
@@ -859,7 +912,23 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                         const sellingPrice = item.unitCost * (1 + (estimate.markupPercentage || 0) / 100);
                         return (
                           <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB]">
-                            <td className="px-6 py-4">{item.name}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span>{item.name}</span>
+                                  {renderPriceStatusBadge(item)}
+                                  {item.priceSource && (
+                                    <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
+                                      item.priceSource === 'Library Price' 
+                                        ? 'bg-american-blue/10 text-american-blue' 
+                                        : 'bg-emerald-100 text-emerald-600'
+                                    }`}>
+                                      {item.priceSource}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-6 py-4 text-center">{item.qty}</td>
                             <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                             {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
@@ -914,9 +983,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                           <td className="px-8 py-5 flex items-center gap-3">
                             <div className="w-1.5 h-1.5 rounded-full bg-american-blue/30" />
                             <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <span>{item.name}</span>
-                                {pricingStrategy === 'best' && item.priceSource && (
+                                {renderPriceStatusBadge(item)}
+                                {item.priceSource && (
                                   <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
                                     item.priceSource === 'Library Price' 
                                       ? 'bg-american-blue/10 text-american-blue' 
@@ -1061,7 +1131,10 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                       <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
                         <td className="px-8 py-5 flex items-center gap-3">
                           <div className="w-1.5 h-1.5 rounded-full bg-american-red shadow-sm shadow-american-red/40" />
-                          <span className="flex-1">{item.name}</span>
+                          <div className="flex-1 flex flex-wrap items-center gap-2">
+                            <span>{item.name}</span>
+                            {renderPriceStatusBadge(item)}
+                          </div>
                           <button 
                             onClick={() => removeItem(item.id)}
                             className="p-1.5 bg-american-red/10 hover:bg-american-red hover:text-white text-american-red rounded-lg transition-all opacity-100 print:hidden"
@@ -1418,6 +1491,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
           </div>
         </div>
       )}
+
     </div>
   );
 }
