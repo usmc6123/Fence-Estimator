@@ -25,6 +25,8 @@ import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, tes
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc } from 'firebase/firestore';
+import { getCanonicalSupplierName } from './lib/utils';
+
 
 // Helper to get state from Hash or LocalStorage
 function getInitialValue(key: string, storageKey: string, defaultValue: any) {
@@ -147,14 +149,25 @@ export default function App() {
   // Fetch quotes from Firestore if user is logged in
   React.useEffect(() => {
     if (!user) {
-      setQuotes(getInitialValue('quotes', 'fence_pro_quotes', []));
+      const raw = getInitialValue('quotes', 'fence_pro_quotes', []);
+      setQuotes(raw.map((q: any) => ({
+        ...q,
+        supplierName: getCanonicalSupplierName(q.supplierName || '')
+      })));
       return;
     }
 
     const q = query(collection(db, 'quotes'), where('companyId', '==', 'lonestarfence'));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        setQuotes(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SupplierQuote)));
+        setQuotes(snapshot.docs.map(d => {
+          const data = d.data();
+          return {
+            ...data,
+            id: d.id,
+            supplierName: getCanonicalSupplierName(data.supplierName || '')
+          } as SupplierQuote;
+        }));
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'quotes')
     );
@@ -186,7 +199,11 @@ export default function App() {
   });
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
-    return getInitialValue('quotes', 'fence_pro_quotes', []);
+    const raw = getInitialValue('quotes', 'fence_pro_quotes', []);
+    return raw.map((q: any) => ({
+      ...q,
+      supplierName: getCanonicalSupplierName(q.supplierName || '')
+    }));
   });
 
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {

@@ -6,7 +6,7 @@ import {
   Plus, History, DollarSign, Search, ChevronDown
 } from 'lucide-react';
 import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, updateDoc, deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
@@ -196,30 +196,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       // 3. Extract data with Gemini
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
       
-      const normalizeName = (name: string) => {
-        return name
-          .toLowerCase()
-          .replace(/ (company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing|supply co|fence co)$/g, '')
-          .replace(/[^\w\s]/g, '')
-          .trim();
-      };
-
-      let supplierName = extractedData.supplierName || 'Unknown Supplier';
-      
-      // Special known mappings for this customer
-      const lowerName = supplierName.toLowerCase();
-      if (lowerName.includes('viking fence')) supplierName = 'Viking Fence';
-      else if (lowerName.includes('forney fence')) supplierName = 'Forney Fence';
-      else if (lowerName.includes('dallas fence')) supplierName = 'Dallas Fence';
-      else {
-        // Match against existing suppliers to prevent duplicates
-        const normalizedNew = normalizeName(supplierName);
-        const existingSuppliers = Array.from(new Set(quotes.map(q => q.supplierName)));
-        const bestMatch = existingSuppliers.find(existing => normalizeName(existing) === normalizedNew);
-        if (bestMatch) {
-          supplierName = bestMatch;
-        }
-      }
+      let supplierName = getCanonicalSupplierName(extractedData.supplierName || 'Unknown Supplier');
 
       const newQuoteId = Math.random().toString(36).substr(2, 9);
 
@@ -393,11 +370,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string, fileUrl?: string }[] }> = {};
 
     const normalizeName = (name: string) => {
-      return name
-        .toLowerCase()
-        .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
-        .replace(/[^\w\s]/g, '')
-        .trim();
+      return getCanonicalSupplierName(name).toLowerCase();
     };
 
     quotes.forEach(quote => {
@@ -449,11 +422,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId: string }[] }> = {};
 
     const normalizeName = (name: string) => {
-      return name
-        .toLowerCase()
-        .replace(/\b(company|co|supply|inc|inc\.|llc|corp|corporation|fence|fencing)\b/g, '')
-        .replace(/[^\w\s]/g, '')
-        .trim();
+      return getCanonicalSupplierName(name).toLowerCase();
     };
 
     quotes.forEach(quote => {

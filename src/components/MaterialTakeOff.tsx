@@ -694,16 +694,13 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                           {renderPriceStatusBadge(item)}
                                           {item.priceSource && (
                                             <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
-                                              item.priceSource === 'Library Price' 
-                                                ? 'bg-american-blue/10 text-american-blue' 
-                                                : 'bg-emerald-100 text-emerald-600'
+                                              isFallback
+                                                ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                                : item.priceSource === 'Library Price' 
+                                                  ? 'bg-american-blue/10 text-american-blue' 
+                                                  : 'bg-emerald-100 text-emerald-600'
                                             }`}>
                                               {item.priceSource}
-                                            </span>
-                                          )}
-                                          {isFallback && showPrices && (
-                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[8px] font-black uppercase tracking-tighter rounded-md">
-                                              Library Price
                                             </span>
                                           )}
                                         </div>
@@ -988,9 +985,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                 {renderPriceStatusBadge(item)}
                                 {item.priceSource && (
                                   <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter rounded-md ${
-                                    item.priceSource === 'Library Price' 
-                                      ? 'bg-american-blue/10 text-american-blue' 
-                                      : 'bg-emerald-100 text-emerald-600'
+                                    isFallback
+                                      ? 'bg-orange-100 text-orange-600 border border-orange-200'
+                                      : item.priceSource === 'Library Price' 
+                                        ? 'bg-american-blue/10 text-american-blue' 
+                                        : 'bg-emerald-100 text-emerald-600'
                                   }`}>
                                     {item.priceSource}
                                   </span>
