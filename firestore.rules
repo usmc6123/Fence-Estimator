@@ -114,7 +114,8 @@ service cloud.firestore {
 
     match /employees/{email} {
       allow get, list: if isCompanyMember();
-      allow write: if isAdmin() && isValidEmployee(incoming());
+      allow create, update: if isAdmin() && isValidEmployee(incoming());
+      allow delete: if isAdmin();
     }
 
     match /companySettings/{settingId} {

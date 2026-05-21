@@ -22,6 +22,7 @@ export default function ManageEmployees() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [embedMode, setEmbedMode] = React.useState<'scheduler' | 'employee'>('scheduler');
   
   // New employee form
   const [email, setEmail] = React.useState('');
@@ -219,11 +220,13 @@ export default function ManageEmployees() {
   };
 
   const getSquarespaceCode = () => {
-    const origin = window.location.origin;
+    // Ensure trailing slash is included properly to prevent Vercel redirect query stripping
+    const baseOrigin = window.location.origin;
+    const origin = baseOrigin.endsWith('/') ? baseOrigin : `${baseOrigin}/`;
     return `<!-- Lone Star Fence Works - Employee Portal Embed -->
 <div id="lsfw-portal-container" style="width: 100%; min-height: 800px; background: #F8F9FA; position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-top: 20px;">
   <iframe 
-    src="${origin}?portal=employee" 
+    src="${origin}?portal=${embedMode}" 
     style="width: 100%; height: 900px; border: none; display: block;" 
     allow="geolocation; microphone; camera"
     id="lsfw-portal-frame"
@@ -372,6 +375,40 @@ export default function ManageEmployees() {
             <p className="text-xs text-[#666666] leading-relaxed mb-4">
               Add a Code Block in Squarespace at <code className="bg-gray-100 px-1 py-0.5 rounded text-american-red font-bold font-mono text-[10px] sm:text-xs">lonestarfenceworks.com/employees</code> and paste the text snippet below.
             </p>
+            
+            {/* Embed Mode Switcher */}
+            <div className="mb-4">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-[#666666] mb-1.5">
+                Embed Target View
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-[#F8F9FA] rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEmbedMode('scheduler')}
+                  className={cn(
+                    "py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                    embedMode === 'scheduler'
+                      ? "bg-white shadow-xs text-american-blue border border-[#E5E5E5]"
+                      : "text-[#666666] hover:text-american-blue hover:bg-gray-100"
+                  )}
+                >
+                  Job Scheduler Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmbedMode('employee')}
+                  className={cn(
+                    "py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                    embedMode === 'employee'
+                      ? "bg-white shadow-xs text-american-blue border border-[#E5E5E5]"
+                      : "text-[#666666] hover:text-american-blue hover:bg-gray-100"
+                  )}
+                >
+                  Full Employee Portal
+                </button>
+              </div>
+            </div>
+
             <div className="relative">
               <pre className="max-h-36 overflow-y-auto rounded-xl bg-gray-900 p-3 text-[10px] font-mono text-gray-300 border border-gray-800 whitespace-pre-wrap leading-tight">
                 {getSquarespaceCode()}
