@@ -4,7 +4,7 @@ import {
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map as MapIcon, X, Printer, Share2, Trees, Droplets,
-  TrendingUp, RotateCcw, Package, Navigation, Image
+  TrendingUp, RotateCcw, Package, Navigation, Image, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote } from '../types';
@@ -875,45 +875,102 @@ export default function Estimator({
                           </div>
                         )}
                         <div className="p-8 rounded-[32px] bg-[#F9F9FB] border-2 border-[#F0F0F0] shadow-sm hover:shadow-md transition-all relative group overflow-hidden">
-                        <div className="flex flex-col lg:flex-row gap-8">
-                          {/* Run Identifier & Length */}
-                          <div className="lg:w-1/3 space-y-6">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="px-3 py-1 rounded-full bg-american-blue/10 text-american-blue text-[10px] font-black uppercase tracking-widest">Section {idx + 1}</span>
-                              <div className="flex items-center gap-2">
-                                {idx > 0 && (
-                                  <button
-                                    onClick={() => {
-                                      const newRuns = [...estimate.runs!];
-                                      newRuns[idx].isStartOfNewSection = !newRuns[idx].isStartOfNewSection;
-                                      setEstimate({ ...estimate, runs: newRuns });
-                                    }}
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ring-1",
-                                      run.isStartOfNewSection 
-                                        ? "bg-emerald-600 text-white ring-emerald-500 shadow-sm" 
-                                        : "bg-white text-american-blue ring-american-blue/20 hover:bg-american-blue/5"
-                                    )}
-                                    title={run.isStartOfNewSection ? "This run starts a separate section" : "This run is connected to the previous run"}
-                                  >
-                                    <div className="flex items-center gap-1.5">
-                                      <Navigation size={10} className={run.isStartOfNewSection ? "" : "rotate-180"} />
-                                      {run.isStartOfNewSection ? "New Line" : "Connected"}
-                                    </div>
-                                  </button>
-                                )}
-                                <button 
+                          {/* Full-width header of the section block */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-[#F0F0F0]/80">
+                            <div className="flex items-center gap-3">
+                              <span className="px-3 py-1 rounded-full bg-american-blue/10 text-american-blue text-[10px] font-black uppercase tracking-widest leading-none">Section {idx + 1}</span>
+                              <span className="text-xs font-black uppercase tracking-wider text-american-blue">{run.name || `Run ${idx + 1}`}</span>
+                            </div>
+                            
+                            <div className="flex items-center flex-wrap gap-3">
+                              {/* Move Up/Down Controls */}
+                              <div className="flex items-center gap-0.5 bg-white rounded-xl border border-[#EBEBEB] p-1 shadow-sm">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
                                   onClick={() => {
-                                    const newRuns = estimate.runs!.filter((_, i) => i !== idx);
-                                    setEstimate({ ...estimate, runs: newRuns });
+                                    if (idx > 0) {
+                                      const newRuns = [...estimate.runs!];
+                                      const temp = newRuns[idx];
+                                      newRuns[idx] = newRuns[idx - 1];
+                                      newRuns[idx - 1] = temp;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }
                                   }}
-                                  className="text-american-red hover:bg-american-red/10 p-2 rounded-xl transition-all"
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-all",
+                                    idx === 0 
+                                      ? "text-[#CCCCCC] cursor-not-allowed opacity-55" 
+                                      : "text-american-blue hover:bg-american-blue/5 active:scale-95"
+                                  )}
+                                  title="Move Run Up"
                                 >
-                                  <Trash2 size={18} />
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === estimate.runs!.length - 1}
+                                  onClick={() => {
+                                    if (idx < estimate.runs!.length - 1) {
+                                      const newRuns = [...estimate.runs!];
+                                      const temp = newRuns[idx];
+                                      newRuns[idx] = newRuns[idx + 1];
+                                      newRuns[idx + 1] = temp;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }
+                                  }}
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-all",
+                                    idx === estimate.runs!.length - 1 
+                                      ? "text-[#CCCCCC] cursor-not-allowed opacity-55" 
+                                      : "text-american-blue hover:bg-american-blue/5 active:scale-95"
+                                  )}
+                                  title="Move Run Down"
+                                >
+                                  <ArrowDown size={14} />
                                 </button>
                               </div>
+
+                              {idx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].isStartOfNewSection = !newRuns[idx].isStartOfNewSection;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ring-1",
+                                    run.isStartOfNewSection 
+                                      ? "bg-emerald-600 text-white ring-emerald-500 shadow-sm" 
+                                      : "bg-white text-american-blue ring-american-blue/20 hover:bg-american-blue/5"
+                                  )}
+                                  title={run.isStartOfNewSection ? "This run starts a separate section" : "This run is connected to the previous run"}
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <Navigation size={10} className={run.isStartOfNewSection ? "" : "rotate-180"} />
+                                    {run.isStartOfNewSection ? "New Line" : "Connected"}
+                                  </div>
+                                </button>
+                              )}
+
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const newRuns = estimate.runs!.filter((_, i) => i !== idx);
+                                  setEstimate({ ...estimate, runs: newRuns });
+                                }}
+                                className="text-american-red hover:bg-american-red/10 p-2 rounded-xl transition-all"
+                                title="Delete Section"
+                              >
+                                <Trash2 size={18} />
+                              </button>
                             </div>
-                            <div className="space-y-4">
+                          </div>
+
+                          <div className="flex flex-col lg:flex-row gap-8">
+                            {/* Run Identifier & Length */}
+                            <div className="lg:w-1/3 space-y-4">
                               <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Run Name</label>
                                 <input 
@@ -928,7 +985,7 @@ export default function Estimator({
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Length (LF)</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Length (LF)</label>
                                 <div className="relative">
                                   <input 
                                     type="number" 
@@ -944,7 +1001,6 @@ export default function Estimator({
                                 </div>
                               </div>
                             </div>
-                          </div>
 
                           {/* Styling Overrides */}
                           <div className="flex-1 grid gap-4 grid-cols-2">
