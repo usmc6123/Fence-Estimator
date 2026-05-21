@@ -699,6 +699,22 @@ export default function Estimator({
                       </div>
                     </div>
                   )}
+
+                  {defaultStyle.type === 'Pipe' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2 col-span-2">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Post Installation Option</label>
+                         <select 
+                           value={estimate.pipeInstallType || 'Set in Concrete'}
+                           onChange={(e) => setEstimate({...estimate, pipeInstallType: e.target.value as any})}
+                           className="w-full rounded-xl border-2 border-[#F0F0F0] bg-[#F9F9F9] px-4 py-3 text-sm font-bold focus:border-american-blue outline-none"
+                         >
+                           <option value="Set in Concrete">Posts Set in Concrete (Standard)</option>
+                           <option value="Driven Posts">Driven Posts (Concrete Gateway/Corner/Endpoints, driven line posts)</option>
+                         </select>
+                      </div>
+                    </div>
+                  )}
                </div>
 
                <div className="mt-8 pt-6 border-t border-dashed border-american-blue/10 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -716,7 +732,8 @@ export default function Estimator({
                         ironRails: estimate.ironRails,
                         ironTop: estimate.ironTop,
                         ironInstallType: estimate.ironInstallType,
-                        ironPanelType: estimate.ironPanelType
+                        ironPanelType: estimate.ironPanelType,
+                        pipeInstallType: estimate.pipeInstallType || 'Set in Concrete'
                       }));
                       setEstimate({...estimate, runs: newRuns});
                     }}
@@ -824,7 +841,8 @@ export default function Estimator({
                           isPreStained: estimate.isPreStained,
                           hasRotBoard: estimate.hasRotBoard,
                           ironInstallType: estimate.ironInstallType,
-                          ironPanelType: estimate.ironPanelType
+                          ironPanelType: estimate.ironPanelType,
+                          pipeInstallType: estimate.pipeInstallType || 'Set in Concrete'
                         };
                         setEstimate({ ...estimate, runs: [...(estimate.runs || []), newRun] });
                       }}
@@ -1143,6 +1161,26 @@ export default function Estimator({
                                     </button>
                                   </div>
                                 )}
+                              </div>
+                            )}
+
+                            {runStyle.type === 'Pipe' && (
+                              <div className="col-span-full grid grid-cols-1 gap-6 pt-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">Post Installation Option</label>
+                                  <select 
+                                    value={run.pipeInstallType || estimate.pipeInstallType || 'Set in Concrete'}
+                                    onChange={(e) => {
+                                      const newRuns = [...estimate.runs!];
+                                      newRuns[idx].pipeInstallType = e.target.value as any;
+                                      setEstimate({ ...estimate, runs: newRuns });
+                                    }}
+                                    className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none"
+                                  >
+                                    <option value="Set in Concrete">Posts Set in Concrete (Standard)</option>
+                                    <option value="Driven Posts">Driven Posts (Concrete Gateway/Corner/Endpoints, driven line posts)</option>
+                                  </select>
+                                </div>
                               </div>
                             )}
 

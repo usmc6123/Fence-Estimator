@@ -775,29 +775,105 @@ export function calculateDetailedTakeOff(
         if (runStyle.type !== 'Chain Link') {
           if (runStyle.type === 'Wood') {
             postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+            const cost = stdPostCount * postMat.cost;
+            runFenceMaterialCost += cost;
+            runItems.push({
+              id: postMat.id,
+              name: postMat.name,
+              qty: stdPostCount,
+              unit: postMat.unit,
+              unitCost: postMat.cost,
+              priceSource: postMat.priceSource,
+              total: cost,
+              category: 'Structure'
+            });
           } else if (runStyle.type === 'Pipe') {
-            const postHeight = (run.height || 4) + 2;
-            postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
-            for (let i = 0; i < stdPostCount; i++) {
-              allPipeSegments.push(postHeight);
+            if (run.pipeInstallType === 'Driven Posts') {
+              const concretePostHeight = (run.height || 4) + 3;
+              const drivenPostHeight = (run.height || 4) + 4;
+              
+              const concretePostMat = materials.find(m => m.id === `p-post-238-${concretePostHeight}`) || materials.find(m => m.id === `p-post-238-8`) || postMat;
+              const drivenPostMat = materials.find(m => m.id === `p-post-238-${drivenPostHeight}`) || materials.find(m => m.id === `p-post-238-8`) || postMat;
+              
+              const cornerAndEndPosts = runCornerPosts + startEndPosts;
+              const concreteIntervalCount = Math.floor(runLF / 96);
+              const concretePostCount = Math.min(stdPostCount, cornerAndEndPosts + concreteIntervalCount);
+              const drivenPostCount = Math.max(0, stdPostCount - concretePostCount);
+              
+              // Push to allPipeSegments for stick optimization
+              for (let i = 0; i < concretePostCount; i++) {
+                allPipeSegments.push(concretePostHeight);
+              }
+              for (let i = 0; i < drivenPostCount; i++) {
+                allPipeSegments.push(drivenPostHeight);
+              }
+              
+              if (concretePostCount > 0) {
+                const concreteCost = concretePostCount * concretePostMat.cost;
+                runFenceMaterialCost += concreteCost;
+                runItems.push({
+                  id: concretePostMat.id,
+                  name: `${concretePostMat.name} (Concrete Set Post - 3' Deep)`,
+                  qty: concretePostCount,
+                  unit: concretePostMat.unit,
+                  unitCost: concretePostMat.cost,
+                  priceSource: concretePostMat.priceSource,
+                  total: concreteCost,
+                  category: 'Structure'
+                });
+              }
+              
+              if (drivenPostCount > 0) {
+                const drivenCost = drivenPostCount * drivenPostMat.cost;
+                runFenceMaterialCost += drivenCost;
+                runItems.push({
+                  id: drivenPostMat.id,
+                  name: `${drivenPostMat.name} (Driven Post - 4' Deep)`,
+                  qty: drivenPostCount,
+                  unit: drivenPostMat.unit,
+                  unitCost: drivenPostMat.cost,
+                  priceSource: drivenPostMat.priceSource,
+                  total: drivenCost,
+                  category: 'Structure'
+                });
+              }
+            } else {
+              // Standard Posts (Set in Concrete, standard height + 2)
+              const postHeight = (run.height || 4) + 2;
+              postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
+              for (let i = 0; i < stdPostCount; i++) {
+                allPipeSegments.push(postHeight);
+              }
+              
+              const cost = stdPostCount * postMat.cost;
+              runFenceMaterialCost += cost;
+              runItems.push({
+                id: postMat.id,
+                name: postMat.name,
+                qty: stdPostCount,
+                unit: postMat.unit,
+                unitCost: postMat.cost,
+                priceSource: postMat.priceSource,
+                total: cost,
+                category: 'Structure'
+              });
             }
           } else if (runStyle.type === 'Metal') {
             const postHeight = (run.height || 4) + 2;
             postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
+            const cost = stdPostCount * postMat.cost;
+            runFenceMaterialCost += cost;
+            runItems.push({
+              id: postMat.id,
+              name: postMat.name,
+              qty: stdPostCount,
+              unit: postMat.unit,
+              unitCost: postMat.cost,
+              priceSource: postMat.priceSource,
+              total: cost,
+              category: 'Structure'
+            });
           }
-
-          const cost = stdPostCount * postMat.cost;
-          runFenceMaterialCost += cost;
-          runItems.push({
-            id: postMat.id,
-            name: postMat.name,
-            qty: stdPostCount,
-            unit: postMat.unit,
-            unitCost: postMat.cost,
-            priceSource: postMat.priceSource,
-            total: cost,
-            category: 'Structure'
-          });
         }
       }
 
@@ -912,7 +988,15 @@ export function calculateDetailedTakeOff(
 
       const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80');
       if (concreteMat) {
-        const concreteQty = Math.ceil(runPostCount * bagsPerPost);
+        let postsInConcrete = runPostCount;
+        if (runStyle.type === 'Pipe' && run.pipeInstallType === 'Driven Posts') {
+          const cornerAndEndPosts = runCornerPosts + startEndPosts;
+          const concreteIntervalCount = Math.floor(runLF / 96);
+          const concretePostCount = Math.min(stdPostCount, cornerAndEndPosts + concreteIntervalCount);
+          postsInConcrete = gatePostCountForRun + concretePostCount;
+        }
+
+        const concreteQty = Math.ceil(postsInConcrete * bagsPerPost);
         const concreteCost = concreteQty * concreteMat.cost;
         runFenceMaterialCost += concreteCost;
         runItems.push({

@@ -272,6 +272,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   hasRotBoard: true,
   defaultChainLinkGrade: 'Residential',
   defaultHasBottomRail: false,
+  pipeInstallType: 'Set in Concrete',
 };
 
 export const DEFAULT_LABOR_RATES = {

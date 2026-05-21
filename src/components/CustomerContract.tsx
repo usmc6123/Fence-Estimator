@@ -309,6 +309,7 @@ export default function CustomerContract({
           Status: ${originalRun?.isExistingFence ? 'Existing Fence' : 'New Installation'}
           Needs Staining: ${originalRun?.needsStain ? 'Yes' : 'No'}
           Reuse Posts: ${originalRun?.reusePosts ? 'Yes' : 'No'}
+          Post Installation Option: ${originalRun?.pipeInstallType || 'Set in Concrete'}
           
           Generate a detailed Scope of Work for this specific section.
           If this section is for staining only on existing fence, DO NOT describe it as a new installation. 
