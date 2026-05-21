@@ -67,7 +67,36 @@ export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
   
-  const isEmployeeView = new URLSearchParams(window.location.search).get('portal') === 'employee';
+  // Robustly extract the portal mode from URL query parameters or hash segments
+  const getPortalParam = () => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.has('portal')) {
+        return searchParams.get('portal')?.toLowerCase();
+      }
+      
+      // Secondary check for cases where routers or iframes bundle search params into hash block
+      const hash = window.location.hash;
+      const qIndex = hash.indexOf('?');
+      if (qIndex !== -1) {
+        const hashParams = new URLSearchParams(hash.substring(qIndex));
+        if (hashParams.has('portal')) {
+          return hashParams.get('portal')?.toLowerCase();
+        }
+      }
+      if (hash.includes('portal=')) {
+        const part = hash.substring(hash.indexOf('portal=') + 7);
+        const ampersand = part.indexOf('&');
+        return ampersand !== -1 ? part.substring(0, ampersand).toLowerCase() : part.toLowerCase();
+      }
+    } catch (e) {
+      console.warn('Failed to parse portal query param:', e);
+    }
+    return null;
+  };
+
+  const portalParam = getPortalParam();
+  const isEmployeeView = portalParam === 'employee' || portalParam === 'scheduler';
   
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
     return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
