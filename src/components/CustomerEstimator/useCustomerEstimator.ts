@@ -105,11 +105,11 @@ export function useCustomerEstimator() {
 
     // Map style
     let defaultStyleId = 'wood-privacy';
-    if (data.fenceType === 'Chain Link') {
+    if (data.fenceType === 'chain link fence') {
       defaultStyleId = 'chain-link';
-    } else if (data.fenceType === 'Metal') {
+    } else if (data.fenceType === 'Wrought iron fence') {
       defaultStyleId = 'aluminum-ornamental';
-    } else if (data.fenceType === 'Split Rail') {
+    } else if (data.fenceType === 'pipe fence') {
       defaultStyleId = 'pipe-no-climb';
     }
 

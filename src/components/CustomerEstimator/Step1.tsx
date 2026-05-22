@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, EyeOff, Layers, Trees, Box, Grid } from 'lucide-react';
+import { Shield, Trees, Box, Grid } from 'lucide-react';
 import privacyFenceImg from '../../assets/images/actual_privacy_fence_squarespace.webp';
 import metalFenceImg from '../../assets/images/actual_metal_fence_squarespace.jpg';
 
@@ -12,44 +12,26 @@ interface Step1Props {
 export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
   const options = [
     {
-      id: 'Privacy',
-      title: 'Privacy Fence',
-      description: 'Solid side-by-side wooden fence providing complete privacy and noise reduction.',
+      id: 'Wood Fence',
+      title: 'Wood Fence',
+      description: 'Solid side-by-side or decorative wooden fences providing complete privacy and noise reduction.',
       icon: Shield,
       image: privacyFenceImg,
       isUserPhoto: true,
       bg: 'hover:border-american-blue hover:bg-slate-50'
     },
     {
-      id: 'Semi-Private',
-      title: 'Semi-Private Fence',
-      description: 'Board-on-board shadowbox designs or horizontal layouts for stylish airflow.',
-      icon: EyeOff,
-      image: 'https://images.unsplash.com/photo-1541996278361-155e87b62b2f?auto=format&fit=crop&w=600&q=80',
-      isUserPhoto: false,
-      bg: 'hover:border-american-blue hover:bg-slate-50'
+      id: 'Wrought iron fence',
+      title: 'Wrought iron fence',
+      description: 'High-end black wrought iron/metal panels with flat or decorative top pickets.',
+      icon: Box,
+      image: metalFenceImg,
+      isUserPhoto: true,
+      bg: 'hover:border-[#9d8145] hover:bg-amber-50/20'
     },
     {
-      id: 'Picket',
-      title: 'Picket Fence',
-      description: 'Classic vertical space-picket styles. Traditionally ornamental and warm.',
-      icon: Layers,
-      image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=600&q=80',
-      isUserPhoto: false,
-      bg: 'hover:border-american-blue hover:bg-slate-50'
-    },
-    {
-      id: 'Split Rail',
-      title: 'Split Rail / Pipe',
-      description: 'Rustic ranch rail and steel pipe setups. Perfect for open boundaries and fields.',
-      icon: Trees,
-      image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80',
-      isUserPhoto: false,
-      bg: 'hover:border-american-blue hover:bg-slate-50'
-    },
-    {
-      id: 'Chain Link',
-      title: 'Chain Link',
+      id: 'chain link fence',
+      title: 'chain link fence',
       description: 'Durable, affordable commercial or residential grade galvanized steel mesh.',
       icon: Grid,
       image: 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?auto=format&fit=crop&w=600&q=80',
@@ -57,13 +39,13 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
       bg: 'hover:border-emerald-600 hover:bg-emerald-50/50'
     },
     {
-      id: 'Metal',
-      title: 'Metal / Ornamental',
-      description: 'High-end black wrought iron panels with flat or decorative top pickets.',
-      icon: Box,
-      image: metalFenceImg,
-      isUserPhoto: true,
-      bg: 'hover:border-[#9d8145] hover:bg-amber-50/20'
+      id: 'pipe fence',
+      title: 'pipe fence',
+      description: 'Rustic ranch rail and steel pipe setups. Perfect for open boundaries and fields.',
+      icon: Trees,
+      image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80',
+      isUserPhoto: false,
+      bg: 'hover:border-american-blue hover:bg-slate-50'
     }
   ];
 

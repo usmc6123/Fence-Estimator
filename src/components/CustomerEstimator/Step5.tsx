@@ -143,7 +143,7 @@ export default function Step5({
               </h3>
             </div>
             <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
-              {data.fenceType || 'Privacy'} / {data.linearFeet} LF
+              {data.fenceType || 'Wood Fence'} / {data.linearFeet} LF
             </div>
           </div>
 

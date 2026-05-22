@@ -113,36 +113,26 @@ export default function EmbedCodeBuilder() {
           <h2 class="text-2xl font-black text-blue-950 uppercase tracking-tight">Select Fence Style</h2>
           <p class="text-sm font-medium text-gray-500">Pick the visual category that matches your boundary requirements.</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <!-- Privacy -->
-          <button type="button" onclick="selectStyle('Privacy')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-900 mb-1">Wood Privacy Fence</h3>
-            <p class="text-xs text-gray-500">Classic side-by-side vertical posts providing complete privacy.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Wood Fence -->
+          <button type="button" onclick="selectStyle('Wood Fence')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
+            <h3 class="font-bold text-base text-gray-900 mb-1">Wood Fence</h3>
+            <p class="text-xs text-gray-500">Solid vertical cedar or pine privacy/style fences built with premium craftsmanship.</p>
           </button>
-          <!-- Semi private -->
-          <button type="button" onclick="selectStyle('Semi-Private')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-900 mb-1">Semi-Private Fence</h3>
-            <p class="text-xs text-gray-500">Board-on-board shadowbox layout offering stylish breeze ventilation.</p>
+          <!-- Wrought iron fence -->
+          <button type="button" onclick="selectStyle('Wrought iron fence')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
+            <h3 class="font-bold text-base text-gray-900 mb-1">Wrought iron fence</h3>
+            <p class="text-xs text-gray-500">High-end black powder-coated metal/ornamental panels with protective pickets.</p>
           </button>
-          <!-- Picket -->
-          <button type="button" onclick="selectStyle('Picket')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-900 mb-1">Classic Picket Fence</h3>
-            <p class="text-xs text-gray-500">Traditional warm spaced-picket design. Perfect decoration boundaries.</p>
+          <!-- chain link fence -->
+          <button type="button" onclick="selectStyle('chain link fence')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-950 hover:shadow-md">
+            <h3 class="font-bold text-base text-gray-950 mb-1">chain link fence</h3>
+            <p class="text-xs text-gray-500">Durable galvanized or black vinyl-coated steel chain link mesh.</p>
           </button>
-          <!-- Split Rail -->
-          <button type="button" onclick="selectStyle('Split Rail')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-900 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-900 mb-1">Split Rail / Pipe Fence</h3>
-            <p class="text-xs text-gray-500">Rustic open layout for ranches, boundaries, or expansive acreage.</p>
-          </button>
-          <!-- Chain link -->
-          <button type="button" onclick="selectStyle('Chain Link')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-950 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-950 mb-1">Chain Link</h3>
-            <p class="text-xs text-gray-500">Heavy-grade galvanized safety mesh. Incredible economic security.</p>
-          </button>
-          <!-- Metal -->
-          <button type="button" onclick="selectStyle('Metal')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-950 hover:shadow-md">
-            <h3 class="font-bold text-base text-gray-950 mb-1">Metal / Ornamental</h3>
-            <p class="text-xs text-gray-500">Powder-coated architectural panels mimicking high-class wrought iron.</p>
+          <!-- pipe fence -->
+          <button type="button" onclick="selectStyle('pipe fence')" class="style-btn flex flex-col text-left p-5 rounded-2xl border-2 border-gray-200 bg-white hover:border-blue-950 hover:shadow-md">
+            <h3 class="font-bold text-base text-gray-950 mb-1">pipe fence</h3>
+            <p class="text-xs text-gray-500">Rustic ranch-rail, pipe, or steel configurations perfect for open acreage.</p>
           </button>
         </div>
       </div>
