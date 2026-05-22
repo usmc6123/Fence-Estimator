@@ -26,6 +26,62 @@ interface CardOption {
   defaultImage: string;
 }
 
+const resizeAndCropImage = (file: File, targetWidth = 800, targetHeight = 500): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        // Calculate aspect ratio and drawing dimensions (cover crop & center)
+        const imgRatio = img.width / img.height;
+        const targetRatio = targetWidth / targetHeight;
+        let dWidth, dHeight, dx, dy;
+
+        if (imgRatio > targetRatio) {
+          // Image is wider than target
+          dHeight = targetHeight;
+          dWidth = targetHeight * imgRatio;
+          dx = (targetWidth - dWidth) / 2;
+          dy = 0;
+        } else {
+          // Image is taller than target
+          dWidth = targetWidth;
+          dHeight = targetWidth / imgRatio;
+          dx = 0;
+          dy = (targetHeight - dHeight) / 2;
+        }
+
+        // Fill background with clean gray first
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        // High quality scaling
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        ctx.drawImage(img, dx, dy, dWidth, dHeight);
+
+        // Compress at 85% image quality to keep payload small (<120kb) and prevent QuotaExceededError
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(compressedBase64);
+      };
+      img.onerror = (err) => reject(err);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function CardPhotosEditor() {
   const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
   const [dragActiveId, setDragActiveId] = React.useState<string | null>(null);
@@ -136,19 +192,14 @@ export default function CardPhotosEditor() {
 
   const activeOptions = activeSection === 'styles' ? styleOptions : materialOptions;
 
-  const handleFileChange = (id: string, file: File) => {
+  const handleFileChange = async (id: string, file: File) => {
     if (!file) return;
 
-    // Check size limit (e.g. 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setMessage({ id, text: 'File is too large. Please select an image under 5MB.', type: 'info' });
-      return;
-    }
+    setMessage({ id, text: 'Processing & compressing photo...', type: 'info' });
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      const updatedPhotos = { ...customPhotos, [id]: base64String };
+    try {
+      const compressedBase64 = await resizeAndCropImage(file, 800, 500);
+      const updatedPhotos = { ...customPhotos, [id]: compressedBase64 };
       setCustomPhotos(updatedPhotos);
       localStorage.setItem('customer_estimator_custom_photos', JSON.stringify(updatedPhotos));
       
@@ -157,11 +208,10 @@ export default function CardPhotosEditor() {
 
       setMessage({ id, text: 'Photo updated and saved successfully!', type: 'success' });
       setTimeout(() => setMessage(null), 3500);
-    };
-    reader.onerror = () => {
+    } catch (e) {
+      console.error('Error processing photo:', e);
       setMessage({ id, text: 'Failed to process the uploaded image.', type: 'info' });
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   // Drag and Drop handlers
@@ -283,12 +333,15 @@ export default function CardPhotosEditor() {
                 </div>
               </div>
 
-              {/* Drag and Drop Uploader - NOW DECLARED RELATIVE */}
+              {/* Drag and Drop Uploader - SECURE & STABLE */}
               <div
                 onDragOver={(e) => handleDragOver(e, card.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, card.id)}
-                className={`relative border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 transition-all text-center ${
+                onClick={() => {
+                  document.getElementById(`file-input-${card.id.replace(/\s+/g, '-')}`)?.click();
+                }}
+                className={`relative border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 transition-all text-center cursor-pointer select-none ${
                   isDragActive
                     ? 'border-american-blue bg-blue-50/40 text-american-blue scale-[0.98]'
                     : 'border-[#D5D5D5] bg-slate-50 hover:bg-slate-100/50 text-[#666666]'
@@ -300,13 +353,14 @@ export default function CardPhotosEditor() {
                   {isDragActive ? (
                     <span className="text-american-blue">Drop image here!</span>
                   ) : (
-                    <span>Drag & drop photo or <span className="text-american-blue underline cursor-pointer">click to browse</span></span>
+                    <span>Drag & drop photo or <span className="text-american-blue underline">click to browse</span></span>
                   )}
                 </div>
                 
                 <span className="text-[10px] text-slate-400 font-medium">Supports PNG, JPG, WEBP (Max 5MB)</span>
                 
                 <input
+                  id={`file-input-${card.id.replace(/\s+/g, '-')}`}
                   type="file"
                   accept="image/*"
                   onChange={(e) => {
@@ -314,9 +368,7 @@ export default function CardPhotosEditor() {
                       handleFileChange(card.id, e.target.files[0]);
                     }
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  style={{ fontSize: '0', pointerEvents: 'auto' }}
-                  title=""
+                  className="hidden"
                 />
               </div>
 
