@@ -165,67 +165,56 @@ export default function Step5({
                 </div>
               </div>
 
-              {/* Line items list */}
-              <div className="space-y-3 font-mono text-xs">
-                {/* Posts */}
-                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-                  <span className="text-slate-400">Posts & concrete footings (8' O.C.)</span>
-                  <span className="text-slate-200 font-bold">${Math.round(breakdown.postsCost).toLocaleString()}</span>
-                </div>
-
-                {/* Infill Materials */}
-                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-                  <span className="text-slate-400">Infill raw materials ({data.material} @ ${MATERIAL_PRICES[data.material]}/LF)</span>
-                  <span className="text-slate-200 font-bold">${Math.round(breakdown.materialsCost).toLocaleString()}</span>
-                </div>
-
-                {/* Labor Take-off */}
-                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2 flex-col gap-0.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Workmanship & setup ({data.siteCondition})</span>
-                    <span className="text-slate-200 font-bold">${Math.round(breakdown.laborCost).toLocaleString()}</span>
+              {/* Simplified Specifications and Overall Range (No Itemized Prices) */}
+              <div className="space-y-6">
+                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                  <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-1">
+                    Project Specifications
+                  </span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Fence Style:</span>
+                      <span className="text-slate-300 font-bold">{data.fenceType || 'Wood Fence'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Linear Footage:</span>
+                      <span className="text-slate-300 font-bold">{data.linearFeet} LF</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Panel Height:</span>
+                      <span className="text-slate-300 font-bold">{data.height} FT</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Wood Finish:</span>
+                      <span className="text-slate-300 font-bold">{data.isPreStained ? 'Pre-Stained' : 'Natural / Raw'}</span>
+                    </div>
+                    {data.needGates && (
+                      <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-2">
+                        <span className="text-slate-500">Gate Configuration:</span>
+                        <span className="text-slate-300 font-bold">
+                          {data.gateCount}x {data.gateType} {data.gateType?.toLowerCase().includes('gate') ? '' : 'Gate'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {data.removeOldFence && (
-                    <span className="text-[10px] text-american-red">*Includes tear down & hauling disposal fee @ $15/LF</span>
-                  )}
-                </div>
-
-                {/* Gates */}
-                {data.needGates && (
-                  <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-                    <span className="text-slate-400">
-                      {data.gateCount}x {data.gateType} entry kit(s)
-                    </span>
-                    <span className="text-slate-200 font-bold">${Math.round(breakdown.gatesCost).toLocaleString()}</span>
-                  </div>
-                )}
-
-                {/* Subtotal */}
-                <div className="flex justify-between border-b border-slate-800 pb-2 pt-2 text-sm">
-                  <span className="text-slate-400 uppercase font-black tracking-wider">Subtotal:</span>
-                  <span className="text-white font-black">${Math.round(breakdown.subtotal).toLocaleString()}</span>
-                </div>
-
-                {/* Contingency */}
-                <div className="flex justify-between text-[11px] text-slate-500 pb-1">
-                  <span>Standard Material Contingency:</span>
-                  <span>${Math.round(breakdown.contingency).toLocaleString()}</span>
-                </div>
-
-                {/* Tax */}
-                <div className="flex justify-between text-[11px] text-slate-500 pb-2 border-b border-slate-800">
-                  <span>Local Sales & Environmental Tax:</span>
-                  <span>${Math.round(breakdown.tax).toLocaleString()}</span>
                 </div>
 
                 {/* GRAND TOTAL RANGE */}
-                <div className="flex justify-between items-baseline pt-4 flex-col sm:flex-row gap-2">
-                  <span className="text-xs font-black uppercase text-white tracking-widest">
-                    Projected Contract Price:
+                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-2 text-center sm:text-left">
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                    Projected Total Investment Range:
                   </span>
-                  <span className="text-2xl sm:text-3xl font-black text-emerald-400 whitespace-nowrap">
-                    ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
-                  </span>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1.5">
+                    <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400 tracking-tight whitespace-nowrap">
+                      ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                      *Turnkey Project Price
+                    </span>
+                  </div>
+                  <p className="text-[10px] leading-normal text-slate-500 font-mono pt-1">
+                    *Estimation range covers standard materials, professional labor workmanship, posts, site prep layout, cleanup, and regional TX taxes. No extra hidden fees.
+                  </p>
                 </div>
               </div>
 
