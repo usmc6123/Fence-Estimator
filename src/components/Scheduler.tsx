@@ -726,80 +726,227 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       return (
                         <div 
                           key={day.toString()}
-                          onClick={() => handleDayClick(day)}
+                          onClick={() => setSelectedDate(isSelected ? null : day)}
                           className={cn(
-                            "flex items-center gap-4 p-4 bg-white rounded-3xl border border-[#E5E5E5] transition-all cursor-pointer min-h-[75px] shadow-sm hover:border-american-blue hover:shadow-md",
-                            isToday && "ring-2 ring-american-red ring-offset-2",
-                            isSelected && "ring-2 ring-american-blue"
+                            "flex flex-col p-4 bg-white rounded-3xl border transition-all cursor-pointer shadow-sm hover:border-american-blue hover:shadow-md",
+                            isToday ? "ring-2 ring-american-red ring-offset-2 border-american-red" : "border-[#E5E5E5]",
+                            isSelected ? "ring-2 ring-american-blue border-american-blue" : ""
                           )}
                         >
-                          {/* Huge Date on Left (at least 60px x 60px layout) */}
-                          <div className={cn(
-                            "flex flex-col items-center justify-center min-w-[65px] h-[65px] rounded-2xl shrink-0 transition-all shadow-xs",
-                            isToday ? "bg-american-red text-white" : 
-                            isSelected ? "bg-american-blue text-white" : "bg-[#F5F7FA] text-american-blue"
-                          )}>
-                            <span className="text-[28px] font-black leading-none">{format(day, 'd')}</span>
-                            <span className={cn(
-                              "text-[10px] font-black uppercase tracking-wider mt-1",
-                              isToday || isSelected ? "text-white/80" : "text-[#999999]"
-                            )}>{format(day, 'EEE')}</span>
+                          {/* Card Summary row */}
+                          <div className="flex items-center gap-4 w-full">
+                            {/* Huge Date on Left (at least 60px x 60px layout) */}
+                            <div className={cn(
+                              "flex flex-col items-center justify-center min-w-[65px] h-[65px] rounded-2xl shrink-0 transition-all shadow-xs",
+                              isToday ? "bg-american-red text-white" : 
+                              isSelected ? "bg-american-blue text-white" : "bg-[#F5F7FA] text-american-blue"
+                            )}>
+                              <span className="text-[28px] font-black leading-none">{format(day, 'd')}</span>
+                              <span className={cn(
+                                "text-[10px] font-black uppercase tracking-wider mt-1",
+                                isToday || isSelected ? "text-white/80" : "text-[#999999]"
+                              )}>{format(day, 'EEE')}</span>
+                            </div>
+
+                            {/* Summary list on right */}
+                            <div className="flex-1 min-w-0 flex flex-wrap gap-1.5">
+                              {allDayItems.length > 0 ? (
+                                allDayItems.map((item, idx) => {
+                                  let bg = "bg-pink-100 text-pink-850 border-pink-200/50";
+                                  let tagText = item.type === 'Job' ? 'Job' : item.type === 'Busy' ? 'Appt' : item.type;
+                                  if (item.type === 'Blackout') {
+                                    bg = "bg-rose-100 text-rose-800 border-rose-200/50";
+                                  } else if (item.type === 'Busy') {
+                                    bg = "bg-orange-100 text-orange-850 border-orange-200/50";
+                                  } else if (item.type === 'Job') {
+                                    bg = "bg-blue-100 text-blue-800 border-blue-200/50";
+                                  }
+
+                                  return (
+                                    <span 
+                                      key={idx} 
+                                      className={cn("text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border leading-none shrink-0", bg)}
+                                    >
+                                      {tagText}: <span className="font-bold normal-case text-gray-800">{item.title}</span>
+                                    </span>
+                                  );
+                                })
+                              ) : (
+                                <div className="flex items-center gap-2 text-emerald-600 px-1 py-1">
+                                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                  <span className="text-[10px] font-black uppercase tracking-wider">Vacant Slot (Available)</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Events List on Right */}
-                          <div className="flex-1 min-w-0 flex flex-col gap-2">
-                            {allDayItems.length > 0 ? (
-                              allDayItems.map((item, idx) => {
-                                let bg = "bg-pink-50 text-pink-850 border-pink-200";
-                                let tagText = item.type === 'Job' ? 'Job' : item.type;
-                                if (item.type === 'Blackout') {
-                                  bg = "bg-rose-100 text-rose-800 border-rose-200";
-                                  tagText = "Blackout";
-                                } else if (item.type === 'Busy') {
-                                  bg = "bg-orange-50 text-orange-800 border-orange-200";
-                                  tagText = "Appt";
-                                } else if (item.type === 'Estimate') {
-                                  bg = "bg-pink-50 text-pink-800 border-pink-200";
-                                  tagText = "Estimate";
-                                } else if (item.type === 'Job') {
-                                  bg = "bg-american-blue text-white border-transparent";
-                                  tagText = "Job";
-                                }
+                          {/* Beautiful Expanded Detail Section inline */}
+                          {isSelected && (
+                            <div 
+                              className="mt-4 pt-4 border-t border-[#E5E5E5] space-y-4 text-left w-full animate-fade-in"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-[10px] font-black text-american-blue uppercase tracking-[0.15em]">Daily Schedule details</h4>
+                                <span className="text-[9px] font-black bg-american-blue/5 text-american-blue px-2.5 py-0.5 rounded-full">
+                                  {allDayItems.length} items
+                                </span>
+                              </div>
 
-                                return (
-                                  <div 
-                                    key={idx}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedDate(day);
-                                      setSelectedEvent(item.isJob ? {
-                                        id: item.id,
-                                        type: 'Job',
-                                        title: item.title,
-                                        startDate: (item.raw as any).scheduledStartDate!,
-                                        endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
-                                        estimateId: item.id,
-                                        userId: user.uid
-                                      } : item.raw as ScheduleEvent);
+                              <div className="space-y-3">
+                                {allDayItems.length === 0 ? (
+                                  <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-center">
+                                    <CalendarIcon size={20} className="mx-auto text-emerald-400 mb-2" />
+                                    <p className="text-xs font-black text-emerald-800">No events scheduled for this day</p>
+                                    <p className="text-[9px] text-emerald-600/70 uppercase tracking-widest font-bold mt-0.5">Vacant Day (Fully Open)</p>
+                                  </div>
+                                ) : (
+                                  allDayItems.map((item, idx) => {
+                                    let bg = "bg-pink-50 border-pink-100 text-pink-700";
+                                    let icon = <CalendarIcon size={14} />;
+                                    if (item.type === 'Blackout') {
+                                      bg = "bg-rose-50 border-rose-100 text-rose-700";
+                                      icon = <AlertCircle size={14} />;
+                                    } else if (item.type === 'Busy') {
+                                      bg = "bg-orange-50 border-orange-100 text-orange-700";
+                                      icon = <Clock size={14} />;
+                                    } else if (item.type === 'Estimate') {
+                                      bg = "bg-pink-50 border-pink-100 text-pink-700";
+                                      icon = <CalendarIcon size={14} />;
+                                    } else if (item.type === 'Job') {
+                                      bg = "bg-blue-50 border-blue-105 text-blue-700";
+                                      icon = <Briefcase size={14} />;
+                                    }
+
+                                    const estObj = savedEstimates.find(e => e.id === (item.raw as any).estimateId || e.id === item.id);
+
+                                    return (
+                                      <div key={idx} className="p-3.5 bg-[#F8F9FA] border border-[#E5E5E5] rounded-2xl shadow-xs space-y-2.5">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className={cn("p-1 rounded-lg border", bg)}>
+                                              {icon}
+                                            </span>
+                                            <div>
+                                              <span className={cn("text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded", bg)}>
+                                                {item.type === 'Job' ? 'Fence Install' : item.type === 'Busy' ? 'Appt' : item.type}
+                                              </span>
+                                              <h5 className="font-black text-american-blue text-[13px] mt-0.5">
+                                                {item.title}
+                                              </h5>
+                                            </div>
+                                          </div>
+
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                              onClick={() => {
+                                                setSelectedEvent(item.isJob ? {
+                                                  id: item.id,
+                                                  type: 'Job',
+                                                  title: item.title,
+                                                  startDate: (item.raw as any).scheduledStartDate!,
+                                                  endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
+                                                  estimateId: item.id,
+                                                  userId: user?.uid || ''
+                                                } : item.raw as ScheduleEvent);
+                                                setShowEventModal(true);
+                                              }}
+                                              className="p-1.5 text-american-blue hover:bg-american-blue/5 rounded-lg transition-colors flex items-center justify-center min-h-[32px] min-w-[32px]"
+                                              title="Manage / Edit"
+                                            >
+                                              <Eye size={15} />
+                                            </button>
+                                            {!readOnly && (
+                                              <button
+                                                onClick={() => deleteEvent(item.id, item.type)}
+                                                className="p-1.5 text-american-red hover:bg-american-red/10 rounded-lg transition-colors flex items-center justify-center min-h-[32px] min-w-[32px]"
+                                                title="Delete"
+                                              >
+                                                <Trash2 size={15} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {estObj && (
+                                          <div className="text-[10px] text-[#666666] font-medium space-y-1.5 bg-white p-2.5 rounded-xl border border-gray-150">
+                                            {estObj.customerAddress && (
+                                              <div className="space-y-1">
+                                                <p className="flex items-center gap-1">
+                                                  <span className="font-bold text-[#999] shrink-0">ADDR:</span> 
+                                                  <span className="truncate font-black text-american-blue uppercase">{estObj.customerAddress}</span>
+                                                </p>
+                                                <a
+                                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(estObj.customerAddress)}`}
+                                                  target="_blank"
+                                                  referrerPolicy="no-referrer"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1 bg-american-blue/5 hover:bg-american-blue/10 text-american-blue p-1.5 rounded-lg font-black uppercase text-[8px] tracking-widest"
+                                                >
+                                                  <ExternalLink size={10} />
+                                                  <span>Get Directions</span>
+                                                </a>
+                                              </div>
+                                            )}
+                                            {estObj.customerPhone && (
+                                              <p className="flex items-center gap-1">
+                                                <span className="font-bold text-[#999]">TEL:</span>
+                                                <a href={`tel:${estObj.customerPhone}`} className="text-american-blue hover:underline font-black">{estObj.customerPhone}</a>
+                                              </p>
+                                            )}
+                                            <p className="flex items-center gap-2 mt-1 pt-1.5 border-t border-gray-200/50 text-[9px] font-bold text-[#999]">
+                                              <span>{(estObj.linearFeet || 0).toFixed(0)}' LF</span>
+                                              <span>•</span>
+                                              <span>{item.type === 'Job' ? `${estObj.scheduledDuration || 2} Days` : 'Assessment'}</span>
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                              {/* Create / Block Time Buttons directly inline */}
+                              {!readOnly && (
+                                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                                  <button 
+                                    onClick={() => {
+                                      setIsAddingEstimate(true);
+                                      setSelectedEvent(null);
                                       setShowEventModal(true);
                                     }}
-                                    className={cn(
-                                      "px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-black uppercase tracking-wide shadow-xs active:scale-98 transition-transform cursor-pointer min-h-[36px]",
-                                      bg
-                                    )}
+                                    className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all min-h-[44px]"
                                   >
-                                    <span className="truncate leading-none">{item.title}</span>
-                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-black/15 text-current leading-none shrink-0">{tagText}</span>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div className="flex items-center gap-2 text-emerald-600 px-1">
-                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                                <span className="text-xs font-black uppercase tracking-wider">Vacant Slot (Available)</span>
-                              </div>
-                            )}
-                          </div>
+                                    <CalendarIcon size={14} />
+                                    <span className="text-[8px] font-black uppercase tracking-wider">Add Est</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setIsAddingBusy(true);
+                                      setSelectedEvent(null);
+                                      setShowEventModal(true);
+                                    }}
+                                    className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all min-h-[44px]"
+                                  >
+                                    <Clock size={14} />
+                                    <span className="text-[8px] font-black uppercase tracking-wider">Busy Appt</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setIsAddingBlackout(true);
+                                      setSelectedEvent(null);
+                                      setShowEventModal(true);
+                                    }}
+                                    className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-all min-h-[44px]"
+                                  >
+                                    <AlertCircle size={14} />
+                                    <span className="text-[8px] font-black uppercase tracking-wider text-rose-700">Blackout</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -906,7 +1053,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                       startDate: job.scheduledStartDate!,
                                       endDate: job.scheduledEndDate || job.scheduledStartDate!,
                                       estimateId: job.id,
-                                      userId: user.uid
+                                      userId: user?.uid || ''
                                     });
                                     setShowEventModal(true);
                                   }}
@@ -925,16 +1072,16 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                 
                                 if (item.type === 'Blackout') {
                                   bg = "bg-rose-500 text-white font-black animate-pulse";
-                                  label = "C";
+                                  label = "Blk";
                                 } else if (item.type === 'Busy') {
-                                  bg = "bg-purple-500 text-white font-black";
-                                  label = "B";
+                                  bg = "bg-orange-500 text-white font-black";
+                                  label = "A";
                                 } else if (item.type === 'Estimate') {
-                                  bg = "bg-amber-500 text-white font-black";
-                                  label = getInitials(item.title) || "A";
+                                  bg = "bg-pink-500 text-white font-black";
+                                  label = "C";
                                 } else {
                                   bg = "bg-american-blue text-white font-black";
-                                  label = getInitials(item.title) || "J";
+                                  label = "J";
                                 }
 
                                 return (
@@ -950,7 +1097,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                         startDate: (item.raw as any).scheduledStartDate!,
                                         endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
                                         estimateId: item.id,
-                                        userId: user.uid
+                                        userId: user?.uid || ''
                                       } : item.raw as ScheduleEvent);
                                       setShowEventModal(true);
                                     }}
@@ -1024,7 +1171,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                               startDate: (item.raw as any).scheduledStartDate!,
                               endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
                               estimateId: item.id,
-                              userId: user.uid
+                              userId: user?.uid || ''
                             } : item.raw);
                             setShowEventModal(true);
                           }}
@@ -1111,7 +1258,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                           startDate: '',
                                           endDate: '',
                                           estimateId: est.id,
-                                          userId: user.uid
+                                          userId: user?.uid || ''
                                       });
                                       setShowEventModal(true);
                                   }}
@@ -1171,7 +1318,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                           startDate: '',
                                           endDate: '',
                                           estimateId: est.id,
-                                          userId: user.uid
+                                          userId: user?.uid || ''
                                       });
                                       setShowEventModal(true);
                                   }}
