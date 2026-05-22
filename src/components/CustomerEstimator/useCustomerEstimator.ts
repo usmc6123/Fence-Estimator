@@ -29,6 +29,8 @@ const INITIAL_DATA: CustomerEstimateData = {
   topStyle: 'Dog Ear',
   hasTopCap: false,
   hasCapAndTrim: false,
+  pipePaintColor: 'Black',
+  pipeWireType: 'Black',
 };
 
 export function useCustomerEstimator(
@@ -71,6 +73,8 @@ export function useCustomerEstimator(
         } else if (value === 'pipe fence') {
           newData.material = 'Set in Concrete';
           newData.height = 5;
+          newData.pipePaintColor = 'Black';
+          newData.pipeWireType = 'Black';
         }
       }
       return newData;
@@ -219,9 +223,9 @@ export function useCustomerEstimator(
         styleId: defaultStyleId,
         visualStyleId: defaultStyleId === 'aluminum-ornamental' 
           ? (data.material === 'Extended pickets' ? 'm-2rep' : (data.material === '3 rail racking' ? 'm-3rr' : 'm-2rft'))
-          : (defaultStyleId === 'pipe-no-climb' ? (data.material && data.material.includes('Black') ? 'p-black' : 'p-std') : (defaultStyleId === 'wood-privacy' ? (data.picketStyle || 'w-side') : 'standard')),
+          : (defaultStyleId === 'pipe-no-climb' ? (data.pipeWireType === 'Black' ? 'p-black' : 'p-std') : (defaultStyleId === 'wood-privacy' ? (data.picketStyle || 'w-side') : 'standard')),
         height: data.height,
-        color: 'Natural',
+        color: defaultStyleId === 'pipe-no-climb' ? (data.pipePaintColor || 'Black') : 'Natural',
         woodType: defaultStyleId === 'wood-privacy' 
           ? (data.material === 'Japanese Cedar' ? 'Japanese Cedar' : (data.material === 'Western Red Cedar' ? 'Western Red Cedar' : 'PT Pine')) 
           : undefined,
@@ -229,7 +233,7 @@ export function useCustomerEstimator(
           ? (data.material === 'Commercial Grade' ? 'Commercial' : 'Residential')
           : undefined,
         pipeInstallType: defaultStyleId === 'pipe-no-climb' 
-          ? (data.material === 'Driven Posts' ? 'Driven Posts' : 'Set in Concrete')
+          ? 'Set in Concrete'
           : undefined,
         isPreStained: !!data.isPreStained,
         reusePosts: !!data.reusePosts,

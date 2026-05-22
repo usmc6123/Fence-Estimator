@@ -77,8 +77,13 @@ export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Prop
                 <span className="font-bold text-[#111111]">{data.height}' Tall</span>
               </div>
               <div>
-                <span className="block text-[9px] text-[#888888]">MATERIAL:</span>
-                <span className="font-bold text-[#111111]">{data.material}</span>
+                <span className="block text-[9px] text-[#888888]">{data.fenceType === 'pipe fence' ? 'WIRE / PAINT:' : 'MATERIAL:'}</span>
+                <span className="font-bold text-[#111111] truncate block">
+                  {data.fenceType === 'pipe fence' 
+                    ? `${data.pipeWireType || 'Black'} Wire, ${data.pipePaintColor || 'Black'} Paint` 
+                    : data.material
+                  }
+                </span>
               </div>
             </div>
           </div>

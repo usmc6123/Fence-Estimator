@@ -16,6 +16,8 @@ interface Step3Props {
   topStyle?: 'Dog Ear' | 'Flat Top';
   hasTopCap?: boolean;
   hasCapAndTrim?: boolean;
+  pipePaintColor?: 'Black' | 'Hunter Green' | 'White';
+  pipeWireType?: 'Black' | 'Galvanized';
 }
 
 export default function Step3({
@@ -32,6 +34,8 @@ export default function Step3({
   topStyle = 'Dog Ear',
   hasTopCap = false,
   hasCapAndTrim = false,
+  pipePaintColor = 'Black',
+  pipeWireType = 'Black',
 }: Step3Props) {
 
   // Define dynamic material options depending on selected style type
@@ -95,19 +99,11 @@ export default function Step3({
     materialsList = [
       {
         id: 'Set in Concrete',
-        name: 'Set in Concrete Post Pipe',
+        name: 'Set in Concrete Post Pipe (Standard)',
         price: MATERIAL_PRICES['Set in Concrete'],
-        description: 'Heavy steel gauge schedule posts embedded inside deep concrete base footing blocks.',
-        badge: 'Premium Stable',
-        badgeColor: 'bg-stone-100 text-stone-800'
-      },
-      {
-        id: 'Driven Posts',
-        name: 'Driven Steel Posts',
-        price: MATERIAL_PRICES['Driven Posts'],
-        description: 'Mechanically pounded heavy-duty steel pipe posts ideal for massive ranch acreages.',
-        badge: 'High-Speed Farm',
-        badgeColor: 'bg-yellow-100 text-yellow-800'
+        description: 'Heavy steel gauge schedule posts embedded inside deep concrete base footing blocks. Built for maximum longevity and wind resistance, concrete set posts are Lone Star standard.',
+        badge: 'Concrete Set Standard',
+        badgeColor: 'bg-[#1e1b4b] text-white'
       }
     ];
   } else {
@@ -423,6 +419,77 @@ export default function Step3({
         </div>
       )}
 
+      {/* Pipe style customizer section if Pipe Fence is selected */}
+      {fenceType === 'pipe fence' && (
+        <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-6">
+          <h3 className="text-sm font-black text-american-blue uppercase tracking-wider border-b border-[#F0F0F0] pb-2">
+            Pipe Fence Customizer Options
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Rail Paint Color Selection */}
+            <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+              <div>
+                <span className="block text-sm font-bold text-american-blue">Rail Paint Color</span>
+                <p className="text-xs text-[#666666] leading-relaxed mt-1 font-semibold">
+                  Choose the high-durability finish color painted on your horizontal metal rails.
+                </p>
+              </div>
+              <div className="pt-3 flex gap-2 w-full">
+                {['Black', 'Hunter Green', 'White'].map((colorOpt) => {
+                  const isColorSel = pipePaintColor === colorOpt;
+                  return (
+                    <button
+                      key={colorOpt}
+                      type="button"
+                      onClick={() => onChangeField('pipePaintColor', colorOpt)}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border transition duration-250 ${
+                        isColorSel
+                          ? 'bg-american-blue border-american-blue text-white shadow-sm'
+                          : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {colorOpt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* No-Climb Wire Selection */}
+            <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+              <div>
+                <span className="block text-sm font-bold text-american-blue">No-Climb Wire Finish</span>
+                <p className="text-xs text-[#666666] leading-relaxed mt-1 font-semibold">
+                  Select the mesh coating. Black coated offers a highly transparent, premium look that blends with pasture surroundings.
+                </p>
+              </div>
+              <div className="pt-3 flex gap-2 w-full">
+                {[
+                  { id: 'Black', label: 'Black Coated' },
+                  { id: 'Galvanized', label: 'Galvanized' }
+                ].map((wireOpt) => {
+                  const isWireSel = pipeWireType === wireOpt.id;
+                  return (
+                    <button
+                      key={wireOpt.id}
+                      type="button"
+                      onClick={() => onChangeField('pipeWireType', wireOpt.id)}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-black border transition duration-250 ${
+                        isWireSel
+                          ? 'bg-american-blue border-american-blue text-white shadow-sm'
+                          : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="block text-center">{wireOpt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary calculation card */}
       <div className="max-w-xl mx-auto bg-slate-100 p-4 rounded-2xl flex items-center justify-between border border-slate-200">
         <div className="flex items-center gap-3">
@@ -432,7 +499,10 @@ export default function Step3({
           <div>
             <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Choice</span>
             <span className="text-xs font-black text-american-blue block">
-              {material || 'Select Option'} {fenceType === 'Wood Fence' && (isPreStained ? '(Pre-Stained)' : '(Raw)')}
+              {fenceType === 'pipe fence' 
+                ? `Pipe Fence / ${pipeWireType} Wire / ${pipePaintColor} Rails` 
+                : `${material || 'Select Option'} ${fenceType === 'Wood Fence' ? (isPreStained ? '(Pre-Stained)' : '(Raw)') : ''}`
+              }
             </span>
           </div>
         </div>

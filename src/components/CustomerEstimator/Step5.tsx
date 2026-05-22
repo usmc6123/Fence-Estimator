@@ -184,10 +184,32 @@ export default function Step5({
                       <span className="text-slate-500">Panel Height:</span>
                       <span className="text-slate-300 font-bold">{data.height} FT</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Wood Finish:</span>
-                      <span className="text-slate-300 font-bold">{data.isPreStained ? 'Pre-Stained' : 'Natural / Raw'}</span>
-                    </div>
+                    {data.fenceType === 'Wood Fence' ? (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Wood Finish:</span>
+                        <span className="text-slate-300 font-bold">{data.isPreStained ? 'Pre-Stained' : 'Natural / Raw'}</span>
+                      </div>
+                    ) : data.fenceType === 'pipe fence' ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Rail Paint:</span>
+                          <span className="text-slate-300 font-bold">{data.pipePaintColor || 'Black'}</span>
+                        </div>
+                        <div className="flex justify-between text-right">
+                          <span className="text-slate-500">Wire Option:</span>
+                          <span className="text-slate-300 font-bold">{data.pipeWireType || 'Black'} Coated</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Post Setting:</span>
+                          <span className="text-slate-300 font-bold">Concrete Set</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Material Type:</span>
+                        <span className="text-slate-300 font-bold">{data.material}</span>
+                      </div>
+                    )}
                     {data.needGates && (
                       <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-2">
                         <span className="text-slate-500">Gate Configuration:</span>

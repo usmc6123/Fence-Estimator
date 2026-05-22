@@ -23,6 +23,8 @@ export interface CustomerEstimateData {
   topStyle?: 'Dog Ear' | 'Flat Top';
   hasTopCap?: boolean;
   hasCapAndTrim?: boolean;
+  pipePaintColor?: 'Black' | 'Hunter Green' | 'White';
+  pipeWireType?: 'Black' | 'Galvanized';
 }
 
 export const MATERIAL_PRICES: Record<string, number> = {
@@ -120,12 +122,8 @@ export function calculateCustomerEstimate(
     }
   } else if (fenceType === 'pipe fence') {
     styleId = 'pipe-no-climb';
-    if (mat === 'Driven Posts') {
-      pipeInstallType = 'Driven Posts';
-    } else {
-      pipeInstallType = 'Set in Concrete';
-    }
-    if (mat && mat.includes('Black')) {
+    pipeInstallType = 'Set in Concrete';
+    if (data.pipeWireType === 'Black') {
       visualStyleId = 'p-black';
     } else {
       visualStyleId = 'p-std';
@@ -222,7 +220,7 @@ export function calculateCustomerEstimate(
         styleId: styleId,
         visualStyleId: visualStyleId,
         height: height,
-        color: 'Natural',
+        color: styleId === 'pipe-no-climb' ? (data.pipePaintColor || 'Black') : 'Natural',
         woodType: woodType,
         chainLinkGrade: chainLinkGrade,
         pipeInstallType: pipeInstallType,

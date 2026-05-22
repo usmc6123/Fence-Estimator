@@ -226,6 +226,8 @@ export default function CustomerEstimator({
                         topStyle={data.topStyle}
                         hasTopCap={data.hasTopCap}
                         hasCapAndTrim={data.hasCapAndTrim}
+                        pipePaintColor={data.pipePaintColor}
+                        pipeWireType={data.pipeWireType}
                       />
                     )}
 
