@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   format, 
   startOfMonth, 
@@ -29,7 +29,8 @@ import {
   CheckCircle2,
   XCircle,
   MapPin,
-  Printer
+  Printer,
+  Eye
 } from 'lucide-react';
 import { SavedEstimate, ScheduleEvent, JobStatus, SchedulerConfig } from '../types';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -99,6 +100,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   const [isMobile, setIsMobile] = useState(false);
   const [mobileView, setMobileView] = useState<'grid' | 'list'>('list');
   const [activeTab, setActiveTab] = useState<'calendar' | 'pending'>('calendar');
+  const [isModalLoading, setIsModalLoading] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -126,6 +128,40 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
      est.jobStatus === 'Estimate Pending')
   );
   const acceptedUnscheduled = savedEstimates.filter(est => est.jobStatus === 'Accepted' && !est.scheduledStartDate && est.status !== 'archived');
+
+  const dayAllScheduledItems = useMemo(() => {
+    if (!selectedDate) return [];
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    const dayEvents = events.filter(e => {
+      if (e.startDate !== dateKey) return false;
+      const view = config.viewFilter;
+      if (view === 'both') return true;
+      if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
+      if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
+      return true;
+    });
+    const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
+    const dayJobs = showJobs ? scheduledEstimates.filter(est => {
+      const start = est.scheduledStartDate!;
+      const end = est.scheduledEndDate || start;
+      return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+    }) : [];
+
+    return [
+      ...dayEvents.map(e => ({ id: e.id, type: e.type, title: e.title, raw: e, isJob: false })),
+      ...dayJobs.map(j => ({ id: j.id, type: 'Job' as const, title: j.customerName, raw: j, isJob: true }))
+    ];
+  }, [selectedDate, events, scheduledEstimates, config.viewFilter]);
+
+  useEffect(() => {
+    if (showEventModal) {
+      setIsModalLoading(true);
+      const timer = setTimeout(() => {
+        setIsModalLoading(false);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [showEventModal, selectedEvent]);
 
   useEffect(() => {
     if (!user) return;
@@ -593,7 +629,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
               {/* Mobile View Switcher */}
               {isMobile && (
-                <div className="flex p-1 bg-[#F5F7FA] border border-[#E5E5E5] rounded-2xl mb-6 w-full shadow-inner no-print">
+                <div className="flex p-1 bg-[#F5F7FA] border border-[#E5E5E5] rounded-2xl mb-4 w-full shadow-inner no-print">
                   <button
                     onClick={() => setMobileView('list')}
                     className={cn(
@@ -616,6 +652,28 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                   >
                     6-Day Grid mode
                   </button>
+                </div>
+              )}
+
+              {/* Calendar Color Legend */}
+              {isMobile && (
+                <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 p-3 bg-gray-50 border border-[#E5E5E5] rounded-2xl mb-6 text-[10px] font-black uppercase tracking-wider no-print">
+                  <div className="flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded text-[8px] bg-american-blue text-white uppercase font-black leading-none">Job</span>
+                    <span className="text-[#666666] font-bold text-[9px]">(J)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[8px] bg-pink-50 text-pink-805 border border-pink-200 uppercase font-black leading-none" style={{ color: '#be185d' }}>Estimate</span>
+                    <span className="text-[#666666] font-bold text-[9px]">(C)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[8px] bg-orange-50 text-orange-855 border border-orange-200 uppercase font-black leading-none" style={{ color: '#c2410c' }}>Appt</span>
+                    <span className="text-[#666666] font-bold text-[9px]">(A)</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[8px] bg-rose-100 text-rose-800 border border-rose-200 uppercase font-black leading-none">Blackout</span>
+                    <span className="text-[#666666] font-bold text-[9px]">(Blk)</span>
+                  </div>
                 </div>
               )}
 
@@ -692,16 +750,20 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                           <div className="flex-1 min-w-0 flex flex-col gap-2">
                             {allDayItems.length > 0 ? (
                               allDayItems.map((item, idx) => {
-                                let bg = "bg-amber-100 text-amber-800 border-amber-200";
-                                let tagText = item.type === 'Job' ? 'Fence Install' : item.type;
+                                let bg = "bg-pink-50 text-pink-850 border-pink-200";
+                                let tagText = item.type === 'Job' ? 'Job' : item.type;
                                 if (item.type === 'Blackout') {
                                   bg = "bg-rose-100 text-rose-800 border-rose-200";
+                                  tagText = "Blackout";
                                 } else if (item.type === 'Busy') {
-                                  bg = "bg-purple-100 text-purple-800 border-purple-200";
+                                  bg = "bg-orange-50 text-orange-800 border-orange-200";
+                                  tagText = "Appt";
                                 } else if (item.type === 'Estimate') {
-                                  bg = "bg-amber-100 text-amber-800 border-amber-200";
+                                  bg = "bg-pink-50 text-pink-800 border-pink-200";
+                                  tagText = "Estimate";
                                 } else if (item.type === 'Job') {
                                   bg = "bg-american-blue text-white border-transparent";
+                                  tagText = "Job";
                                 }
 
                                 return (
@@ -1325,7 +1387,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                   "space-y-6 flex-1",
                   isMobile ? "overflow-y-auto pr-1 pb-8 custom-scrollbar" : ""
                 )}>
-                    {isAddingBlackout ? (
+                    {isModalLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+                            <div className="relative w-12 h-12">
+                                <div className="absolute inset-0 rounded-full border-4 border-american-blue/20"></div>
+                                <div className="absolute inset-0 rounded-full border-4 border-american-blue border-t-transparent animate-spin"></div>
+                            </div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#999999] mt-4">Loading Day Schedule...</p>
+                        </div>
+                    ) : isAddingBlackout ? (
                         <div className="space-y-6">
                             <div className="p-5 bg-american-red/5 border border-american-red/10 rounded-2xl">
                                 <div className="flex items-center gap-3 text-american-red mb-2">
@@ -1516,7 +1586,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                                 className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]"
                                             >
                                                 <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue leading-snug">{est.customerName}</p>
-                                                <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
+                                                <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{(est.linearFeet || 0).toFixed(0)}' LF • {est.customerAddress}</p>
                                             </button>
                                         ))
                                     ) : (
@@ -1755,27 +1825,136 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                         })()
                     ) : (
                         <div className="space-y-6 text-left">
+                            {/* Day's Active Scheduled Events Section */}
+                            <div className="space-y-3 pb-4 border-b border-[#E5E5E5]">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">Scheduled on this Day</h4>
+                                    <span className="text-[10px] font-black bg-american-blue/5 text-american-blue px-2.5 py-0.5 rounded-full">
+                                        {dayAllScheduledItems.length}
+                                    </span>
+                                </div>
+
+                                {dayAllScheduledItems.length === 0 ? (
+                                    <div className="p-5 bg-gray-50 border border-[#E5E5E5] rounded-2xl text-center">
+                                        <CalendarIcon size={20} className="mx-auto text-gray-400 mb-1.5" />
+                                        <p className="text-xs font-black text-gray-500">No events scheduled for this day</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                                        {dayAllScheduledItems.map((item, idx) => {
+                                            let bg = "bg-pink-50 border-pink-100 text-pink-700";
+                                            let icon = <CalendarIcon size={14} />;
+                                            if (item.type === 'Blackout') {
+                                                bg = "bg-rose-50 border-rose-100 text-rose-700";
+                                                icon = <AlertCircle size={14} />;
+                                            } else if (item.type === 'Busy') {
+                                                bg = "bg-orange-50 border-orange-100 text-orange-700";
+                                                icon = <Clock size={14} />;
+                                            } else if (item.type === 'Estimate') {
+                                                bg = "bg-pink-50 border-pink-100 text-pink-700";
+                                                icon = <CalendarIcon size={14} />;
+                                            } else if (item.type === 'Job') {
+                                                bg = "bg-american-blue/5 border-american-blue/10 text-american-blue";
+                                                icon = <Briefcase size={14} />;
+                                            }
+
+                                            const estObj = savedEstimates.find(e => e.id === (item.raw as any).estimateId || e.id === item.id);
+
+                                            return (
+                                                <div key={idx} className="p-3.5 bg-white border border-[#E5E5E5] rounded-2xl shadow-xs space-y-2">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={cn("p-1 rounded-lg border", bg)}>
+                                                                {icon}
+                                                            </span>
+                                                            <div>
+                                                                <span className={cn("text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded", bg)}>
+                                                                    {item.type === 'Job' ? 'Fence Install' : item.type === 'Busy' ? 'Appt' : item.type}
+                                                                </span>
+                                                                <h5 className="font-black text-american-blue text-xs mt-0.5 max-w-[180px] truncate">
+                                                                    {item.title}
+                                                                </h5>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedEvent(item.isJob ? {
+                                                                        id: item.id,
+                                                                        type: 'Job',
+                                                                        title: item.title,
+                                                                        startDate: (item.raw as any).scheduledStartDate!,
+                                                                        endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
+                                                                        estimateId: item.id,
+                                                                        userId: (user ? user.uid : '')
+                                                                    } : item.raw as ScheduleEvent);
+                                                                }}
+                                                                className="p-1 text-[#999999] hover:bg-[#F5F7FA] hover:text-american-blue rounded-lg transition-colors"
+                                                                title="View Details"
+                                                            >
+                                                                <Eye size={13} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteEvent(item.id, item.type)}
+                                                                className="p-1 text-[#999999] hover:bg-american-red/10 hover:text-american-red rounded-lg transition-colors"
+                                                                title="Remove Item"
+                                                            >
+                                                                <Trash2 size={13} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {estObj && (
+                                                        <div className="text-[10px] text-[#666666] font-medium space-y-0.5 bg-gray-50/50 p-2 rounded-xl border border-gray-150">
+                                                            {estObj.customerAddress && (
+                                                                <p className="flex items-center gap-1">
+                                                                    <span className="font-bold text-[#999] shrink-0">ADDR:</span> 
+                                                                    <span className="truncate font-black">{estObj.customerAddress}</span>
+                                                                </p>
+                                                            )}
+                                                            {estObj.customerPhone && (
+                                                                <p className="flex items-center gap-1">
+                                                                    <span className="font-bold text-[#999]">TEL:</span>
+                                                                    <a href={`tel:${estObj.customerPhone}`} className="text-american-blue hover:underline font-black">{estObj.customerPhone}</a>
+                                                                </p>
+                                                            )}
+                                                            <p className="flex items-center gap-2 mt-1 pt-1 border-t border-gray-200/50 text-[9px] font-bold text-[#999]">
+                                                                <span>{(estObj.linearFeet || 0).toFixed(0)}' LF</span>
+                                                                <span>•</span>
+                                                                <span>{item.type === 'Job' ? `${estObj.scheduledDuration || 2} Days` : 'Assessment'}</span>
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Create / Block Time Buttons */}
                             <div className="grid grid-cols-3 gap-3">
                                 <button 
                                   onClick={() => setIsAddingEstimate(true)}
-                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all min-h-[48px]"
+                                  className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all min-h-[48px]"
                                 >
-                                  <CalendarIcon size={20} />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">Est</span>
+                                  <CalendarIcon size={18} />
+                                  <span className="text-[9px] font-black uppercase tracking-wider">Add Est</span>
                                 </button>
                                 <button 
                                   onClick={() => setIsAddingBusy(true)}
-                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all min-h-[48px]"
+                                  className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all min-h-[48px]"
                                 >
-                                  <Clock size={20} />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">Busy</span>
+                                  <Clock size={18} />
+                                  <span className="text-[9px] font-black uppercase tracking-wider">Busy Appt</span>
                                 </button>
                                 <button 
                                   onClick={() => setIsAddingBlackout(true)}
-                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all min-h-[48px]"
+                                  className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all min-h-[48px]"
                                 >
-                                  <AlertCircle size={20} />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">Blackout</span>
+                                  <AlertCircle size={18} />
+                                  <span className="text-[9px] font-black uppercase tracking-wider">Blackout</span>
                                 </button>
                             </div>
 
@@ -1784,7 +1963,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                 <div className="w-full border-t border-[#E5E5E5]"></div>
                               </div>
                               <div className="relative flex justify-center text-[10px]">
-                                <span className="px-2 bg-white text-[#999999] uppercase font-bold tracking-widest">Schedule Job</span>
+                                <span className="px-2 bg-white text-[#999999] uppercase font-bold tracking-widest">Schedule Jobs</span>
                               </div>
                             </div>
 
@@ -1808,7 +1987,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                 </div>
                             </div>
 
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar text-left">
+                            <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar text-left">
                                 {acceptedUnscheduled.length > 0 ? (
                                     acceptedUnscheduled.map(est => (
                                         <button 
@@ -1817,7 +1996,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                             className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]"
                                         >
                                             <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue leading-snug">{est.customerName}</p>
-                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{est.linearFeet.toFixed(0)}' LF • {est.scheduledDuration || 2} Days</p>
+                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{(est.linearFeet || 0).toFixed(0)}' LF • {est.scheduledDuration || 2} Days</p>
                                         </button>
                                     ))
                                 ) : (
