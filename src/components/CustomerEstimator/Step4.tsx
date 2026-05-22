@@ -163,7 +163,7 @@ export default function Step4({
                   Need to tear down & haul an existing fence?
                 </label>
                 <span className="block text-[11px] text-[#666666]">
-                  Adds a standard $15/LF demolition and environmental waste disposal fee.
+                  Adds a standard ${breakdown.demoRate}/LF demolition and environmental waste disposal fee.
                 </span>
               </div>
             </div>

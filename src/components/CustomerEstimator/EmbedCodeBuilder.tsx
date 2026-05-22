@@ -5,15 +5,32 @@ import { doc, getDoc } from 'firebase/firestore';
 
 export default function EmbedCodeBuilder() {
   const [copied, setCopied] = React.useState(false);
-  const [params, setParams] = React.useState({
-    companyName: 'Lone Star Fence Works',
-    phone: '(512) 381-4016',
-    ghlWebhookUrl: '',
-    baseLaborRate: 45,
-    concretePostCost: 85,
-    postSpacing: 8,
-    taxRate: 0.08,
-    contingencyBuffer: 0.10
+  const [params, setParams] = React.useState(() => {
+    let demoRate = 2; // Default
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedLabor = localStorage.getItem('fence_pro_labor_rates');
+        if (cachedLabor) {
+          const rates = JSON.parse(cachedLabor);
+          if (rates && rates.demo !== undefined) {
+            demoRate = rates.demo;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      companyName: 'Lone Star Fence Works',
+      phone: '(512) 381-4016',
+      ghlWebhookUrl: '',
+      baseLaborRate: 45,
+      concretePostCost: 85,
+      postSpacing: 8,
+      taxRate: 0.08,
+      contingencyBuffer: 0.10,
+      demoRate
+    };
   });
 
   // Pull initial webhook or details of GHL on mount
@@ -270,7 +287,7 @@ export default function EmbedCodeBuilder() {
               </div>
               <div class="flex items-center gap-2 bg-slate-50 p-2.5 border border-slate-200 rounded-lg">
                 <input type="checkbox" id="input-remove" onchange="calculateEstimates()" class="h-4 w-4 text-blue-900">
-                <label for="input-remove" class="text-[11px] font-bold text-gray-800 cursor-pointer">Tear down & Haul old fence (+$15/LF)</label>
+                <label for="input-remove" class="text-[11px] font-bold text-gray-800 cursor-pointer">Tear down & Haul old fence (+$\${params.demoRate}/LF)</label>
               </div>
             </div>
           </div>
@@ -473,10 +490,10 @@ export default function EmbedCodeBuilder() {
     const matPrice = MATERIAL_PRICES[state.material] || 18;
     const materialsCost = lf * matPrice;
 
-    // 3. Labor: LF × baseLaborRate × terrain + demolition $15 if checked
+    // 3. Labor: LF × baseLaborRate × terrain + demolition $${params.demoRate} if checked
     const terrainFactor = TERRAIN_FACTORS[state.siteCondition] || 1.0;
     const baseLabor = lf * ${params.baseLaborRate} * terrainFactor;
-    const demoCost = state.removeOldFence ? lf * 15 : 0;
+    const demoCost = state.removeOldFence ? lf * ${params.demoRate} : 0;
     const laborCost = baseLabor + demoCost;
 
     // 4. Gates Cost
@@ -619,7 +636,7 @@ export default function EmbedCodeBuilder() {
     const postsCost = Math.ceil(lf / ${params.postSpacing}) * ${params.concretePostCost};
     const materialsCost = lf * (MATERIAL_PRICES[state.material] || 18);
     const laborFactor = TERRAIN_FACTORS[state.siteCondition] || 1.0;
-    const laborCost = (lf * ${params.baseLaborRate} * laborFactor) + (state.removeOldFence ? lf * 15 : 0);
+    const laborCost = (lf * ${params.baseLaborRate} * laborFactor) + (state.removeOldFence ? lf * ${params.demoRate} : 0);
     const gatesCost = state.needGates ? state.gateCount * (GATE_PRICES[state.gateType] || 0) : 0;
     const subtotal = postsCost + materialsCost + laborCost + gatesCost;
     const contingency = subtotal * ${params.contingencyBuffer};
@@ -817,6 +834,23 @@ export default function EmbedCodeBuilder() {
                   onChange={(e) => handleChange('concretePostCost', parseFloat(e.target.value) || 0)}
                   className="w-full text-xs font-bold border border-slate-300 pl-6 py-2.5 rounded-xl"
                 />
+              </div>
+            </div>
+
+            {/* demolition rate */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500">
+                Demolition Rate
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs text-slate-400 font-bold">$</div>
+                <input
+                  type="number"
+                  value={params.demoRate}
+                  onChange={(e) => handleChange('demoRate', parseFloat(e.target.value) || 0)}
+                  className="w-full text-xs font-bold border border-slate-300 pl-6 pr-8 py-2.5 rounded-xl"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[9px] font-bold text-slate-400">/LF</div>
               </div>
             </div>
 

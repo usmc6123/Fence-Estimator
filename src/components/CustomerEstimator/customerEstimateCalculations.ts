@@ -75,6 +75,7 @@ export interface EstimateBreakdown {
   contingency: number;
   tax: number;
   total: number;
+  demoRate: number;
 }
 
 export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): EstimateBreakdown {
@@ -268,5 +269,6 @@ export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): 
     contingency,
     tax,
     total,
+    demoRate: activeLaborRates.demo || 2,
   };
 }
