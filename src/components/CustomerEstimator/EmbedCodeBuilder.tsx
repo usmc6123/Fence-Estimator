@@ -183,11 +183,14 @@ export default function EmbedCodeBuilder() {
             </div>
           </div>
           <div class="bg-gray-900 text-white p-6 rounded-2xl flex flex-col justify-between">
-            <div class="space-y-2">
-              <span class="text-[10px] font-black text-red-500 uppercase tracking-widest">★ LIVE SYSTEM PRICING</span>
-              <span class="block text-xs font-medium text-gray-400">Projected Ballot Cost</span>
-              <span id="live-calc-display" class="block text-4xl font-extrabold text-emerald-400">$3,450</span>
-              <p class="text-[10px] text-gray-400 mt-2">Calculations include post caps, brackets, nails, concrete footer, and delivery fee weights.</p>
+            <div class="space-y-2.5">
+              <span class="text-[10px] font-black text-amber-500 uppercase tracking-widest">★ ESTIMATE ENGINE STATUS</span>
+              <span class="block text-sm font-bold text-gray-200">Dynamic Pricing Calculated</span>
+              <p class="text-xs text-gray-400 leading-relaxed">Our advanced logic combines real-time lumber indices, concrete bag counts, gate assembly kits, and local labor rates.</p>
+              <div class="p-2.5 bg-gray-850/60 border border-gray-800 rounded-xl flex items-center gap-2">
+                <div class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="text-[10px] font-black tracking-widest text-[#22c55e] uppercase">ESTIMATE LOCK READY AT STEP 5</span>
+              </div>
             </div>
           </div>
         </div>
@@ -287,7 +290,7 @@ export default function EmbedCodeBuilder() {
               </div>
               <div class="flex items-center gap-2 bg-slate-50 p-2.5 border border-slate-200 rounded-lg">
                 <input type="checkbox" id="input-remove" onchange="calculateEstimates()" class="h-4 w-4 text-blue-900">
-                <label for="input-remove" class="text-[11px] font-bold text-gray-800 cursor-pointer">Tear down & Haul old fence (+$\${params.demoRate}/LF)</label>
+                <label for="input-remove" class="text-[11px] font-bold text-gray-800 cursor-pointer">Tear down & Haul old fence (+$\${(params.demoRate * (1 + params.contingencyBuffer)).toFixed(2)}/LF)</label>
               </div>
             </div>
           </div>
@@ -325,41 +328,41 @@ export default function EmbedCodeBuilder() {
             </div>
           </div>
           <div class="lg:col-span-7 bg-[#111827] text-white p-6 rounded-2xl shadow-xl space-y-4 border border-gray-800">
-            <h3 class="font-extrabold text-white text-base tracking-tight uppercase border-b border-gray-800 pb-2">Invoice Summary</h3>
-            <div class="space-y-2 font-mono text-xs">
-              <div class="flex justify-between border-b border-dashed border-gray-800 pb-1">
-                <span class="text-gray-400">Post anchor concrete setup:</span>
-                <span id="receipt-posts" class="font-bold text-gray-200">-</span>
+            <h3 class="font-extrabold text-white text-base tracking-tight uppercase border-b border-gray-800 pb-2">Investment Summary</h3>
+            
+            <div class="space-y-3 text-xs border-b border-gray-800 pb-4">
+              <div class="flex justify-between">
+                <span class="text-gray-400">Selected style:</span>
+                <span id="receipt-spec-style" class="font-bold text-gray-200">-</span>
               </div>
-              <div class="flex justify-between border-b border-dashed border-gray-800 pb-1">
-                <span class="text-gray-400">Raw framing infills:</span>
-                <span id="receipt-mats" class="font-bold text-gray-200">-</span>
+              <div class="flex justify-between">
+                <span class="text-gray-400">Total physical span:</span>
+                <span id="receipt-spec-span" class="font-bold text-gray-200">-</span>
               </div>
-              <div class="flex justify-between border-b border-dashed border-gray-800 pb-1">
-                <span class="text-gray-400">Workmanship / demo setup:</span>
-                <span id="receipt-labor" class="font-bold text-gray-200">-</span>
+              <div class="flex justify-between">
+                <span class="text-gray-400">Target height parameter:</span>
+                <span id="receipt-spec-height" class="font-bold text-gray-200">-</span>
               </div>
-              <div class="flex justify-between border-b border-dashed border-gray-800 pb-1" id="receipt-gates-row">
-                <span class="text-gray-400">Entry gate kits:</span>
-                <span id="receipt-gates" class="font-bold text-gray-200">$0</span>
+              <div class="flex justify-between">
+                <span class="text-gray-450">Selected material:</span>
+                <span id="receipt-spec-material" class="font-bold text-gray-200">-</span>
               </div>
-              <div class="flex justify-between border-b border-gray-850 pt-2 text-sm text-white">
-                <span class="uppercase tracking-widest font-black">SUBTOTAL:</span>
-                <span id="receipt-subtotal" class="font-black">-</span>
+              <div class="flex justify-between">
+                <span class="text-gray-400">Gate systems:</span>
+                <span id="receipt-spec-gates" class="font-bold text-gray-200">-</span>
               </div>
-              <div class="flex justify-between text-[11px] text-gray-500">
-                <span>Buffer Margin (${Math.round(params.contingencyBuffer*100)}%):</span>
-                <span id="receipt-buffer">-</span>
-              </div>
-              <div class="flex justify-between text-[11px] text-gray-500 border-b border-gray-800 pb-2">
-                <span>Tax Allocation (${Math.round(params.taxRate*100)}%):</span>
-                <span id="receipt-tax">-</span>
-              </div>
-              <div class="flex justify-between items-baseline pt-2">
-                <span class="text-xs uppercase font-extrabold tracking-widest">Estimated Total Price:</span>
-                <span id="receipt-grandtotal" class="text-2xl font-black text-emerald-400">-</span>
+              <div class="flex justify-between" id="receipt-spec-demo-row">
+                <span class="text-gray-400">Old fence removal:</span>
+                <span id="receipt-spec-demo" class="font-bold text-gray-200">-</span>
               </div>
             </div>
+
+            <div class="pt-2 text-center bg-gray-900/60 p-4 border border-gray-800 rounded-xl space-y-1">
+              <span class="text-[10px] font-bold text-amber-500 uppercase tracking-widest block">Projected Total Investment Range</span>
+              <span id="receipt-price-range" class="text-2xl sm:text-3xl font-black text-emerald-400 block">-</span>
+              <span class="text-[9px] text-gray-500 block leading-relaxed">Turnkey calculation includes materials, posts setting, labor, profit buffer, and sales tax estimations.</span>
+            </div>
+
             <div id="error-alert" class="hidden p-3 bg-red-950 text-red-300 font-bold text-xs text-center border border-red-800 rounded-lg"></div>
           </div>
         </div>
@@ -509,17 +512,27 @@ export default function EmbedCodeBuilder() {
     const total = subtotal + contingency + tax;
 
     // Render displays
-    document.getElementById('live-calc-display').innerText = '$' + Math.round(total).toLocaleString();
+    const liveDisplay = document.getElementById('live-calc-display');
+    if (liveDisplay) {
+      liveDisplay.innerText = '$' + Math.round(total).toLocaleString();
+    }
     
-    // Receipt table display for Step 5
-    document.getElementById('receipt-posts').innerText = '$' + Math.round(postsCost).toLocaleString();
-    document.getElementById('receipt-mats').innerText = '$' + Math.round(materialsCost).toLocaleString();
-    document.getElementById('receipt-labor').innerText = '$' + Math.round(laborCost).toLocaleString();
-    document.getElementById('receipt-gates').innerText = '$' + Math.round(gatesCost).toLocaleString();
-    document.getElementById('receipt-subtotal').innerText = '$' + Math.round(subtotal).toLocaleString();
-    document.getElementById('receipt-buffer').innerText = '$' + Math.round(contingency).toLocaleString();
-    document.getElementById('receipt-tax').innerText = '$' + Math.round(tax).toLocaleString();
-    document.getElementById('receipt-grandtotal').innerText = '$' + Math.round(total).toLocaleString();
+    // Specifications list displays
+    document.getElementById('receipt-spec-style').innerText = state.fenceType || 'Wood Fence';
+    document.getElementById('receipt-spec-span').innerText = lf + ' LF';
+    document.getElementById('receipt-spec-height').innerText = state.height + ' FT';
+    document.getElementById('receipt-spec-material').innerText = state.material;
+    
+    const gatesText = state.needGates ? state.gateCount + ' × ' + state.gateType : 'None Requested';
+    document.getElementById('receipt-spec-gates').innerText = gatesText;
+    
+    const demoText = state.removeOldFence ? 'Tear down & haul standard old fence' : 'No removal required';
+    document.getElementById('receipt-spec-demo').innerText = demoText;
+
+    // Projected Turnkey Cost range
+    const rangeMin = Math.round(total * 0.95);
+    const rangeMax = Math.round(total * 1.10);
+    document.getElementById('receipt-price-range').innerText = '$' + rangeMin.toLocaleString() + ' - $' + rangeMax.toLocaleString();
   }
 
   function renderStep() {

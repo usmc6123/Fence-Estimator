@@ -122,7 +122,64 @@ export function calculateDetailedTakeOff(
   materials: MaterialItem[],
   laborRates: LaborRates
 ): DetailedTakeOff {
-  const runs = estimate.runs || [];
+  const rawRuns = estimate.runs || [];
+  let activeRuns = [...rawRuns];
+
+  if (activeRuns.length === 0 && (estimate.linearFeet || estimate.gateCount)) {
+    // Generate fallback run from estimate settings
+    const styleId = estimate.defaultStyleId || 'wood-privacy';
+    const visualStyleId = estimate.defaultVisualStyleId || 'w-side';
+    let woodType = estimate.woodType;
+    if (styleId === 'wood-privacy' && !woodType) {
+      woodType = 'PT Pine';
+    }
+    let chainLinkGrade = estimate.defaultChainLinkGrade || (estimate as any).chainLinkGrade;
+    if (styleId === 'chain-link' && !chainLinkGrade) {
+      chainLinkGrade = 'Residential';
+    }
+    let pipeInstallType = estimate.pipeInstallType;
+    if (styleId === 'pipe-no-climb' && !pipeInstallType) {
+      pipeInstallType = 'Set in Concrete';
+    }
+
+    const gateDetails: GateDetail[] = [];
+    if (estimate.gateCount) {
+      for (let i = 0; i < estimate.gateCount; i++) {
+        gateDetails.push({
+          id: `global-gate-${i}`,
+          type: 'Single',
+          width: 4,
+          construction: styleId === 'aluminum-ornamental' ? 'Welded' : 'Pre-made'
+        });
+      }
+    }
+
+    activeRuns = [
+      {
+        id: 'fallback-run',
+        name: 'Main Section',
+        linearFeet: estimate.linearFeet || 0,
+        corners: 0,
+        gates: gateDetails.length,
+        gateDetails,
+        styleId,
+        visualStyleId,
+        height: estimate.defaultHeight || 6,
+        color: estimate.defaultColor || 'Natural',
+        woodType,
+        chainLinkGrade: chainLinkGrade as any,
+        pipeInstallType,
+        hasDemolition: !!(estimate as any).hasDemolition,
+        demoLinearFeet: (estimate as any).hasDemolition ? (estimate.linearFeet || 0) : 0,
+        demoType: styleId === 'wood-privacy' ? 'Wood' : (styleId === 'chain-link' ? 'Chain Link' : 'Metal'),
+        reusePosts: !!(estimate as any).reusePosts,
+        isPreStained: !!estimate.isPreStained,
+        topStyle: estimate.topStyle || 'Dog Ear',
+      }
+    ];
+  }
+
+  const runs = activeRuns;
   const detailedRuns: RunTakeOff[] = [];
   const summaryMap: Record<string, TakeOffItem> = {};
 
@@ -140,52 +197,6 @@ export function calculateDetailedTakeOff(
   let totalLabor = 0;
   let totalDemo = 0;
   let totalPrep = 0;
-
-  // Global Fallback if no runs are defined
-  if (runs.length === 0 && (estimate.linearFeet || estimate.gateCount)) {
-    const lf = estimate.linearFeet || 0;
-    const style = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
-    
-    // Simple multiplier logic for global fallback
-    const materialCostPerLF = 15; // Simplified average
-    const laborCostPerLF = 10;
-    
-    addToSummary({
-      id: 'global-material',
-      name: `Fence Materials (Bulk - ${style.name})`,
-      qty: lf,
-      unit: 'lf',
-      unitCost: materialCostPerLF,
-      priceSource: 'Library Price',
-      total: lf * materialCostPerLF,
-      category: 'Infill'
-    });
-
-    addToSummary({
-      id: 'global-labor',
-      name: `Fence Installation (Bulk)`,
-      qty: lf,
-      unit: 'lf',
-      unitCost: laborCostPerLF,
-      priceSource: 'Library Price',
-      total: lf * laborCostPerLF,
-      category: 'Labor'
-    });
-
-    if (estimate.gateCount) {
-      const gateCost = style.type === 'Wood' ? 250 : 350;
-      addToSummary({
-        id: 'global-gates',
-        name: `Gates (Global)`,
-        qty: estimate.gateCount,
-        unit: 'each',
-        unitCost: gateCost,
-        priceSource: 'Library Price',
-        total: estimate.gateCount * gateCost,
-        category: 'Gate'
-      });
-    }
-  }
 
   const wasteFactor = 1 + (estimate.wastePercentage === undefined ? 10 : estimate.wastePercentage) / 100;
 

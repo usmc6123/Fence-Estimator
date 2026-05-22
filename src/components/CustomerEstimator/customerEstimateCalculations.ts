@@ -260,6 +260,9 @@ export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): 
   const tax = takeoff.totals.tax;
   const total = takeoff.totals.grandTotal;
 
+  const markupFactor = 1 + (mockEstimate.markupPercentage || 0) / 100;
+  const demoRateWithMarkup = (activeLaborRates.demo || 2) * markupFactor;
+
   return {
     postsCost,
     materialsCost,
@@ -269,6 +272,6 @@ export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): 
     contingency,
     tax,
     total,
-    demoRate: activeLaborRates.demo || 2,
+    demoRate: demoRateWithMarkup,
   };
 }
