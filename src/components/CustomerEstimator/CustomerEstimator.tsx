@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCustomerEstimator } from './useCustomerEstimator';
-import { Globe, ClipboardCheck, ArrowRight, ExternalLink, Calculator, Users, Settings } from 'lucide-react';
+import { Globe, ClipboardCheck, ArrowRight, ExternalLink, Calculator, Users, Settings, Image as ImageIcon } from 'lucide-react';
 import Step1 from './Step1';
 import Step2 from './Step2';
 import Step3 from './Step3';
@@ -10,6 +10,7 @@ import Step5 from './Step5';
 import Step6 from './Step6';
 import ClientCrmLeads from './ClientCrmLeads';
 import EmbedCodeBuilder from './EmbedCodeBuilder';
+import CardPhotosEditor from './CardPhotosEditor';
 
 import { MaterialItem, LaborRates, Estimate } from '../../types';
 
@@ -42,7 +43,7 @@ export default function CustomerEstimator({
   } = useCustomerEstimator(materials, laborRates, estimate);
 
   // Internal tab state for the suite (only active if NOT standalone)
-  const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed'>('estimator');
+  const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed' | 'photos'>('estimator');
   const [leadsCount, setLeadsCount] = React.useState<number>(0);
 
   // Compute progress percent for steps 1-5
@@ -113,10 +114,11 @@ export default function CustomerEstimator({
             </div>
 
             {/* Top Workspace Tab Bar selectors */}
-            <div className="grid grid-cols-3 gap-2 bg-slate-200 p-1.5 rounded-2xl border border-slate-300 shadow-inner">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-200 p-1.5 rounded-2xl border border-slate-300 shadow-inner">
               
               {/* Tab 1: Homeowner Estimator Wizard */}
               <button
+                type="button"
                 onClick={() => setActiveSubTab('estimator')}
                 className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                   activeSubTab === 'estimator'
@@ -130,6 +132,7 @@ export default function CustomerEstimator({
 
               {/* Tab 2: client CRM Leads logs */}
               <button
+                type="button"
                 onClick={() => setActiveSubTab('crm')}
                 className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all relative ${
                   activeSubTab === 'crm'
@@ -148,6 +151,7 @@ export default function CustomerEstimator({
 
               {/* Tab 3: Embed Code squarespace compiler */}
               <button
+                type="button"
                 onClick={() => setActiveSubTab('embed')}
                 className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                   activeSubTab === 'embed'
@@ -157,6 +161,20 @@ export default function CustomerEstimator({
               >
                 <Settings size={14} />
                 Embed Code Builder
+              </button>
+
+              {/* Tab 4: Customize Card Photos */}
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('photos')}
+                className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                  activeSubTab === 'photos'
+                    ? 'bg-white text-american-blue shadow-md border border-slate-200'
+                    : 'text-[#555555] hover:text-american-blue hover:bg-white/40'
+                }`}
+              >
+                <ImageIcon size={14} />
+                Customize Photos
               </button>
 
             </div>
@@ -283,8 +301,10 @@ export default function CustomerEstimator({
             </div>
           ) : activeSubTab === 'crm' ? (
             <ClientCrmLeads onLeadsCountChange={setLeadsCount} />
-          ) : (
+          ) : activeSubTab === 'embed' ? (
             <EmbedCodeBuilder materials={materials} laborRates={laborRates} estimate={estimate} />
+          ) : (
+            <CardPhotosEditor />
           )}
         </div>
 

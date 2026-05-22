@@ -2,6 +2,18 @@ import React from 'react';
 import { Layers, CheckCircle2, ShieldAlert, Sparkles, RefreshCw, Lock } from 'lucide-react';
 import { MATERIAL_PRICES, EstimateBreakdown } from './customerEstimateCalculations';
 
+// Standard Default Images for Step 2 Material Options
+import ptPineImg from '../../assets/images/downloaded_portfolio_1.png';
+import japaneseCedarImg from '../../assets/images/downloaded_portfolio_2.png';
+import westernRedCedarImg from '../../assets/images/downloaded_portfolio_3.png';
+import standardFlatTopImg from '../../assets/images/actual_metal_fence_squarespace.jpg';
+import extendedPicketsImg from '../../assets/images/downloaded_portfolio_4.png';
+import rackingPanelImg from '../../assets/images/downloaded_portfolio_5.png';
+import residentialGradeImg from '../../assets/images/user_chain_link_fence_faithful_new_1779474771303.png';
+import commercialGradeImg from '../../assets/images/downloaded_portfolio_7.jpeg';
+import privacySlatsImg from '../../assets/images/downloaded_portfolio_6.png';
+import setInConcreteImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
+
 interface Step3Props {
   material: string;
   breakdown: EstimateBreakdown;
@@ -37,6 +49,30 @@ export default function Step3({
   pipePaintColor = 'Black',
   pipeWireType = 'Black',
 }: Step3Props) {
+  const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
+
+  const loadPhotos = React.useCallback(() => {
+    try {
+      const saved = localStorage.getItem('customer_estimator_custom_photos');
+      if (saved) {
+        setCustomPhotos(JSON.parse(saved));
+      } else {
+        setCustomPhotos({});
+      }
+    } catch (e) {
+      console.error('Error loading custom photos:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadPhotos();
+
+    // Listen for custom photo changes
+    window.addEventListener('customer_estimator_photos_updated', loadPhotos);
+    return () => {
+      window.removeEventListener('customer_estimator_photos_updated', loadPhotos);
+    };
+  }, [loadPhotos]);
 
   // Define dynamic material options depending on selected style type
   let materialsList = [];
@@ -49,7 +85,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Standard flat top'],
         description: 'Elite 2-rail flat top black wrought iron panels offering modern, clean architectural lines.',
         badge: 'Classic Black Match',
-        badgeColor: 'bg-slate-100 text-slate-800'
+        badgeColor: 'bg-slate-100 text-slate-800',
+        image: standardFlatTopImg
       },
       {
         id: 'Extended pickets',
@@ -57,7 +94,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Extended pickets'],
         description: 'Traditional spear styling with picket tips extending above the top rail for decorative appeal.',
         badge: 'Spear Decorative',
-        badgeColor: 'bg-indigo-100 text-indigo-800'
+        badgeColor: 'bg-indigo-100 text-indigo-800',
+        image: extendedPicketsImg
       },
       {
         id: '3 rail racking',
@@ -65,7 +103,8 @@ export default function Step3({
         price: MATERIAL_PRICES['3 rail racking'],
         description: 'Heavy duty three-rail structural panel engineered specifically to transition sloped ground beautifully.',
         badge: 'Maximum Enclosure',
-        badgeColor: 'bg-amber-100 text-amber-800'
+        badgeColor: 'bg-amber-100 text-amber-800',
+        image: rackingPanelImg
       }
     ];
   } else if (fenceType === 'chain link fence') {
@@ -76,7 +115,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Residential Grade'],
         description: 'Affordable galvanized steel wire mesh (11-gauge) suited for standard residential properties.',
         badge: 'Highly Economical',
-        badgeColor: 'bg-green-100 text-green-800'
+        badgeColor: 'bg-green-100 text-green-800',
+        image: residentialGradeImg
       },
       {
         id: 'Commercial Grade',
@@ -84,7 +124,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Commercial Grade'],
         description: 'Thick, high-strength industrial 9-gauge galvanized fabric suited for superior security.',
         badge: 'Heavy Utility',
-        badgeColor: 'bg-blue-100 text-blue-800'
+        badgeColor: 'bg-blue-100 text-blue-800',
+        image: commercialGradeImg
       },
       {
         id: 'Privacy Slats',
@@ -92,7 +133,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Privacy Slats'],
         description: 'Standard 11-gauge galvanized steel fence outfitted with lock-in vertical privacy slats.',
         badge: 'Semi-Private Span',
-        badgeColor: 'bg-purple-100 text-purple-800'
+        badgeColor: 'bg-purple-100 text-purple-800',
+        image: privacySlatsImg
       }
     ];
   } else if (fenceType === 'pipe fence') {
@@ -103,7 +145,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Set in Concrete'],
         description: 'Heavy steel gauge schedule posts embedded inside deep concrete base footing blocks. Built for maximum longevity and wind resistance, concrete set posts are Lone Star standard.',
         badge: 'Concrete Set Standard',
-        badgeColor: 'bg-[#1e1b4b] text-white'
+        badgeColor: 'bg-[#1e1b4b] text-white',
+        image: setInConcreteImg
       }
     ];
   } else {
@@ -115,7 +158,8 @@ export default function Step3({
         price: MATERIAL_PRICES['PT Pine'],
         description: 'Rigid wood species pressure-infused with preservative chemicals protecting against decay and termites.',
         badge: 'Tough Budget Option',
-        badgeColor: 'bg-lime-100 text-lime-800'
+        badgeColor: 'bg-lime-100 text-lime-800',
+        image: ptPineImg
       },
       {
         id: 'Japanese Cedar',
@@ -123,7 +167,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Japanese Cedar'],
         description: 'Superior dimensional stability, pleasing natural grain, and innate natural resistance to insect rot.',
         badge: 'Popular Quality Choice',
-        badgeColor: 'bg-amber-100 text-amber-800'
+        badgeColor: 'bg-amber-100 text-amber-800',
+        image: japaneseCedarImg
       },
       {
         id: 'Western Red Cedar',
@@ -131,7 +176,8 @@ export default function Step3({
         price: MATERIAL_PRICES['Western Red Cedar'],
         description: 'Top-tier luxury timber. Supreme water resistance, beautiful red tones, and absolute resistance to warping.',
         badge: 'Ultimate Premium Species',
-        badgeColor: 'bg-emerald-100 text-emerald-800'
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        image: westernRedCedarImg
       }
     ];
   }
@@ -148,6 +194,7 @@ export default function Step3({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
         {materialsList.map((m) => {
           const isSelected = material === m.id;
+          const activeImage = customPhotos[m.id] || m.image;
           return (
             <button
               key={m.id}
@@ -155,13 +202,13 @@ export default function Step3({
               onClick={() => {
                 onChangeField('material', m.id);
               }}
-              className={`flex flex-col text-left p-6 rounded-2xl border-2 transition-all duration-300 relative ${
+              className={`flex flex-col text-left p-5 rounded-2xl border-2 transition-all duration-300 relative ${
                 isSelected
                   ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/20 shadow-md shadow-american-blue/5'
                   : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-md'
               }`}
             >
-              <div className="flex justify-between items-start mb-3 w-full">
+              <div className="flex justify-between items-center mb-2.5 w-full">
                 <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider ${m.badgeColor}`}>
                   {m.badge}
                 </span>
@@ -169,7 +216,18 @@ export default function Step3({
                   <CheckCircle2 size={16} className="text-american-blue shrink-0 ml-1" />
                 )}
               </div>
-              <h3 className="font-bold text-base text-[#111111] mb-1">{m.name}</h3>
+
+              {/* Material option photograph preview */}
+              <div className="w-full h-32 rounded-xl overflow-hidden mb-3 bg-slate-100 border border-slate-200 relative shrink-0">
+                <img
+                  src={activeImage}
+                  alt={m.name}
+                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              <h3 className="font-extrabold text-[#111111] text-sm mb-1">{m.name}</h3>
               <p className="text-xs text-[#666666] leading-relaxed flex-grow mt-1">{m.description}</p>
             </button>
           );

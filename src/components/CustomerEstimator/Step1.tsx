@@ -1,7 +1,9 @@
 import React from 'react';
 import { Shield, Trees, Box, Grid } from 'lucide-react';
-import privacyFenceImg from '../../assets/images/actual_privacy_fence_squarespace.webp';
-import metalFenceImg from '../../assets/images/actual_metal_fence_squarespace.jpg';
+import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
+import metalFenceImg from '../../assets/images/user_metal_fence_faithful_new_1779474753459.png';
+import chainLinkImg from '../../assets/images/user_chain_link_fence_faithful_new_1779474771303.png';
+import pipeFenceImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
 
 interface Step1Props {
   selectedType: string;
@@ -10,13 +12,38 @@ interface Step1Props {
 }
 
 export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
+  const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
+
+  const loadPhotos = React.useCallback(() => {
+    try {
+      const saved = localStorage.getItem('customer_estimator_custom_photos');
+      if (saved) {
+        setCustomPhotos(JSON.parse(saved));
+      } else {
+        setCustomPhotos({});
+      }
+    } catch (e) {
+      console.error('Error loading custom photos:', e);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadPhotos();
+
+    // Listen for custom photo changes
+    window.addEventListener('customer_estimator_photos_updated', loadPhotos);
+    return () => {
+      window.removeEventListener('customer_estimator_photos_updated', loadPhotos);
+    };
+  }, [loadPhotos]);
+
   const options = [
     {
       id: 'Wood Fence',
       title: 'Wood Fence',
       description: 'Solid side-by-side or decorative wooden fences providing complete privacy and noise reduction.',
       icon: Shield,
-      image: privacyFenceImg,
+      image: customPhotos['Wood Fence'] || privacyFenceImg,
       isUserPhoto: true,
       bg: 'hover:border-american-blue hover:bg-slate-50'
     },
@@ -25,7 +52,7 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
       title: 'Wrought iron fence',
       description: 'High-end black wrought iron/metal panels with flat or decorative top pickets.',
       icon: Box,
-      image: metalFenceImg,
+      image: customPhotos['Wrought iron fence'] || metalFenceImg,
       isUserPhoto: true,
       bg: 'hover:border-[#9d8145] hover:bg-amber-50/20'
     },
@@ -34,8 +61,8 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
       title: 'chain link fence',
       description: 'Durable, affordable commercial or residential grade galvanized steel mesh.',
       icon: Grid,
-      image: 'https://images.unsplash.com/photo-1548690312-e3b507d8c110?auto=format&fit=crop&w=600&q=80',
-      isUserPhoto: false,
+      image: customPhotos['chain link fence'] || chainLinkImg,
+      isUserPhoto: true,
       bg: 'hover:border-emerald-600 hover:bg-emerald-50/50'
     },
     {
@@ -43,8 +70,8 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
       title: 'pipe fence',
       description: 'Rustic ranch rail and steel pipe setups. Perfect for open boundaries and fields.',
       icon: Trees,
-      image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80',
-      isUserPhoto: false,
+      image: customPhotos['pipe fence'] || pipeFenceImg,
+      isUserPhoto: true,
       bg: 'hover:border-american-blue hover:bg-slate-50'
     }
   ];
@@ -89,19 +116,6 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
                 {isSelected && (
                   <div className="absolute top-3 right-3 bg-american-blue text-white font-extrabold text-[10px] tracking-widest px-2.5 py-1 rounded-full uppercase shadow-md border border-white/20 animate-pulse">
                     Selected
-                  </div>
-                )}
-
-                {/* User Photo Badge / Status Badge */}
-                {opt.isUserPhoto && (
-                  <div className="absolute bottom-3 left-3 bg-[#1e1b4b] text-white font-black text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 border border-indigo-400/30">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    LONE STAR ACTUAL WORK
-                  </div>
-                )}
-                {!opt.isUserPhoto && (
-                  <div className="absolute bottom-3 left-3 bg-slate-900/60 backdrop-blur-xs text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded">
-                    STYLE REFERENCE
                   </div>
                 )}
               </div>
