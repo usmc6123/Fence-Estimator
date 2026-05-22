@@ -278,10 +278,8 @@ export default function App() {
     localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
-    if (!user) {
-      localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
-      localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
-    }
+    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+    localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
     localStorage.setItem('fence_pro_customer_contract_ai_scope', JSON.stringify(aiContractScope));
   }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, aiContractScope, user]);
@@ -386,7 +384,7 @@ export default function App() {
   }
 
   if (isCustomerPortal) {
-    return <CustomerEstimator standalone={true} />;
+    return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
   }
 
   return (
@@ -398,7 +396,7 @@ export default function App() {
       onLogout={handleLogout}
     >
       {activeTab === 'customer-estimator' && (
-        <CustomerEstimator />
+        <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} />
       )}
       {activeTab === 'estimator' && (
         <Estimator 

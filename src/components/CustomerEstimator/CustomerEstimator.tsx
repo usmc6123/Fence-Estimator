@@ -11,11 +11,21 @@ import Step6 from './Step6';
 import ClientCrmLeads from './ClientCrmLeads';
 import EmbedCodeBuilder from './EmbedCodeBuilder';
 
+import { MaterialItem, LaborRates, Estimate } from '../../types';
+
 interface CustomerEstimatorProps {
   standalone?: boolean;
+  materials?: MaterialItem[];
+  laborRates?: LaborRates;
+  estimate?: Partial<Estimate>;
 }
 
-export default function CustomerEstimator({ standalone = false }: CustomerEstimatorProps) {
+export default function CustomerEstimator({ 
+  standalone = false,
+  materials,
+  laborRates,
+  estimate,
+}: CustomerEstimatorProps) {
   const {
     step,
     data,
@@ -29,7 +39,7 @@ export default function CustomerEstimator({ standalone = false }: CustomerEstima
     handleBack,
     handleSubmit,
     resetEstimator,
-  } = useCustomerEstimator();
+  } = useCustomerEstimator(materials, laborRates, estimate);
 
   // Internal tab state for the suite (only active if NOT standalone)
   const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed'>('estimator');
@@ -272,7 +282,7 @@ export default function CustomerEstimator({ standalone = false }: CustomerEstima
           ) : activeSubTab === 'crm' ? (
             <ClientCrmLeads onLeadsCountChange={setLeadsCount} />
           ) : (
-            <EmbedCodeBuilder />
+            <EmbedCodeBuilder materials={materials} laborRates={laborRates} estimate={estimate} />
           )}
         </div>
 

@@ -6,6 +6,7 @@ import {
   calculateCustomerEstimate,
   EstimateBreakdown
 } from './customerEstimateCalculations';
+import { MaterialItem, LaborRates, Estimate } from '../../types';
 
 const INITIAL_DATA: CustomerEstimateData = {
   fenceType: '',
@@ -30,7 +31,11 @@ const INITIAL_DATA: CustomerEstimateData = {
   hasCapAndTrim: false,
 };
 
-export function useCustomerEstimator() {
+export function useCustomerEstimator(
+  propMaterials?: MaterialItem[],
+  propLaborRates?: LaborRates,
+  propEstimate?: Partial<Estimate>
+) {
   const [step, setStep] = React.useState<number>(1);
   const [data, setData] = React.useState<CustomerEstimateData>(INITIAL_DATA);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
@@ -40,12 +45,12 @@ export function useCustomerEstimator() {
 
   // Real-time calculation breakdown
   const [breakdown, setBreakdown] = React.useState<EstimateBreakdown>(() => 
-    calculateCustomerEstimate(INITIAL_DATA)
+    calculateCustomerEstimate(INITIAL_DATA, propMaterials, propLaborRates, propEstimate)
   );
 
   React.useEffect(() => {
-    setBreakdown(calculateCustomerEstimate(data));
-  }, [data]);
+    setBreakdown(calculateCustomerEstimate(data, propMaterials, propLaborRates, propEstimate));
+  }, [data, propMaterials, propLaborRates, propEstimate]);
 
   const updateField = React.useCallback(<K extends keyof CustomerEstimateData>(
     field: K,
@@ -134,6 +139,27 @@ export function useCustomerEstimator() {
       defaultStyleId = 'pipe-no-climb';
     }
 
+    // Resolve active estimate config settings
+    let activeEstimateConfig: any = propEstimate || {};
+    if (!propEstimate && typeof window !== 'undefined') {
+      try {
+        const cachedEst = localStorage.getItem('fence_pro_estimate');
+        if (cachedEst) {
+          activeEstimateConfig = JSON.parse(cachedEst);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const wastePercentage = activeEstimateConfig.wastePercentage !== undefined ? activeEstimateConfig.wastePercentage : 0;
+    const markupPercentage = activeEstimateConfig.markupPercentage !== undefined ? activeEstimateConfig.markupPercentage : 20;
+    const taxPercentage = activeEstimateConfig.taxPercentage !== undefined ? activeEstimateConfig.taxPercentage : 8.25;
+    const concreteType = activeEstimateConfig.concreteType || 'Maximizer';
+    const footingType = activeEstimateConfig.footingType || 'Cuboid';
+    const postWidth = activeEstimateConfig.postWidth !== undefined ? activeEstimateConfig.postWidth : 6;
+    const postThickness = activeEstimateConfig.postThickness !== undefined ? activeEstimateConfig.postThickness : 6;
+
     // Build Estimate model
     const customerEstimateDoc = {
       id: estId,
@@ -167,14 +193,14 @@ export function useCustomerEstimator() {
       hasCapAndTrim: !!data.hasCapAndTrim,
       hasTopCap: !!data.hasTopCap,
       topStyle: data.topStyle || 'Dog Ear',
-      wastePercentage: 10,
+      wastePercentage: wastePercentage,
       includeStain: !!data.isPreStained,
-      footingType: 'Cuboid',
-      concreteType: 'Maximizer',
-      postWidth: 4,
-      postThickness: 4,
-      markupPercentage: 10,
-      taxPercentage: 8,
+      footingType: footingType,
+      concreteType: concreteType,
+      postWidth: postWidth,
+      postThickness: postThickness,
+      markupPercentage: markupPercentage,
+      taxPercentage: taxPercentage,
       deliveryFee: 0,
       manualQuantities: {},
       manualPrices: {},

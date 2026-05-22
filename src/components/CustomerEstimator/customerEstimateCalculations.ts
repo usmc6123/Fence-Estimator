@@ -1,6 +1,6 @@
 import { MATERIALS, DEFAULT_LABOR_RATES } from '../../constants';
 import { calculateDetailedTakeOff } from '../../lib/calculations';
-import { Estimate, FenceRun, GateDetail } from '../../types';
+import { Estimate, FenceRun, GateDetail, MaterialItem, LaborRates } from '../../types';
 
 export interface CustomerEstimateData {
   fenceType: string;
@@ -78,7 +78,12 @@ export interface EstimateBreakdown {
   demoRate: number;
 }
 
-export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): EstimateBreakdown {
+export function calculateCustomerEstimate(
+  data: Partial<CustomerEstimateData>,
+  customMaterials?: MaterialItem[],
+  customLaborRates?: LaborRates,
+  customEstimateConfig?: any
+): EstimateBreakdown {
   const lf = data.linearFeet || 0;
   const height = data.height || 6;
   const fenceType = data.fenceType || 'Wood Fence';
@@ -151,12 +156,12 @@ export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): 
     }
   }
 
-  // Retrieve custom materials, labor rates, and estimate settings from localStorage (for exact matching)
-  let activeMaterials = MATERIALS;
-  let activeLaborRates = DEFAULT_LABOR_RATES;
-  let activeEstimateConfig: any = {};
+  // Retrieve custom materials, labor rates, and estimate settings from parameters or localStorage (for exact matching)
+  let activeMaterials = customMaterials || MATERIALS;
+  let activeLaborRates = customLaborRates || DEFAULT_LABOR_RATES;
+  let activeEstimateConfig: any = customEstimateConfig || {};
 
-  if (typeof window !== 'undefined') {
+  if (!customMaterials && !customLaborRates && !customEstimateConfig && typeof window !== 'undefined') {
     try {
       const cachedMats = localStorage.getItem('fence_pro_materials');
       if (cachedMats) {
@@ -200,6 +205,8 @@ export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): 
     concreteType: activeEstimateConfig.concreteType || 'Maximizer',
     footingType: activeEstimateConfig.footingType || 'Cuboid',
     wastePercentage: activeEstimateConfig.wastePercentage !== undefined ? activeEstimateConfig.wastePercentage : 0,
+    postWidth: activeEstimateConfig.postWidth !== undefined ? activeEstimateConfig.postWidth : 6,
+    postThickness: activeEstimateConfig.postThickness !== undefined ? activeEstimateConfig.postThickness : 6,
     isPreStained: !!data.isPreStained,
     hasTopCap: !!data.hasTopCap,
     hasCapAndTrim: !!data.hasCapAndTrim,

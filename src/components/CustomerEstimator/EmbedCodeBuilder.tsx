@@ -3,32 +3,65 @@ import { FileText, Copy, Download, Check, Sparkles, ExternalLink, Settings, Shie
 import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-export default function EmbedCodeBuilder() {
+import { MaterialItem, LaborRates, Estimate } from '../../types';
+
+interface EmbedCodeBuilderProps {
+  materials?: MaterialItem[];
+  laborRates?: LaborRates;
+  estimate?: Partial<Estimate>;
+}
+
+export default function EmbedCodeBuilder({
+  materials,
+  laborRates,
+  estimate,
+}: EmbedCodeBuilderProps) {
   const [copied, setCopied] = React.useState(false);
   const [params, setParams] = React.useState(() => {
     let demoRate = 2; // Default
-    if (typeof window !== 'undefined') {
-      try {
-        const cachedLabor = localStorage.getItem('fence_pro_labor_rates');
-        if (cachedLabor) {
-          const rates = JSON.parse(cachedLabor);
-          if (rates && rates.demo !== undefined) {
-            demoRate = rates.demo;
+    let baseLaborRate = 45;
+    let taxRate = 0.0825;
+    let contingencyBuffer = 0.20;
+
+    let activeLabor = laborRates;
+    let activeEst = estimate;
+
+    if (!activeLabor || !activeEst) {
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedLabor = localStorage.getItem('fence_pro_labor_rates');
+          if (cachedLabor) {
+            activeLabor = JSON.parse(cachedLabor);
           }
+          const cachedEst = localStorage.getItem('fence_pro_estimate');
+          if (cachedEst) {
+            activeEst = JSON.parse(cachedEst);
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
       }
     }
+
+    if (activeLabor) {
+      if (activeLabor.demo !== undefined) demoRate = activeLabor.demo;
+      if (activeLabor.woodSideBySide6 !== undefined) baseLaborRate = activeLabor.woodSideBySide6;
+    }
+
+    if (activeEst) {
+      if (activeEst.taxPercentage !== undefined) taxRate = activeEst.taxPercentage / 100;
+      if (activeEst.markupPercentage !== undefined) contingencyBuffer = activeEst.markupPercentage / 100;
+    }
+
     return {
       companyName: 'Lone Star Fence Works',
-      phone: '(512) 381-4016',
+      phone: '(469) 560-6269',
       ghlWebhookUrl: '',
-      baseLaborRate: 45,
+      baseLaborRate,
       concretePostCost: 85,
       postSpacing: 8,
-      taxRate: 0.08,
-      contingencyBuffer: 0.10,
+      taxRate,
+      contingencyBuffer,
       demoRate
     };
   });
