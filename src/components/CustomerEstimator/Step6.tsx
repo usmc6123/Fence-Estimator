@@ -95,7 +95,7 @@ export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Prop
             </span>
           </div>
           <span className="text-2xl font-black text-emerald-600">
-            ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
+            ${Math.round(breakdown.total).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
           </span>
         </div>
 

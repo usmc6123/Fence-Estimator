@@ -206,7 +206,7 @@ export default function Step5({
                   </span>
                   <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1.5">
                     <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400 tracking-tight whitespace-nowrap">
-                      ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
+                      ${Math.round(breakdown.total).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
                     </span>
                     <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                       *Turnkey Project Price

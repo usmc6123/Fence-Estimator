@@ -563,7 +563,7 @@ export default function EmbedCodeBuilder({
     document.getElementById('receipt-spec-demo').innerText = demoText;
 
     // Projected Turnkey Cost range
-    const rangeMin = Math.round(total * 0.95);
+    const rangeMin = Math.round(total);
     const rangeMax = Math.round(total * 1.10);
     document.getElementById('receipt-price-range').innerText = '$' + rangeMin.toLocaleString() + ' - $' + rangeMax.toLocaleString();
   }
