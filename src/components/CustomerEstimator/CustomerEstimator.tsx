@@ -167,8 +167,8 @@ export default function CustomerEstimator({ standalone = false }: CustomerEstima
                     </span>
                     <span className="font-bold text-[#666666]">
                       {step === 1 && 'Style Selection'}
-                      {step === 2 && 'Dimensions'}
-                      {step === 3 && 'Material Details'}
+                      {step === 2 && 'Material Details'}
+                      {step === 3 && 'Dimensions'}
                       {step === 4 && 'Fence Accessories'}
                       {step === 5 && 'Contact Verification & Confirmation'}
                     </span>
@@ -202,6 +202,24 @@ export default function CustomerEstimator({ standalone = false }: CustomerEstima
                     )}
 
                     {step === 2 && (
+                      <Step3
+                        material={data.material}
+                        breakdown={breakdown}
+                        onChangeMaterial={(mat) => updateField('material', mat)}
+                        onNext={handleNext}
+                        onBack={handleBack}
+                        fenceType={data.fenceType}
+                        isPreStained={data.isPreStained}
+                        onChangeField={updateField}
+                        reusePosts={data.reusePosts}
+                        picketStyle={data.picketStyle}
+                        topStyle={data.topStyle}
+                        hasTopCap={data.hasTopCap}
+                        hasCapAndTrim={data.hasCapAndTrim}
+                      />
+                    )}
+
+                    {step === 3 && (
                       <Step2
                         linearFeet={data.linearFeet}
                         height={data.height}
@@ -209,16 +227,7 @@ export default function CustomerEstimator({ standalone = false }: CustomerEstima
                         onChangeField={updateField}
                         onNext={handleNext}
                         onBack={handleBack}
-                      />
-                    )}
-
-                    {step === 3 && (
-                      <Step3
-                        material={data.material}
-                        breakdown={breakdown}
-                        onChangeMaterial={(mat) => updateField('material', mat)}
-                        onNext={handleNext}
-                        onBack={handleBack}
+                        fenceType={data.fenceType}
                       />
                     )}
 

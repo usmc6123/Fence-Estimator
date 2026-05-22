@@ -126,6 +126,20 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
           );
         })}
       </div>
+
+      <div className="flex justify-end max-w-5xl mx-auto pt-4 border-t border-[#F0F0F0]">
+        <button
+          onClick={onNext}
+          disabled={!selectedType}
+          className={`rounded-xl px-6 py-3 text-sm font-black uppercase tracking-wider text-white shadow-lg active:scale-95 transition-all ${
+            !selectedType
+              ? 'bg-slate-300 shadow-none cursor-not-allowed'
+              : 'bg-american-blue shadow-american-blue/20 hover:bg-american-blue/90'
+          }`}
+        >
+          Next Step
+        </button>
+      </div>
     </div>
   );
 }

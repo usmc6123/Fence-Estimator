@@ -1,5 +1,5 @@
 import React from 'react';
-import { Ruler, ArrowUpRight } from 'lucide-react';
+import { Ruler, ArrowUpRight, Lock } from 'lucide-react';
 import { EstimateBreakdown } from './customerEstimateCalculations';
 
 interface Step2Props {
@@ -9,6 +9,7 @@ interface Step2Props {
   onChangeField: (field: 'linearFeet' | 'height', val: any) => void;
   onNext: () => void;
   onBack: () => void;
+  fenceType?: string;
 }
 
 export default function Step2({
@@ -18,7 +19,14 @@ export default function Step2({
   onChangeField,
   onNext,
   onBack,
+  fenceType,
 }: Step2Props) {
+  React.useEffect(() => {
+    if (fenceType === 'Wood Fence' && height !== 6 && height !== 8) {
+      onChangeField('height', 6);
+    }
+  }, [fenceType, height, onChangeField]);
+
   return (
     <div id="step-2-container" className="space-y-6">
       <div className="text-center max-w-xl mx-auto space-y-2">
@@ -67,12 +75,21 @@ export default function Step2({
               onChange={(e) => onChangeField('height', parseInt(e.target.value))}
               className="block w-full rounded-xl border border-[#D5D5D5] bg-white px-4 py-4 text-sm font-bold text-[#111111] focus:border-american-blue focus:ring-ring focus:outline-none"
             >
-              <option value={3}>3 Feet Tall (Front/Decorative)</option>
-              <option value={4}>4 Feet Tall (Picket / Pool Standard)</option>
-              <option value={5}>5 Feet Tall (Medium Security)</option>
-              <option value={6}>6 Feet Tall (Classic Privacy Standard)</option>
-              <option value={7}>7 Feet Tall (Custom Screen)</option>
-              <option value={8}>8 Feet Tall (High Security / Industrial)</option>
+              {fenceType === 'Wood Fence' ? (
+                <>
+                  <option value={6}>6 Feet Tall (Classic Privacy Standard)</option>
+                  <option value={8}>8 Feet Tall (High Security / Industrial)</option>
+                </>
+              ) : (
+                <>
+                  <option value={3}>3 Feet Tall (Front/Decorative)</option>
+                  <option value={4}>4 Feet Tall (Picket / Pool Standard)</option>
+                  <option value={5}>5 Feet Tall (Medium Security)</option>
+                  <option value={6}>6 Feet Tall (Classic Privacy Standard)</option>
+                  <option value={7}>7 Feet Tall (Custom Screen)</option>
+                  <option value={8}>8 Feet Tall (High Security / Industrial)</option>
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -85,16 +102,17 @@ export default function Step2({
               <span>Real-time Estimator</span>
             </div>
             
-            <div className="space-y-1">
+            <div className="space-y-2 py-2">
               <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Projected Estimate Range
+                Projected Estimate status
               </span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black text-emerald-400">
-                  ${Math.round(breakdown.total).toLocaleString()}
-                </span>
-                <span className="text-xs text-slate-400">total</span>
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-amber-400">
+                <Lock size={18} className="animate-pulse" />
+                <span className="text-xs font-black uppercase tracking-wider">LOCKED UNTIL STEP 5</span>
               </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                To view your dynamic price range, complete the simple contact verification form in Step 5.
+              </p>
             </div>
 
             <div className="border-t border-slate-800 pt-4 space-y-2 text-xs text-slate-400">
@@ -106,15 +124,15 @@ export default function Step2({
                 <span>Selected fence height:</span>
                 <span className="font-bold text-white">{height} FT</span>
               </div>
-              <p className="mt-2 text-[10px] leading-normal italic">
-                *Includes standard cedar lumber pricing guidelines. You can pick pressure-treated pine, metal, or other raw materials on Step 3 to calibrate results.
+              <p className="mt-2 text-[10px] leading-normal italic text-slate-500">
+                *Estimates compile raw structural posts, infill, hardware accessories, site prep, and local TX sales tax.
               </p>
             </div>
           </div>
 
           <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between mt-4">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Auto-calculated</span>
-            <ArrowUpRight size={14} className="text-emerald-400 animate-pulse" />
+            <Lock size={14} className="text-amber-400" />
           </div>
         </div>
       </div>

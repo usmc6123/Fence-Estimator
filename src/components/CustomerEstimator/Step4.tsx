@@ -109,9 +109,9 @@ export default function Step4({
                       onChange={(e) => onChangeField('gateType', e.target.value)}
                       className="block w-full rounded-lg border border-[#D5D5D5] bg-white px-3 py-2.5 text-sm font-bold text-[#111111]"
                     >
-                      <option value="Single Swing">Single Swing (3-5ft wide) — ${GATE_PRICES['Single Swing']}</option>
-                      <option value="Double Swing">Double Swing (8-12ft wide) — ${GATE_PRICES['Double Swing']}</option>
-                      <option value="Sliding">Sliding Gate (Space-Saver) — ${GATE_PRICES['Sliding']}</option>
+                      <option value="Single Swing">Single Swing (3-5ft wide)</option>
+                      <option value="Double Swing">Double Swing (8-12ft wide)</option>
+                      <option value="Sliding">Sliding Gate (Space-Saver)</option>
                     </select>
                   </div>
                 </div>

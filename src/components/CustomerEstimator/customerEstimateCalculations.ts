@@ -1,3 +1,7 @@
+import { MATERIALS, DEFAULT_LABOR_RATES } from '../../constants';
+import { calculateDetailedTakeOff } from '../../lib/calculations';
+import { Estimate, FenceRun, GateDetail } from '../../types';
+
 export interface CustomerEstimateData {
   fenceType: string;
   linearFeet: number;
@@ -13,9 +17,35 @@ export interface CustomerEstimateData {
   email: string;
   phone: string;
   address: string;
+  isPreStained?: boolean;
+  reusePosts?: boolean;
+  picketStyle?: 'w-side' | 'w-bob';
+  topStyle?: 'Dog Ear' | 'Flat Top';
+  hasTopCap?: boolean;
+  hasCapAndTrim?: boolean;
 }
 
 export const MATERIAL_PRICES: Record<string, number> = {
+  // Wood Fence Species
+  'PT Pine': 18,
+  'Japanese Cedar': 22,
+  'Western Red Cedar': 28,
+
+  // Wrought Iron (nominals)
+  'Standard flat top': 32,
+  'Extended pickets': 35,
+  '3 rail racking': 40,
+
+  // Chain Link (nominals)
+  'Residential Grade': 12,
+  'Commercial Grade': 16,
+  'Privacy Slats': 22,
+
+  // Pipe Fence (nominals)
+  'Set in Concrete': 24,
+  'Driven Posts': 20,
+
+  // Backward compatibility for existing settings
   'Pressure-treated': 18,
   'Cedar': 22,
   'Composite': 35,
@@ -49,38 +79,185 @@ export interface EstimateBreakdown {
 
 export function calculateCustomerEstimate(data: Partial<CustomerEstimateData>): EstimateBreakdown {
   const lf = data.linearFeet || 0;
-  
-  // 1. Posts Cost: (Linear Feet ÷ 8) × $85
-  const postsCost = Math.ceil(lf / 8) * 85;
+  const height = data.height || 6;
+  const fenceType = data.fenceType || 'Wood Fence';
 
-  // 2. Materials Cost: Linear Feet × Material Price Per LF
-  const materialPrice = data.material ? (MATERIAL_PRICES[data.material] || 0) : 0;
-  const materialsCost = lf * materialPrice;
+  // Resolve default style ID and run attributes
+  let styleId = 'wood-privacy';
+  let visualStyleId = 'w-side';
+  let woodType: 'PT Pine' | 'Western Red Cedar' | 'Japanese Cedar' | undefined = undefined;
+  let chainLinkGrade: 'Residential' | 'Commercial' | undefined = undefined;
+  let pipeInstallType: 'Set in Concrete' | 'Driven Posts' | undefined = undefined;
 
-  // 3. Labor Cost: Linear Feet × $45 × Terrain Factor + Demolition $15/LF if yes
-  const terrainFactor = data.siteCondition ? (TERRAIN_FACTORS[data.siteCondition] || 1.0) : 1.0;
-  const baseLabor = lf * 45 * terrainFactor;
-  const demoCost = data.removeOldFence ? lf * 15 : 0;
-  const laborCost = baseLabor + demoCost;
+  const mat = data.material || 'PT Pine';
 
-  // 4. Gates Cost
-  let gatesCost = 0;
-  if (data.needGates && data.gateCount && data.gateType) {
-    const gateUnitPrice = GATE_PRICES[data.gateType] || 0;
-    gatesCost = data.gateCount * gateUnitPrice;
+  if (fenceType === 'Wrought iron fence') {
+    styleId = 'aluminum-ornamental';
+    if (mat === 'Extended pickets') {
+      visualStyleId = 'm-2rep';
+    } else if (mat === '3 rail racking') {
+      visualStyleId = 'm-3rr';
+    } else {
+      visualStyleId = 'm-2rft';
+    }
+  } else if (fenceType === 'chain link fence') {
+    styleId = 'chain-link';
+    if (mat === 'Commercial Grade') {
+      chainLinkGrade = 'Commercial';
+      visualStyleId = 'cl-std';
+    } else if (mat === 'Privacy Slats') {
+      chainLinkGrade = 'Residential';
+      visualStyleId = 'cl-slat';
+    } else {
+      chainLinkGrade = 'Residential';
+      visualStyleId = 'cl-std';
+    }
+  } else if (fenceType === 'pipe fence') {
+    styleId = 'pipe-no-climb';
+    if (mat === 'Driven Posts') {
+      pipeInstallType = 'Driven Posts';
+    } else {
+      pipeInstallType = 'Set in Concrete';
+    }
+    if (mat && mat.includes('Black')) {
+      visualStyleId = 'p-black';
+    } else {
+      visualStyleId = 'p-std';
+    }
+  } else {
+    // Wood Fence
+    styleId = 'wood-privacy';
+    visualStyleId = data.picketStyle || 'w-side';
+    if (mat === 'Western Red Cedar') {
+      woodType = 'Western Red Cedar';
+    } else if (mat === 'Japanese Cedar') {
+      woodType = 'Japanese Cedar';
+    } else {
+      woodType = 'PT Pine';
+    }
   }
 
-  // 5. Subtotal: Posts + Materials + Labor + Gates
-  const subtotal = postsCost + materialsCost + laborCost + gatesCost;
+  // Gates Detail list
+  const gateDetails: GateDetail[] = [];
+  if (data.needGates && data.gateCount) {
+    for (let i = 0; i < data.gateCount; i++) {
+      gateDetails.push({
+        id: `gate-cust-${i}`,
+        type: data.gateType === 'Double Swing' ? 'Double' : 'Single',
+        width: data.gateType === 'Double Swing' ? 8 : 4,
+        construction: styleId === 'aluminum-ornamental' ? 'Welded' : 'Pre-made',
+      });
+    }
+  }
 
-  // 6. Contingency: Subtotal × 10%
-  const contingency = subtotal * 0.10;
+  // Retrieve custom materials, labor rates, and estimate settings from localStorage (for exact matching)
+  let activeMaterials = MATERIALS;
+  let activeLaborRates = DEFAULT_LABOR_RATES;
+  let activeEstimateConfig: any = {};
 
-  // 7. Tax: (Subtotal + Contingency) × 8% (the user prompt specifies "Tax: (Subtotal + Contingency) x 8%")
-  const tax = (subtotal + contingency) * 0.08;
+  if (typeof window !== 'undefined') {
+    try {
+      const cachedMats = localStorage.getItem('fence_pro_materials');
+      if (cachedMats) {
+        activeMaterials = JSON.parse(cachedMats);
+      }
+    } catch (e) {
+      console.error('Failed to parse cached materials in customer estimator calculations:', e);
+    }
 
-  // 8. TOTAL: Subtotal + Contingency + Tax
-  const total = subtotal + contingency + tax;
+    try {
+      const cachedLabor = localStorage.getItem('fence_pro_labor_rates');
+      if (cachedLabor) {
+        activeLaborRates = JSON.parse(cachedLabor);
+      }
+    } catch (e) {
+      console.error('Failed to parse cached labor rates in customer estimator calculations:', e);
+    }
+
+    try {
+      const cachedEst = localStorage.getItem('fence_pro_estimate');
+      if (cachedEst) {
+        activeEstimateConfig = JSON.parse(cachedEst);
+      }
+    } catch (e) {
+      console.error('Failed to parse cached estimate config in customer estimator calculations:', e);
+    }
+  }
+
+  // Set up mock Estimate with the same profit margins, taxes, and settings as the standard estimator
+  const mockEstimate: Partial<Estimate> = {
+    id: 'mock-cust-est',
+    customerName: 'Customer',
+    date: new Date().toISOString(),
+    linearFeet: lf,
+    height: height,
+    defaultStyleId: styleId,
+    defaultVisualStyleId: visualStyleId,
+    defaultHeight: height,
+    markupPercentage: activeEstimateConfig.markupPercentage !== undefined ? activeEstimateConfig.markupPercentage : 20,
+    taxPercentage: activeEstimateConfig.taxPercentage !== undefined ? activeEstimateConfig.taxPercentage : 8.25,
+    concreteType: activeEstimateConfig.concreteType || 'Maximizer',
+    footingType: activeEstimateConfig.footingType || 'Cuboid',
+    wastePercentage: activeEstimateConfig.wastePercentage !== undefined ? activeEstimateConfig.wastePercentage : 0,
+    isPreStained: !!data.isPreStained,
+    hasTopCap: !!data.hasTopCap,
+    hasCapAndTrim: !!data.hasCapAndTrim,
+    topStyle: data.topStyle || 'Dog Ear',
+    runs: [
+      {
+        id: 'run-1',
+        name: 'Main Section',
+        linearFeet: lf,
+        corners: 0,
+        gates: gateDetails.length,
+        gateDetails: gateDetails,
+        styleId: styleId,
+        visualStyleId: visualStyleId,
+        height: height,
+        color: 'Natural',
+        woodType: woodType,
+        chainLinkGrade: chainLinkGrade,
+        pipeInstallType: pipeInstallType,
+        hasDemolition: !!data.removeOldFence,
+        demoLinearFeet: data.removeOldFence ? lf : 0,
+        demoType: styleId === 'wood-privacy' ? 'Wood' : (styleId === 'chain-link' ? 'Chain Link' : 'Metal'),
+        reusePosts: !!data.reusePosts,
+        isPreStained: !!data.isPreStained,
+        topStyle: data.topStyle || 'Dog Ear',
+      }
+    ]
+  };
+
+  const takeoff = calculateDetailedTakeOff(mockEstimate, activeMaterials, activeLaborRates);
+
+  // Classify products into posts, gates, materials, labor
+  let postsCost = 0;
+  let gatesCost = 0;
+  let materialsCost = 0;
+
+  takeoff.summary.forEach(item => {
+    const category = item.category || '';
+    const name = (item.name || '').toLowerCase();
+
+    // Skip labor, demo, prep which go into laborCost
+    if (category === 'Labor' || category === 'Demolition' || category === 'SitePrep') {
+      return;
+    }
+
+    if (category === 'Gate' || name.includes('gate') || name.includes('hinge') || name.includes('latch')) {
+      gatesCost += item.total;
+    } else if (category === 'Post' || name.includes('post') || name.includes('concrete') || name.includes('maximizer') || name.includes('quickset')) {
+      postsCost += item.total;
+    } else {
+      materialsCost += item.total;
+    }
+  });
+
+  const laborCost = takeoff.totals.labor + takeoff.totals.demo + takeoff.totals.prep;
+  const subtotal = takeoff.totals.subtotal;
+  const contingency = takeoff.totals.markup;
+  const tax = takeoff.totals.tax;
+  const total = takeoff.totals.grandTotal;
 
   return {
     postsCost,

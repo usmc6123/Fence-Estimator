@@ -88,14 +88,14 @@ export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Prop
         <div className="border-t border-[#E5E5E5] pt-4 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="block text-[9px] font-black text-[#888888] uppercase tracking-wider">
-              Estimated Total Price:
+              Estimated Price Range:
             </span>
             <span className="text-xs text-slate-500 italic">
               *Includes delivery, posts, hardware, tax, & labor
             </span>
           </div>
-          <span className="text-3xl font-black text-emerald-600">
-            ${Math.round(breakdown.total).toLocaleString()}
+          <span className="text-2xl font-black text-emerald-600">
+            ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
           </span>
         </div>
 

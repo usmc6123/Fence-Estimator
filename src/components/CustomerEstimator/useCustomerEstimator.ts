@@ -11,7 +11,7 @@ const INITIAL_DATA: CustomerEstimateData = {
   fenceType: '',
   linearFeet: 100,
   height: 6,
-  material: 'Pressure-treated',
+  material: 'PT Pine',
   needGates: false,
   gateCount: 1,
   gateType: 'Single Swing',
@@ -22,6 +22,12 @@ const INITIAL_DATA: CustomerEstimateData = {
   email: '',
   phone: '',
   address: '',
+  isPreStained: false,
+  reusePosts: false,
+  picketStyle: 'w-side',
+  topStyle: 'Dog Ear',
+  hasTopCap: false,
+  hasCapAndTrim: false,
 };
 
 export function useCustomerEstimator() {
@@ -45,10 +51,25 @@ export function useCustomerEstimator() {
     field: K,
     value: CustomerEstimateData[K]
   ) => {
-    setData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setData(prev => {
+      const newData = { ...prev, [field]: value };
+      if (field === 'fenceType') {
+        if (value === 'Wood Fence') {
+          newData.material = 'PT Pine';
+          newData.height = 6;
+        } else if (value === 'Wrought iron fence') {
+          newData.material = 'Standard flat top';
+          newData.height = 4;
+        } else if (value === 'chain link fence') {
+          newData.material = 'Residential Grade';
+          newData.height = 6;
+        } else if (value === 'pipe fence') {
+          newData.material = 'Set in Concrete';
+          newData.height = 5;
+        }
+      }
+      return newData;
+    });
   }, []);
 
   const handleNext = React.useCallback(() => {
@@ -57,7 +78,11 @@ export function useCustomerEstimator() {
       setError('Please select a fence type before moving to the next step.');
       return;
     }
-    if (step === 2) {
+    if (step === 2 && !data.material) {
+      setError('Please select a material choice before moving to the next step.');
+      return;
+    }
+    if (step === 3) {
       if (!data.linearFeet || data.linearFeet <= 0) {
         setError('Please enter a valid length in linear feet.');
         return;
@@ -66,10 +91,6 @@ export function useCustomerEstimator() {
         setError('Please select a height.');
         return;
       }
-    }
-    if (step === 3 && !data.material) {
-      setError('Please select a material.');
-      return;
     }
     
     setError(null);
@@ -143,9 +164,11 @@ export function useCustomerEstimator() {
       needsMarking: false,
       obstacleRemoval: false,
       postCapId: 'pc-dome',
-      hasCapAndTrim: false,
+      hasCapAndTrim: !!data.hasCapAndTrim,
+      hasTopCap: !!data.hasTopCap,
+      topStyle: data.topStyle || 'Dog Ear',
       wastePercentage: 10,
-      includeStain: false,
+      includeStain: !!data.isPreStained,
       footingType: 'Cuboid',
       concreteType: 'Maximizer',
       postWidth: 4,
@@ -164,14 +187,30 @@ export function useCustomerEstimator() {
         gateDetails: data.needGates ? [{
           id: `gate-${Math.random().toString(36).substr(2, 9)}`,
           type: data.gateType === 'Double Swing' ? 'Double' : 'Single',
-          width: 4,
-          construction: 'Pre-made'
+          width: data.gateType === 'Double Swing' ? 8 : 4,
+          construction: defaultStyleId === 'aluminum-ornamental' ? 'Welded' : 'Pre-made'
         }] : [],
         styleId: defaultStyleId,
-        visualStyleId: 'standard',
+        visualStyleId: defaultStyleId === 'aluminum-ornamental' 
+          ? (data.material === 'Extended pickets' ? 'm-2rep' : (data.material === '3 rail racking' ? 'm-3rr' : 'm-2rft'))
+          : (defaultStyleId === 'pipe-no-climb' ? (data.material && data.material.includes('Black') ? 'p-black' : 'p-std') : (defaultStyleId === 'wood-privacy' ? (data.picketStyle || 'w-side') : 'standard')),
         height: data.height,
         color: 'Natural',
-        woodType: data.material === 'Cedar' ? 'Japanese Cedar' : 'PT Pine'
+        woodType: defaultStyleId === 'wood-privacy' 
+          ? (data.material === 'Japanese Cedar' ? 'Japanese Cedar' : (data.material === 'Western Red Cedar' ? 'Western Red Cedar' : 'PT Pine')) 
+          : undefined,
+        chainLinkGrade: defaultStyleId === 'chain-link' 
+          ? (data.material === 'Commercial Grade' ? 'Commercial' : 'Residential')
+          : undefined,
+        pipeInstallType: defaultStyleId === 'pipe-no-climb' 
+          ? (data.material === 'Driven Posts' ? 'Driven Posts' : 'Set in Concrete')
+          : undefined,
+        isPreStained: !!data.isPreStained,
+        reusePosts: !!data.reusePosts,
+        hasDemolition: !!data.removeOldFence,
+        demoLinearFeet: data.removeOldFence ? data.linearFeet : 0,
+        demoType: defaultStyleId === 'wood-privacy' ? 'Wood' : (defaultStyleId === 'chain-link' ? 'Chain Link' : 'Metal'),
+        topStyle: data.topStyle || 'Dog Ear',
       }]
     };
 

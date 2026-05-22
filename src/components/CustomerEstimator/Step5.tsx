@@ -132,103 +132,123 @@ export default function Step5({
         </div>
 
         {/* Dynamic Pricing Receipt & Scopes Block (7 Cols) */}
-        <div className="lg:col-span-7 bg-[#111827] text-white p-6 rounded-2xl shadow-xl space-y-6 border border-slate-800">
-          <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-            <div className="space-y-0.5">
-              <span className="block text-[10px] font-black text-american-red uppercase tracking-widest">
-                Lone Star Fence Works
-              </span>
-              <h3 className="text-lg font-black tracking-tight text-white uppercase">
-                Estimate Summary
-              </h3>
-            </div>
-            <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
-              {data.fenceType || 'Wood Fence'} / {data.linearFeet} LF
-            </div>
-          </div>
-
-          {/* Line items list */}
-          <div className="space-y-3 font-mono text-xs">
-            {/* Posts */}
-            <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-              <span className="text-slate-400">Posts & concrete footings (8' O.C.)</span>
-              <span className="text-slate-200 font-bold">${Math.round(breakdown.postsCost).toLocaleString()}</span>
-            </div>
-
-            {/* Infill Materials */}
-            <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-              <span className="text-slate-400">Infill raw materials ({data.material} @ ${MATERIAL_PRICES[data.material]}/LF)</span>
-              <span className="text-slate-200 font-bold">${Math.round(breakdown.materialsCost).toLocaleString()}</span>
-            </div>
-
-            {/* Labor Take-off */}
-            <div className="flex justify-between border-b border-dashed border-slate-800 pb-2 flex-col gap-0.5">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Workmanship & setup ({data.siteCondition})</span>
-                <span className="text-slate-200 font-bold">${Math.round(breakdown.laborCost).toLocaleString()}</span>
+        <div className="lg:col-span-7 bg-[#111827] text-white p-6 rounded-2xl shadow-xl space-y-6 border border-slate-800 self-stretch flex flex-col justify-between min-h-[460px]">
+          {!isValid ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center space-y-4">
+              <div className="p-4 bg-slate-900 border border-slate-800 rounded-full text-amber-400">
+                <Lock size={36} className="animate-pulse" />
               </div>
-              {data.removeOldFence && (
-                <span className="text-[10px] text-american-red">*Includes tear down & hauling disposal fee @ $15/LF</span>
-              )}
-            </div>
-
-            {/* Gates */}
-            {data.needGates && (
-              <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
-                <span className="text-slate-400">
-                  {data.gateCount}x {data.gateType} entry kit(s)
-                </span>
-                <span className="text-slate-200 font-bold">${Math.round(breakdown.gatesCost).toLocaleString()}</span>
+              <div className="space-y-2 max-w-sm">
+                <h3 className="text-base font-black uppercase tracking-wider text-white">Pricing Summary Locked</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Please complete your <strong>First Name, Last Name, Email, Phone, and Project Address</strong> on the left to unlock your tailored Lone Star estimate range & materials takeoff scope.
+                </p>
               </div>
-            )}
-
-            {/* Subtotal */}
-            <div className="flex justify-between border-b border-slate-800 pb-2 pt-2 text-sm">
-              <span className="text-slate-400 uppercase font-black tracking-wider">Subtotal:</span>
-              <span className="text-white font-black">${Math.round(breakdown.subtotal).toLocaleString()}</span>
+              <div className="w-full max-w-xs border-t border-slate-800 pt-4 flex justify-between items-center text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                <span>Lone Star Security</span>
+                <span>● Pending Verification</span>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                <div className="space-y-0.5">
+                  <span className="block text-[10px] font-black text-american-red uppercase tracking-widest">
+                    Lone Star Fence Works
+                  </span>
+                  <h3 className="text-lg font-black tracking-tight text-white uppercase">
+                    Estimate Summary
+                  </h3>
+                </div>
+                <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
+                  {data.fenceType || 'Wood Fence'} / {data.linearFeet} LF
+                </div>
+              </div>
 
-            {/* Contingency */}
-            <div className="flex justify-between text-[11px] text-slate-500 pb-1">
-              <span>Standard Material Contingency (10.0%):</span>
-              <span>${Math.round(breakdown.contingency).toLocaleString()}</span>
-            </div>
+              {/* Line items list */}
+              <div className="space-y-3 font-mono text-xs">
+                {/* Posts */}
+                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
+                  <span className="text-slate-400">Posts & concrete footings (8' O.C.)</span>
+                  <span className="text-slate-200 font-bold">${Math.round(breakdown.postsCost).toLocaleString()}</span>
+                </div>
 
-            {/* Tax */}
-            <div className="flex justify-between text-[11px] text-slate-500 pb-2 border-b border-slate-800">
-              <span>Local Sales & Environmental Tax (8.0%):</span>
-              <span>${Math.round(breakdown.tax).toLocaleString()}</span>
-            </div>
+                {/* Infill Materials */}
+                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
+                  <span className="text-slate-400">Infill raw materials ({data.material} @ ${MATERIAL_PRICES[data.material]}/LF)</span>
+                  <span className="text-slate-200 font-bold">${Math.round(breakdown.materialsCost).toLocaleString()}</span>
+                </div>
 
-            {/* GRAND TOTAL */}
-            <div className="flex justify-between items-baseline pt-4">
-              <span className="text-sm font-black uppercase text-white tracking-widest">
-                Estimated Contract Price:
-              </span>
-              <span className="text-3xl font-black text-emerald-400">
-                ${Math.round(breakdown.total).toLocaleString()}
-              </span>
-            </div>
-          </div>
+                {/* Labor Take-off */}
+                <div className="flex justify-between border-b border-dashed border-slate-800 pb-2 flex-col gap-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Workmanship & setup ({data.siteCondition})</span>
+                    <span className="text-slate-200 font-bold">${Math.round(breakdown.laborCost).toLocaleString()}</span>
+                  </div>
+                  {data.removeOldFence && (
+                    <span className="text-[10px] text-american-red">*Includes tear down & hauling disposal fee @ $15/LF</span>
+                  )}
+                </div>
 
-          {/* Legal Warranties & Safeguards (Compliant with Lone Star rule) */}
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-            <h4 className="text-[10px] font-black text-american-red uppercase tracking-widest flex items-center gap-1.5">
-              <Globe size={12} />
-              Professional Scopes & Warranties
-            </h4>
-            <ul className="list-disc list-inside text-[10px] text-slate-400 space-y-1.5 leading-relaxed">
-              <li>
-                <strong className="text-slate-200">New Installation Workmanship:</strong> Full 1-year warranty covering installation defects or connection issues.
-              </li>
-              <li>
-                <strong className="text-slate-200">Environmental Aging Limitations:</strong> Excludes natural weathering, wood cracking, warp, rot under severe conditions, or acts of nature that transcend normal application tolerances.
-              </li>
-              <li>
-                <strong className="text-slate-200">Accurate Raw Sizing:</strong> Quotes are computed explicitly with Japanese/Western Cedar and PT Pine, omitting unbranded terms.
-              </li>
-            </ul>
-          </div>
+                {/* Gates */}
+                {data.needGates && (
+                  <div className="flex justify-between border-b border-dashed border-slate-800 pb-2">
+                    <span className="text-slate-400">
+                      {data.gateCount}x {data.gateType} entry kit(s)
+                    </span>
+                    <span className="text-slate-200 font-bold">${Math.round(breakdown.gatesCost).toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Subtotal */}
+                <div className="flex justify-between border-b border-slate-800 pb-2 pt-2 text-sm">
+                  <span className="text-slate-400 uppercase font-black tracking-wider">Subtotal:</span>
+                  <span className="text-white font-black">${Math.round(breakdown.subtotal).toLocaleString()}</span>
+                </div>
+
+                {/* Contingency */}
+                <div className="flex justify-between text-[11px] text-slate-500 pb-1">
+                  <span>Standard Material Contingency:</span>
+                  <span>${Math.round(breakdown.contingency).toLocaleString()}</span>
+                </div>
+
+                {/* Tax */}
+                <div className="flex justify-between text-[11px] text-slate-500 pb-2 border-b border-slate-800">
+                  <span>Local Sales & Environmental Tax:</span>
+                  <span>${Math.round(breakdown.tax).toLocaleString()}</span>
+                </div>
+
+                {/* GRAND TOTAL RANGE */}
+                <div className="flex justify-between items-baseline pt-4 flex-col sm:flex-row gap-2">
+                  <span className="text-xs font-black uppercase text-white tracking-widest">
+                    Projected Contract Price:
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-400 whitespace-nowrap">
+                    ${Math.round(breakdown.total * 0.95).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Legal Warranties & Safeguards (Compliant with Lone Star rule) */}
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                <h4 className="text-[10px] font-black text-american-red uppercase tracking-widest flex items-center gap-1.5">
+                  <Globe size={12} />
+                  Professional Scopes & Warranties
+                </h4>
+                <ul className="list-disc list-inside text-[10px] text-slate-400 space-y-1.5 leading-relaxed">
+                  <li>
+                    <strong className="text-slate-200">New Installation Workmanship:</strong> Full 1-year warranty covering installation defects or connection issues.
+                  </li>
+                  <li>
+                    <strong className="text-slate-200">Environmental Aging Limitations:</strong> Excludes natural weathering, wood cracking, warp, rot under severe conditions, or acts of nature that transcend normal application tolerances.
+                  </li>
+                  <li>
+                    <strong className="text-slate-200">Accurate Raw Sizing:</strong> Quotes are computed explicitly with Japanese/Western Cedar and PT Pine, omitting unbranded terms.
+                  </li>
+                </ul>
+              </div>
+            </>
+          )}
 
           {/* Submitting Feedback / Error block */}
           {error && (
