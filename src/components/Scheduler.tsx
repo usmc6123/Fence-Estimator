@@ -681,7 +681,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
               <div className={cn(
                 "grid mb-4",
                 isMobile && mobileView === 'grid' ? "grid-cols-6" : "grid-cols-7",
-                isMobile && mobileView === 'list' ? "hidden" : "block"
+                isMobile && mobileView === 'list' ? "hidden" : ""
               )}>
                 {(isMobile && mobileView === 'grid' 
                   ? ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] 
