@@ -287,8 +287,8 @@ export default function EmployeePortal() {
       </header>
 
       {/* Main Content: Scheduler Only */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="bg-white rounded-3xl border border-[#E5E5E5] p-2 sm:p-6 shadow-xs">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-0 sm:p-6 lg:p-8">
+        <div className="bg-transparent sm:bg-white rounded-none sm:rounded-3xl border-0 sm:border border-[#E5E5E5] p-1 sm:p-6 shadow-none sm:shadow-xs">
           <Scheduler 
             savedEstimates={savedEstimates} 
             user={user} 

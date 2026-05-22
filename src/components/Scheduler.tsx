@@ -42,6 +42,24 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const getInitials = (name: string) => {
+  if (!name) return "";
+  const cleaned = name.replace(/^EST:\s*/i, '').trim();
+  const parts = cleaned.split(/\s+/);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+  return new Date(dateStr);
+};
+
 interface SchedulerProps {
   savedEstimates: SavedEstimate[];
   user: any;
@@ -51,7 +69,7 @@ interface SchedulerProps {
 export default function Scheduler({ savedEstimates, user, readOnly = false }: SchedulerProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [isAddingBlackout, setIsAddingBlackout] = useState(false);
   const [isAddingEstimate, setIsAddingEstimate] = useState(false);
   const [isAddingBusy, setIsAddingBusy] = useState(false);
@@ -70,6 +88,26 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(2);
+  
+  // Rescheduling states
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleDateStr, setRescheduleDateStr] = useState("");
+  const [rescheduleTimeStr, setRescheduleTimeStr] = useState("09:00");
+  const [rescheduleDuration, setRescheduleDuration] = useState(2);
+  
+  // Mobile responsive helper states
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileView, setMobileView] = useState<'grid' | 'list'>('list');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'pending'>('calendar');
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const [config, setConfig] = useState<SchedulerConfig>({
     appointmentDuration: 60, // 60 mins
@@ -308,6 +346,47 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     }
   };
 
+  const handleRescheduleJob = async (estimateId: string, newDateStr: string, newDuration: number) => {
+    try {
+      const parsed = parseLocalDate(newDateStr);
+      const end = addDays(parsed, newDuration - 1);
+      const endStr = format(end, 'yyyy-MM-dd');
+      
+      const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(newDateStr));
+      if (isBlackedOut) {
+          alert("This day is a designated blackout for installs.");
+          return;
+      }
+
+      const docRef = doc(db, 'estimates', estimateId);
+      await updateDoc(docRef, {
+        scheduledStartDate: newDateStr,
+        scheduledEndDate: endStr,
+        scheduledDuration: newDuration
+      });
+      
+      setIsRescheduling(false);
+      setShowEventModal(false);
+    } catch (error) {
+      console.error('Failed to reschedule job:', error);
+    }
+  };
+
+  const handleRescheduleEstimate = async (eventId: string, newDateStr: string, newTimeStr: string) => {
+    try {
+      const docRef = doc(db, 'schedule_events', eventId);
+      await updateDoc(docRef, {
+        startDate: newDateStr,
+        startTime: newTimeStr
+      });
+      
+      setIsRescheduling(false);
+      setShowEventModal(false);
+    } catch (error) {
+      console.error('Failed to reschedule estimate:', error);
+    }
+  };
+
   const addBlackout = async (date: Date) => {
     if (!user) return;
     const dateKey = format(date, 'yyyy-MM-dd');
@@ -369,207 +448,567 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     setShowEventModal(false);
   };
 
+  const getSelectedDayItems = () => {
+    const targetDate = selectedDate || new Date();
+    const dateKey = format(targetDate, 'yyyy-MM-dd');
+    
+    // Day scheduled events
+    const dayEvents = events.filter(e => {
+      if (e.startDate !== dateKey) return false;
+      const view = config.viewFilter;
+      if (view === 'both') return true;
+      if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
+      if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
+      return true;
+    });
+
+    const items = dayEvents.map(e => ({
+      id: e.id,
+      title: e.title,
+      type: e.type,
+      isJob: false,
+      address: e.estimateId ? savedEstimates.find(est => est.id === e.estimateId)?.customerAddress : undefined,
+      raw: e
+    }));
+
+    // Scheduled jobs (installations)
+    const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
+    const activeJobs = showJobs ? scheduledEstimates.filter(est => {
+      const start = est.scheduledStartDate!;
+      const end = est.scheduledEndDate || start;
+      return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+    }) : [];
+
+    activeJobs.forEach(job => {
+      items.push({
+        id: job.id,
+        title: job.customerName,
+        type: 'Job',
+        isJob: true,
+        address: job.customerAddress,
+        raw: job as any
+      });
+    });
+
+    return items;
+  };
+
   return (
-    <div className="min-h-full bg-[#F5F7FA] p-6 lg:p-10 font-sans">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <div className="min-h-full bg-[#F5F7FA] p-1 sm:p-6 lg:p-10 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-10">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="hidden sm:flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-american-blue rounded-lg text-white">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2.5 bg-american-blue rounded-xl text-white">
                 <CalendarIcon size={20} />
               </div>
-              <h1 className="text-2xl font-black text-american-blue uppercase tracking-tight">Production Scheduler</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-american-blue uppercase tracking-tight">Production Scheduler</h1>
             </div>
-            <p className="text-sm font-medium text-[#666666]">Manage installs, blackout dates, and subcontractor capacity.</p>
+            <p className="text-xs sm:text-sm font-medium text-[#666666]">Manage installs, blackout dates, and subcontractor capacity.</p>
           </div>
           
-          <div className="flex items-center gap-3">
-              <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-[#E5E5E5] no-print">
-              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                  <div className="w-3 h-3 rounded-full bg-american-blue" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Installs</span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Legend Indicators */}
+            <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-2xl shadow-xs border border-[#E5E5E5] text-[10px] sm:text-xs">
+              <div className="flex items-center gap-1.5 pr-2 border-r border-[#E5E5E5]">
+                <div className="w-2.5 h-2.5 rounded-full bg-american-blue" />
+                <span className="font-extrabold text-[#1A1A1A] uppercase tracking-wider text-[9px]">Installs</span>
               </div>
-              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                  <div className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Appts</span>
+              <div className="flex items-center gap-1.5 px-2 border-r border-[#E5E5E5]">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="font-extrabold text-[#1A1A1A] uppercase tracking-wider text-[9px]">Appts</span>
               </div>
-              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                  <div className="w-3 h-3 rounded-full bg-purple-500" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Busy</span>
+              <div className="flex items-center gap-1.5 px-2 border-r border-[#E5E5E5]">
+                <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                <span className="font-extrabold text-[#1A1A1A] uppercase tracking-wider text-[9px]">Busy</span>
               </div>
-              <div className="flex items-center gap-2 px-3 border-r border-[#E5E5E5]">
-                  <div className="w-3 h-3 rounded-full bg-american-red" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Job Blk</span>
+              <div className="flex items-center gap-1.5 px-2 border-r border-[#E5E5E5]">
+                <div className="w-2.5 h-2.5 rounded-full bg-american-red" />
+                <span className="font-extrabold text-[#1A1A1A] uppercase tracking-wider text-[9px]">Job Blk</span>
               </div>
-              <div className="flex items-center gap-2 px-3">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-[10px] font-bold text-[#1A1A1A] uppercase">Vacant</span>
+              <div className="flex items-center gap-1.5 pl-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="font-extrabold text-[#1A1A1A] uppercase tracking-wider text-[9px]">Vacant</span>
               </div>
             </div>
 
-            {!readOnly && (
-              <button 
-                onClick={() => setShowSettingsModal(true)}
-                className="p-3 bg-white text-american-blue hover:text-american-red rounded-2xl shadow-lg border border-[#E5E5E5] transition-all no-print"
-                title="Scheduler Settings"
-              >
-                <SettingsIcon size={20} />
-              </button>
-            )}
+            {/* Print and Settings Controls */}
+            <div className="flex items-center gap-2">
+              {!readOnly && (
+                <button 
+                  onClick={() => setShowSettingsModal(true)}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 p-3 bg-white text-american-blue hover:text-american-red rounded-2xl shadow-xs border border-[#E5E5E5] transition-all no-print min-h-[44px] text-xs font-bold uppercase tracking-wider"
+                  title="Scheduler Settings"
+                >
+                  <SettingsIcon size={18} />
+                  <span className="sm:hidden">Settings</span>
+                </button>
+              )}
 
-            <button 
-              onClick={handlePrint}
-              className="flex items-center gap-2 bg-american-blue text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-american-red transition-all shadow-lg no-print"
-            >
-              <Printer size={16} />
-              Print
-            </button>
+              <button 
+                onClick={handlePrint}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-american-blue text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-american-red transition-all shadow-md no-print min-h-[44px]"
+              >
+                <Printer size={16} />
+                <span>Print</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Layout Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
           
           {/* Main Calendar View */}
-          <div className={cn("flex flex-col gap-6", readOnly ? "lg:col-span-12" : "lg:col-span-8")}>
-            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-american-blue/5 border border-[#E5E5E5]">
+          <div className={cn("flex flex-col gap-6 w-full", readOnly ? "lg:col-span-12" : "lg:col-span-8")}>
+            <div className="bg-white rounded-3xl p-3 sm:p-8 shadow-xl shadow-american-blue/5 border border-[#E5E5E5]">
               {/* Month Selector */}
-              <div className="flex items-center justify-between mb-10">
-                <h2 className="text-xl font-black text-american-blue">{format(currentDate, 'MMMM yyyy')}</h2>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between mb-6 sm:mb-10 px-1 sm:px-0">
+                <h2 className="text-2xl sm:text-xl font-black text-american-blue uppercase tracking-tight">{format(currentDate, 'MMMM yyyy')}</h2>
+                <div className="flex items-center gap-2 sm:gap-2">
                   <button 
                     onClick={prevMonth}
-                    className="p-2 hover:bg-[#F5F7FA] rounded-xl transition-colors border border-transparent hover:border-[#E5E5E5]"
+                    className="p-3.5 bg-[#F5F7FA] hover:bg-[#E5E5E5] rounded-xl transition-all border border-[#E5E5E5] flex items-center justify-center min-w-[48px] min-h-[48px] text-american-blue shadow-xs"
+                    title="Previous Month"
                   >
-                    <ChevronLeft size={20} />
+                    <ChevronLeft size={24} />
                   </button>
                   <button 
                     onClick={() => setCurrentDate(new Date())}
-                    className="px-4 py-2 text-xs font-bold text-american-blue hover:bg-american-blue/5 rounded-xl uppercase tracking-widest transition-all"
+                    className="px-4 py-2.5 text-xs font-black text-american-blue hover:bg-american-blue/5 rounded-xl uppercase tracking-widest transition-all min-h-[48px] flex items-center justify-center"
                   >
                     Today
                   </button>
                   <button 
                     onClick={nextMonth}
-                    className="p-2 hover:bg-[#F5F7FA] rounded-xl transition-colors border border-transparent hover:border-[#E5E5E5]"
+                    className="p-3.5 bg-[#F5F7FA] hover:bg-[#E5E5E5] rounded-xl transition-all border border-[#E5E5E5] flex items-center justify-center min-w-[48px] min-h-[48px] text-american-blue shadow-xs"
+                    title="Next Month"
                   >
-                    <ChevronRight size={20} />
+                    <ChevronRight size={24} />
                   </button>
                 </div>
               </div>
 
+              {/* Mobile View Switcher */}
+              {isMobile && (
+                <div className="flex p-1 bg-[#F5F7FA] border border-[#E5E5E5] rounded-2xl mb-6 w-full shadow-inner no-print">
+                  <button
+                    onClick={() => setMobileView('list')}
+                    className={cn(
+                      "flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all",
+                      mobileView === 'list' 
+                        ? "bg-american-blue text-white shadow-md" 
+                        : "text-[#666666] hover:bg-black/5"
+                    )}
+                  >
+                    List view (Highly readable)
+                  </button>
+                  <button
+                    onClick={() => setMobileView('grid')}
+                    className={cn(
+                      "flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all",
+                      mobileView === 'grid' 
+                        ? "bg-american-blue text-white shadow-md" 
+                        : "text-[#666666] hover:bg-black/5"
+                    )}
+                  >
+                    6-Day Grid mode
+                  </button>
+                </div>
+              )}
+
               {/* Day Headers */}
-              <div className="grid grid-cols-7 mb-4">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center">
-                    <span className="text-[10px] font-black text-[#999999] uppercase tracking-widest">{day}</span>
+              <div className={cn(
+                "grid mb-4",
+                isMobile && mobileView === 'grid' ? "grid-cols-6" : "grid-cols-7",
+                isMobile && mobileView === 'list' ? "hidden" : "block"
+              )}>
+                {(isMobile && mobileView === 'grid' 
+                  ? ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] 
+                  : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                ).map((day, dIdx) => (
+                  <div key={dIdx} className="text-center">
+                    <span className="text-base sm:text-xs font-black text-[#666666] uppercase tracking-widest">{day}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Grid */}
-              <div className="grid grid-cols-7 gap-px bg-[#E5E5E5] border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-inner">
-                {calendarDays.map((day, idx) => {
-                  const dateKey = format(day, 'yyyy-MM-dd');
-                  const dayEvents = events.filter(e => {
-                    if (e.startDate !== dateKey) return false;
-                    const view = config.viewFilter;
-                    if (view === 'both') return true;
-                    if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
-                    if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
-                    return true;
-                  });
-                  const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
-                  const jobs = showJobs ? scheduledEstimates.filter(est => {
-                    const start = est.scheduledStartDate!;
-                    const end = est.scheduledEndDate || start;
-                    return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
-                  }) : [];
-                  const isCurrentMonth = isSameMonth(day, monthStart);
-                  const isToday = isSameDay(day, new Date());
-                  
-                  return (
-                    <div 
-                      key={day.toString()}
-                      onClick={() => handleDayClick(day)}
-                      className={cn(
-                        "min-h-[120px] bg-white p-3 cursor-pointer group transition-all",
-                        !isCurrentMonth && "bg-[#F8F9FA]/50",
-                        isToday && "bg-american-blue/[0.02]"
-                      )}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={cn(
-                          "text-sm font-black w-7 h-7 flex items-center justify-center rounded-lg transition-all",
-                          isToday ? "bg-american-blue text-white shadow-lg" : "text-[#1A1A1A] group-hover:bg-[#F5F7FA]",
-                          !isCurrentMonth && "text-[#BBBBBB]"
-                        )}>
-                          {format(day, 'd')}
-                        </span>
-                      </div>
+              {/* Grid or List Container */}
+              {isMobile && mobileView === 'list' ? (
+                <div className="space-y-4 my-2 no-print">
+                  {calendarDays
+                    // Filters to only days of the current visible month for accuracy
+                    .filter(day => isSameMonth(day, monthStart))
+                    .map((day) => {
+                      const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayEvents = events.filter(e => {
+                        if (e.startDate !== dateKey) return false;
+                        const view = config.viewFilter;
+                        if (view === 'both') return true;
+                        if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
+                        if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
+                        return true;
+                      });
+                      const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
+                      const jobs = showJobs ? scheduledEstimates.filter(est => {
+                        const start = est.scheduledStartDate!;
+                        const end = est.scheduledEndDate || start;
+                        return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+                      }) : [];
 
-                      <div className="space-y-1">
-                        {dayEvents.map(event => (
-                          <div 
-                            key={event.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDate(day);
-                              setSelectedEvent(event);
-                              setShowEventModal(true);
-                            }}
-                            className={cn(
-                              "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate cursor-pointer transition-all hover:scale-105 active:scale-95",
-                              event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : 
-                              event.type === 'Estimate' ? "bg-amber-100 text-amber-700 border border-amber-200" :
-                              event.type === 'Busy' ? "bg-purple-100 text-purple-700 border border-purple-200" :
-                              "bg-american-blue/10 text-american-blue border border-american-blue/20"
+                      const isToday = isSameDay(day, new Date());
+                      const isSelected = selectedDate && isSameDay(day, selectedDate);
+                      const allDayItems = [
+                        ...dayEvents.map(e => ({ id: e.id, type: e.type, title: e.title, raw: e, isJob: false })),
+                        ...jobs.map(j => ({ id: j.id, type: 'Job' as const, title: j.customerName, raw: j, isJob: true }))
+                      ];
+
+                      return (
+                        <div 
+                          key={day.toString()}
+                          onClick={() => handleDayClick(day)}
+                          className={cn(
+                            "flex items-center gap-4 p-4 bg-white rounded-3xl border border-[#E5E5E5] transition-all cursor-pointer min-h-[75px] shadow-sm hover:border-american-blue hover:shadow-md",
+                            isToday && "ring-2 ring-american-red ring-offset-2",
+                            isSelected && "ring-2 ring-american-blue"
+                          )}
+                        >
+                          {/* Huge Date on Left (at least 60px x 60px layout) */}
+                          <div className={cn(
+                            "flex flex-col items-center justify-center min-w-[65px] h-[65px] rounded-2xl shrink-0 transition-all shadow-xs",
+                            isToday ? "bg-american-red text-white" : 
+                            isSelected ? "bg-american-blue text-white" : "bg-[#F5F7FA] text-american-blue"
+                          )}>
+                            <span className="text-[28px] font-black leading-none">{format(day, 'd')}</span>
+                            <span className={cn(
+                              "text-[10px] font-black uppercase tracking-wider mt-1",
+                              isToday || isSelected ? "text-white/80" : "text-[#999999]"
+                            )}>{format(day, 'EEE')}</span>
+                          </div>
+
+                          {/* Events List on Right */}
+                          <div className="flex-1 min-w-0 flex flex-col gap-2">
+                            {allDayItems.length > 0 ? (
+                              allDayItems.map((item, idx) => {
+                                let bg = "bg-amber-100 text-amber-800 border-amber-200";
+                                let tagText = item.type === 'Job' ? 'Fence Install' : item.type;
+                                if (item.type === 'Blackout') {
+                                  bg = "bg-rose-100 text-rose-800 border-rose-200";
+                                } else if (item.type === 'Busy') {
+                                  bg = "bg-purple-100 text-purple-800 border-purple-200";
+                                } else if (item.type === 'Estimate') {
+                                  bg = "bg-amber-100 text-amber-800 border-amber-200";
+                                } else if (item.type === 'Job') {
+                                  bg = "bg-american-blue text-white border-transparent";
+                                }
+
+                                return (
+                                  <div 
+                                    key={idx}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDate(day);
+                                      setSelectedEvent(item.isJob ? {
+                                        id: item.id,
+                                        type: 'Job',
+                                        title: item.title,
+                                        startDate: (item.raw as any).scheduledStartDate!,
+                                        endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
+                                        estimateId: item.id,
+                                        userId: user.uid
+                                      } : item.raw as ScheduleEvent);
+                                      setShowEventModal(true);
+                                    }}
+                                    className={cn(
+                                      "px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-black uppercase tracking-wide shadow-xs active:scale-98 transition-transform cursor-pointer min-h-[36px]",
+                                      bg
+                                    )}
+                                  >
+                                    <span className="truncate leading-none">{item.title}</span>
+                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-black/15 text-current leading-none shrink-0">{tagText}</span>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="flex items-center gap-2 text-emerald-600 px-1">
+                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                <span className="text-xs font-black uppercase tracking-wider">Vacant Slot (Available)</span>
+                              </div>
                             )}
-                          >
-                            {event.type === 'Blackout' ? <AlertCircle size={8} /> : 
-                             event.type === 'Estimate' ? <CalendarIcon size={8} /> :
-                             event.type === 'Busy' ? <Clock size={8} /> :
-                             <Briefcase size={8} />}
-                            {event.title} {!event.isAllDay && event.startTime ? `(${event.startTime})` : ''}
                           </div>
-                        ))}
-                        {jobs.map(job => (
-                          <div 
-                            key={job.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDate(day);
-                              setSelectedEvent({
-                                id: job.id,
-                                type: 'Job',
-                                title: job.customerName,
-                                startDate: job.scheduledStartDate!,
-                                endDate: job.scheduledEndDate || job.scheduledStartDate!,
-                                estimateId: job.id,
-                                userId: user.uid
-                              });
-                              setShowEventModal(true);
-                            }}
-                            className="text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate bg-american-blue text-white shadow-sm cursor-pointer transition-all hover:scale-105 active:scale-95"
-                          >
-                            <CheckCircle2 size={8} />
-                            {job.customerName}
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <div className={cn(
+                  "grid gap-1.5 sm:gap-px bg-[#F5F7FA] sm:bg-[#E5E5E5] border border-transparent sm:border-[#E5E5E5] rounded-2xl overflow-hidden shadow-inner",
+                  isMobile && mobileView === 'grid' ? "grid-cols-6" : "grid-cols-7"
+                )}>
+                  {calendarDays
+                    .filter(day => {
+                      if (isMobile && mobileView === 'grid') {
+                        // Omit Sunday to render exactly 6 days per row
+                        return day.getDay() !== 0;
+                      }
+                      return true;
+                    })
+                    .map((day, idx) => {
+                      const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayEvents = events.filter(e => {
+                        if (e.startDate !== dateKey) return false;
+                        const view = config.viewFilter;
+                        if (view === 'both') return true;
+                        if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
+                        if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
+                        return true;
+                      });
+                      const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
+                      const jobs = showJobs ? scheduledEstimates.filter(est => {
+                        const start = est.scheduledStartDate!;
+                        const end = est.scheduledEndDate || start;
+                        return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+                      }) : [];
+                      const isCurrentMonth = isSameMonth(day, monthStart);
+                      const isToday = isSameDay(day, new Date());
+                      const isSelected = selectedDate && isSameDay(day, selectedDate);
+                      
+                      // Combine events and jobs
+                      const dayAllItems = [
+                        ...dayEvents.map(e => ({ id: e.id, type: e.type, title: e.title, raw: e, isJob: false })),
+                        ...jobs.map(j => ({ id: j.id, type: 'Job' as const, title: j.customerName, raw: j, isJob: true }))
+                      ];
+
+                      return (
+                        <div 
+                          key={day.toString()}
+                          onClick={() => handleDayClick(day)}
+                          className={cn(
+                            "min-h-[110px] bg-white p-2 sm:p-3 cursor-pointer group transition-all flex flex-col justify-between shadow-xs sm:shadow-none rounded-2xl sm:rounded-none",
+                            !isCurrentMonth && "bg-[#F8F9FA]/50 opacity-60",
+                            isToday && "bg-american-blue/[0.02] ring-2 ring-american-red ring-inset",
+                            isSelected && "ring-2 ring-american-blue ring-inset bg-american-blue/[0.01]"
+                          )}
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className={cn(
+                              "text-[28px] sm:text-sm font-black w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full transition-all leading-none",
+                              isToday ? "bg-american-red text-white shadow-md font-bold" : 
+                              isSelected ? "bg-american-blue text-white shadow-md font-bold" :
+                              "text-[#1A1A1A] group-hover:bg-[#F5F7FA]",
+                              !isCurrentMonth && "text-[#BBBBBB]"
+                            )}>
+                              {format(day, 'd')}
+                            </span>
                           </div>
-                        ))}
+
+                          {/* Events content */}
+                          {!isMobile ? (
+                            <div className="space-y-1 mt-2">
+                              {dayEvents.map(event => (
+                                <div 
+                                  key={event.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedDate(day);
+                                    setSelectedEvent(event);
+                                    setShowEventModal(true);
+                                  }}
+                                  className={cn(
+                                    "text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate cursor-pointer transition-all hover:scale-105 active:scale-95",
+                                    event.type === 'Blackout' ? "bg-american-red/10 text-american-red border border-american-red/20" : 
+                                    event.type === 'Estimate' ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                                    event.type === 'Busy' ? "bg-purple-100 text-purple-700 border border-purple-200" :
+                                    "bg-american-blue/10 text-american-blue border border-american-blue/20"
+                                  )}
+                                >
+                                  {event.type === 'Blackout' ? <AlertCircle size={8} /> : 
+                                   event.type === 'Estimate' ? <CalendarIcon size={8} /> :
+                                   event.type === 'Busy' ? <Clock size={8} /> :
+                                   <Briefcase size={8} />}
+                                  {event.title} {!event.isAllDay && event.startTime ? `(${event.startTime})` : ''}
+                                </div>
+                              ))}
+                              {jobs.map(job => (
+                                <div 
+                                  key={job.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedDate(day);
+                                    setSelectedEvent({
+                                      id: job.id,
+                                      type: 'Job',
+                                      title: job.customerName,
+                                      startDate: job.scheduledStartDate!,
+                                      endDate: job.scheduledEndDate || job.scheduledStartDate!,
+                                      estimateId: job.id,
+                                      userId: user.uid
+                                    });
+                                    setShowEventModal(true);
+                                  }}
+                                  className="text-[9px] font-bold p-1 rounded-md flex items-center gap-1 leading-tight truncate bg-american-blue text-white shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95"
+                                >
+                                  <CheckCircle2 size={8} />
+                                  {job.customerName}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-row flex-wrap gap-1.5 justify-center items-center mt-2 pb-1 w-full">
+                              {dayAllItems.slice(0, 2).map((item, idx) => {
+                                let bg = "bg-amber-500 text-white";
+                                let label = "A";
+                                
+                                if (item.type === 'Blackout') {
+                                  bg = "bg-rose-500 text-white font-black animate-pulse";
+                                  label = "C";
+                                } else if (item.type === 'Busy') {
+                                  bg = "bg-purple-500 text-white font-black";
+                                  label = "B";
+                                } else if (item.type === 'Estimate') {
+                                  bg = "bg-amber-500 text-white font-black";
+                                  label = getInitials(item.title) || "A";
+                                } else {
+                                  bg = "bg-american-blue text-white font-black";
+                                  label = getInitials(item.title) || "J";
+                                }
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDate(day);
+                                      setSelectedEvent(item.isJob ? {
+                                        id: item.id,
+                                        type: 'Job',
+                                        title: item.title,
+                                        startDate: (item.raw as any).scheduledStartDate!,
+                                        endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
+                                        estimateId: item.id,
+                                        userId: user.uid
+                                      } : item.raw as ScheduleEvent);
+                                      setShowEventModal(true);
+                                    }}
+                                    className={cn(
+                                      "w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md border border-white transition-transform active:scale-90 cursor-pointer shrink-0",
+                                      bg
+                                    )}
+                                  >
+                                    {label}
+                                  </div>
+                                );
+                              })}
+                              
+                              {/* Overlapping preventer "+more" indicator */}
+                              {dayAllItems.length > 2 && (
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDayClick(day);
+                                  }}
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black bg-gray-500 text-white shadow-md border border-white transition-transform active:scale-90 cursor-pointer shrink-0"
+                                  title={`${dayAllItems.length - 2} more items`}
+                                >
+                                  +{dayAllItems.length - 2}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
+              {/* Agenda details section below the calendar grid for quick view & interaction */}
+              {isMobile && (
+                <div className="mt-8 border-t border-[#E5E5E5] pt-6 text-left" id="mobile-selected-day-agenda-section">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[16px] font-black text-american-blue uppercase tracking-wider">
+                      Agenda: {format(selectedDate || new Date(), 'EEEE, MMM d, yyyy')}
+                    </h4>
+                    {!readOnly && (
+                      <button
+                        onClick={() => {
+                          setSelectedDate(selectedDate || new Date());
+                          setIsAddingBlackout(false);
+                          setIsAddingEstimate(false);
+                          setIsAddingBusy(false);
+                          setIsCreatingNewDossier(false);
+                          setSelectedEvent(null);
+                          setShowEventModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 bg-american-blue/5 text-american-blue border border-american-blue/15 hover:bg-american-blue hover:text-white transition-all px-4 py-2.5 rounded-xl text-xs font-bold leading-none min-h-[44px]"
+                      >
+                        <Plus size={14} />
+                        <span>Add Action</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {getSelectedDayItems().length > 0 ? (
+                      getSelectedDayItems().map((item, iIdx) => (
+                        <div
+                          key={iIdx}
+                          onClick={() => {
+                            setSelectedEvent(item.isJob ? {
+                              id: item.id,
+                              type: 'Job',
+                              title: item.title,
+                              startDate: (item.raw as any).scheduledStartDate!,
+                              endDate: (item.raw as any).scheduledEndDate || (item.raw as any).scheduledStartDate!,
+                              estimateId: item.id,
+                              userId: user.uid
+                            } : item.raw);
+                            setShowEventModal(true);
+                          }}
+                          className="p-4 rounded-2xl bg-[#F8F9FA] border border-[#E5E5E5] active:border-american-blue cursor-pointer transition-all flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 text-white",
+                              item.type === 'Blackout' ? 'bg-rose-500' :
+                              item.type === 'Estimate' ? 'bg-amber-500' :
+                              item.type === 'Busy' ? 'bg-purple-500' : 'bg-american-blue'
+                            )}>
+                              {item.type === 'Blackout' ? <AlertCircle size={20} /> :
+                               item.type === 'Busy' ? <Clock size={20} /> :
+                               item.type === 'Estimate' ? <CalendarIcon size={20} /> :
+                               <Briefcase size={20} />}
+                            </div>
+                            <div className="text-left">
+                              <p className="text-[16px] font-black text-american-blue leading-tight">{item.title}</p>
+                              <p className="text-sm text-[#666666] font-medium mt-1 leading-normal">
+                                {item.type} {item.raw.isAllDay ? '(All Day)' : item.raw.startTime ? `@ ${item.raw.startTime}` : ''}
+                                {item.address ? ` • ${item.address}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronRight size={18} className="text-[#999999] shrink-0" />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 px-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-850">
+                        <p className="text-sm font-black uppercase tracking-wider text-emerald-800">No active events today.</p>
+                        <p className="text-xs text-emerald-600/70 mt-1">Ready for scheduled works or appointments.</p>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Side Panel: Unscheduled Jobs */}
+          {/* Side Panel: Unscheduled items & Pending Estimates */}
           {!readOnly && (
-            <div className="lg:col-span-4 flex flex-col gap-8">
+            <div className="hidden lg:flex lg:col-span-4 flex-col gap-6 sm:gap-8 w-full">
               
-              <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
+              {/* Pending Estimates List */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit text-left">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Pending Estimates</h3>
                   <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
@@ -587,15 +1026,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                             <div className="flex justify-between items-start mb-2">
                                <div>
                                   <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
-                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
+                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px] sm:max-w-[200px]">{est.customerAddress}</p>
                                </div>
-                               <div className="text-[10px] font-black text-white bg-american-red px-2 py-1 rounded-lg">
+                               <div className="text-[10px] font-black text-white bg-american-red px-2 py-1 rounded-lg shrink-0">
                                   {Math.round(est.linearFeet)}'
-                               </div>
+                                </div>
                             </div>
                             
                             <div className="flex items-center justify-between mt-4">
-                              <div className="flex items-center gap-1 ">
+                              <div className="flex items-center gap-1">
                                   <Clock size={10} className="text-[#999999]" />
                                   <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">{config.appointmentDuration} Min Appt</span>
                               </div>
@@ -614,7 +1053,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                       });
                                       setShowEventModal(true);
                                   }}
-                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
+                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline min-h-[36px] px-2.5"
                               >
                                   Schedule
                               </button>
@@ -629,7 +1068,8 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                 </div>
               </div>
 
-              <div className="bg-white rounded-3xl p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit">
+              {/* Unscheduled Orders list */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E5E5E5] shadow-xl shadow-american-blue/5 h-fit text-left">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">Unscheduled Orders</h3>
                   <div className="h-6 w-6 rounded-full bg-american-red flex items-center justify-center text-white text-[10px] font-black">
@@ -647,15 +1087,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                             <div className="flex justify-between items-start mb-2">
                                <div>
                                   <p className="text-xs font-black text-[#1A1A1A]">{est.customerName}</p>
-                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px]">{est.customerAddress}</p>
+                                  <p className="text-[10px] font-bold text-[#999999] uppercase truncate max-w-[150px] sm:max-w-[200px]">{est.customerAddress}</p>
                                </div>
-                               <div className="text-[10px] font-black text-american-blue bg-white px-2 py-1 rounded-lg border border-[#E5E5E5]">
+                               <div className="text-[10px] font-black text-american-blue bg-white px-2 py-1 rounded-lg border border-[#E5E5E5] shrink-0">
                                   {Math.round(est.linearFeet)}' LF
                                </div>
                             </div>
                             
                             <div className="flex items-center justify-between mt-4">
-                              <div className="flex items-center gap-1 ">
+                              <div className="flex items-center gap-1">
                                   <Clock size={10} className="text-[#999999]" />
                                   <span className="text-[9px] font-bold text-[#999999] uppercase tracking-tighter">Approx. {est.scheduledDuration || 2} Days</span>
                               </div>
@@ -673,7 +1113,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                       });
                                       setShowEventModal(true);
                                   }}
-                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline"
+                                  className="text-[10px] font-black text-american-blue uppercase tracking-tighter hover:underline min-h-[36px] px-2.5"
                               >
                                   Assign Slot
                               </button>
@@ -682,20 +1122,20 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       ))
                   ) : (
                       <div className="text-center py-10 opacity-30">
-                          <CalendarIcon size={40} className="mx-auto mb-4" />
+                          <CalendarIcon size={40} className="mx-auto mb-4 text-[#999]" />
                           <p className="text-xs font-bold uppercase tracking-widest leading-relaxed">All active contracts are<br/>currently scheduled.</p>
                       </div>
                   )}
                 </div>
               </div>
 
-              {/* Subcontractor Status Card */}
-              <div className="bg-american-blue p-8 rounded-3xl text-white relative overflow-hidden shadow-xl">
+              {/* Blackout Actions */}
+              <div className="bg-american-blue p-6 sm:p-8 rounded-3xl text-white relative overflow-hidden shadow-xl text-left">
                    <div className="absolute top-0 right-0 p-6 opacity-10">
                       <User size={60} />
                    </div>
-                   <h4 className="text-xs font-black uppercase tracking-[0.2em] mb-2 opacity-60">Subcontractor Pool</h4>
-                   <p className="text-xl font-black mb-4">Availability Management</p>
+                   <h4 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] mb-2 opacity-60">Subcontractor Pool</h4>
+                   <p className="text-lg sm:text-xl font-black mb-4">Availability Management</p>
                    <p className="text-xs text-white/70 leading-relaxed mb-6">Mark dates as blackout to prevent overlaps or overbooking your installation teams.</p>
                    <button 
                       onClick={() => {
@@ -707,7 +1147,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                           setSelectedEvent(null);
                           setShowEventModal(true);
                       }}
-                      className="w-full bg-american-red hover:bg-white hover:text-american-red text-white transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                      className="w-full bg-american-red hover:bg-white hover:text-american-red text-white transition-all py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 min-h-[44px]"
                    >
                       <AlertCircle size={16} />
                       Blackout Today
@@ -734,13 +1174,13 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-sm rounded-3xl sm:rounded-[40px] shadow-2xl overflow-hidden text-left"
             >
-              <div className="p-10">
+              <div className="p-6 sm:p-10">
                 <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Calendar Settings</h3>
-                  <button onClick={() => setShowSettingsModal(false)}>
-                    <XCircle size={20} className="text-[#999999]" />
+                  <h3 className="text-base sm:text-xl font-black text-american-blue uppercase tracking-tight">Calendar Settings</h3>
+                  <button onClick={() => setShowSettingsModal(false)} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-[#999999] hover:text-american-red">
+                    <XCircle size={22} />
                   </button>
                 </div>
 
@@ -753,7 +1193,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                           key={f}
                           onClick={() => saveConfig({ ...config, viewFilter: f })}
                           className={cn(
-                            "py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                            "py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all min-h-[44px]",
                             config.viewFilter === f ? "bg-american-blue text-white shadow-lg" : "bg-[#F5F7FA] text-[#999999]"
                           )}
                         >
@@ -768,7 +1208,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                     <select 
                       value={config.appointmentDuration}
                       onChange={(e) => saveConfig({ ...config, appointmentDuration: Number(e.target.value) })}
-                      className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                      className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                     >
                       <option value={30}>30 Minutes</option>
                       <option value={45}>45 Minutes</option>
@@ -784,7 +1224,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       <select 
                         value={config.startHour}
                         onChange={(e) => saveConfig({ ...config, startHour: Number(e.target.value) })}
-                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                       >
                         {Array.from({ length: 24 }).map((_, i) => (
                           <option key={i} value={i}>{i}:00</option>
@@ -796,7 +1236,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       <select 
                         value={config.endHour}
                         onChange={(e) => saveConfig({ ...config, endHour: Number(e.target.value) })}
-                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                       >
                         {Array.from({ length: 24 }).map((_, i) => (
                           <option key={i} value={i}>{i}:00</option>
@@ -807,7 +1247,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
                   <button 
                     onClick={() => setShowSettingsModal(false)}
-                    className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl mt-4"
+                    className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest shadow-xl mt-4 min-h-[48px]"
                   >
                     Done
                   </button>
@@ -818,36 +1258,52 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         )}
       </AnimatePresence>
 
-      {/* Event/Scheduling Modal */}
+      {/* Event/Scheduling Actions Modal */}
       <AnimatePresence>
         {showEventModal && selectedDate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={cn(
+              "fixed inset-0 z-50 flex items-center justify-center overflow-y-auto no-print",
+              isMobile ? "p-0" : "p-4"
+          )}>
+            {!isMobile && (
+              <motion.div 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 onClick={() => {
+                     setShowEventModal(false);
+                     setIsAddingBlackout(false);
+                     setIsAddingEstimate(false);
+                     setIsAddingBusy(false);
+                     setSelectedEvent(null);
+                     setIsRescheduling(false);
+                 }}
+                 className="absolute inset-0 bg-american-blue/60 backdrop-blur-md" 
+              />
+            )}
             <motion.div 
-               initial={{ opacity: 0 }}
-               animate={{ opacity: 1 }}
-               exit={{ opacity: 0 }}
-               onClick={() => {
-                   setShowEventModal(false);
-                   setIsAddingBlackout(false);
-                   setIsAddingEstimate(false);
-                   setSelectedEvent(null);
-               }}
-               className="absolute inset-0 bg-american-blue/60 backdrop-blur-md" 
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-white/10"
+              initial={isMobile ? { y: '100%' } : { scale: 0.9, opacity: 0, y: 20 }}
+              animate={isMobile ? { y: 0 } : { scale: 1, opacity: 1, y: 0 }}
+              exit={isMobile ? { y: '100%' } : { scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className={cn(
+                "bg-white text-left shadow-2xl",
+                isMobile 
+                  ? "fixed inset-0 z-50 w-full h-full flex flex-col p-6 overflow-hidden" 
+                  : "relative w-full max-w-md rounded-3xl sm:rounded-[40px] overflow-hidden border border-white/10 my-8"
+              )}
             >
-              <div className="p-10">
-                <div className="flex items-center justify-between mb-8">
+              <div className={cn(
+                "flex flex-col h-full overflow-hidden",
+                !isMobile && "p-6 sm:p-10 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              )}>
+                <div className="flex items-center justify-between mb-6 shrink-0">
                   <div>
-                    <h3 className="text-2xl font-black text-american-blue uppercase tracking-tight">
+                    <h3 className="text-lg sm:text-xl font-black text-american-blue uppercase tracking-tight leading-snug">
                         {isAddingBlackout ? 'Job Blackout' : isAddingBusy ? 'Busy Appointment' : isAddingEstimate ? 'Schedule Appointment' : selectedEvent?.type === 'Job' ? 'Schedule Job' : selectedEvent?.type === 'Blackout' ? 'Manage Blackout' : selectedEvent?.type === 'Estimate' ? 'Manage Appointment' : selectedEvent?.type === 'Busy' ? 'Manage Busy Time' : 'Day Actions'}
                     </h3>
-                    <p className="text-xs font-bold text-[#999999] uppercase tracking-widest mt-1">
-                        {format(selectedDate, 'EEEE, MMM do, yyyy')}
+                    <p className="text-xs font-black text-[#999999] uppercase tracking-widest mt-1">
+                        {format(selectedDate, 'EEEE, MMMM do, yyyy')}
                     </p>
                   </div>
                   <button 
@@ -857,58 +1313,61 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                         setIsAddingEstimate(false);
                         setIsAddingBusy(false);
                         setSelectedEvent(null);
+                        setIsRescheduling(false);
                     }}
-                    className="h-10 w-10 rounded-xl bg-[#F5F7FA] flex items-center justify-center text-[#999999] hover:text-american-red transition-colors"
+                    className="h-11 w-11 rounded-xl bg-[#F5F7FA] flex items-center justify-center text-[#999999] hover:text-american-red transition-colors shrink-0"
                   >
-                    <XCircle size={20} />
+                    <XCircle size={22} />
                   </button>
                 </div>
 
-                <div className="space-y-6">
-                    {/* Content depends on context */}
+                <div className={cn(
+                  "space-y-6 flex-1",
+                  isMobile ? "overflow-y-auto pr-1 pb-8 custom-scrollbar" : ""
+                )}>
                     {isAddingBlackout ? (
                         <div className="space-y-6">
-                            <div className="p-6 bg-american-red/5 border border-american-red/10 rounded-3xl">
+                            <div className="p-5 bg-american-red/5 border border-american-red/10 rounded-2xl">
                                 <div className="flex items-center gap-3 text-american-red mb-2">
-                                    <AlertCircle size={20} />
-                                    <h4 className="font-black uppercase text-xs tracking-widest">Confirm Job Blackout</h4>
+                                    <AlertCircle size={18} />
+                                    <h4 className="font-black uppercase text-xs tracking-wider">Confirm Job Blackout</h4>
                                 </div>
                                 <p className="text-xs text-[#666666] leading-relaxed">This will mark this day as unavailable for any new fence installations. Estimates can still be scheduled.</p>
                             </div>
                             <button 
                                 onClick={() => addBlackout(selectedDate)}
-                                className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all"
+                                className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all min-h-[48px]"
                             >
                                 Lock Jobs
                             </button>
                         </div>
                     ) : isAddingBusy ? (
                         <div className="space-y-6">
-                            <div className="p-6 bg-purple-50 border border-purple-100 rounded-3xl">
+                            <div className="p-5 bg-purple-50 border border-purple-100 rounded-2xl">
                                 <div className="flex items-center gap-3 text-purple-700 mb-2">
-                                    <Clock size={20} />
-                                    <h4 className="font-black uppercase text-xs tracking-widest">Custom Appointment / Busy</h4>
+                                    <Clock size={18} />
+                                    <h4 className="font-black uppercase text-xs tracking-wider">Custom Appointment / Busy</h4>
                                 </div>
-                                <p className="text-xs text-purple-800/70 leading-relaxed font-bold">Block time for estimate appointments (Vacations/Personal time).</p>
+                                <p className="text-xs text-purple-800 leading-relaxed font-bold">Block time for estimate appointments (Vacations/Personal time).</p>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="space-y-2">
+                            <div className="space-y-4 text-left">
+                                <div className="space-y-1.5">
                                     <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Reason / Description</label>
                                     <input 
                                         type="text" 
                                         id="busy-title"
                                         placeholder="e.g. Doctor Appt, Vacation..."
-                                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                        className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                                     />
                                 </div>
 
                                 <div className="flex items-center justify-between p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5]">
-                                    <label className="text-xs font-bold text-american-blue">All Day Window</label>
+                                    <label className="text-xs font-black text-american-blue uppercase tracking-wider">All Day Window</label>
                                     <button 
                                         onClick={() => setBusyAllDay(!busyAllDay)}
                                         className={cn(
-                                            "w-12 h-6 rounded-full transition-all relative p-1",
+                                            "w-12 h-6 rounded-full transition-all relative p-1 shrink-0",
                                             busyAllDay ? "bg-american-blue" : "bg-[#E5E5E5]"
                                         )}
                                     >
@@ -927,22 +1386,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                             exit={{ height: 0, opacity: 0 }}
                                             className="grid grid-cols-2 gap-4 overflow-hidden"
                                         >
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Start</label>
                                                 <input 
                                                     type="time" 
                                                     value={busyStart}
                                                     onChange={(e) => setBusyStart(e.target.value)}
-                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                                                 />
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">End</label>
                                                 <input 
                                                     type="time" 
                                                     value={busyEnd}
                                                     onChange={(e) => setBusyEnd(e.target.value)}
-                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                                                 />
                                             </div>
                                         </motion.div>
@@ -955,29 +1414,29 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                     const title = (document.getElementById('busy-title') as HTMLInputElement).value;
                                     addBusy(selectedDate, title);
                                 }}
-                                className="w-full bg-american-blue py-5 rounded-3xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all font-sans"
+                                className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:shadow-american-blue/20 transition-all min-h-[48px]"
                             >
                                 {busyAllDay ? 'Block Full Day' : 'Block Selected Time'}
                             </button>
                         </div>
                     ) : isAddingEstimate ? (
                         <div className="space-y-6">
-                            <div className="p-6 bg-amber-50 border border-amber-200 rounded-3xl">
+                            <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl">
                                 <div className="flex items-center gap-3 text-amber-600 mb-2">
-                                    <CalendarIcon size={20} />
-                                    <h4 className="font-black uppercase text-xs tracking-widest">Estimate Appointment</h4>
+                                    <CalendarIcon size={18} />
+                                    <h4 className="font-black uppercase text-xs tracking-wider">Estimate Appointment</h4>
                                 </div>
                                 <p className="text-xs text-amber-800 leading-relaxed font-bold">Duration: {config.appointmentDuration} Minutes</p>
-                                <p className="text-[10px] text-amber-700/60 mt-1 uppercase tracking-widest font-black">Available Between {config.startHour}:00 - {config.endHour}:00</p>
+                                <p className="text-[10px] text-amber-700/70 mt-1 uppercase tracking-widest font-black">Available Between {config.startHour}:00 - {config.endHour}:00</p>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-1.5 text-left">
                                 <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Appointment Time</label>
                                 <input 
                                     type="time" 
                                     value={estimateTime}
                                     onChange={(e) => setEstimateTime(e.target.value)}
-                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue"
+                                    className="w-full p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5] text-sm font-bold outline-none focus:border-american-blue min-h-[44px]"
                                 />
                             </div>
 
@@ -990,14 +1449,14 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                      setIsCreatingNewDossier(!isCreatingNewDossier);
                                      setNewDossierData({ name: '', phone: '', address: '', email: '' });
                                  }}
-                                 className="text-[9px] font-black text-american-blue uppercase tracking-widest hover:text-american-red transition-colors"
+                                 className="text-[10px] font-black text-american-blue uppercase tracking-widest hover:text-american-red transition-all py-1 px-2.5 min-h-[36px]"
                                >
-                                   {isCreatingNewDossier ? 'Cancel & Select Existing' : '+ Add New'}
+                                   {isCreatingNewDossier ? 'Cancel' : '+ Add New'}
                                </button>
                             </div>
 
                             {isCreatingNewDossier ? (
-                                <div className="space-y-3 p-6 bg-american-blue/5 rounded-3xl border border-american-blue/10">
+                                <div className="space-y-3.5 p-5 bg-american-blue/5 rounded-2xl border border-american-blue/10 text-left">
                                     <div className="space-y-1">
                                         <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Customer Name*</label>
                                         <input 
@@ -1005,10 +1464,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                             placeholder="Full Name"
                                             value={newDossierData.name}
                                             onChange={(e) => setNewDossierData({...newDossierData, name: e.target.value})}
-                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue min-h-[40px]"
                                         />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-35">
                                         <div className="space-y-1">
                                             <label className="text-[8px] font-black text-[#999999] uppercase tracking-widest pl-2">Phone*</label>
                                             <input 
@@ -1016,7 +1475,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                                 placeholder="(000) 000-0000"
                                                 value={newDossierData.phone}
                                                 onChange={(e) => setNewDossierData({...newDossierData, phone: e.target.value})}
-                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue min-h-[40px]"
                                             />
                                         </div>
                                         <div className="space-y-1">
@@ -1026,7 +1485,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                                 placeholder="email@example.com"
                                                 value={newDossierData.email}
                                                 onChange={(e) => setNewDossierData({...newDossierData, email: e.target.value})}
-                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                                className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue min-h-[40px]"
                                             />
                                         </div>
                                     </div>
@@ -1037,27 +1496,27 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                             placeholder="123 Fence Way, City, TX"
                                             value={newDossierData.address}
                                             onChange={(e) => setNewDossierData({...newDossierData, address: e.target.value})}
-                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue"
+                                            className="w-full p-3 bg-white rounded-xl border border-[#E5E5E5] text-xs font-bold outline-none focus:border-american-blue min-h-[40px]"
                                         />
                                     </div>
                                     <button 
                                         onClick={quickCreateAndSchedule}
-                                        className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-american-red transition-all mt-2"
+                                        className="w-full bg-american-blue py-4 rounded-2xl text-white font-black uppercase text-xs tracking-widest shadow-xl hover:bg-american-red transition-all mt-2 min-h-[48px]"
                                     >
                                         Create & Schedule
                                     </button>
                                 </div>
                             ) : (
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar text-left">
                                     {pendingDossiers.length > 0 ? (
                                         pendingDossiers.map(est => (
                                             <button 
                                                 key={est.id}
                                                 onClick={() => scheduleEstimate(est.id, selectedDate)}
-                                                className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
+                                                className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]"
                                             >
-                                                <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
-                                                <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
+                                                <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue leading-snug">{est.customerName}</p>
+                                                <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{est.linearFeet.toFixed(0)}' LF • {est.customerAddress}</p>
                                             </button>
                                         ))
                                     ) : (
@@ -1065,7 +1524,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                             <p className="text-xs italic text-[#999999] mb-4">No pending dossiers available.</p>
                                             <button 
                                               onClick={() => setIsCreatingNewDossier(true)}
-                                              className="text-[10px] font-black text-american-blue uppercase tracking-widest bg-american-blue/5 px-6 py-3 rounded-xl hover:bg-american-blue hover:text-white transition-all shadow-sm border border-american-blue/10"
+                                              className="text-[10px] font-black text-american-blue uppercase tracking-widest bg-american-blue/5 px-6 py-3 rounded-xl hover:bg-american-blue hover:text-white transition-all shadow-sm border border-american-blue/10 min-h-[44px]"
                                             >
                                               + Quick Add Lead
                                             </button>
@@ -1074,87 +1533,255 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                 </div>
                             )}
                         </div>
-                    ) : selectedEvent ? (
-                        <div className="space-y-6">
-                            <div className="p-8 bg-[#F8F9FA] rounded-3xl border border-[#E5E5E5]">
-                                <div className="flex items-center gap-4 mb-4">
-                                     <div className={cn(
-                                         "h-12 w-12 rounded-2xl flex items-center justify-center text-white",
-                                         selectedEvent.type === 'Blackout' ? 'bg-american-red' : 
-                                         selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 
-                                         selectedEvent.type === 'Busy' ? 'bg-purple-500' : 'bg-american-blue'
-                                     )}>
-                                         {selectedEvent.type === 'Blackout' ? <AlertCircle size={24} /> : 
-                                          selectedEvent.type === 'Busy' ? <Clock size={24} /> :
-                                          <Briefcase size={24} />}
-                                     </div>
-                                     <div>
-                                         <h4 className="font-black text-american-blue uppercase text-sm">{selectedEvent.title}</h4>
-                                         <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
-                                             {selectedEvent.type} {selectedEvent.isAllDay ? '(All Day)' : selectedEvent.startTime ? `(${selectedEvent.startTime} - ${selectedEvent.endTime})` : ''}
-                                         </p>
-                                     </div>
-                                </div>
+                    ) : isRescheduling && selectedEvent ? (
+                        <div className="space-y-6 text-left animate-fade-in">
+                            <div className="p-5 sm:p-7 bg-[#F8F9FA] rounded-2xl border border-[#E5E5E5] space-y-4">
+                                <h4 className="text-base font-black text-american-blue uppercase tracking-wider">Reschedule Date / Time</h4>
                                 
-                                {selectedEvent.estimateId && (
-                                    <div className="space-y-4 pt-4 border-t border-[#E5E5E5]">
-                                        <div className="flex items-center gap-3">
-                                            <MapPin size={14} className="text-[#999999]" />
-                                            <span className="text-xs text-[#666666] font-medium">{savedEstimates.find(e => e.id === selectedEvent.estimateId)?.customerAddress}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <Clock size={14} className="text-[#999999]" />
-                                            <span className="text-xs text-[#666666] font-medium">
-                                                {selectedEvent.type === 'Job' 
-                                                  ? `${savedEstimates.find(e => e.id === selectedEvent.estimateId)?.scheduledDuration || 2} Day Installation`
-                                                  : `${config.appointmentDuration} Minute Appointment ${selectedEvent.startTime ? `@ ${selectedEvent.startTime}` : ''}`}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Select New Start Date</label>
+                                    <input 
+                                        type="date"
+                                        value={rescheduleDateStr}
+                                        onChange={(e) => setRescheduleDateStr(e.target.value)}
+                                        className="w-full p-4 bg-white rounded-2xl border border-[#E5E5E5] text-base font-black outline-none focus:border-american-blue min-h-[44px]"
+                                    />
+                                </div>
 
-                            {!readOnly && (
-                              <button 
-                                  onClick={() => deleteEvent(selectedEvent.id, selectedEvent.type)}
-                                  className="w-full bg-american-red/5 hover:bg-american-red hover:text-white border border-american-red/20 text-american-red py-4 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
-                              >
-                                  <Trash2 size={16} />
-                                  {selectedEvent.type === 'Blackout' ? 'Remove Blackout' : 
-                                   selectedEvent.type === 'Busy' ? 'Remove Appointment' :
-                                   selectedEvent.type === 'Estimate' ? 'Cancel Appointment' : 'Unschedule Job'}
-                              </button>
-                            )}
+                                {selectedEvent.type === 'Job' ? (
+                                  <div className="space-y-1.5">
+                                      <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Installation Duration (Days)</label>
+                                      <div className="flex items-center gap-2">
+                                          {[1, 2, 3, 4, 5].map(d => (
+                                              <button
+                                                  key={d}
+                                                  type="button"
+                                                  onClick={() => setRescheduleDuration(d)}
+                                                  className={cn(
+                                                      "h-11 w-11 flex items-center justify-center rounded-xl font-bold text-xs transition-all min-h-[44px] min-w-[44px]",
+                                                      rescheduleDuration === d 
+                                                          ? "bg-american-blue text-white shadow-md shadow-american-blue/20" 
+                                                          : "bg-white border border-[#E5E5E5] text-american-blue hover:border-american-blue"
+                                                  )}
+                                              >
+                                                  {d}
+                                              </button>
+                                          ))}
+                                      </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                      <label className="text-[10px] font-black text-[#999999] uppercase tracking-widest px-1">Appointment Time</label>
+                                      <input 
+                                          type="time"
+                                          value={rescheduleTimeStr}
+                                          onChange={(e) => setRescheduleTimeStr(e.target.value)}
+                                          className="w-full p-4 bg-white rounded-2xl border border-[#E5E5E5] text-base font-black outline-none focus:border-american-blue min-h-[44px]"
+                                      />
+                                  </div>
+                                )}
+
+                                <div className="flex gap-3 pt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsRescheduling(false)}
+                                        className="flex-1 py-3 border border-[#E5E5E5] rounded-xl text-xs font-black text-[#666] uppercase hover:bg-gray-100 min-h-[44px]"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (selectedEvent.type === 'Job') {
+                                                handleRescheduleJob(selectedEvent.estimateId || selectedEvent.id, rescheduleDateStr, rescheduleDuration);
+                                            } else {
+                                                handleRescheduleEstimate(selectedEvent.id, rescheduleDateStr, rescheduleTimeStr);
+                                            }
+                                        }}
+                                        className="flex-1 py-3 bg-american-blue text-white rounded-xl text-xs font-black uppercase hover:bg-american-red transition-all min-h-[44px]"
+                                    >
+                                        Save Date
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+                    ) : selectedEvent ? (
+                        (() => {
+                          const estimateObj = savedEstimates.find(e => e.id === selectedEvent.estimateId || e.id === selectedEvent.id);
+                          return (
+                            <div className="space-y-6 text-left animate-fade-in">
+                                <div className="p-5 sm:p-7 bg-[#F8F9FA] rounded-2xl border border-[#E5E5E5] space-y-5">
+                                    
+                                    {/* Main Event Type Badge */}
+                                    <div className="flex items-center gap-3">
+                                         <div className={cn(
+                                             "h-12 w-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-sm",
+                                             selectedEvent.type === 'Blackout' ? 'bg-rose-500' : 
+                                             selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 
+                                             selectedEvent.type === 'Busy' ? 'bg-purple-500' : 'bg-american-blue'
+                                         )}>
+                                             {selectedEvent.type === 'Blackout' ? <AlertCircle size={22} /> : 
+                                              selectedEvent.type === 'Busy' ? <Clock size={22} /> :
+                                              selectedEvent.type === 'Estimate' ? <CalendarIcon size={22} /> :
+                                              <Briefcase size={22} />}
+                                         </div>
+                                         <div>
+                                             <span className={cn(
+                                                 "px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-white",
+                                                 selectedEvent.type === 'Blackout' ? 'bg-rose-500' : 
+                                                 selectedEvent.type === 'Estimate' ? 'bg-amber-500' : 
+                                                 selectedEvent.type === 'Busy' ? 'bg-purple-500' : 'bg-american-blue'
+                                             )}>
+                                                 {selectedEvent.type === 'Job' ? 'Fence Installation' : selectedEvent.type}
+                                             </span>
+                                             {selectedEvent.type === 'Job' && estimateObj && (
+                                                 <p className="text-xs font-black text-american-blue uppercase tracking-tight mt-1">
+                                                     Japanese Cedar Wooden Fence
+                                                 </p>
+                                             )}
+                                         </div>
+                                    </div>
+
+                                    {/* Date Section (Enhanced) */}
+                                    <div className="pt-2">
+                                        <p className="text-[11px] font-black text-[#999999] uppercase tracking-widest leading-none mb-1.5">
+                                            Scheduled Date
+                                        </p>
+                                        <p className="text-lg sm:text-xl font-black text-american-blue uppercase leading-snug">
+                                            {format(parseLocalDate(selectedEvent.startDate), 'EEEE, MMMM do, yyyy')}
+                                        </p>
+                                        {selectedEvent.type === 'Job' && selectedEvent.endDate && selectedEvent.endDate !== selectedEvent.startDate && (
+                                            <div className="mt-1.5 flex items-center gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-[#999]" />
+                                                <p className="text-xs font-bold text-[#666666]">
+                                                    Through {format(parseLocalDate(selectedEvent.endDate), 'EEEE, MMMM do, yyyy')}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Customer Name Section */}
+                                    {selectedEvent.type !== 'Blackout' && selectedEvent.type !== 'Busy' && (
+                                        <div>
+                                            <p className="text-[11px] font-black text-[#999999] uppercase tracking-widest leading-none mb-1.5">
+                                                Customer Name
+                                            </p>
+                                            <p className="text-lg sm:text-xl font-black text-american-blue uppercase leading-snug">
+                                                {estimateObj?.customerName || selectedEvent.title}
+                                            </p>
+                                            {estimateObj?.customerPhone && (
+                                                <p className="text-sm font-bold text-american-blue hover:underline mt-1">
+                                                    <a href={`tel:${estimateObj.customerPhone}`}>{estimateObj.customerPhone}</a>
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Address & Navigation */}
+                                    {estimateObj?.customerAddress && (
+                                        <div className="space-y-2 pt-2">
+                                            <div>
+                                                <p className="text-[11px] font-black text-[#999999] uppercase tracking-widest leading-none mb-1.5">
+                                                    Site Address
+                                                </p>
+                                                <p className="text-sm sm:text-base text-[#333333] font-black uppercase leading-normal">
+                                                    {estimateObj.customerAddress}
+                                                </p>
+                                            </div>
+                                            
+                                            <a
+                                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(estimateObj.customerAddress)}`}
+                                               target="_blank"
+                                               referrerPolicy="no-referrer"
+                                               rel="noopener noreferrer"
+                                               className="flex items-center justify-center gap-2.5 w-full bg-american-blue hover:bg-american-red text-white py-4 sm:py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[48px] shadow-xs cursor-pointer mt-2"
+                                            >
+                                               <ExternalLink size={15} />
+                                               <span>Navigate to Site</span>
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* Duration details */}
+                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[#E5E5E5]">
+                                         <div>
+                                             <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest mb-1">Type of Work</p>
+                                             <p className="text-xs font-black text-american-blue uppercase leading-none">
+                                                 {selectedEvent.type === 'Job' ? 'Project Install' : 'Assessment Visit'}
+                                             </p>
+                                         </div>
+                                         <div>
+                                             <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest mb-1">Work Duration</p>
+                                             <p className="text-xs font-black text-american-blue uppercase leading-none">
+                                                 {selectedEvent.type === 'Job' 
+                                                   ? `${estimateObj?.scheduledDuration || 2} Days`
+                                                   : `${config.appointmentDuration} Minutes`}
+                                             </p>
+                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex flex-col gap-3">
+                                    {!readOnly && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                             <button
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setRescheduleDateStr(selectedEvent.startDate || "");
+                                                     setRescheduleTimeStr(selectedEvent.startTime || "09:00");
+                                                     setRescheduleDuration(estimateObj?.scheduledDuration || 2);
+                                                     setIsRescheduling(true);
+                                                 }}
+                                                 className="w-full bg-[#F5F7FA] hover:bg-[#E5E5E5] text-american-blue border border-[#E5E5E5] py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all min-h-[48px]"
+                                             >
+                                                 <Clock size={16} />
+                                                 <span>Reschedule</span>
+                                             </button>
+                                             
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => deleteEvent(selectedEvent.id, selectedEvent.type)}
+                                                 className="w-full bg-american-red/5 hover:bg-american-red hover:text-white border border-american-red/20 text-american-red py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all min-h-[48px]"
+                                             >
+                                                 <Trash2 size={16} />
+                                                 <span>{selectedEvent.type === 'Job' ? 'Unschedule' : 'Delete'}</span>
+                                             </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                          );
+                        })()
                     ) : (
-                        <div className="space-y-6">
+                        <div className="space-y-6 text-left">
                             <div className="grid grid-cols-3 gap-3">
                                 <button 
                                   onClick={() => setIsAddingEstimate(true)}
-                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all"
+                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all min-h-[48px]"
                                 >
                                   <CalendarIcon size={20} />
-                                  <span className="text-[9px] font-bold uppercase tracking-tight">Est</span>
+                                  <span className="text-[10px] font-black uppercase tracking-wider">Est</span>
                                 </button>
                                 <button 
                                   onClick={() => setIsAddingBusy(true)}
-                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all"
+                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-all min-h-[48px]"
                                 >
                                   <Clock size={20} />
-                                  <span className="text-[9px] font-bold uppercase tracking-tight">Busy</span>
+                                  <span className="text-[10px] font-black uppercase tracking-wider">Busy</span>
                                 </button>
                                 <button 
                                   onClick={() => setIsAddingBlackout(true)}
-                                  className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all"
+                                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-american-red/5 border border-american-red/20 text-american-red hover:bg-american-red/10 transition-all min-h-[48px]"
                                 >
                                   <AlertCircle size={20} />
-                                  <span className="text-[9px] font-bold uppercase tracking-tight">Blk Out</span>
+                                  <span className="text-[10px] font-black uppercase tracking-wider">Blackout</span>
                                 </button>
                             </div>
 
                             <div className="relative">
                               <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-[#E5E5E5] text-center"></div>
+                                <div className="w-full border-t border-[#E5E5E5]"></div>
                               </div>
                               <div className="relative flex justify-center text-[10px]">
                                 <span className="px-2 bg-white text-[#999999] uppercase font-bold tracking-widest">Schedule Job</span>
@@ -1163,15 +1790,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
                             <div className="p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5]">
                                 <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest mb-3 text-center">Set Default Duration (Days)</p>
-                                <div className="flex items-center justify-center gap-4">
+                                <div className="flex items-center justify-center gap-3">
                                     {[1, 2, 3, 4, 5].map(d => (
                                     <button 
                                         key={d}
                                         onClick={() => setSelectedDuration(d)}
                                         className={cn(
-                                            "h-10 w-10 flex items-center justify-center rounded-xl font-bold text-xs transition-all",
+                                            "h-11 w-11 flex items-center justify-center rounded-xl font-bold text-xs transition-all min-h-[44px] min-w-[44px]",
                                             selectedDuration === d 
-                                                ? "bg-american-blue text-white shadow-lg shadow-american-blue/20" 
+                                                ? "bg-american-blue text-white shadow-md shadow-american-blue/20" 
                                                 : "bg-white border border-[#E5E5E5] text-american-blue hover:border-american-blue"
                                         )}
                                     >
@@ -1181,20 +1808,20 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                 </div>
                             </div>
 
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar text-left">
                                 {acceptedUnscheduled.length > 0 ? (
                                     acceptedUnscheduled.map(est => (
                                         <button 
                                             key={est.id}
                                             onClick={() => scheduleJob(est.id, selectedDate)}
-                                            className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group"
+                                            className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]"
                                         >
-                                            <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue">{est.customerName}</p>
-                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1">{est.linearFeet.toFixed(0)}' LF • {est.scheduledDuration || 2} Days</p>
+                                            <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue leading-snug">{est.customerName}</p>
+                                            <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{est.linearFeet.toFixed(0)}' LF • {est.scheduledDuration || 2} Days</p>
                                         </button>
                                     ))
                                 ) : (
-                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending jobs available.</p>
+                                    <p className="text-center py-6 text-xs italic text-[#999999]">No pending job orders available.</p>
                                 )}
                             </div>
                         </div>
