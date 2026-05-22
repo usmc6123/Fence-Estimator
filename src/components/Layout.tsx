@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon, Users } from 'lucide-react';
+import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon, Users, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -19,6 +19,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
 
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
+    { id: 'customer-estimator', label: 'Customer Estimator', icon: Globe },
     { id: 'scheduler', label: 'Job Scheduler', icon: CalendarIcon },
     { id: 'dossiers', label: 'Saved Dossiers', icon: Archive },
     { id: 'financials', label: 'Financials', icon: Wallet },

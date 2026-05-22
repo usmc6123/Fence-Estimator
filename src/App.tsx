@@ -19,6 +19,7 @@ import Scheduler from './components/Scheduler';
 import Financials from './components/Financials';
 import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
+import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
@@ -97,6 +98,7 @@ export default function App() {
 
   const portalParam = getPortalParam();
   const isEmployeeView = portalParam === 'employee' || portalParam === 'scheduler';
+  const isCustomerPortal = portalParam === 'customer';
   
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
     return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
@@ -383,6 +385,10 @@ export default function App() {
     return <EmployeePortal />;
   }
 
+  if (isCustomerPortal) {
+    return <CustomerEstimator standalone={true} />;
+  }
+
   return (
     <Layout 
       activeTab={activeTab} 
@@ -391,6 +397,9 @@ export default function App() {
       onLogin={handleLogin} 
       onLogout={handleLogout}
     >
+      {activeTab === 'customer-estimator' && (
+        <CustomerEstimator />
+      )}
       {activeTab === 'estimator' && (
         <Estimator 
           materials={materials} 
