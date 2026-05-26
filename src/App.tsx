@@ -210,9 +210,18 @@ export default function App() {
     };
     window.addEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
 
+    // Grab message submissions from embedded iframes/widgets
+    const handleMessageReceived = (event: MessageEvent) => {
+      if (event && event.data && event.data.type === 'customer_estimator_estimate_submitted') {
+        window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
+      }
+    };
+    window.addEventListener('message', handleMessageReceived);
+
     return () => {
       if (unsubCloud) unsubCloud();
       window.removeEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
+      window.removeEventListener('message', handleMessageReceived);
     };
   }, [user]);
 

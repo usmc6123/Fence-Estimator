@@ -350,7 +350,24 @@ export default function Estimator({
     });
 
     try {
-      await setDoc(doc(db, 'estimates', newId), estimateToSave);
+      const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger') || '[]';
+      const localLedger = JSON.parse(localLedgerStr);
+      // Prevent duplicates in local ledger
+      const filteredLedger = localLedger.filter((e: any) => e.id !== newId);
+      filteredLedger.push(estimateToSave);
+      localStorage.setItem('customer_estimator_local_ledger', JSON.stringify(filteredLedger));
+      // Dispatch an event to immediately notify the application about the newly submitted estimate
+      window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
+    } catch (localErr) {
+      console.error('Failed to save to local backup ledger:', localErr);
+    }
+
+    try {
+      try {
+        await setDoc(doc(db, 'estimates', newId), estimateToSave);
+      } catch (writeErr) {
+        console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
+      }
       setShowSuccess(true);
 
       // GHL Webhook Integration
@@ -413,7 +430,8 @@ export default function Estimator({
         }
       }, 1500);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `estimates/${newId}`);
+      console.error('Failed to process estimate submission:', error);
+      alert('Estimation processed, but encountered an error. The details have been saved locally in your browser ledger.');
     }
   };
 

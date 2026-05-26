@@ -115,6 +115,55 @@ export default function EmbedCodeBuilder({
     }));
   };
 
+  const customMaterialPrices = React.useMemo(() => {
+    const prices: Record<string, number> = {
+      'PT Pine': 18,
+      'Japanese Cedar': 22,
+      'Western Red Cedar': 28,
+      'Standard flat top': 32,
+      'Extended pickets': 35,
+      '3 rail racking': 40,
+      'Residential Grade': 12,
+      'Commercial Grade': 16,
+      'Privacy Slats': 22,
+      'Set in Concrete': 24,
+      'Driven Posts': 20
+    };
+
+    if (materials && materials.length > 0) {
+      materials.forEach(m => {
+        const name = (m.name || '').toLowerCase();
+        const price = m.cost;
+        if (price !== undefined) {
+          if (name.includes('pine') || name === 'pt pine') {
+            prices['PT Pine'] = price;
+          } else if (name.includes('japanese cedar') || name === 'japanese cedar') {
+            prices['Japanese Cedar'] = price;
+          } else if (name.includes('western red cedar') || name === 'western red cedar') {
+            prices['Western Red Cedar'] = price;
+          } else if (name.includes('standard flat top') || name.includes('flat top')) {
+            prices['Standard flat top'] = price;
+          } else if (name.includes('extended pickets') || name.includes('extended')) {
+            prices['Extended pickets'] = price;
+          } else if (name.includes('3 rail') || name.includes('racking')) {
+            prices['3 rail racking'] = price;
+          } else if (name.includes('residential grade') || name === 'residential') {
+            prices['Residential Grade'] = price;
+          } else if (name.includes('commercial grade') || name === 'commercial') {
+            prices['Commercial Grade'] = price;
+          } else if (name.includes('privacy slats') || name.includes('slats')) {
+            prices['Privacy Slats'] = price;
+          } else if (name.includes('concrete') || name.includes('set in concrete')) {
+            prices['Set in Concrete'] = price;
+          } else if (name.includes('driven posts') || name.includes('driven')) {
+            prices['Driven Posts'] = price;
+          }
+        }
+      });
+    }
+    return prices;
+  }, [materials]);
+
   // Compile a gorgeous, live, self-contained single-page responsive HTML Estimator Widget
   const compiledCode = React.useMemo(() => {
     const serializedPhotos = JSON.stringify(customPhotos);
@@ -525,19 +574,7 @@ export default function EmbedCodeBuilder({
     }
   ];
 
-  const MATERIAL_PRICES = {
-    'PT Pine': 18,
-    'Japanese Cedar': 22,
-    'Western Red Cedar': 28,
-    'Standard flat top': 32,
-    'Extended pickets': 35,
-    '3 rail racking': 40,
-    'Residential Grade': 12,
-    'Commercial Grade': 16,
-    'Privacy Slats': 22,
-    'Set in Concrete': 24,
-    'Driven Posts': 20
-  };
+  const MATERIAL_PRICES = ${JSON.stringify(customMaterialPrices, null, 4)};
 
   const TERRAIN_FACTORS = {
     'Level': 1.0,
@@ -1170,6 +1207,27 @@ export default function EmbedCodeBuilder({
       }]
     };
 
+    // Deep clean helper to wipe out undefined fields recursively so Firestore doesn't crash on nested fields
+    function deepClean(obj) {
+      if (Array.isArray(obj)) {
+        return obj.map(deepClean);
+      } else if (obj !== null && typeof obj === 'object') {
+        var cleaned = {};
+        Object.keys(obj).forEach(function(key) {
+          if (obj[key] !== undefined) {
+            cleaned[key] = deepClean(obj[key]);
+          }
+        });
+        return cleaned;
+      }
+      return obj;
+    }
+
+    var cleanedCustomerEstimateDoc = deepClean(customerEstimateDoc);
+
+    // Always append to local ledger first as a guaranteed offline-first backup record
+    saveToLocalLedger(cleanedCustomerEstimateDoc);
+
     // 1. Direct secure writes to corporate Firestore "estimates" collection 
     try {
       const firebaseConfig = {
@@ -1184,7 +1242,7 @@ export default function EmbedCodeBuilder({
       if (typeof firebase !== 'undefined') {
         const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
         const db = app.firestore("ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb");
-        await db.collection('estimates').doc(estId).set(customerEstimateDoc);
+        await db.collection('estimates').doc(estId).set(cleanedCustomerEstimateDoc);
         console.log('Estimate recorded safely to company Firestore database ledger with ID:', estId);
       }
     } catch (dbErr) {
@@ -1244,8 +1302,128 @@ export default function EmbedCodeBuilder({
     }
   }
 
+  // Always append to local ledger first as a guaranteed offline-first backup record
+  function saveToLocalLedger(customerEstimateDoc) {
+    try {
+      const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger') || '[]';
+      const localLedger = JSON.parse(localLedgerStr);
+      localLedger.push(customerEstimateDoc);
+      localStorage.setItem('customer_estimator_local_ledger', JSON.stringify(localLedger));
+      
+      // Dispatch custom event to notify same-tab dashboards immediately
+      window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
+      
+      // Post message to notify parents if loaded in iframe
+      if (window.parent) {
+        window.parent.postMessage({ type: 'customer_estimator_estimate_submitted' }, '*');
+      }
+    } catch (localErr) {
+      console.warn('Failed to save to local backup ledger:', localErr);
+    }
+  }
+
   // Start initialization
-  resetForm();
+  async function initializeWidget() {
+    try {
+      const firebaseConfig = {
+        apiKey: "AIzaSyDzF73c-QZN6T0_ldVELubP5mEvucsZ9JQ",
+        authDomain: "dazzling-card-485210-r8.firebaseapp.com",
+        projectId: "dazzling-card-485210-r8",
+        storageBucket: "dazzling-card-485210-r8.firebasestorage.app",
+        messagingSenderId: "301045874568",
+        appId: "1:301045874568:web:ef29807ec75b5c00fb843d"
+      };
+
+      if (typeof firebase !== 'undefined') {
+        const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+        const db = app.firestore("ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb");
+
+        // Dynamic Materials Loader
+        try {
+          const materialsSnapshot = await db.collection('materials').where('companyId', '==', 'lonestarfence').get();
+          materialsSnapshot.forEach(doc => {
+            const data = doc.data();
+            const name = (data.name || '').toLowerCase();
+            const price = data.cost;
+            if (price !== undefined) {
+              if (name.includes('pine') || name === 'pt pine') {
+                MATERIAL_PRICES['PT Pine'] = price;
+              } else if (name.includes('japanese cedar') || name === 'japanese cedar') {
+                MATERIAL_PRICES['Japanese Cedar'] = price;
+              } else if (name.includes('western red cedar') || name === 'western red cedar') {
+                MATERIAL_PRICES['Western Red Cedar'] = price;
+              } else if (name.includes('standard flat top') || name.includes('flat top')) {
+                MATERIAL_PRICES['Standard flat top'] = price;
+              } else if (name.includes('extended pickets') || name.includes('extended')) {
+                MATERIAL_PRICES['Extended pickets'] = price;
+              } else if (name.includes('3 rail') || name.includes('racking')) {
+                MATERIAL_PRICES['3 rail racking'] = price;
+              } else if (name.includes('residential grade') || name === 'residential') {
+                MATERIAL_PRICES['Residential Grade'] = price;
+              } else if (name.includes('commercial grade') || name === 'commercial') {
+                MATERIAL_PRICES['Commercial Grade'] = price;
+              } else if (name.includes('privacy slats') || name.includes('slats')) {
+                MATERIAL_PRICES['Privacy Slats'] = price;
+              } else if (name.includes('concrete') || name.includes('set in concrete')) {
+                MATERIAL_PRICES['Set in Concrete'] = price;
+              } else if (name.includes('driven posts') || name.includes('driven')) {
+                MATERIAL_PRICES['Driven Posts'] = price;
+              }
+            }
+          });
+        } catch (mErr) {
+          console.warn('Silent live materials pricing sync bypassed:', mErr);
+        }
+
+        // Fetch settings
+        try {
+          const settingsDoc = await db.collection('companySettings').doc('main').get();
+          if (settingsDoc.exists) {
+            const settings = settingsDoc.data();
+            if (settings.companyName) {
+              document.querySelectorAll('.company-name-text').forEach(el => {
+                el.innerText = settings.companyName;
+              });
+            }
+            if (settings.companyPhone) {
+              document.querySelectorAll('.company-phone-text').forEach(el => {
+                el.innerText = settings.companyPhone;
+                if (el.tagName === 'A') {
+                  el.href = 'tel:' + settings.companyPhone.replace(/\D/g, '');
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Silent settings sync bypassed:', err);
+        }
+
+        // Fetch custom photos
+        try {
+          const photosSnapshot = await db.collection('customPhotos').get();
+          photosSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data && data.base64) {
+              customPhotos[doc.id] = data.base64;
+            }
+          });
+        } catch (err) {
+          console.warn('Silent photo sync bypassed:', err);
+        }
+      }
+    } catch (e) {
+      console.warn('Firebase active loader bypassed:', e);
+    } finally {
+      resetForm();
+    }
+  }
+
+  // Run start
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeWidget);
+  } else {
+    initializeWidget();
+  }
 </script>
     `;
 
@@ -1321,7 +1499,7 @@ ${widgetHTML}
 </body>
 </html>`;
     }
-  }, [params, customPhotos, embedFormat]);
+  }, [params, customPhotos, embedFormat, customMaterialPrices]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(compiledCode);

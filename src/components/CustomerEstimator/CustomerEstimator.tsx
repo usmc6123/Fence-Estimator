@@ -46,6 +46,7 @@ export default function CustomerEstimator({
   const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed' | 'photos'>('estimator');
   const [leadsCount, setLeadsCount] = React.useState<number>(0);
   const [isEmbedded, setIsEmbedded] = React.useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -150,12 +151,22 @@ export default function CustomerEstimator({
                 onClick={() => {
                   const embeddedUrl = `${window.location.origin}${window.location.pathname}?portal=customer`;
                   navigator.clipboard.writeText(embeddedUrl);
-                  alert('Public standalone quotation portal link copied to clipboard!');
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
                 }}
                 className="flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 hover:bg-slate-800 text-xs text-white font-bold tracking-wider transition-all"
               >
-                <ExternalLink size={14} className="text-indigo-400" />
-                Copy Public Estimator Link
+                {copiedLink ? (
+                  <>
+                    <ClipboardCheck size={14} className="text-emerald-400 animate-bounce" />
+                    Copied Public Link!
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink size={14} className="text-indigo-400" />
+                    Copy Public Estimator Link
+                  </>
+                )}
               </button>
             </div>
 
@@ -241,8 +252,8 @@ export default function CustomerEstimator({
                     </span>
                     <span className="font-bold text-[#666666]">
                       {step === 1 && 'Style Selection'}
-                      {step === 2 && 'Material Details'}
-                      {step === 3 && 'Dimensions'}
+                      {step === 2 && 'Dimensions & Footage'}
+                      {step === 3 && 'Material & Customizations'}
                       {step === 4 && 'Fence Accessories'}
                       {step === 5 && 'Contact Verification & Confirmation'}
                     </span>
@@ -276,6 +287,18 @@ export default function CustomerEstimator({
                     )}
 
                     {step === 2 && (
+                      <Step2
+                        linearFeet={data.linearFeet}
+                        height={data.height}
+                        breakdown={breakdown}
+                        onChangeField={updateField}
+                        onNext={handleNext}
+                        onBack={handleBack}
+                        fenceType={data.fenceType}
+                      />
+                    )}
+
+                    {step === 3 && (
                       <Step3
                         material={data.material}
                         breakdown={breakdown}
@@ -292,18 +315,6 @@ export default function CustomerEstimator({
                         hasCapAndTrim={data.hasCapAndTrim}
                         pipePaintColor={data.pipePaintColor}
                         pipeWireType={data.pipeWireType}
-                      />
-                    )}
-
-                    {step === 3 && (
-                      <Step2
-                        linearFeet={data.linearFeet}
-                        height={data.height}
-                        breakdown={breakdown}
-                        onChangeField={updateField}
-                        onNext={handleNext}
-                        onBack={handleBack}
-                        fenceType={data.fenceType}
                       />
                     )}
 

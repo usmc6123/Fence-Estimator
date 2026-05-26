@@ -107,15 +107,17 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       // 2. Optimistically update local parent UI state so it disappears immediately
       setSavedEstimates(prev => prev.filter(est => est.id !== id));
 
+      // Reset confirmation immediately to prevent deadlock if async deletion fails
+      setDeleteConfirmId(null);
+
       // 3. Delete from firestore if user is logged in
       if (user) {
         try {
           await deleteDoc(doc(db, 'estimates', id));
         } catch (error) {
-          handleFirestoreError(error, OperationType.DELETE, `estimates/${id}`);
+          console.warn('Firestore server-side delete operation rejected:', error);
         }
       }
-      setDeleteConfirmId(null);
     } else {
       setDeleteConfirmId(id);
       // Reset after 6 seconds if not clicked again
@@ -410,16 +412,16 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                     type="button"
                     onClick={(e) => deleteEstimate(estimate.id, e)}
                     className={cn(
-                      "relative z-30 p-3 rounded-xl transition-all hover:scale-110 active:scale-95 flex items-center gap-2",
+                      "relative z-30 p-3 rounded-xl flex items-center gap-2",
                       deleteConfirmId === estimate.id 
                         ? "bg-american-red text-white animate-pulse px-4" 
-                        : "bg-american-red/10 text-american-red hover:bg-american-red hover:text-white"
+                        : "bg-american-red/10 text-american-red hover:bg-american-red hover:text-white hover:scale-110 active:scale-95 transition-all"
                     )}
                     title={deleteConfirmId === estimate.id ? "Confirm Delete" : "Delete Permanently"}
                   >
                     <Trash2 size={18} className="pointer-events-none" />
                     {deleteConfirmId === estimate.id && (
-                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Sure?</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap pointer-events-none">Sure?</span>
                     )}
                   </button>
                 </div>

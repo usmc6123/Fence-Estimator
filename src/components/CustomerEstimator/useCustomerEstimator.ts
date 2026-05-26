@@ -94,11 +94,7 @@ export function useCustomerEstimator(
       setError('Please select a fence type before moving to the next step.');
       return;
     }
-    if (step === 2 && !data.material) {
-      setError('Please select a material choice before moving to the next step.');
-      return;
-    }
-    if (step === 3) {
+    if (step === 2) {
       if (!data.linearFeet || data.linearFeet <= 0) {
         setError('Please enter a valid length in linear feet.');
         return;
@@ -107,6 +103,10 @@ export function useCustomerEstimator(
         setError('Please select a height.');
         return;
       }
+    }
+    if (step === 3 && !data.material) {
+      setError('Please select a material choice before moving to the next step.');
+      return;
     }
     
     setError(null);
@@ -251,11 +251,29 @@ export function useCustomerEstimator(
       }]
     };
 
+    // Deep clean helper to wipe out undefined fields recursively so Firestore doesn't crash on nested fields
+    const deepClean = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(deepClean);
+      } else if (obj !== null && typeof obj === 'object') {
+        const cleaned: any = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) {
+            cleaned[key] = deepClean(obj[key]);
+          }
+        });
+        return cleaned;
+      }
+      return obj;
+    };
+
+    const cleanedCustomerEstimateDoc = deepClean(customerEstimateDoc);
+
     // Always append to local ledger first as a guaranteed offline-first backup record
     try {
       const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger') || '[]';
       const localLedger = JSON.parse(localLedgerStr);
-      localLedger.push(customerEstimateDoc);
+      localLedger.push(cleanedCustomerEstimateDoc);
       localStorage.setItem('customer_estimator_local_ledger', JSON.stringify(localLedger));
       // Dispatch an event to immediately notify the application about the newly submitted estimate
       window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
@@ -266,7 +284,7 @@ export function useCustomerEstimator(
     try {
       // 1. Save to Firestore (Attempt cloud sync)
       try {
-        await setDoc(doc(db, 'estimates', estId), customerEstimateDoc);
+        await setDoc(doc(db, 'estimates', estId), cleanedCustomerEstimateDoc);
       } catch (writeErr) {
         console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
         // We catch this gracefully to prevent offline/permission errors from blocking the client experience
