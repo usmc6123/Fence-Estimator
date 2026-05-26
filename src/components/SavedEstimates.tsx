@@ -89,13 +89,33 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     e.preventDefault();
     
     if (deleteConfirmId === id) {
-      if (!user) return;
+      // 1. Remove from local ledger in localStorage
       try {
-        await deleteDoc(doc(db, 'estimates', id));
-        setDeleteConfirmId(null);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `estimates/${id}`);
+        const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger');
+        if (localLedgerStr) {
+          const localLedger = JSON.parse(localLedgerStr);
+          const updatedLedger = localLedger.filter((est: any) => est.id !== id);
+          localStorage.setItem('customer_estimator_local_ledger', JSON.stringify(updatedLedger));
+        }
+      } catch (err) {
+        console.error('Failed to update local ledger during deletion:', err);
       }
+
+      // Dispatch event to app syncing engine
+      window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
+
+      // 2. Optimistically update local parent UI state so it disappears immediately
+      setSavedEstimates(prev => prev.filter(est => est.id !== id));
+
+      // 3. Delete from firestore if user is logged in
+      if (user) {
+        try {
+          await deleteDoc(doc(db, 'estimates', id));
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `estimates/${id}`);
+        }
+      }
+      setDeleteConfirmId(null);
     } else {
       setDeleteConfirmId(id);
       // Reset after 6 seconds if not clicked again

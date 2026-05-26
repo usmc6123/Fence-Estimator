@@ -193,6 +193,22 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
     }
     try {
       await deleteDoc(doc(db, 'estimates', leadId));
+      
+      // Let's also remove it from localStorage for parity!
+      try {
+        const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger');
+        if (localLedgerStr) {
+          const localLedger = JSON.parse(localLedgerStr);
+          const updatedLedger = localLedger.filter((est: any) => est.id !== leadId);
+          localStorage.setItem('customer_estimator_local_ledger', JSON.stringify(updatedLedger));
+        }
+      } catch (err) {
+        console.error('Failed to update local ledger during lead deletion:', err);
+      }
+      
+      // Notify the application
+      window.dispatchEvent(new Event('customer_estimator_estimate_submitted'));
+
       setLeads(prev => prev.filter(l => l.id !== leadId));
       if (selectedLead && selectedLead.id === leadId) {
         setSelectedLead(null);
