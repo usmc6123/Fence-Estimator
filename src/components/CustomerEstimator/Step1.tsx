@@ -4,6 +4,7 @@ import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
 import metalFenceImg from '../../assets/images/user_metal_fence_faithful_new_1779474753459.png';
 import chainLinkImg from '../../assets/images/user_chain_link_fence_faithful_new_1779474771303.png';
 import pipeFenceImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
+import { getCustomPhotos } from './photoStorage';
 
 interface Step1Props {
   selectedType: string;
@@ -15,16 +16,13 @@ export default function Step1({ selectedType, onChange, onNext }: Step1Props) {
   const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
 
   const loadPhotos = React.useCallback(() => {
-    try {
-      const saved = localStorage.getItem('customer_estimator_custom_photos');
-      if (saved) {
-        setCustomPhotos(JSON.parse(saved));
-      } else {
-        setCustomPhotos({});
-      }
-    } catch (e) {
-      console.error('Error loading custom photos:', e);
-    }
+    getCustomPhotos()
+      .then((photos) => {
+        setCustomPhotos(photos);
+      })
+      .catch((e) => {
+        console.error('Error loading custom photos from high-capacity DB:', e);
+      });
   }, []);
 
   React.useEffect(() => {

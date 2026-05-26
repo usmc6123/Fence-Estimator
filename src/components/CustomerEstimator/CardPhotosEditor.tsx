@@ -1,5 +1,6 @@
 import React from 'react';
 import { Upload, Image as ImageIcon, Trash2, RefreshCw, CheckCircle2, Sliders, Layers, X, ShieldCheck, Save } from 'lucide-react';
+import { getCustomPhotos, saveCustomPhotos, clearCustomPhotos } from './photoStorage';
 
 // Step 1: Fence Styles Images
 import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
@@ -112,54 +113,56 @@ export default function CardPhotosEditor() {
 
   // Load and sync existing custom images on mount
   React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem('customer_estimator_custom_photos');
-      if (saved) {
-        setCustomPhotos(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error('Error loading custom photos:', e);
-    }
+    getCustomPhotos()
+      .then((photos) => {
+        setCustomPhotos(photos);
+      })
+      .catch((e) => {
+        console.error('Error loading custom photos:', e);
+      });
   }, []);
 
-  const handleForceVerifyAndSave = () => {
-    setVerificationState({ status: 'checking', message: 'Verifying disk space & writing configuration...' });
+  const handleForceVerifyAndSave = async () => {
+    setVerificationState({ status: 'checking', message: 'Verifying with high-capacity IndexedDB...' });
     
-    setTimeout(() => {
-      try {
-        const dataStr = JSON.stringify(customPhotos);
-        localStorage.setItem('customer_estimator_custom_photos', dataStr);
-        
-        // Retrieve and compare to guarantee write was successful
-        const retrieved = localStorage.getItem('customer_estimator_custom_photos');
-        if (!retrieved || retrieved !== dataStr) {
-          throw new Error('Local database verification step failed. Changes could not be verified on hard disk.');
-        }
-        
-        // Measure size 
-        const bytes = new Blob([dataStr]).size;
-        const kb = (bytes / 1024).toFixed(1);
-        const count = Object.keys(customPhotos).length;
-        
-        // Emit events
-        window.dispatchEvent(new Event('customer_estimator_photos_updated'));
-        
-        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        
-        setVerificationState({
-          status: 'verified',
-          message: `Saved & Sync Verified successfully at ${timestamp}!`,
-          details: `All ${count} custom photograph presets are securely locked into your local browser storage (${kb} KB utilized).`
-        });
-      } catch (e: any) {
-        console.error('Storage verify error:', e);
-        setVerificationState({
-          status: 'error',
-          message: 'Sync Verification Failed!',
-          details: e?.message || 'Check browser storage settings.'
-        });
+    try {
+      // Save to IndexedDB
+      await saveCustomPhotos(customPhotos);
+      
+      // Verification read back
+      const verifiedData = await getCustomPhotos();
+      
+      const initialKeys = Object.keys(customPhotos);
+      const verifiedKeys = Object.keys(verifiedData);
+      
+      if (initialKeys.length !== verifiedKeys.length) {
+        throw new Error('Database verification mismatch. Not all photos were preserved successfully.');
       }
-    }, 400);
+      
+      // Calculate footprint
+      const dataStr = JSON.stringify(verifiedData);
+      const bytes = new Blob([dataStr]).size;
+      const kb = (bytes / 1024).toFixed(1);
+      const count = verifiedKeys.length;
+      
+      // Emit events
+      window.dispatchEvent(new Event('customer_estimator_photos_updated'));
+      
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      setVerificationState({
+        status: 'verified',
+        message: `Saved & Sync Verified successfully at ${timestamp}!`,
+        details: `All ${count} custom photograph presets are custom-cropped and securely preserved inside your browser high-capacity storage (${kb} KB utilized).`
+      });
+    } catch (e: any) {
+      console.error('Storage verify error:', e);
+      setVerificationState({
+        status: 'error',
+        message: 'Sync Verification Failed!',
+        details: e?.message || 'Check browser storage settings.'
+      });
+    }
   };
 
   const styleOptions: CardOption[] = [
@@ -349,14 +352,19 @@ export default function CardPhotosEditor() {
       const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
       const updatedPhotos = { ...customPhotos, [editorImage.id]: compressedBase64 };
       setCustomPhotos(updatedPhotos);
-      localStorage.setItem('customer_estimator_custom_photos', JSON.stringify(updatedPhotos));
-
-      // Emit event
-      window.dispatchEvent(new Event('customer_estimator_photos_updated'));
-
-      setMessage({ id: editorImage.id, text: 'Photo custom crop applied and saved!', type: 'success' });
-      setEditorImage(null);
-      setTimeout(() => setMessage(null), 3500);
+      
+      saveCustomPhotos(updatedPhotos)
+        .then(() => {
+          // Emit event
+          window.dispatchEvent(new Event('customer_estimator_photos_updated'));
+          setMessage({ id: editorImage.id, text: 'Photo custom crop applied and saved!', type: 'success' });
+          setEditorImage(null);
+          setTimeout(() => setMessage(null), 3500);
+        })
+        .catch((err) => {
+          console.error('Error saving adjusted photo:', err);
+          setMessage({ id: editorImage.id, text: 'Failed to write to database: storage is full or restricted.', type: 'info' });
+        });
     };
     img.src = editorImage.src;
   };
@@ -378,7 +386,7 @@ export default function CardPhotosEditor() {
     e.preventDefault();
     e.stopPropagation();
     setDragActiveId(null);
-
+ 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileChange(id, e.dataTransfer.files[0]);
     }
@@ -388,13 +396,18 @@ export default function CardPhotosEditor() {
     const updatedPhotos = { ...customPhotos };
     delete updatedPhotos[id];
     setCustomPhotos(updatedPhotos);
-    localStorage.setItem('customer_estimator_custom_photos', JSON.stringify(updatedPhotos));
-
-    // Emit event
-    window.dispatchEvent(new Event('customer_estimator_photos_updated'));
-
-    setMessage({ id, text: 'Reset to standard default photograph.', type: 'success' });
-    setTimeout(() => setMessage(null), 3000);
+    
+    saveCustomPhotos(updatedPhotos)
+      .then(() => {
+        // Emit event
+        window.dispatchEvent(new Event('customer_estimator_photos_updated'));
+        setMessage({ id, text: 'Reset to standard default photograph.', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
+      })
+      .catch((err) => {
+        console.error('Error saving reset state:', err);
+        setMessage({ id, text: 'Failed to update database.', type: 'info' });
+      });
   };
 
   return (

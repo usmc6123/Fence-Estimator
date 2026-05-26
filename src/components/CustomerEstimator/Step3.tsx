@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layers, CheckCircle2, ShieldAlert, Sparkles, RefreshCw, Lock } from 'lucide-react';
 import { MATERIAL_PRICES, EstimateBreakdown } from './customerEstimateCalculations';
+import { getCustomPhotos } from './photoStorage';
 
 // Standard Default Images for Step 2 Material Options
 import ptPineImg from '../../assets/images/downloaded_portfolio_1.png';
@@ -59,16 +60,13 @@ export default function Step3({
   const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
 
   const loadPhotos = React.useCallback(() => {
-    try {
-      const saved = localStorage.getItem('customer_estimator_custom_photos');
-      if (saved) {
-        setCustomPhotos(JSON.parse(saved));
-      } else {
-        setCustomPhotos({});
-      }
-    } catch (e) {
-      console.error('Error loading custom photos:', e);
-    }
+    getCustomPhotos()
+      .then((photos) => {
+        setCustomPhotos(photos);
+      })
+      .catch((e) => {
+        console.error('Error loading custom photos from high-capacity database in Step 3:', e);
+      });
   }, []);
 
   React.useEffect(() => {
