@@ -14,6 +14,13 @@ import commercialGradeImg from '../../assets/images/downloaded_portfolio_7.jpeg'
 import privacySlatsImg from '../../assets/images/downloaded_portfolio_6.png';
 import setInConcreteImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
 
+// Custom Stock Photos as requested for Wood Fence options
+import sideBySideImg from '../../assets/images/side_by_side_fence_1779799143225.png';
+import boardOnBoardImg from '../../assets/images/board_on_board_fence_1779799160044.png';
+import dogEarImg from '../../assets/images/dog_ear_picket_1779799178350.png';
+import flatTopImg from '../../assets/images/flat_top_picket_1779799198099.png';
+import topCapImg from '../../assets/images/top_cap_board_1779799217354.png';
+
 interface Step3Props {
   material: string;
   breakdown: EstimateBreakdown;
@@ -218,14 +225,16 @@ export default function Step3({
               </div>
 
               {/* Material option photograph preview */}
-              <div className="w-full h-32 rounded-xl overflow-hidden mb-3 bg-slate-100 border border-slate-200 relative shrink-0">
-                <img
-                  src={activeImage}
-                  alt={m.name}
-                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+              {fenceType !== 'Wood Fence' && (
+                <div className="w-full h-32 rounded-xl overflow-hidden mb-3 bg-slate-100 border border-slate-200 relative shrink-0">
+                  <img
+                    src={activeImage}
+                    alt={m.name}
+                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
 
               <h3 className="font-extrabold text-[#111111] text-sm mb-1">{m.name}</h3>
               <p className="text-xs text-[#666666] leading-relaxed flex-grow mt-1">{m.description}</p>
@@ -329,147 +338,220 @@ export default function Step3({
 
       {/* Wood Style customizer section if Wood Fence is selected */}
       {fenceType === 'Wood Fence' && (
-        <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-6">
-          <h3 className="text-sm font-black text-american-blue uppercase tracking-wider border-b border-[#F0F0F0] pb-2">
-            Wood Fence Construction Style
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div id="wood-fence-customizer" className="max-w-3xl mx-auto bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-8">
+          <div className="border-b border-[#F0F0F0] pb-3">
+            <h3 className="text-base font-black text-american-blue uppercase tracking-wider">
+              Wood Fence Custom Construction Styles
+            </h3>
+            <p className="text-xs text-[#666666] mt-0.5">
+              Select premium architectural specs to customize your Lone Star wood fence layout.
+            </p>
+          </div>
+
+          <div className="space-y-8">
             {/* Picket Style: Board on Board vs Side by Side */}
-            <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+            <div className="space-y-3">
               <div>
-                <span className="block text-sm font-bold text-american-blue">Picket Orientation</span>
+                <span className="block text-sm font-black text-american-blue uppercase tracking-wider">Picket Orientation</span>
                 <p className="text-xs text-[#666666] leading-relaxed mt-1">
-                  Choose how your wood pickets are oriented: Side by Side (standard) or Board on Board (overlapping layers).
+                  Choose how your wood pickets are aligned. standard Side-by-Side has minimal spacing, while Board-on-Board delivers absolute total privacy with layered overlaps.
                 </p>
               </div>
-              <div className="pt-2 flex gap-2 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Option 1: Side by Side */}
                 <button
                   type="button"
                   onClick={() => onChangeField('picketStyle', 'w-side')}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     picketStyle === 'w-side'
-                      ? 'bg-american-blue border-american-blue text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-xs'
                   }`}
                 >
-                  <span className="block text-center font-black">Side by Side</span>
-                  <span className="block text-[9px] text-center opacity-85 mt-0.5">Micro gaps form over time</span>
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={sideBySideImg}
+                      alt="Side by Side Pickets"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {picketStyle === 'w-side' && (
+                      <div className="absolute top-2.5 right-2.5 bg-american-blue text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-[#111111] text-sm">Side by Side (Standard)</span>
+                    <span className="block text-[10px] text-[#666666] leading-relaxed mt-1">Minor hairline gaps can form over time as wood boards naturally dry and contract.</span>
+                  </div>
                 </button>
+
+                {/* Option 2: Board on Board */}
                 <button
                   type="button"
                   onClick={() => onChangeField('picketStyle', 'w-bob')}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     picketStyle === 'w-bob'
-                      ? 'bg-american-blue border-american-blue text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-xs'
                   }`}
                 >
-                  <span className="block text-center font-black">Board on Board</span>
-                  <span className="block text-[9px] text-center opacity-85 mt-0.5">100% gapless privacy</span>
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={boardOnBoardImg}
+                      alt="Board on Board Pickets"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {picketStyle === 'w-bob' && (
+                      <div className="absolute top-2.5 right-2.5 bg-american-blue text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-[#111111] text-sm">Board on Board</span>
+                    <span className="block text-[10px] text-[#666666] leading-relaxed mt-1">Overlapping layered picket boards provide 100% gapless premium security & permanent privacy.</span>
+                  </div>
                 </button>
               </div>
             </div>
 
             {/* Picket Top Finish: Dog Ear vs Flat Top */}
-            <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+            <div className="space-y-3">
               <div>
-                <span className="block text-sm font-bold text-american-blue">Picket Top Finish</span>
+                <span className="block text-sm font-black text-american-blue uppercase tracking-wider">Picket Top Finish</span>
                 <p className="text-xs text-[#666666] leading-relaxed mt-1">
-                  Dog Ear is standard. Flat Top gives an elegant modern line, especially when finished with cap and trim.
+                  Decide the upper profile cuts for each picket. Dog Ear has classic safety angles. Flat Top gives a crisp linear framing line that easily integrates cap styles.
                 </p>
               </div>
-              <div className="pt-2 flex gap-2 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Option 1: Dog Ear */}
                 <button
                   type="button"
                   onClick={() => onChangeField('topStyle', 'Dog Ear')}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     topStyle === 'Dog Ear' || !topStyle
-                      ? 'bg-american-blue border-american-blue text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-xs'
                   }`}
                 >
-                  <span className="block text-center font-black">Dog Ear</span>
-                  <span className="block text-[9px] text-center opacity-85 mt-0.5">Classic dog-eared tops</span>
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={dogEarImg}
+                      alt="Dog Ear Picket Ends"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {(topStyle === 'Dog Ear' || !topStyle) && (
+                      <div className="absolute top-2.5 right-2.5 bg-american-blue text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-[#111111] text-sm">Classic Dog Ear</span>
+                    <span className="block text-[10px] text-[#666666] leading-relaxed mt-1">The traditional design highlighting corner angle bevels on the tip of every picket.</span>
+                  </div>
                 </button>
+
+                {/* Option 2: Flat Top */}
                 <button
                   type="button"
                   onClick={() => onChangeField('topStyle', 'Flat Top')}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     topStyle === 'Flat Top'
-                      ? 'bg-american-blue border-american-blue text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-xs'
                   }`}
                 >
-                  <span className="block text-center font-black">Flat Top</span>
-                  <span className="block text-[9px] text-center opacity-85 mt-0.5">Clean horizontal top cuts</span>
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={flatTopImg}
+                      alt="Flat Top Picket Ends"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {topStyle === 'Flat Top' && (
+                      <div className="absolute top-2.5 right-2.5 bg-american-blue text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-[#111111] text-sm">Modern Flat Top</span>
+                    <span className="block text-[10px] text-[#666666] leading-relaxed mt-1">Clean, straight, horizontal boundaries. Automatically includes the premium 1x4 horizontal trim board accent as a standard add-on!</span>
+                  </div>
                 </button>
               </div>
             </div>
 
             {/* Top Cap (2x6) Toggle */}
-            <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+            <div className="space-y-3">
               <div>
-                <span className="block text-sm font-bold text-american-blue">Top Cap Board (2x6 Wood Rail)</span>
+                <span className="block text-sm font-black text-american-blue uppercase tracking-wider">Top Cap Board (2x6 Wood Rail)</span>
                 <p className="text-xs text-[#666666] leading-relaxed mt-1">
-                  Adds a flat horizontal structural cap across the top of your fence panels.
+                  Protects raw wood picket cores from direct rainfall and environmental elements by adding a heavy-duty horizontal cap rail across the system.
                 </p>
               </div>
-              <div className="pt-2 flex gap-2 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Option 1: Standard No Cap */}
                 <button
                   type="button"
                   onClick={() => onChangeField('hasTopCap', false)}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     !hasTopCap
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-slate-900 bg-slate-900 text-white ring-2 ring-slate-900/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] text-slate-700 hover:shadow-xs'
                   }`}
                 >
-                  Standard (No Cap)
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={dogEarImg}
+                      alt="Standard Raw Top"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {!hasTopCap && (
+                      <div className="absolute top-2.5 right-2.5 bg-emerald-500 text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-sm">Standard (No Top Cap)</span>
+                    <span className="block text-[10px] leading-relaxed mt-1 opacity-80">Simple classic outline exposing the pickets. Picket tops remain fully visible.</span>
+                  </div>
                 </button>
+
+                {/* Option 2: Include Top Cap */}
                 <button
                   type="button"
                   onClick={() => onChangeField('hasTopCap', true)}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
+                  className={`flex flex-col text-left overflow-hidden rounded-xl border-2 transition-all duration-300 ${
                     hasTopCap
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
+                      ? 'border-slate-900 bg-slate-900 text-white ring-2 ring-slate-900/15 shadow-sm'
+                      : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] text-slate-700 hover:shadow-xs'
                   }`}
                 >
-                  Include Top Cap
-                </button>
-              </div>
-            </div>
-
-            {/* Top Trim (1x4) Toggle */}
-            <div className="space-y-2 p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 flex flex-col justify-between">
-              <div>
-                <span className="block text-sm font-bold text-american-blue">Top Trim Board (1x4 Decorative Rail)</span>
-                <p className="text-xs text-[#666666] leading-relaxed mt-1">
-                  Adds a vertical trim board accent under the cap for a beautiful, premium framed framing look.
-                </p>
-              </div>
-              <div className="pt-2 flex gap-2 w-full">
-                <button
-                  type="button"
-                  onClick={() => onChangeField('hasCapAndTrim', false)}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
-                    !hasCapAndTrim
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  No Trim
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChangeField('hasCapAndTrim', true)}
-                  className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold border transition duration-250 ${
-                    hasCapAndTrim
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                      : 'bg-white border-[#E5E5E5] text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  Include Top Trim
+                  <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
+                    <img
+                      src={topCapImg}
+                      alt="Top Cap Board"
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                    {hasTopCap && (
+                      <div className="absolute top-2.5 right-2.5 bg-emerald-500 text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="block font-extrabold text-sm">Include 2x6 Top Cap</span>
+                    <span className="block text-[10px] leading-relaxed mt-1 opacity-80">Heavy 2x6 timber rail set flat across top. Adds solid framing strength and diverts weathering rainwater.</span>
+                  </div>
                 </button>
               </div>
             </div>

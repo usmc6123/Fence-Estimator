@@ -133,133 +133,125 @@ export default function Step5({
 
         {/* Dynamic Pricing Receipt & Scopes Block (7 Cols) */}
         <div className="lg:col-span-7 bg-[#111827] text-white p-6 rounded-2xl shadow-xl space-y-6 border border-slate-800 self-stretch flex flex-col justify-between min-h-[460px]">
-          {!isValid ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center space-y-4">
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-full text-amber-400">
-                <Lock size={36} className="animate-pulse" />
-              </div>
-              <div className="space-y-2 max-w-sm">
-                <h3 className="text-base font-black uppercase tracking-wider text-white">Pricing Summary Locked</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Please complete your <strong>First Name, Last Name, Email, Phone, and Project Address</strong> on the left to unlock your tailored Lone Star estimate range & materials takeoff scope.
-                </p>
-              </div>
-              <div className="w-full max-w-xs border-t border-slate-800 pt-4 flex justify-between items-center text-[10px] uppercase font-bold tracking-widest text-slate-500">
-                <span>Lone Star Security</span>
-                <span>● Pending Verification</span>
+          <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+            <div className="space-y-0.5">
+              <span className="block text-[10px] font-black text-american-red uppercase tracking-widest">
+                Lone Star Fence Works
+              </span>
+              <h3 className="text-lg font-black tracking-tight text-white uppercase">
+                Estimate Summary
+              </h3>
+            </div>
+            <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
+              {data.fenceType || 'Wood Fence'} / {data.linearFeet} LF
+            </div>
+          </div>
+
+          {/* Simplified Specifications and Overall Range (No Itemized Prices shown until submission) */}
+          <div className="space-y-6">
+            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+              <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-1">
+                Project Specifications
+              </span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Fence Style:</span>
+                  <span className="text-slate-300 font-bold">{data.fenceType || 'Wood Fence'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Linear Footage:</span>
+                  <span className="text-slate-300 font-bold">{data.linearFeet} LF</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Panel Height:</span>
+                  <span className="text-slate-300 font-bold">{data.height} FT</span>
+                </div>
+                {data.fenceType === 'Wood Fence' ? (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Wood Finish:</span>
+                    <span className="text-slate-300 font-bold">{data.isPreStained ? 'Pre-Stained' : 'Natural / Raw'}</span>
+                  </div>
+                ) : data.fenceType === 'pipe fence' ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Rail Paint:</span>
+                      <span className="text-slate-300 font-bold">{data.pipePaintColor || 'Black'}</span>
+                    </div>
+                    <div className="flex justify-between text-right">
+                      <span className="text-slate-500">Wire Option:</span>
+                      <span className="text-slate-300 font-bold">{data.pipeWireType || 'Black'} Coated</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Post Setting:</span>
+                      <span className="text-slate-300 font-bold">Concrete Set</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Material Type:</span>
+                    <span className="text-slate-300 font-bold">{data.material}</span>
+                  </div>
+                )}
+                {data.needGates && (
+                  <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-2">
+                    <span className="text-slate-500">Gate Configuration:</span>
+                    <span className="text-slate-300 font-bold">
+                      {data.gateCount}x {data.gateType} {data.gateType?.toLowerCase().includes('gate') ? '' : 'Gate'}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <>
-              <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-                <div className="space-y-0.5">
-                  <span className="block text-[10px] font-black text-american-red uppercase tracking-widest">
-                    Lone Star Fence Works
-                  </span>
-                  <h3 className="text-lg font-black tracking-tight text-white uppercase">
-                    Estimate Summary
-                  </h3>
-                </div>
-                <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
-                  {data.fenceType || 'Wood Fence'} / {data.linearFeet} LF
-                </div>
+
+            {/* GRAND TOTAL RANGE - LOCKED UNTIL SUBMISSION */}
+            <div className="bg-slate-900 border border-amber-500/25 p-5 rounded-xl space-y-3 text-center sm:text-left relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-[#f59e0b]/10 text-amber-500 text-[8px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-bl">
+                🔒 LOCKED
+              </div>
+              <span className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                Projected Total Investment Range:
+              </span>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 pt-0.5">
+                <span className="text-lg sm:text-xl font-extrabold text-amber-400 flex items-center gap-2">
+                  <Lock size={18} className="animate-pulse text-amber-500 shrink-0" />
+                  Locked Until Submit
+                </span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                  *Turnkey Project Price
+                </span>
               </div>
 
-              {/* Simplified Specifications and Overall Range (No Itemized Prices) */}
-              <div className="space-y-6">
-                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
-                  <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-1">
-                    Project Specifications
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Fence Style:</span>
-                      <span className="text-slate-300 font-bold">{data.fenceType || 'Wood Fence'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Linear Footage:</span>
-                      <span className="text-slate-300 font-bold">{data.linearFeet} LF</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Panel Height:</span>
-                      <span className="text-slate-300 font-bold">{data.height} FT</span>
-                    </div>
-                    {data.fenceType === 'Wood Fence' ? (
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Wood Finish:</span>
-                        <span className="text-slate-300 font-bold">{data.isPreStained ? 'Pre-Stained' : 'Natural / Raw'}</span>
-                      </div>
-                    ) : data.fenceType === 'pipe fence' ? (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Rail Paint:</span>
-                          <span className="text-slate-300 font-bold">{data.pipePaintColor || 'Black'}</span>
-                        </div>
-                        <div className="flex justify-between text-right">
-                          <span className="text-slate-500">Wire Option:</span>
-                          <span className="text-slate-300 font-bold">{data.pipeWireType || 'Black'} Coated</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Post Setting:</span>
-                          <span className="text-slate-300 font-bold">Concrete Set</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Material Type:</span>
-                        <span className="text-slate-300 font-bold">{data.material}</span>
-                      </div>
-                    )}
-                    {data.needGates && (
-                      <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-2">
-                        <span className="text-slate-500">Gate Configuration:</span>
-                        <span className="text-slate-300 font-bold">
-                          {data.gateCount}x {data.gateType} {data.gateType?.toLowerCase().includes('gate') ? '' : 'Gate'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {!isValid ? (
+                <p className="text-[10px] leading-relaxed text-slate-400">
+                  Please enter your <strong className="text-white">First Name, Last Name, Email, Phone, and Project Address</strong> on the left to verify your submission and unlock your tailored price estimation.
+                </p>
+              ) : (
+                <p className="text-[10px] leading-relaxed text-slate-300">
+                  Contact details complete! Click the <strong className="text-emerald-400">"Get Estimate Now"</strong> button below to secure your lead, log your information, and instantly unlock your official price range.
+                </p>
+              )}
+            </div>
+          </div>
 
-                {/* GRAND TOTAL RANGE */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-2 text-center sm:text-left">
-                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    Projected Total Investment Range:
-                  </span>
-                  <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1.5">
-                    <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400 tracking-tight whitespace-nowrap">
-                      ${Math.round(breakdown.total).toLocaleString()} - ${Math.round(breakdown.total * 1.10).toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                      *Turnkey Project Price
-                    </span>
-                  </div>
-                  <p className="text-[10px] leading-normal text-slate-500 font-mono pt-1">
-                    *Estimation range covers standard materials, professional labor workmanship, posts, site prep layout, cleanup, and regional TX taxes. No extra hidden fees.
-                  </p>
-                </div>
-              </div>
-
-              {/* Legal Warranties & Safeguards (Compliant with Lone Star rule) */}
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                <h4 className="text-[10px] font-black text-american-red uppercase tracking-widest flex items-center gap-1.5">
-                  <Globe size={12} />
-                  Professional Scopes & Warranties
-                </h4>
-                <ul className="list-disc list-inside text-[10px] text-slate-400 space-y-1.5 leading-relaxed">
-                  <li>
-                    <strong className="text-slate-200">New Installation Workmanship:</strong> Full 1-year warranty covering installation defects or connection issues.
-                  </li>
-                  <li>
-                    <strong className="text-slate-200">Environmental Aging Limitations:</strong> Excludes natural weathering, wood cracking, warp, rot under severe conditions, or acts of nature that transcend normal application tolerances.
-                  </li>
-                  <li>
-                    <strong className="text-slate-200">Accurate Raw Sizing:</strong> Quotes are computed explicitly with Japanese/Western Cedar and PT Pine, omitting unbranded terms.
-                  </li>
-                </ul>
-              </div>
-            </>
-          )}
+          {/* Legal Warranties & Safeguards (Compliant with Lone Star rule) */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <h4 className="text-[10px] font-black text-american-red uppercase tracking-widest flex items-center gap-1.5">
+              <Globe size={12} />
+              Professional Scopes & Warranties
+            </h4>
+            <ul className="list-disc list-inside text-[10px] text-slate-400 space-y-1.5 leading-relaxed">
+              <li>
+                <strong className="text-slate-200">New Installation Workmanship:</strong> Full 1-year warranty covering installation defects or connection issues.
+              </li>
+              <li>
+                <strong className="text-slate-200">Environmental Aging Limitations:</strong> Excludes natural weathering, wood cracking, warp, rot under severe conditions, or acts of nature that transcend normal application tolerances.
+              </li>
+              <li>
+                <strong className="text-slate-200">Accurate Raw Sizing:</strong> Quotes are computed explicitly with Japanese/Western Cedar and PT Pine, omitting unbranded terms.
+              </li>
+            </ul>
+          </div>
 
           {/* Submitting Feedback / Error block */}
           {error && (

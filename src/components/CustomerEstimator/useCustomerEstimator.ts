@@ -77,6 +77,13 @@ export function useCustomerEstimator(
           newData.pipeWireType = 'Black';
         }
       }
+      if (field === 'topStyle') {
+        if (value === 'Flat Top') {
+          newData.hasCapAndTrim = true;
+        } else {
+          newData.hasCapAndTrim = false;
+        }
+      }
       return newData;
     });
   }, []);
