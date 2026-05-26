@@ -8,16 +8,18 @@ import chainLinkImg from '../../assets/images/user_chain_link_fence_faithful_new
 import pipeFenceImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
 
 // Step 2: Material Option Images
-import ptPineImg from '../../assets/images/downloaded_portfolio_1.png';
-import japaneseCedarImg from '../../assets/images/downloaded_portfolio_2.png';
-import westernRedCedarImg from '../../assets/images/downloaded_portfolio_3.png';
+import sideBySideImg from '../../assets/images/side_by_side_fence_1779799143225.png';
+import boardOnBoardImg from '../../assets/images/board_on_board_fence_1779799160044.png';
+import dogEarImg from '../../assets/images/dog_ear_picket_1779799178350.png';
+import flatTopImg from '../../assets/images/flat_top_picket_1779799198099.png';
+import topCapImg from '../../assets/images/top_cap_board_1779799217354.png';
+
 import standardFlatTopImg from '../../assets/images/actual_metal_fence_squarespace.jpg';
 import extendedPicketsImg from '../../assets/images/downloaded_portfolio_4.png';
 import rackingPanelImg from '../../assets/images/downloaded_portfolio_5.png';
 import residentialGradeImg from '../../assets/images/user_chain_link_fence_faithful_new_1779474771303.png';
 import commercialGradeImg from '../../assets/images/downloaded_portfolio_7.jpeg';
 import privacySlatsImg from '../../assets/images/downloaded_portfolio_6.png';
-import setInConcreteImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
 
 interface CardOption {
   id: string;
@@ -128,24 +130,38 @@ export default function CardPhotosEditor() {
   ];
 
   const materialOptions: CardOption[] = [
+    // Wood Fence Detail Customizers
     {
-      id: 'PT Pine',
-      name: 'Pressure-Treated Pine',
-      description: 'Rigid wood species pressure-infused with preservative chemicals.',
-      defaultImage: ptPineImg,
+      id: 'w-side',
+      name: 'Side by Side (Wood Orientation)',
+      description: 'Solid side-by-side display aligned with minimal spacing.',
+      defaultImage: sideBySideImg,
     },
     {
-      id: 'Japanese Cedar',
-      name: 'Japanese Cedar (Sugi)',
-      description: 'Innate resistance wood with superior dimensional stability and natural grain.',
-      defaultImage: japaneseCedarImg,
+      id: 'w-bob',
+      name: 'Board on Board (Wood Orientation)',
+      description: 'Overlapping wood boards offering maximum visual privacy.',
+      defaultImage: boardOnBoardImg,
     },
     {
-      id: 'Western Red Cedar',
-      name: 'Western Red Cedar',
-      description: 'Top-tier luxury lumber with supreme water, rot, and warp resistance.',
-      defaultImage: westernRedCedarImg,
+      id: 'Dog Ear',
+      name: 'Classic Dog Ear (Wood Top)',
+      description: 'The traditional timber picket look with safety cut corners.',
+      defaultImage: dogEarImg,
     },
+    {
+      id: 'Flat Top',
+      name: 'Modern Flat Top (Wood Top)',
+      description: 'Sleek premium flat picket ending paired with 1x4 trim accents.',
+      defaultImage: flatTopImg,
+    },
+    {
+      id: 'top-cap',
+      name: 'Include 2x6 Top Cap (Wood Accent)',
+      description: 'A structural wood cap board blocking rainwater from the boards.',
+      defaultImage: topCapImg,
+    },
+    // Wrought Iron Detail Customizers
     {
       id: 'Standard flat top',
       name: 'Standard Flat Top (Wrought Iron)',
@@ -164,6 +180,7 @@ export default function CardPhotosEditor() {
       description: 'Heavy duty panel engineered specifically to transition slopes beautifully.',
       defaultImage: rackingPanelImg,
     },
+    // Chain Link Detail Customizers
     {
       id: 'Residential Grade',
       name: 'Residential Grade (Chain Link)',
@@ -181,12 +198,6 @@ export default function CardPhotosEditor() {
       name: 'Galvanized with Privacy Slats (Chain Link)',
       description: 'Chain link steel fabric outfitted with lock-in vertical privacy slats.',
       defaultImage: privacySlatsImg,
-    },
-    {
-      id: 'Set in Concrete',
-      name: 'Set in Concrete Post (Pipe Fence)',
-      description: 'Heavy steel post embedded deep in concrete base footing blocks.',
-      defaultImage: setInConcreteImg,
     },
   ];
 

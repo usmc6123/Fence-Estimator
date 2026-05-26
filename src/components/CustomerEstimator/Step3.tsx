@@ -192,149 +192,157 @@ export default function Step3({
   return (
     <div id="step-3-container" className="space-y-6">
       <div className="text-center max-w-xl mx-auto space-y-2">
-        <h2 className="text-2xl font-black text-american-blue uppercase tracking-tight">Material & Details</h2>
+        <h2 className="text-2xl font-black text-american-blue uppercase tracking-tight">
+          {fenceType === 'pipe fence' ? 'Pipe Fence Customization' : 'Material & Details'}
+        </h2>
         <p className="text-sm font-medium text-[#666666]">
-          Choose the specific species, grade, or styling configuration for your {fenceType || 'Wood Fence'}.
+          {fenceType === 'pipe fence'
+            ? 'Select paint color and no-climb wire finish details for your pasture pipe fence.'
+            : `Choose the specific species, grade, or styling configuration for your ${fenceType || 'Wood Fence'}.`}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-        {materialsList.map((m) => {
-          const isSelected = material === m.id;
-          const activeImage = customPhotos[m.id] || m.image;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => {
-                onChangeField('material', m.id);
-              }}
-              className={`flex flex-col text-left p-5 rounded-2xl border-2 transition-all duration-300 relative ${
-                isSelected
-                  ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/20 shadow-md shadow-american-blue/5'
-                  : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-md'
-              }`}
-            >
-              <div className="flex justify-between items-center mb-2.5 w-full">
-                <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider ${m.badgeColor}`}>
-                  {m.badge}
-                </span>
-                {isSelected && (
-                  <CheckCircle2 size={16} className="text-american-blue shrink-0 ml-1" />
-                )}
-              </div>
-
-              {/* Material option photograph preview */}
-              {fenceType !== 'Wood Fence' && (
-                <div className="w-full h-32 rounded-xl overflow-hidden mb-3 bg-slate-100 border border-slate-200 relative shrink-0">
-                  <img
-                    src={activeImage}
-                    alt={m.name}
-                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                    referrerPolicy="no-referrer"
-                  />
+      {fenceType !== 'pipe fence' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {materialsList.map((m) => {
+            const isSelected = material === m.id;
+            const activeImage = customPhotos[m.id] || m.image;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  onChangeField('material', m.id);
+                }}
+                className={`flex flex-col text-left p-5 rounded-2xl border-2 transition-all duration-300 relative ${
+                  isSelected
+                    ? 'border-american-blue bg-blue-50/10 ring-2 ring-american-blue/20 shadow-md shadow-american-blue/5'
+                    : 'border-[#E5E5E5] bg-white hover:border-[#CCCCCC] hover:shadow-md'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-2.5 w-full">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider ${m.badgeColor}`}>
+                    {m.badge}
+                  </span>
+                  {isSelected && (
+                    <CheckCircle2 size={16} className="text-american-blue shrink-0 ml-1" />
+                  )}
                 </div>
-              )}
 
-              <h3 className="font-extrabold text-[#111111] text-sm mb-1">{m.name}</h3>
-              <p className="text-xs text-[#666666] leading-relaxed flex-grow mt-1">{m.description}</p>
-            </button>
-          );
-        })}
-      </div>
+                {/* Material option photograph preview */}
+                {fenceType !== 'Wood Fence' && (
+                  <div className="w-full h-32 rounded-xl overflow-hidden mb-3 bg-slate-100 border border-slate-200 relative shrink-0">
+                    <img
+                      src={activeImage}
+                      alt={m.name}
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                )}
+
+                <h3 className="font-extrabold text-[#111111] text-sm mb-1">{m.name}</h3>
+                <p className="text-xs text-[#666666] leading-relaxed flex-grow mt-1">{m.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Conditional settings for styling modifications based on style selected */}
-      <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-6">
-        <h3 className="text-sm font-black text-american-blue uppercase tracking-wider border-b border-[#F0F0F0] pb-2">
-          Special Options
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Option A: Staining (Only for Wood Fence) */}
-          {fenceType === 'Wood Fence' && (
+      {fenceType !== 'pipe fence' && (
+        <div className="max-w-3xl mx-auto bg-white p-6 rounded-2xl border border-[#E5E5E5] space-y-6">
+          <h3 className="text-sm font-black text-american-blue uppercase tracking-wider border-b border-[#F0F0F0] pb-2">
+            Special Options
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Option A: Staining (Only for Wood Fence) */}
+            {fenceType === 'Wood Fence' && (
+              <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                  <Sparkles size={18} />
+                </div>
+                <div className="space-y-1">
+                  <span className="block text-sm font-bold text-american-blue">Pre-Stained Lumber Finish?</span>
+                  <p className="text-xs text-[#666666]">Apply factory pre-staining to lumber (adds protection & rich warm color).</p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onChangeField('isPreStained', false)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        !isPreStained 
+                          ? 'bg-slate-900 border-slate-900 text-white' 
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      Raw Lumber
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onChangeField('isPreStained', true)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        isPreStained 
+                          ? 'bg-slate-900 border-slate-900 text-white' 
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      Pre-Stained
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Option B: Post Reusing & Disclaimer (All, but focus on Wood/overall) */}
             <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
-                <Sparkles size={18} />
+              <div className="h-10 w-10 rounded-xl bg-orange-50 text-orange-700 flex items-center justify-center shrink-0 border border-orange-200">
+                <RefreshCw size={18} />
               </div>
               <div className="space-y-1">
-                <span className="block text-sm font-bold text-american-blue">Pre-Stained Lumber Finish?</span>
-                <p className="text-xs text-[#666666]">Apply factory pre-staining to lumber (adds protection & rich warm color).</p>
+                <span className="block text-sm font-bold text-american-blue">Reuse Existing Posts?</span>
+                <p className="text-xs text-[#666666]">Reuse standard sturdy fence posts already set in position.</p>
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => onChangeField('isPreStained', false)}
+                    onClick={() => onChangeField('reusePosts', false)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                      !isPreStained 
+                      !reusePosts 
                         ? 'bg-slate-900 border-slate-900 text-white' 
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    Raw Lumber
+                    New Posts
                   </button>
                   <button
                     type="button"
-                    onClick={() => onChangeField('isPreStained', true)}
+                    onClick={() => onChangeField('reusePosts', true)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                      isPreStained 
+                      reusePosts 
                         ? 'bg-slate-900 border-slate-900 text-white' 
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    Pre-Stained
+                    Reuse Existing
                   </button>
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Option B: Post Reusing & Disclaimer (All, but focus on Wood/overall) */}
-          <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="h-10 w-10 rounded-xl bg-orange-50 text-orange-700 flex items-center justify-center shrink-0 border border-orange-200">
-              <RefreshCw size={18} />
-            </div>
-            <div className="space-y-1">
-              <span className="block text-sm font-bold text-american-blue">Reuse Existing Posts?</span>
-              <p className="text-xs text-[#666666]">Reuse standard sturdy fence posts already set in position.</p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onChangeField('reusePosts', false)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                    !reusePosts 
-                      ? 'bg-slate-900 border-slate-900 text-white' 
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  New Posts
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChangeField('reusePosts', true)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                    reusePosts 
-                      ? 'bg-slate-900 border-slate-900 text-white' 
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  Reuse Existing
-                </button>
+          {/* Legal Disclaimer Box if Reuse Existing Posts is checked */}
+          {reusePosts && (
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-orange-850 flex items-start gap-3 mt-4">
+              <ShieldAlert size={20} className="text-orange-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="block text-xs font-black uppercase tracking-wider text-orange-800">Warranty Limitation Notice</span>
+                <p className="text-xs font-bold text-orange-700 leading-relaxed uppercase">
+                  Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts.
+                </p>
               </div>
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Legal Disclaimer Box if Reuse Existing Posts is checked */}
-        {reusePosts && (
-          <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-orange-850 flex items-start gap-3 mt-4">
-            <ShieldAlert size={20} className="text-orange-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="block text-xs font-black uppercase tracking-wider text-orange-800">Warranty Limitation Notice</span>
-              <p className="text-xs font-bold text-orange-700 leading-relaxed uppercase">
-                Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Wood Style customizer section if Wood Fence is selected */}
       {fenceType === 'Wood Fence' && (
@@ -370,7 +378,7 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={sideBySideImg}
+                      src={customPhotos['w-side'] || sideBySideImg}
                       alt="Side by Side Pickets"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -399,7 +407,7 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={boardOnBoardImg}
+                      src={customPhotos['w-bob'] || boardOnBoardImg}
                       alt="Board on Board Pickets"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -439,7 +447,7 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={dogEarImg}
+                      src={customPhotos['Dog Ear'] || dogEarImg}
                       alt="Dog Ear Picket Ends"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -468,7 +476,7 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={flatTopImg}
+                      src={customPhotos['Flat Top'] || flatTopImg}
                       alt="Flat Top Picket Ends"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -508,7 +516,7 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={dogEarImg}
+                      src={customPhotos['Dog Ear'] || dogEarImg}
                       alt="Standard Raw Top"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
@@ -537,20 +545,20 @@ export default function Step3({
                 >
                   <div className="w-full h-36 bg-slate-100 overflow-hidden relative shrink-0 border-b border-[#E5E5E5]">
                     <img
-                      src={topCapImg}
+                      src={customPhotos['top-cap'] || topCapImg}
                       alt="Top Cap Board"
                       className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                       referrerPolicy="no-referrer"
                     />
                     {hasTopCap && (
-                      <div className="absolute top-2.5 right-2.5 bg-emerald-500 text-white p-1 rounded-full shadow-md z-10">
+                      <div className="absolute top-1.5 right-1.5 bg-white text-emerald-600 rounded-full p-0.5 shadow-md">
                         <CheckCircle2 size={16} />
                       </div>
                     )}
                   </div>
                   <div className="p-3">
                     <span className="block font-extrabold text-sm">Include 2x6 Top Cap</span>
-                    <span className="block text-[10px] leading-relaxed mt-1 opacity-80">Heavy 2x6 timber rail set flat across top. Adds solid framing strength and diverts weathering rainwater.</span>
+                    <span className="block text-[10px] leading-relaxed mt-1 opacity-80">Heavy 2x6 timber rail set flat across top. Adds solid framing strength and diverts rainwater weathering.</span>
                   </div>
                 </button>
               </div>
