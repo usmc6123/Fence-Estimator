@@ -1,6 +1,6 @@
 import React from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import {
   CustomerEstimateData,
   calculateCustomerEstimate,
@@ -253,7 +253,11 @@ export function useCustomerEstimator(
 
     try {
       // 1. Save to Firestore
-      await setDoc(doc(db, 'estimates', estId), customerEstimateDoc);
+      try {
+        await setDoc(doc(db, 'estimates', estId), customerEstimateDoc);
+      } catch (writeErr) {
+        handleFirestoreError(writeErr, OperationType.WRITE, `estimates/${estId}`);
+      }
 
       // 2. Fetch GHL Webhook info from companySettings
       let ghlWebhookUrl = '';

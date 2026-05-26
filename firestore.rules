@@ -119,7 +119,8 @@ service cloud.firestore {
     }
 
     match /companySettings/{settingId} {
-      allow get, list: if isCompanyMember();
+      allow get: if isCompanyMember() || settingId == 'main';
+      allow list: if isCompanyMember();
       allow create, update: if canWriteData() && isValidSettings(incoming());
       allow delete: if isAdmin();
     }
@@ -133,7 +134,7 @@ service cloud.firestore {
 
     match /estimates/{estimateId} {
       allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if canWriteData() && isValidEstimate(incoming());
+      allow create:    if (canWriteData() || (incoming().isCustomerEstimate == true)) && isValidEstimate(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidEstimate(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
