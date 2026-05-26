@@ -175,7 +175,7 @@ service cloud.firestore {
     }
 
     match /materials/{materialId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if true;
       allow create:    if canWriteData() && isValidMaterial(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidMaterial(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';

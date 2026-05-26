@@ -25,7 +25,7 @@ import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from
 import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
 
 
@@ -67,6 +67,48 @@ function getInitialValue(key: string, storageKey: string, defaultValue: any) {
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
+
+  const [activeTab, setActiveTab] = React.useState(() => {
+    return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
+  });
+  
+  const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
+    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
+  });
+
+  const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
+    const raw = getInitialValue('quotes', 'fence_pro_quotes', []);
+    return raw.map((q: any) => ({
+      ...q,
+      supplierName: getCanonicalSupplierName(q.supplierName || '')
+    }));
+  });
+
+  const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
+    return getInitialValue('laborRates', 'fence_pro_labor_rates', DEFAULT_LABOR_RATES);
+  });
+
+  const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
+    const initial = getInitialValue('estimate', 'fence_pro_estimate', DEFAULT_ESTIMATE);
+    const hasNoCustomer = !initial.customerName && !initial.customerAddress;
+    
+    if (hasNoCustomer) {
+      let migrated = { ...initial };
+      let changed = false;
+
+      if (initial.markupPercentage === 30) {
+        migrated.markupPercentage = 20;
+        changed = true;
+      }
+      if (initial.wastePercentage === 10) {
+        migrated.wastePercentage = 0;
+        changed = true;
+      }
+
+      if (changed) return migrated;
+    }
+    return initial;
+  });
   
   // Robustly extract the portal mode from URL query parameters or hash segments
   const getPortalParam = () => {
@@ -174,49 +216,126 @@ export default function App() {
     };
   }, [user]);
 
-  // Fetch materials from Firestore if user is logged in
+  // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
-    if (!user) {
+    // If not logged in and not customer portal, set initial/offline materials
+    if (!user && !isCustomerPortal) {
       setMaterials(MATERIALS);
       return;
     }
 
     const q = query(collection(db, 'materials'), where('companyId', '==', 'lonestarfence'));
     
-    // Check if we need to seed or sync missing items
-    const checkAndSync = async () => {
-      try {
-        const snapshot = await getDocs(q);
-        const existingMaterials = snapshot.docs.map(d => d.data() as MaterialItem);
-        const existingIds = new Set(existingMaterials.map(m => m.id));
-        
-        const missingItems = MATERIALS.filter(mat => !existingIds.has(mat.id));
-        
-        if (missingItems.length > 0) {
-          console.log(`Syncing ${missingItems.length} missing materials to Firestore...`);
-          const batch = writeBatch(db);
-          missingItems.forEach((mat) => {
-            const docRef = doc(db, 'materials', mat.id);
-            batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
-          });
-          await batch.commit();
-          console.log('Sync complete.');
+    // Seed and sync ONLY if an administrative user is actively logged in
+    if (user) {
+      const checkAndSync = async () => {
+        try {
+          const snapshot = await getDocs(q);
+          const existingMaterials = snapshot.docs.map(d => d.data() as MaterialItem);
+          const existingIds = new Set(existingMaterials.map(m => m.id));
+          
+          const missingItems = MATERIALS.filter(mat => !existingIds.has(mat.id));
+          
+          if (missingItems.length > 0) {
+            console.log(`Syncing ${missingItems.length} missing materials to Firestore...`);
+            const batch = writeBatch(db);
+            missingItems.forEach((mat) => {
+              const docRef = doc(db, 'materials', mat.id);
+              batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
+            });
+            await batch.commit();
+            console.log('Sync complete.');
+          }
+        } catch (error) {
+          console.error('Material sync failed:', error);
         }
-      } catch (error) {
-        console.error('Material sync failed:', error);
-      }
-    };
-
-    checkAndSync();
+      };
+      checkAndSync();
+    }
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        setMaterials(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MaterialItem)));
+        const fetched = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MaterialItem));
+        if (fetched.length > 0) {
+          setMaterials(fetched);
+        }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
     );
     return () => unsubscribe();
+  }, [user, isCustomerPortal]);
+
+  // Fetch global company settings on mount/initially (especially for unauthenticated customer portal)
+  React.useEffect(() => {
+    const fetchGlobalSettings = async () => {
+      try {
+        const docRef = doc(db, 'companySettings', 'main');
+        const dSnap = await getDoc(docRef);
+        if (dSnap.exists()) {
+          const sData = dSnap.data();
+          if (sData.laborRates) {
+            setLaborRates(sData.laborRates);
+          }
+          if (sData.estimatorSettings) {
+            setEstimate(prev => ({
+              ...prev,
+              ...sData.estimatorSettings
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load global settings from Firestore:', err);
+      }
+    };
+
+    fetchGlobalSettings();
   }, [user]);
+
+  // Global Sync of laborRates and estimatorSettings back to Firestore (Only for authenticated company members)
+  React.useEffect(() => {
+    if (!user) return;
+
+    const syncSettingsToCloud = async () => {
+      try {
+        const docRef = doc(db, 'companySettings', 'main');
+        // Extract only the estimator configuration defaults to prevent overwriting other customer/active estimate details
+        const estimatorSettings = {
+          markupPercentage: estimate.markupPercentage !== undefined ? estimate.markupPercentage : 20,
+          wastePercentage: estimate.wastePercentage !== undefined ? estimate.wastePercentage : 0,
+          taxPercentage: estimate.taxPercentage !== undefined ? estimate.taxPercentage : 8.25,
+          concreteType: estimate.concreteType || 'Maximizer',
+          footingType: estimate.footingType || 'Cuboid',
+          postWidth: estimate.postWidth !== undefined ? estimate.postWidth : 6,
+          postThickness: estimate.postThickness !== undefined ? estimate.postThickness : 6,
+        };
+
+        await setDoc(docRef, {
+          laborRates,
+          estimatorSettings,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (syncErr) {
+        console.error('Failed to sync updated pricing defaults to cloud:', syncErr);
+      }
+    };
+
+    // Debounce the cloud write slightly to handle rapid UI edits
+    const timer = setTimeout(() => {
+      syncSettingsToCloud();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [
+    laborRates, 
+    estimate.markupPercentage, 
+    estimate.wastePercentage, 
+    estimate.taxPercentage, 
+    estimate.concreteType, 
+    estimate.footingType, 
+    estimate.postWidth, 
+    estimate.postThickness, 
+    user
+  ]);
 
   // Fetch quotes from Firestore if user is logged in
   React.useEffect(() => {
@@ -261,48 +380,6 @@ export default function App() {
       console.error('Logout failed:', error);
     }
   };
-  
-  const [activeTab, setActiveTab] = React.useState(() => {
-    return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
-  });
-  
-  const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
-    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
-  });
-
-  const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
-    const raw = getInitialValue('quotes', 'fence_pro_quotes', []);
-    return raw.map((q: any) => ({
-      ...q,
-      supplierName: getCanonicalSupplierName(q.supplierName || '')
-    }));
-  });
-
-  const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
-    return getInitialValue('laborRates', 'fence_pro_labor_rates', DEFAULT_LABOR_RATES);
-  });
-
-  const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
-    const initial = getInitialValue('estimate', 'fence_pro_estimate', DEFAULT_ESTIMATE);
-    const hasNoCustomer = !initial.customerName && !initial.customerAddress;
-    
-    if (hasNoCustomer) {
-      let migrated = { ...initial };
-      let changed = false;
-
-      if (initial.markupPercentage === 30) {
-        migrated.markupPercentage = 20;
-        changed = true;
-      }
-      if (initial.wastePercentage === 10) {
-        migrated.wastePercentage = 0;
-        changed = true;
-      }
-
-      if (changed) return migrated;
-    }
-    return initial;
-  });
 
   // Load scopes from estimate when it changes
   React.useEffect(() => {

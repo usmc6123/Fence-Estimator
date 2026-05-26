@@ -1271,7 +1271,8 @@ export default function EmbedCodeBuilder({
     if (e.data && e.data.type === 'resize_estimator') {
       var container = document.getElementById('fence-estimator-container');
       if (container) {
-        container.style.minHeight = e.data.height + 'px';
+        container.style.height = e.data.height + 'px';
+        container.style.minHeight = '0px';
       }
     }
   });

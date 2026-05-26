@@ -45,6 +45,17 @@ export default function CustomerEstimator({
   // Internal tab state for the suite (only active if NOT standalone)
   const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed' | 'photos'>('estimator');
   const [leadsCount, setLeadsCount] = React.useState<number>(0);
+  const [isEmbedded, setIsEmbedded] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        setIsEmbedded(window.self !== window.top);
+      } catch (e) {
+        setIsEmbedded(true);
+      }
+    }
+  }, []);
 
   // Send scroll height to parent window when embedded inside an iframe
   React.useEffect(() => {
@@ -55,7 +66,7 @@ export default function CustomerEstimator({
       if (root) {
         // Measure real content height and add spacing padding for fluid shadow rendering
         const height = root.offsetHeight || root.scrollHeight;
-        window.parent.postMessage({ type: 'resize_estimator', height: height + 40 }, '*');
+        window.parent.postMessage({ type: 'resize_estimator', height: height + 20 }, '*');
       }
     };
 
@@ -77,7 +88,7 @@ export default function CustomerEstimator({
         observer.disconnect();
       }
     };
-  }, [step, standalone, activeSubTab]);
+  }, [step, standalone, activeSubTab, isEmbedded]);
 
   // Compute progress percent for steps 1-5
   const progressPercent = Math.min(100, Math.max(0, ((step - 1) / 4) * 100));
@@ -85,8 +96,10 @@ export default function CustomerEstimator({
   return (
     <div 
       id="customer-estimator-root" 
-      className={`font-sans min-h-screen ${
-        standalone ? 'bg-[#F8F9FA] flex flex-col justify-center py-10 px-4' : 'bg-transparent'
+      className={`font-sans ${
+        isEmbedded 
+          ? 'bg-[#F8F9FA] h-auto min-h-0 py-2 px-2 flex flex-col justify-start' 
+          : (standalone ? 'bg-[#F8F9FA] min-h-screen flex flex-col justify-center py-10 px-4' : 'bg-transparent')
       }`}
     >
       <div 
