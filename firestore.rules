@@ -12,11 +12,11 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'usmc6123@gmail.com';
+      return isSignedIn() && request.auth.token != null && request.auth.token.email == 'usmc6123@gmail.com';
     }
 
     function isEmployee() {
-      return isSignedIn() && exists(/databases/$(database)/documents/employees/$(request.auth.token.email));
+      return isSignedIn() && request.auth.token != null && request.auth.token.email != null && exists(/databases/$(database)/documents/employees/$(request.auth.token.email));
     }
 
     function getEmployeePermission() {
@@ -28,11 +28,11 @@ service cloud.firestore {
     }
 
     function isCompanyMember() {
-      return isAdmin() || isEmployee();
+      return isSignedIn() && (isAdmin() || isEmployee());
     }
 
     function canWriteData() {
-      return isAdmin() || canEmployeeEdit();
+      return isSignedIn() && (isAdmin() || canEmployeeEdit());
     }
 
     function incoming() {

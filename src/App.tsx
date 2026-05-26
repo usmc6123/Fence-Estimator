@@ -116,21 +116,62 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch estimates from Firestore if user is logged in
+  // Fetch estimates from Firestore if user is logged in, and merge with local ledger backup
   React.useEffect(() => {
-    if (!user) {
-      setSavedEstimates([]);
-      return;
-    }
+    let unsubCloud: () => void = () => {};
 
-    const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        setSavedEstimates(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate)));
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'estimates')
-    );
-    return () => unsubscribe();
+    const syncEstimates = () => {
+      let localEstimates: SavedEstimate[] = [];
+      try {
+        const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger');
+        if (localLedgerStr) {
+          localEstimates = JSON.parse(localLedgerStr);
+        }
+      } catch (e) {
+        console.error('Failed to load local ledger estimates:', e);
+      }
+
+      if (!user) {
+        setSavedEstimates(localEstimates);
+        return () => {};
+      }
+
+      const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          const cloudEstimates = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate));
+          // Merge cloud with unique local estimates
+          const cloudIds = new Set(cloudEstimates.map(e => e.id));
+          const uniqueLocal = localEstimates.filter(e => !cloudIds.has(e.id));
+          setSavedEstimates([...cloudEstimates, ...uniqueLocal]);
+        },
+        (error) => {
+          console.error('Error listening to cloud estimates, falling back to local registry:', error);
+          setSavedEstimates(localEstimates);
+        }
+      );
+      return unsubscribe;
+    };
+
+    unsubCloud = syncEstimates();
+
+    // Re-check anytime a new customer estimate is submitted
+    const handleLocalSubmitted = () => {
+      // Re-run syncing to grab latest items from localStorage
+      const unsubNew = syncEstimates();
+      // Update original unsubscribe reference
+      const prevUnsubVal = unsubCloud;
+      unsubCloud = () => {
+        prevUnsubVal();
+        unsubNew();
+      };
+    };
+    window.addEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
+
+    return () => {
+      if (unsubCloud) unsubCloud();
+      window.removeEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
+    };
   }, [user]);
 
   // Fetch materials from Firestore if user is logged in
