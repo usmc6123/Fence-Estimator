@@ -46,6 +46,39 @@ export default function CustomerEstimator({
   const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed' | 'photos'>('estimator');
   const [leadsCount, setLeadsCount] = React.useState<number>(0);
 
+  // Send scroll height to parent window when embedded inside an iframe
+  React.useEffect(() => {
+    if (!standalone) return;
+
+    const sendHeight = () => {
+      const root = document.getElementById('customer-estimator-root');
+      if (root) {
+        // Measure real content height and add spacing padding for fluid shadow rendering
+        const height = root.offsetHeight || root.scrollHeight;
+        window.parent.postMessage({ type: 'resize_estimator', height: height + 40 }, '*');
+      }
+    };
+
+    sendHeight();
+    const timer = setTimeout(sendHeight, 300);
+
+    let observer: ResizeObserver | null = null;
+    const rootEl = document.getElementById('customer-estimator-root');
+    if (rootEl && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        sendHeight();
+      });
+      observer.observe(rootEl);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [step, standalone, activeSubTab]);
+
   // Compute progress percent for steps 1-5
   const progressPercent = Math.min(100, Math.max(0, ((step - 1) / 4) * 100));
 

@@ -18,7 +18,7 @@ export default function EmbedCodeBuilder({
   estimate,
 }: EmbedCodeBuilderProps) {
   const [copied, setCopied] = React.useState(false);
-  const [embedFormat, setEmbedFormat] = React.useState<'Squarespace' | 'FullHTML'>('Squarespace');
+  const [embedFormat, setEmbedFormat] = React.useState<'Iframe' | 'Squarespace' | 'FullHTML'>('Iframe');
   const [customPhotos, setCustomPhotos] = React.useState<Record<string, string>>({});
   const [params, setParams] = React.useState(() => {
     let demoRate = 2; // Default
@@ -1249,7 +1249,35 @@ export default function EmbedCodeBuilder({
 </script>
     `;
 
-    if (embedFormat === 'Squarespace') {
+    if (embedFormat === 'Iframe') {
+      const hostUrl = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : 'https://ais-pre-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app';
+      const iframeSource = `${hostUrl}/?portal=customer`;
+      return `<!-- Lone Star Fence Works Homeowner Estimator - Dynamic Iframe Embed -->
+<!-- Bypasses Squarespace's strict character limits and script blocks. Works on all plans. -->
+<!-- Paste this snippet directly inside a Squarespace "Embed" block or "Code" block. -->
+<div id="fence-estimator-container" style="width: 100%; min-height: 800px; -webkit-overflow-scrolling: touch; overflow: hidden; position: relative; border-radius: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.06); background-color: #F8F9FA;">
+  <iframe 
+    src="${iframeSource}" 
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; overflow: hidden;" 
+    scrolling="no" 
+    id="fence-estimator-iframe"
+    title="${params.companyName} Homeowner Estimator"
+  ></iframe>
+</div>
+
+<!-- Autoresize controller script: listens to wizard step transitions to size the parent container dynamically -->
+<script>
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'resize_estimator') {
+      var container = document.getElementById('fence-estimator-container');
+      if (container) {
+        container.style.minHeight = e.data.height + 'px';
+      }
+    }
+  });
+</script>
+`;
+    } else if (embedFormat === 'Squarespace') {
       // Clean Squarespace format (embeddable Div + scoped scripts)
       return `<!-- Lone Star Fence Works Homeowner Estimator Widget -->
 <!-- Simply paste this clean div content block directly into your Squarespace custom HTML block container safely. -->
@@ -1301,7 +1329,9 @@ ${widgetHTML}
   };
 
   const handleDownload = () => {
-    const filename = embedFormat === 'Squarespace' ? 'fence-estimator-widget-squarespace.html' : 'fence-estimator-widget-standalone.html';
+    const filename = embedFormat === 'Iframe' 
+      ? 'fence-estimator-iframe-widget.html' 
+      : (embedFormat === 'Squarespace' ? 'fence-estimator-widget-squarespace.html' : 'fence-estimator-widget-standalone.html');
     const blob = new Blob([compiledCode], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1334,35 +1364,47 @@ ${widgetHTML}
       </div>
 
       {/* Widget Target Selector */}
-      <div className="bg-slate-100 p-2 rounded-2xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="space-y-0.5 pl-2">
-          <span className="text-xs font-black text-[#111111] uppercase tracking-wider block">Widget Deployment Format</span>
-          <span className="text-[11px] text-slate-500 font-bold block">Choose format matching how you add code to your website.</span>
+      <div className="bg-slate-100 p-3 rounded-2xl border border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="space-y-1 pl-1">
+          <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider block">Widget Deployment Format</span>
+          <span className="text-[11px] text-slate-500 font-bold block">Select the format to embed the Estimator Widget into your company website.</span>
         </div>
-        <div className="flex gap-1.5 bg-white p-1 rounded-xl border border-slate-250 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-1.5 bg-white p-1 rounded-xl border border-slate-200 w-full xl:w-auto">
+          <button
+            type="button"
+            onClick={() => setEmbedFormat('Iframe')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+              embedFormat === 'Iframe'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+            }`}
+          >
+            <ShieldCheck size={14} className={embedFormat === 'Iframe' ? 'text-emerald-300' : ''} />
+            Dynamic Iframe (Recommended - Fixes Save Error)
+          </button>
           <button
             type="button"
             onClick={() => setEmbedFormat('Squarespace')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
               embedFormat === 'Squarespace'
                 ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-indigo-600'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
             }`}
           >
             <LayoutGrid size={14} />
-            Squarespace Div (Recommended)
+            Raw HTML/Div (Alternative)
           </button>
           <button
             type="button"
             onClick={() => setEmbedFormat('FullHTML')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
               embedFormat === 'FullHTML'
                 ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-indigo-600'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
             }`}
           >
             <Monitor size={14} />
-            Full Standalone Page
+            Standalone Port
           </button>
         </div>
       </div>
@@ -1570,33 +1612,75 @@ ${widgetHTML}
               Implementation Guide
             </h4>
 
-            {embedFormat === 'Squarespace' ? (
+            {embedFormat === 'Iframe' ? (
+              <div className="space-y-3.5 text-xs text-slate-600 leading-relaxed">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+                  <span className="font-black text-emerald-800 text-xs uppercase tracking-widest block">✔ Resolves Squarespace Save Errors</span>
+                  <p className="text-[11.5px] text-emerald-900 font-medium">
+                    Squarespace often triggers an <strong>"unable to save" error</strong> when you paste big blocks of raw code containing JavaScript, due to editor length constraints and built-in script filtering (WAF) blocks.
+                  </p>
+                  <p className="text-[11px] text-emerald-800">
+                    The <strong>Dynamic Iframe format</strong> completely resolves this. It is highly lightweight, secure, and renders at 100% speed on any standard or personal plan.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
+                    <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">1. Copy Iframe Code</span>
+                    <p className="text-[11px] text-[#555555]">
+                      Click <strong className="text-slate-800">Copy Entire Code</strong> on the snippet block panel above to copy the lightweight responsive frame element.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
+                    <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">2. Place Embed or Code Block</span>
+                    <p className="text-[11px] text-[#555555]">
+                      In Squarespace, add an <strong className="text-slate-800">Embed Block</strong> or a <strong className="text-slate-800">Code Block</strong>.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
+                    <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">3. Paste Code & Save</span>
+                    <p className="text-[11px] text-[#555555]">
+                      Paste the code snippet directly and click Save. Make sure <strong>Display Source</strong> is turned <strong>OFF</strong> if using a Code Block.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all border border-indigo-100 bg-indigo-50/10">
+                    <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">★ Responsive Auto-Height</span>
+                    <p className="text-[11px] text-[#555555]">
+                      Our built-in height controller listens to the wizard steps and dynamically scales the iframe taller or shorter as the user progresses, eliminating double scrollbars!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : embedFormat === 'Squarespace' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs leading-relaxed text-slate-600">
                 <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
                   <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">1. Copy widget Code</span>
                   <p className="text-[11px] text-[#555555]">
-                    Click the <strong className="text-slate-800">Copy Entire Code</strong> on the snippet panel to copy your self-contained widget block.
+                    Click the <strong className="text-slate-800">Copy Entire Code</strong> on the snippet panel for the raw-embedded format.
                   </p>
                 </div>
 
                 <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
-                  <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">2. Place Squarespace Code Block</span>
+                  <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">2. Create html Code Block</span>
                   <p className="text-[11px] text-[#555555]">
-                    Go into your Squarespace editor mode. Create/choose your section and add a custom <strong className="text-slate-800">Code Block</strong> element.
+                    Add a custom <strong className="text-slate-800">Code Block</strong> inside your Squarespace section. Set format to HTML.
                   </p>
                 </div>
 
                 <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all">
                   <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">3. Paste Code & Save</span>
                   <p className="text-[11px] text-[#555555]">
-                    Paste the entire block directly. Make sure the <strong className="text-[#a81616]">Display Source</strong> option in Squarespace settings is turned <strong className="text-[#a81616]">OFF</strong>.
+                    Paste the entire block directly into the code field. Ensure the <strong className="text-[#a81616]">Display Source</strong> option is turned <strong className="text-[#a81616]">OFF</strong>.
                   </p>
                 </div>
 
-                <div className="space-y-1 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all border border-indigo-100">
-                  <span className="font-black text-indigo-600 text-xs uppercase tracking-wider">★ Why This Code Works</span>
+                <div className="space-y-1 p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-slate-650">
+                  <span className="font-black text-indigo-900 text-xs uppercase tracking-wider">⚠ Plan Requirement</span>
                   <p className="text-[11px] text-[#555555]">
-                    This custom block wraps styles and scripts inside the <code className="bg-slate-250 py-0.5 px-1 text-slate-800 rounded font-mono">div</code>, rendering step cards immediately, while preventing formatting leakage.
+                    Squarespace only permits custom raw scripts on Business or Commerce subscription tiers, and might refuse to save on lower plans.
                   </p>
                 </div>
               </div>
