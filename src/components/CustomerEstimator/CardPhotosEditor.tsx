@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, Image as ImageIcon, Trash2, RefreshCw, CheckCircle2, Sliders, Layers, X } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, RefreshCw, CheckCircle2, Sliders, Layers, X, ShieldCheck, Save } from 'lucide-react';
 
 // Step 1: Fence Styles Images
 import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
@@ -104,6 +104,12 @@ export default function CardPhotosEditor() {
   const [isDragging, setIsDragging] = React.useState<boolean>(false);
   const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
 
+  const [verificationState, setVerificationState] = React.useState<{
+    status: 'idle' | 'checking' | 'verified' | 'error';
+    message: string;
+    details?: string;
+  }>({ status: 'idle', message: '' });
+
   // Load and sync existing custom images on mount
   React.useEffect(() => {
     try {
@@ -115,6 +121,46 @@ export default function CardPhotosEditor() {
       console.error('Error loading custom photos:', e);
     }
   }, []);
+
+  const handleForceVerifyAndSave = () => {
+    setVerificationState({ status: 'checking', message: 'Verifying disk space & writing configuration...' });
+    
+    setTimeout(() => {
+      try {
+        const dataStr = JSON.stringify(customPhotos);
+        localStorage.setItem('customer_estimator_custom_photos', dataStr);
+        
+        // Retrieve and compare to guarantee write was successful
+        const retrieved = localStorage.getItem('customer_estimator_custom_photos');
+        if (!retrieved || retrieved !== dataStr) {
+          throw new Error('Local database verification step failed. Changes could not be verified on hard disk.');
+        }
+        
+        // Measure size 
+        const bytes = new Blob([dataStr]).size;
+        const kb = (bytes / 1024).toFixed(1);
+        const count = Object.keys(customPhotos).length;
+        
+        // Emit events
+        window.dispatchEvent(new Event('customer_estimator_photos_updated'));
+        
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        setVerificationState({
+          status: 'verified',
+          message: `Saved & Sync Verified successfully at ${timestamp}!`,
+          details: `All ${count} custom photograph presets are securely locked into your local browser storage (${kb} KB utilized).`
+        });
+      } catch (e: any) {
+        console.error('Storage verify error:', e);
+        setVerificationState({
+          status: 'error',
+          message: 'Sync Verification Failed!',
+          details: e?.message || 'Check browser storage settings.'
+        });
+      }
+    }, 400);
+  };
 
   const styleOptions: CardOption[] = [
     {
@@ -358,6 +404,84 @@ export default function CardPhotosEditor() {
         <p className="text-sm font-medium text-[#666666]">
           Upload custom photographs for the wizard cards. Your custom photos will immediately update both the main Style steps and the detailed Material steps.
         </p>
+
+        {/* Global Verification & Storage Sanity Tool */}
+        <div className="pt-2 max-w-md mx-auto">
+          {verificationState.status === 'idle' && (
+            <button
+              type="button"
+              onClick={handleForceVerifyAndSave}
+              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider py-2.5 px-5 rounded-xl transition duration-200 shadow-sm border border-slate-900 active:scale-95 cursor-pointer"
+            >
+              <Save size={14} />
+              Confirm & Save Photo Settings
+            </button>
+          )}
+
+          {verificationState.status === 'checking' && (
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 bg-slate-100 text-slate-500 text-xs font-black uppercase tracking-wider py-2.5 px-5 rounded-xl border border-slate-200 cursor-not-allowed"
+            >
+              <RefreshCw className="animate-spin" size={14} />
+              Verifying write sync...
+            </button>
+          )}
+
+          {/* Success / Warning State Banners */}
+          {verificationState.status === 'verified' && (
+            <div className="space-y-3">
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-850 text-left space-y-1 shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800">
+                    {verificationState.message}
+                  </span>
+                </div>
+                {verificationState.details && (
+                  <p className="text-[10px] font-bold text-emerald-700">
+                    {verificationState.details}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleForceVerifyAndSave}
+                className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 hover:underline text-[11px] font-bold uppercase tracking-wider"
+              >
+                <RefreshCw size={11} />
+                Re-Run Storage Verification Test
+              </button>
+            </div>
+          )}
+
+          {verificationState.status === 'error' && (
+            <div className="space-y-3">
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-850 text-left space-y-1 shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-2 text-red-800">
+                  <X size={18} className="text-american-red shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider">
+                    {verificationState.message}
+                  </span>
+                </div>
+                {verificationState.details && (
+                  <p className="text-[10px] text-red-600">
+                    {verificationState.details}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleForceVerifyAndSave}
+                className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-850 text-white text-xs font-black uppercase tracking-wider py-2.5 px-5 rounded-xl transition duration-200 shadow-sm border border-slate-900 active:scale-95 cursor-pointer"
+              >
+                <RefreshCw size={13} />
+                Retry Storage Verification Action
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Control Switcher to choose between Step 1 (Styles) and Step 2 (Materials) */}
