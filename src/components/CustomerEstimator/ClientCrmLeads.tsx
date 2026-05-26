@@ -1,5 +1,5 @@
 import React from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, writeBatch, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { 
   Users, TrendingUp, DollarSign, Search, MapPin, 
@@ -17,52 +17,62 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
   const [statusFilter, setStatusFilter] = React.useState<string>('All');
   const [selectedLead, setSelectedLead] = React.useState<any | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = React.useState<string>('Live Synced');
 
-  // Read leads from firebase
-  const fetchLeads = React.useCallback(async () => {
+  // Trigger brief visual sync indicator when clicked
+  const fetchLeads = React.useCallback(() => {
+    setSyncStatus('Syncing...');
+    setTimeout(() => {
+      setSyncStatus('Live Synced');
+    }, 600);
+  }, []);
+
+  // Set up real-time firebase subscriber
+  React.useEffect(() => {
     setLoading(true);
     setError(null);
-    try {
-      const q = query(
-        collection(db, 'estimates'), 
-        where('companyId', '==', 'lonestarfence')
-      );
-      const querySnapshot = await getDocs(q);
-      const fetchedItems: any[] = [];
-      querySnapshot.forEach((docSnap) => {
-        const item = docSnap.data();
-        // Include customer estimates
-        if (item.isCustomerEstimate || item.customerName) {
-          fetchedItems.push({
-            id: docSnap.id,
-            ...item
-          });
+    
+    const q = query(
+      collection(db, 'estimates'), 
+      where('companyId', '==', 'lonestarfence')
+    );
+
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const fetchedItems: any[] = [];
+        snapshot.forEach((docSnap) => {
+          const item = docSnap.data();
+          // Include customer estimates
+          if (item.isCustomerEstimate || item.customerName) {
+            fetchedItems.push({
+              id: docSnap.id,
+              ...item
+            });
+          }
+        });
+
+        // Sort by newest address or date
+        fetchedItems.sort((a, b) => {
+          const dateA = a.date || a.createdAt || '';
+          const dateB = b.date || b.createdAt || '';
+          return dateB.localeCompare(dateA);
+        });
+
+        setLeads(fetchedItems);
+        if (onLeadsCountChange) {
+          onLeadsCountChange(fetchedItems.length);
         }
-      });
-
-      // Sort by newest address or date
-      fetchedItems.sort((a, b) => {
-        const dateA = a.date || a.createdAt || '';
-        const dateB = b.date || b.createdAt || '';
-        return dateB.localeCompare(dateA);
-      });
-
-      setLeads(fetchedItems);
-      if (onLeadsCountChange) {
-        onLeadsCountChange(fetchedItems.length);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Failed to load leads from database:', err);
+        setError('Could not connect to database. Showing fallback preview schema.');
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to load leads from database:', err);
-      setError('Could not connect to database. Showing fallback preview schema.');
-      // Keep state clean
-    } finally {
-      setLoading(false);
-    }
-  }, [onLeadsCountChange]);
+    );
 
-  React.useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+    return () => unsubscribe();
+  }, [onLeadsCountChange]);
 
   // Seed demo leads in case database is empty
   const handleSeedDemodb = async () => {
@@ -244,10 +254,10 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
         </div>
         <button
           onClick={fetchLeads}
-          className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-indigo-400/20 shadow-md transition-all z-10 flex items-center gap-2"
+          className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-indigo-400/20 shadow-md transition-all z-10 flex items-center gap-2 hover:shadow-indigo-500/25 min-w-[130px] justify-center"
         >
-          <RotateCcw size={12} className="animate-spin-slow" />
-          Sync Pipeline Log
+          <RotateCcw size={12} className={syncStatus === 'Syncing...' ? 'animate-spin' : 'animate-spin-slow'} />
+          {syncStatus}
         </button>
       </div>
 

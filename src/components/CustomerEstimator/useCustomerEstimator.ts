@@ -288,32 +288,36 @@ export function useCustomerEstimator(
 
       // 3. Post to GHL if we have a URL
       if (ghlWebhookUrl) {
-        const webhookPayload = {
-          firstName: data.firstName,
-          lastName: data.lastName,
-          email: data.email,
-          phone: data.phone,
-          projectAddress: data.address,
-          fenceType: data.fenceType,
-          estimateTotal: Math.round(breakdown.total * 100) / 100,
-          estimateDetails: JSON.stringify({
-            data,
-            breakdown
-          }),
-          source: 'website-estimator-tool',
-          tags: ['Customer Estimate', 'New Lead']
-        };
+        try {
+          const webhookPayload = {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone,
+            projectAddress: data.address,
+            fenceType: data.fenceType,
+            estimateTotal: Math.round(breakdown.total * 100) / 100,
+            estimateDetails: JSON.stringify({
+              data,
+              breakdown
+            }),
+            source: 'website-estimator-tool',
+            tags: ['Customer Estimate', 'New Lead']
+          };
 
-        const response = await fetch(ghlWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(webhookPayload)
-        });
+          const response = await fetch(ghlWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookPayload)
+          });
 
-        if (response.ok) {
-          setGhlSynced(true);
-        } else {
-          console.warn('GHL CRM webhook returned an error:', response.status);
+          if (response.ok) {
+            setGhlSynced(true);
+          } else {
+            console.warn('GHL CRM webhook returned an error:', response.status);
+          }
+        } catch (ghlError) {
+          console.warn('GHL CRM transmission failed, estimate saved securely in app ledger:', ghlError);
         }
       }
 
