@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, Image as ImageIcon, Trash2, RefreshCw, CheckCircle2, Sliders, Layers } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, RefreshCw, CheckCircle2, Sliders, Layers, X } from 'lucide-react';
 
 // Step 1: Fence Styles Images
 import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
@@ -89,6 +89,20 @@ export default function CardPhotosEditor() {
   const [dragActiveId, setDragActiveId] = React.useState<string | null>(null);
   const [activeSection, setActiveSection] = React.useState<'styles' | 'materials'>('styles');
   const [message, setMessage] = React.useState<{ id: string; text: string; type: 'success' | 'info' } | null>(null);
+
+  const previewRef = React.useRef<HTMLDivElement>(null);
+  const [editorImage, setEditorImage] = React.useState<{
+    id: string;
+    src: string;
+    naturalWidth: number;
+    naturalHeight: number;
+  } | null>(null);
+
+  const [zoomMultiplier, setZoomMultiplier] = React.useState<number>(1.0);
+  const [dragX, setDragX] = React.useState<number>(0);
+  const [dragY, setDragY] = React.useState<number>(0);
+  const [isDragging, setIsDragging] = React.useState<boolean>(false);
+  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
 
   // Load and sync existing custom images on mount
   React.useEffect(() => {
@@ -206,23 +220,99 @@ export default function CardPhotosEditor() {
   const handleFileChange = async (id: string, file: File) => {
     if (!file) return;
 
-    setMessage({ id, text: 'Processing & compressing photo...', type: 'info' });
+    setMessage({ id, text: 'Opening image in framing viewport...', type: 'info' });
 
     try {
-      const compressedBase64 = await resizeAndCropImage(file, 800, 500);
-      const updatedPhotos = { ...customPhotos, [id]: compressedBase64 };
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const src = event.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          setEditorImage({
+            id,
+            src,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+          });
+          setZoomMultiplier(1.0);
+          setDragX(0);
+          setDragY(0);
+          setIsDragging(false);
+          setMessage(null);
+        };
+        img.onerror = () => {
+          setMessage({ id, text: 'Failed to load image details.', type: 'info' });
+        };
+        img.src = src;
+      };
+      reader.onerror = () => {
+        setMessage({ id, text: 'Failed to read image file.', type: 'info' });
+      };
+      reader.readAsDataURL(file);
+    } catch (e) {
+      console.error('Error loading image:', e);
+      setMessage({ id, text: 'Failed to open image editor.', type: 'info' });
+    }
+  };
+
+  const handleSaveAdjustedPhoto = () => {
+    if (!editorImage) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 500;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const VIEWPORT_W = 400;
+    const VIEWPORT_H = 250;
+    const ratio = 800 / VIEWPORT_W; // exactly 2.0
+
+    // Fill background with elegant neutral first
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, 800, 500);
+
+    // High quality scaling setup
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const img = new Image();
+    img.onload = () => {
+      const imgRatio = editorImage.naturalWidth / editorImage.naturalHeight;
+      const targetRatio = VIEWPORT_W / VIEWPORT_H;
+      let baseScale = 1.0;
+      if (imgRatio > targetRatio) {
+        baseScale = VIEWPORT_H / editorImage.naturalHeight;
+      } else {
+        baseScale = VIEWPORT_W / editorImage.naturalWidth;
+      }
+
+      const currentW = editorImage.naturalWidth * baseScale * zoomMultiplier;
+      const currentH = editorImage.naturalHeight * baseScale * zoomMultiplier;
+
+      const defaultX = (VIEWPORT_W - currentW) / 2;
+      const defaultY = (VIEWPORT_H - currentH) / 2;
+
+      const finalW = currentW * ratio;
+      const finalH = currentH * ratio;
+      const finalX = (defaultX + dragX) * ratio;
+      const finalY = (defaultY + dragY) * ratio;
+
+      ctx.drawImage(img, finalX, finalY, finalW, finalH);
+
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      const updatedPhotos = { ...customPhotos, [editorImage.id]: compressedBase64 };
       setCustomPhotos(updatedPhotos);
       localStorage.setItem('customer_estimator_custom_photos', JSON.stringify(updatedPhotos));
-      
-      // Emit synthetic update event so other active windows can update
+
+      // Emit event
       window.dispatchEvent(new Event('customer_estimator_photos_updated'));
 
-      setMessage({ id, text: 'Photo updated and saved successfully!', type: 'success' });
+      setMessage({ id: editorImage.id, text: 'Photo custom crop applied and saved!', type: 'success' });
+      setEditorImage(null);
       setTimeout(() => setMessage(null), 3500);
-    } catch (e) {
-      console.error('Error processing photo:', e);
-      setMessage({ id, text: 'Failed to process the uploaded image.', type: 'info' });
-    }
+    };
+    img.src = editorImage.src;
   };
 
   // Drag and Drop handlers
@@ -414,6 +504,199 @@ export default function CardPhotosEditor() {
           );
         })}
       </div>
+
+      {/* Visual Crop & Position Frame Adjustment Modal */}
+      {editorImage && (() => {
+        const VIEWPORT_W = 400;
+        const VIEWPORT_H = 250;
+        
+        const imgRatio = editorImage.naturalWidth / editorImage.naturalHeight;
+        const targetRatio = VIEWPORT_W / VIEWPORT_H;
+        let baseScale = 1.0;
+        if (imgRatio > targetRatio) {
+          baseScale = VIEWPORT_H / editorImage.naturalHeight;
+        } else {
+          baseScale = VIEWPORT_W / editorImage.naturalWidth;
+        }
+
+        const currentW = editorImage.naturalWidth * baseScale * zoomMultiplier;
+        const currentH = editorImage.naturalHeight * baseScale * zoomMultiplier;
+
+        const defaultX = (VIEWPORT_W - currentW) / 2;
+        const defaultY = (VIEWPORT_H - currentH) / 2;
+
+        const leftPos = defaultX + dragX;
+        const topPos = defaultY + dragY;
+
+        const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+          e.preventDefault();
+          setIsDragging(true);
+          setDragStart({ x: e.clientX - dragX, y: e.clientY - dragY });
+        };
+
+        const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+          if (!isDragging) return;
+          setDragX(e.clientX - dragStart.x);
+          setDragY(e.clientY - dragStart.y);
+        };
+
+        const handleMouseUp = () => {
+          setIsDragging(false);
+        };
+
+        const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+          if (e.touches.length === 1) {
+            setIsDragging(true);
+            setDragStart({ x: e.touches[0].clientX - dragX, y: e.touches[0].clientY - dragY });
+          }
+        };
+
+        const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+          if (!isDragging || e.touches.length !== 1) return;
+          setDragX(e.touches[0].clientX - dragStart.x);
+          setDragY(e.touches[0].clientY - dragStart.y);
+        };
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+            <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl p-6 relative flex flex-col space-y-5">
+              
+              {/* Header */}
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                <div className="space-y-0.5">
+                  <h3 className="text-md font-black text-american-blue uppercase tracking-tight">
+                    Position Your Photo
+                  </h3>
+                  <p className="text-[11px] text-[#666666] font-medium leading-none">
+                    Select the ideal crop viewport view below
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditorImage(null)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-100 rounded-lg"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Viewport Frame Container */}
+              <div className="flex flex-col items-center justify-center space-y-2">
+                <div 
+                  ref={previewRef}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleMouseUp}
+                  style={{ width: `${VIEWPORT_W}px`, height: `${VIEWPORT_H}px` }}
+                  className="relative overflow-hidden rounded-2xl border border-slate-300 shadow-inner select-none cursor-grab active:cursor-grabbing bg-slate-100 flex-shrink-0"
+                >
+                  <img
+                    src={editorImage.src}
+                    alt="Reposition adjustments"
+                    draggable={false}
+                    style={{
+                      width: `${currentW}px`,
+                      height: `${currentH}px`,
+                      left: `${leftPos}px`,
+                      top: `${topPos}px`,
+                      position: 'absolute',
+                      transform: 'translateZ(0)',
+                    }}
+                    className="max-w-none pointer-events-none select-none"
+                    referrerPolicy="no-referrer"
+                  />
+                  
+                  {/* Subtle Framing Guides */}
+                  <div className="absolute inset-0 border-2 border-american-blue pointer-events-none opacity-20" />
+                  <div className="absolute inset-x-0 top-1/2 h-px bg-white pointer-events-none opacity-40" />
+                  <div className="absolute inset-y-0 left-1/2 w-px bg-white pointer-events-none opacity-40" />
+                  
+                  {/* Card Display overlay tag */}
+                  <span className="absolute bottom-2.5 left-2.5 bg-slate-900/80 text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded shadow-sm pointer-events-none">
+                    Card View Area
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  ↕️ Drag the picture above to re-center details.
+                </p>
+              </div>
+
+              {/* Sliders and Quick Centering Actions */}
+              <div className="space-y-4 pt-1">
+                
+                {/* Zoom factor adjustment */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-slate-500" />
+                      Scale / Zoom View
+                    </span>
+                    <span className="text-american-blue text-xs font-extrabold flex items-center gap-1">
+                      {Math.round(zoomMultiplier * 100)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 font-bold">Fit</span>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="4.0"
+                      step="0.02"
+                      value={zoomMultiplier}
+                      onChange={(e) => setZoomMultiplier(parseFloat(e.target.value))}
+                      className="flex-grow accent-slate-900 bg-slate-200 rounded-lg h-1.5 cursor-pointer"
+                    />
+                    <span className="text-xs text-slate-400 font-bold">Zoom</span>
+                  </div>
+                </div>
+
+                {/* Reset button row */}
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                    Dimensions: {editorImage.naturalWidth}x{editorImage.naturalHeight}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDragX(0);
+                      setDragY(0);
+                      setZoomMultiplier(1.0);
+                    }}
+                    className="text-xs font-black text-slate-800 hover:text-american-blue hover:underline uppercase tracking-wider flex items-center gap-1.5 p-1 transition-colors"
+                  >
+                    <RefreshCw size={12} />
+                    Reset Frame Position
+                  </button>
+                </div>
+              </div>
+
+              {/* Dialog Footer Actions */}
+              <div className="flex items-center gap-3 pt-3 border-t border-slate-100 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditorImage(null)}
+                  className="px-4.5 py-2.5 rounded-xl text-xs font-black uppercase text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAdjustedPhoto}
+                  className="px-5.5 py-2.5 rounded-xl text-xs font-black uppercase bg-slate-900 text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 shadow-md shadow-slate-900/15"
+                >
+                  <CheckCircle2 size={14} />
+                  Apply & Save Crop
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
