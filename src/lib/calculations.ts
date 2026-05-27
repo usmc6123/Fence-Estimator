@@ -1641,7 +1641,7 @@ export function calculateDetailedTakeOff(
     let runLaborRate = 0;
     if (runStyle.type === 'Wood') {
       const is6ft = run.height <= 6;
-      const isSideBySide = run.visualStyleId === 'w-side';
+      const isSideBySide = run.visualStyleId === 'w-side' || run.visualStyleId === 'side-by-side';
       if (is6ft) {
         runLaborRate = isSideBySide ? laborRates.woodSideBySide6 : laborRates.woodBoardOnBoard6;
       } else {
@@ -1759,7 +1759,7 @@ export function calculateDetailedTakeOff(
       hasTrim: !!estimate.hasCapAndTrim,
       woodType: run.woodType || estimate.woodType,
       stainSides: run.stainSides,
-      picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : (run.visualStyleId === 'w-side' ? 'Side by Side' : run.visualStyleId),
+      picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : ((run.visualStyleId === 'w-side' || run.visualStyleId === 'side-by-side') ? 'Side by Side' : run.visualStyleId),
       chainLinkGrade: run.chainLinkGrade || (runStyle.type === 'Chain Link' ? 'Residential' : undefined),
       hasBottomRail: run.hasBottomRail,
       ironInstallType: run.ironInstallType || estimate.ironInstallType,
