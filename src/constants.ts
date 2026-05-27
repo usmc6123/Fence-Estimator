@@ -290,7 +290,6 @@ export const DEFAULT_LABOR_RATES = {
   washAndStain: 0.8, // per sq ft
   gateWeldedFrame: 150,
   gateWoodWalk: 100,
-  gateWoodDrive: 150,
   gateHangPreMade: 50,
   deliveryFee: 50,
 };

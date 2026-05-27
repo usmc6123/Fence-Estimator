@@ -99,10 +99,9 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
             </div>
             <div className="grid gap-6 sm:grid-cols-2">
               {[
-                { label: "Wood Walk", key: "gateWoodWalk" },
-                { label: "Wood Drive", key: "gateWoodDrive" },
-                { label: "Welded Frame", key: "gateWeldedFrame" },
-                { label: "Hang Pre-made", key: "gateHangPreMade" }
+                { label: "Wood Walk Gate", key: "gateWoodWalk" },
+                { label: "Welded Frame Gate (wood drive or metal other than 4')", key: "gateWeldedFrame" },
+                { label: "Premade 4' Metal Gate", key: "gateHangPreMade" }
               ].map((item) => (
                 <div key={item.key} className="group space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-[#666666] ml-2 group-hover:text-american-blue transition-colors">

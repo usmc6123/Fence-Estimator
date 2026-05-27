@@ -331,7 +331,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
             washAndStain: 1.5,
             gateWeldedFrame: 150,
             gateWoodWalk: 75,
-            gateWoodDrive: 150,
             gateHangPreMade: 50,
             deliveryFee: 75
         },

@@ -106,7 +106,6 @@ export interface LaborRates {
   washAndStain: number; // per sq ft
   gateWeldedFrame: number;
   gateWoodWalk: number;
-  gateWoodDrive: number;
   gateHangPreMade: number;
   deliveryFee: number;
 }

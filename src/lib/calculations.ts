@@ -663,20 +663,22 @@ export function calculateDetailedTakeOff(
         let gateLaborAmount = 0;
         let gateLaborName = '';
 
-        if (gate.construction === 'Welded') {
-          gateLaborAmount = laborRates.gateWeldedFrame;
-          gateLaborName = `Gate Install (Welded Frame)`;
-        } else if (gate.construction === 'Pre-made') {
-          gateLaborAmount = laborRates.gateHangPreMade;
-          gateLaborName = `Gate Install (Pre-made Gate)`;
+        if (runStyle.type === 'Wood') {
+          if (gate.type === 'Double') {
+            gateLaborAmount = laborRates.gateWeldedFrame;
+            gateLaborName = `Gate Install (Welded Frame - Wood Drive)`;
+          } else {
+            gateLaborAmount = laborRates.gateWoodWalk;
+            gateLaborName = `Gate Install (Wood Walk Gate)`;
+          }
         } else {
-          // Default logic if not specifically selected
-          if (runStyle.type === 'Wood') {
-            gateLaborAmount = gate.type === 'Double' ? laborRates.gateWoodDrive : laborRates.gateWoodWalk;
-            gateLaborName = `Gate Install (${gate.type} Wood)`;
+          // Metal or other run styles
+          if (gate.width === 4 && (gate.construction === 'Pre-made' || !gate.construction)) {
+            gateLaborAmount = laborRates.gateHangPreMade;
+            gateLaborName = `Gate Install (Premade 4' Metal Gate)`;
           } else {
             gateLaborAmount = laborRates.gateWeldedFrame;
-            gateLaborName = `Gate Install (Welded Frame)`;
+            gateLaborName = `Gate Install (Welded Frame - Metal other than 4')`;
           }
         }
 
