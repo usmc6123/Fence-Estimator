@@ -1509,7 +1509,7 @@ export default function Estimator({
                                     </select>
                                     <div className="flex items-center gap-2">
                                       <div className="flex bg-[#F0F0F0] p-0.5 rounded-lg">
-                                        {(['Pre-made', 'Welded'] as const).map(ctype => (
+                                        {(['Wood Framed', 'Pre-made', 'Welded'] as const).map(ctype => (
                                           <button
                                             key={ctype}
                                             onClick={() => {
@@ -1519,7 +1519,7 @@ export default function Estimator({
                                             }}
                                             className={cn(
                                               "px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-widest transition-all",
-                                              (gate.construction || 'Pre-made') === ctype 
+                                              (gate.construction || (runStyle.type === 'Wood' ? 'Wood Framed' : 'Pre-made')) === ctype 
                                                 ? "bg-white text-american-blue shadow-sm" 
                                                 : "text-[#999999] hover:text-american-blue"
                                             )}

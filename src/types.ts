@@ -42,7 +42,7 @@ export interface GateDetail {
   id: string;
   type: 'Single' | 'Double';
   width: number;
-  construction?: 'Pre-made' | 'Welded';
+  construction?: 'Wood Framed' | 'Pre-made' | 'Welded';
   position?: number; // Distance from start of run in feet
   customItems?: {
     id: string;

@@ -663,22 +663,33 @@ export function calculateDetailedTakeOff(
         let gateLaborAmount = 0;
         let gateLaborName = '';
 
-        if (runStyle.type === 'Wood') {
-          if (gate.type === 'Double') {
-            gateLaborAmount = laborRates.gateWeldedFrame;
-            gateLaborName = `Gate Install (Welded Frame - Wood Drive)`;
-          } else {
-            gateLaborAmount = laborRates.gateWoodWalk;
-            gateLaborName = `Gate Install (Wood Walk Gate)`;
-          }
+        if (gate.construction === 'Wood Framed') {
+          gateLaborAmount = laborRates.gateWoodWalk;
+          gateLaborName = `Gate Install (Wood Walk Gate)`;
+        } else if (gate.construction === 'Pre-made') {
+          gateLaborAmount = laborRates.gateHangPreMade;
+          gateLaborName = `Gate Install (Premade 4' Metal Gate)`;
+        } else if (gate.construction === 'Welded') {
+          gateLaborAmount = laborRates.gateWeldedFrame;
+          gateLaborName = `Gate Install (Welded Frame Gate)`;
         } else {
-          // Metal or other run styles
-          if (gate.width === 4 && (gate.construction === 'Pre-made' || !gate.construction)) {
-            gateLaborAmount = laborRates.gateHangPreMade;
-            gateLaborName = `Gate Install (Premade 4' Metal Gate)`;
+          if (runStyle.type === 'Wood') {
+            if (gate.type === 'Double') {
+              gateLaborAmount = laborRates.gateWeldedFrame;
+              gateLaborName = `Gate Install (Welded Frame - Wood Drive)`;
+            } else {
+              gateLaborAmount = laborRates.gateWoodWalk;
+              gateLaborName = `Gate Install (Wood Walk Gate)`;
+            }
           } else {
-            gateLaborAmount = laborRates.gateWeldedFrame;
-            gateLaborName = `Gate Install (Welded Frame - Metal other than 4')`;
+            // Metal or other run styles
+            if (gate.width === 4) {
+              gateLaborAmount = laborRates.gateHangPreMade;
+              gateLaborName = `Gate Install (Premade 4' Metal Gate)`;
+            } else {
+              gateLaborAmount = laborRates.gateWeldedFrame;
+              gateLaborName = `Gate Install (Welded Frame - Metal other than 4')`;
+            }
           }
         }
 
