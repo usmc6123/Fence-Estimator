@@ -25,7 +25,7 @@ export async function generateAIScope(prompt: string): Promise<string> {
   const ai = getGenAI();
   // Using gemini-3-flash-preview as the default stable model
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-3.5-flash",
     contents: prompt
   });
   
@@ -36,7 +36,7 @@ export async function analyzeQuoteDocument(fileData: string, mimeType: string): 
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.5-flash",
       contents: [
         {
           inlineData: {
@@ -100,7 +100,7 @@ export async function analyzeReceiptDocument(fileData: string, mimeType: string)
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.5-flash",
       contents: [
         {
           inlineData: {
@@ -164,7 +164,7 @@ export async function analyzeBlueprintDocument(fileData: string, mimeType: strin
   try {
     const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.5-flash",
       contents: [
         {
           inlineData: {
