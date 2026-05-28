@@ -44,7 +44,7 @@ export default function EmployeePortal() {
           const empDoc = await getDoc(doc(db, 'employees', u.email.toLowerCase()));
           if (empDoc.exists()) {
             setEmployeeRecord(empDoc.data() as Employee);
-          } else if (u.email === 'usmc6123@gmail.com') {
+          } else if (u.email === 'usmc6123@gmail.com' || u.email === 'bradens@lonestarfenceworks.com') {
             // Give Admin full privileges even inside portal view
             setEmployeeRecord({
               email: u.email,

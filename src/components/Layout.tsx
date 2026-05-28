@@ -35,7 +35,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  const isAdmin = user && user.email === 'usmc6123@gmail.com';
+  const isAdmin = user && (user.email === 'usmc6123@gmail.com' || user.email === 'bradens@lonestarfenceworks.com');
   const displayItems = isAdmin 
     ? [...navItems, { id: 'employees', label: 'Manage Employees', icon: Users }] 
     : navItems;
