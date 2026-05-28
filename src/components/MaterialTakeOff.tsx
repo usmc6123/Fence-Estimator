@@ -4,11 +4,10 @@ import {
   Package, Hammer, Trash2, Settings as SettingsIcon, ExternalLink,
   Plus, Search, X, AlertTriangle, Clock, ClipboardList, CheckCircle2
 } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote, User } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
-import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 

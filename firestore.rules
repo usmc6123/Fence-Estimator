@@ -103,6 +103,12 @@ service cloud.firestore {
         && data.permission in ['View Only', 'Can Edit'];
     }
 
+    function isValidUserProfile(data) {
+      return data.uid is string
+        && data.tier in ['free', 'paid']
+        && (data.email == null || data.email is string);
+    }
+
     function isValidEvent(data) {
       return data.id is string
         && data.title is string
@@ -111,6 +117,14 @@ service cloud.firestore {
     }
 
     // --- Collection Routes ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow update: if (isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming()))
+                      || isAdmin();
+    }
 
     match /employees/{email} {
       allow get, list: if isCompanyMember();

@@ -1,24 +1,27 @@
 import React from 'react';
-import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon, Users, Globe } from 'lucide-react';
+import { Hammer, Calculator, Book, Settings, Menu, X, FileText, TrendingUp, Shield, Archive, Wallet, LogIn, LogOut, Calendar as CalendarIcon, Users, Globe, Sparkles, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
-import { User } from 'firebase/auth';
+import { User } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   user: User | null;
+  userTier?: 'free' | 'paid';
   onLogin: () => void;
   onLogout: () => void;
 }
 
-export default function Layout({ children, activeTab, setActiveTab, user, onLogin, onLogout }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, user, userTier = 'free', onLogin, onLogout }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
+    { id: 'pricing', label: 'Pricing Plans', icon: Sparkles },
+    { id: 'billing', label: 'Premium & Billing', icon: CreditCard },
     { id: 'customer-estimator', label: 'Customer Estimator', icon: Globe },
     { id: 'scheduler', label: 'Job Scheduler', icon: CalendarIcon },
     { id: 'dossiers', label: 'Saved Dossiers', icon: Archive },
@@ -79,29 +82,39 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
           </ul>
         </nav>
         
-        <div className="absolute bottom-0 w-full border-t border-[#E5E5E5] p-6">
+        <div className="absolute bottom-0 w-full border-t border-[#E5E5E5] p-5">
           {user ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-american-blue text-white flex items-center justify-center text-xs font-bold uppercase">
-                    {user.displayName?.substring(0, 2) || 'U'}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="h-10 w-10 text-xs text-white bg-american-blue rounded-full flex items-center justify-center font-bold uppercase">
+                      {(user.displayName || user.email || 'U').substring(0, 2)}
+                    </div>
+                  )}
+                  <div className="overflow-hidden">
+                    <p className="text-sm font-black text-american-blue truncate">{user.displayName || user.email?.split('@')[0] || 'User'}</p>
+                    <p className="text-[10px] text-[#999999] truncate font-mono">{user.email}</p>
                   </div>
-                )}
-                <div className="overflow-hidden">
-                  <p className="text-sm font-black text-american-blue truncate">{user.displayName || 'User'}</p>
-                  <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest truncate">Fence Pro</p>
                 </div>
+                <button 
+                  onClick={onLogout}
+                  className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors shrink-0"
+                  title="Log Out"
+                >
+                  <LogOut size={16} />
+                </button>
               </div>
-              <button 
-                onClick={onLogout}
-                className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors"
-                title="Log Out"
-              >
-                <LogOut size={16} />
-              </button>
+              <div className="inline-flex mt-1">
+                <span className={cn(
+                  "rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-widest",
+                  userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
+                )}>
+                  {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
+                </span>
+              </div>
             </div>
           ) : (
             <button 
@@ -170,30 +183,40 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogi
 
             <div className="mt-4 border-t border-[#E5E5E5] pt-4">
               {user ? (
-                <div className="flex items-center justify-between gap-3 px-4">
-                  <div className="flex items-center gap-3">
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-american-blue text-white flex items-center justify-center text-xs font-bold uppercase">
-                        {user.displayName?.substring(0, 2) || 'U'}
+                <div className="flex flex-col gap-3 px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {user.photoURL ? (
+                        <img src={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-american-blue/10" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="h-10 w-10 text-xs text-white bg-american-blue rounded-full flex items-center justify-center font-bold uppercase">
+                          {(user.displayName || user.email || 'U').substring(0, 2)}
+                        </div>
+                      )}
+                      <div className="overflow-hidden">
+                        <p className="text-sm font-black text-american-blue truncate">{user.displayName || user.email?.split('@')[0] || 'User'}</p>
+                        <p className="text-[10px] text-[#999999] truncate font-mono">{user.email}</p>
                       </div>
-                    )}
-                    <div className="overflow-hidden">
-                      <p className="text-sm font-black text-american-blue truncate">{user.displayName || 'User'}</p>
-                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest truncate">Fence Pro</p>
                     </div>
+                    <button 
+                      onClick={() => {
+                        onLogout();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors flex items-center gap-2 text-xs font-black uppercase tracking-wider"
+                    >
+                      <LogOut size={16} />
+                      Exit
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => {
-                      onLogout();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="p-2 text-american-red hover:bg-american-red/5 rounded-lg transition-colors flex items-center gap-2 text-sm font-bold uppercase tracking-wider"
-                  >
-                    <LogOut size={16} />
-                    Exit
-                  </button>
+                  <div className="inline-flex">
+                    <span className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest",
+                      userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
+                    )}>
+                      {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <button 

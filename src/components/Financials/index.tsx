@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { SavedEstimate, JobExpense, JobStatus } from '../../types';
+import { SavedEstimate, JobExpense, JobStatus, User } from '../../types';
 import { db, handleFirestoreError, OperationType, storage } from '../../lib/firebase';
 import { 
   collection, 
@@ -38,7 +38,6 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { User } from 'firebase/auth';
 import { analyzeReceiptDocument } from '../../services/geminiService';
 
 interface FinancialsProps {

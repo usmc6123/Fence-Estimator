@@ -1,5 +1,10 @@
 {
   "name": "Lone Star Fence Works",
-  "description": "Professional fence building estimation tool for Lone Star Fence Works.",
-  "requestFramePermissions": ["camera"],
+  "description": "Professional fence building estimation tool with premium subscriptions, automated contracts, and layout visualizations.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

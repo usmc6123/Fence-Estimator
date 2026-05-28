@@ -5,13 +5,12 @@ import {
   CheckCircle2, Loader2, ChevronRight, Scale, ExternalLink,
   Plus, History, DollarSign, Search, ChevronDown, GitMerge
 } from 'lucide-react';
-import { SupplierQuote, QuoteItem, MaterialItem } from '../types';
+import { SupplierQuote, QuoteItem, MaterialItem, User } from '../types';
 import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, updateDoc, deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { User } from 'firebase/auth';
 
 interface SearchableSelectProps {
   options: { value: string; label: string }[];

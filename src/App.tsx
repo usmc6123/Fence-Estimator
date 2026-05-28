@@ -5,6 +5,7 @@
 
 import React from 'react';
 import Layout from './components/Layout';
+import { AuthPage, PricingPage, SubscriptionDashboard } from './components/SubscriptionSystem';
 import Estimator from './components/Estimator';
 import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
@@ -21,9 +22,9 @@ import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
-import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate } from './types';
-import { auth, onAuthStateChanged, signInWithPopup, googleProvider, signOut, testConnection } from './lib/firebase';
-import { User } from 'firebase/auth';
+import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
+import { testConnection } from './lib/firebase';
+import { useUser, useClerk } from '@clerk/clerk-react';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
@@ -65,7 +66,96 @@ function getInitialValue(key: string, storageKey: string, defaultValue: any) {
 }
 
 export default function App() {
-  const [user, setUser] = React.useState<User | null>(null);
+  const { isLoaded, isSignedIn, user: clerkUser } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
+
+  const [localUser, setLocalUser] = React.useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('company_local_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const user = React.useMemo<User | null>(() => {
+    if (localUser) return localUser;
+    if (!isLoaded || !clerkUser) return null;
+    return {
+      uid: clerkUser.id,
+      email: clerkUser.primaryEmailAddress?.emailAddress || null,
+      displayName: clerkUser.fullName || null,
+      photoURL: clerkUser.imageUrl || null
+    };
+  }, [isLoaded, clerkUser, localUser]);
+
+  const [userTier, setUserTier] = React.useState<'free' | 'paid'>('free');
+  const [userNextBilling, setUserNextBilling] = React.useState<string | null>(null);
+
+  // Sync / Listen to user's real-time subscription document state from Firestore
+  React.useEffect(() => {
+    if (!user) {
+      setUserTier('free');
+      setUserNextBilling(null);
+      return;
+    }
+
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const uData = docSnap.data();
+        setUserTier(uData.tier || 'free');
+        setUserNextBilling(uData.nextBillingDate || null);
+      } else {
+        // Auto register their doc as free if they signed up and doc doesn't exist yet
+        setDoc(userRef, {
+          uid: user.uid,
+          email: user.email || '',
+          tier: 'free',
+          createdAt: new Date().toISOString()
+        }, { merge: true }).catch(err => console.error("Auto registered doc error:", err));
+        
+        setUserTier('free');
+        setUserNextBilling(null);
+      }
+    }, (error) => {
+      console.warn('Real-time subscription watcher had issues:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Handle return from Stripe checkout and verify session results
+  React.useEffect(() => {
+    const handleCheckSessionResult = async () => {
+      if (!user) return;
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session_id');
+      if (sessionId) {
+        try {
+          const response = await fetch('/api/verify-session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sessionId, userId: user.uid }),
+          });
+          const result = await response.json();
+          if (response.ok && result.success) {
+            setUserTier('paid');
+            setUserNextBilling(result.nextBillingDate);
+          }
+        } catch (err) {
+          console.error('Failed to verify landing session path:', err);
+        } finally {
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }
+    };
+    handleCheckSessionResult();
+  }, [user]);
+
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
 
   const [activeTab, setActiveTab] = React.useState(() => {
@@ -152,10 +242,6 @@ export default function App() {
 
   React.useEffect(() => {
     testConnection();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
   }, []);
 
   // Fetch estimates from Firestore if user is logged in, and merge with local ledger backup
@@ -375,16 +461,17 @@ export default function App() {
   }, [user]);
 
   const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Login failed:', error);
-    }
+    setActiveTab('pricing');
   };
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (localUser) {
+        setLocalUser(null);
+        localStorage.removeItem('company_local_user');
+      } else {
+        await clerkSignOut();
+      }
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -514,14 +601,64 @@ export default function App() {
     return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
   }
 
+  if (!user) {
+    return (
+      <Layout 
+        activeTab="pricing" 
+        setActiveTab={setActiveTab} 
+        user={null} 
+        userTier="free"
+        onLogin={handleLogin} 
+        onLogout={handleLogout}
+      >
+        <div className="grid gap-8 lg:grid-cols-5 items-start mt-4">
+          <div className="lg:col-span-3">
+            <PricingPage 
+              userId={null}
+              userEmail={null}
+              currentTier="free"
+              onGetStarted={() => {}}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <AuthPage 
+              onSuccess={() => setActiveTab('estimator')} 
+              onLocalLogin={(u) => {
+                setLocalUser(u);
+                localStorage.setItem('company_local_user', JSON.stringify(u));
+              }}
+            />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout 
       activeTab={activeTab} 
       setActiveTab={setActiveTab} 
       user={user} 
+      userTier={userTier}
       onLogin={handleLogin} 
       onLogout={handleLogout}
     >
+      {activeTab === 'pricing' && (
+        <PricingPage 
+          userId={user.uid}
+          userEmail={user.email}
+          currentTier={userTier}
+          onGetStarted={() => setActiveTab('estimator')}
+        />
+      )}
+      {activeTab === 'billing' && (
+        <SubscriptionDashboard 
+          userId={user.uid}
+          currentTier={userTier}
+          nextBillingDate={userNextBilling}
+          onNavigatePricing={() => setActiveTab('pricing')}
+        />
+      )}
       {activeTab === 'customer-estimator' && (
         <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} />
       )}

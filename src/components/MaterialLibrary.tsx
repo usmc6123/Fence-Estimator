@@ -7,10 +7,9 @@ import {
   CheckCircle2, XCircle, AlertCircle, Clock, AlertTriangle, ClipboardList, Printer
 } from 'lucide-react';
 import { MATERIALS, COMPANY_INFO } from '../constants';
-import { MaterialCategory, MaterialItem } from '../types';
+import { MaterialCategory, MaterialItem, User } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { X } from 'lucide-react';
-import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 

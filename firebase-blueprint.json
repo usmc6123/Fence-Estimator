@@ -146,9 +146,28 @@
         "password": { "type": "string" }
       },
       "required": ["email", "permission"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about a user's account and subscription state",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "tier": { "type": "string", "enum": ["free", "paid"] },
+        "stripeCustomerId": { "type": "string" },
+        "stripeSubscriptionId": { "type": "string" },
+        "nextBillingDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "tier", "createdAt"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User subscription and account tier info"
+    },
     "/estimates/{estimateId}": {
       "schema": "Estimate",
       "description": "Collection of fence estimates"

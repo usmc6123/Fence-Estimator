@@ -7,12 +7,11 @@ import {
   TrendingUp, RotateCcw, Package, Navigation, Image, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
-import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote } from '../types';
+import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote, User } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
-import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import FileGallery from './FileGallery';

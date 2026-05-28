@@ -6,10 +6,9 @@ import {
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
   FolderOpen, ArrowLeft
 } from 'lucide-react';
-import { SavedEstimate, JobStatus, JobPhoto } from '../types';
+import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
