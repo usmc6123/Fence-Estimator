@@ -9,7 +9,7 @@ import {
 import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface SavedEstimatesProps {
@@ -73,7 +73,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
 
     try {
-      await updateDoc(doc(db, 'estimates', id), {
+      await updateDoc(getEstimateDoc(db, id), {
         jobStatus: status,
         status: 'active',
         lastModified: new Date().toISOString()
@@ -112,7 +112,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       // 3. Delete from firestore if user is logged in
       if (user) {
         try {
-          await deleteDoc(doc(db, 'estimates', id));
+          await deleteDoc(getEstimateDoc(db, id));
         } catch (error) {
           console.warn('Firestore server-side delete operation rejected:', error);
         }
@@ -133,7 +133,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!estimate) return;
 
     try {
-      await updateDoc(doc(db, 'estimates', id), {
+      await updateDoc(getEstimateDoc(db, id), {
         status: estimate.status === 'archived' ? 'active' : 'archived',
         lastModified: new Date().toISOString()
       });
@@ -148,7 +148,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
 
     try {
-      await updateDoc(doc(db, 'estimates', id), {
+      await updateDoc(getEstimateDoc(db, id), {
         jobStatus: 'Accepted',
         status: 'active', // Ensure it's not archived
         lastModified: new Date().toISOString()
@@ -164,7 +164,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
     
     try {
-      await updateDoc(doc(db, 'estimates', id), {
+      await updateDoc(getEstimateDoc(db, id), {
         jobStatus: 'Completed',
         status: 'active',
         lastModified: new Date().toISOString()

@@ -1,6 +1,6 @@
 import React from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../../lib/firebase';
 import {
   CustomerEstimateData,
   calculateCustomerEstimate,
@@ -284,7 +284,7 @@ export function useCustomerEstimator(
     try {
       // 1. Save to Firestore (Attempt cloud sync)
       try {
-        await setDoc(doc(db, 'estimates', estId), cleanedCustomerEstimateDoc);
+        await setDoc(getEstimateDoc(db, estId), cleanedCustomerEstimateDoc);
       } catch (writeErr) {
         console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
         // We catch this gracefully to prevent offline/permission errors from blocking the client experience

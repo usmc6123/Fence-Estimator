@@ -12,7 +12,7 @@ import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import FileGallery from './FileGallery';
 import { analyzeBlueprintDocument } from '../services/geminiService';
@@ -363,7 +363,7 @@ export default function Estimator({
 
     try {
       try {
-        await setDoc(doc(db, 'estimates', newId), estimateToSave);
+        await setDoc(getEstimateDoc(db, newId), estimateToSave);
       } catch (writeErr) {
         console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
       }

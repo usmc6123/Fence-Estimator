@@ -23,7 +23,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { SavedEstimate, JobExpense, JobStatus, User } from '../../types';
-import { db, handleFirestoreError, OperationType, storage } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, storage, getEstimateDoc } from '../../lib/firebase';
 import { 
   collection, 
   query, 
@@ -278,7 +278,7 @@ function JobDetailView({ job, onBack, expenses }: { job: SavedEstimate, onBack: 
 
   const handleStatusChange = async (newStatus: JobStatus) => {
     try {
-      await updateDoc(doc(db, 'estimates', job.id), {
+      await updateDoc(getEstimateDoc(db, job.id), {
         jobStatus: newStatus,
         lastModified: new Date().toISOString()
       });

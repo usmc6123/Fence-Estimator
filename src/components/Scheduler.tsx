@@ -33,7 +33,7 @@ import {
   Eye
 } from 'lucide-react';
 import { SavedEstimate, ScheduleEvent, JobStatus, SchedulerConfig } from '../types';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -341,7 +341,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
 
     try {
-        await setDoc(doc(db, 'estimates', dossierId), newDossier);
+        await setDoc(getEstimateDoc(db, dossierId), newDossier);
         await scheduleEstimate(dossierId, selectedDate);
         setNewDossierData({ name: '', phone: '', address: '', email: '' });
         setIsCreatingNewDossier(false);
@@ -368,7 +368,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
     try {
-      const docRef = doc(db, 'estimates', estimateId);
+      const docRef = getEstimateDoc(db, estimateId);
       await updateDoc(docRef, {
         scheduledStartDate: startDateStr,
         scheduledEndDate: endDateStr,
@@ -393,7 +393,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           return;
       }
 
-      const docRef = doc(db, 'estimates', estimateId);
+      const docRef = getEstimateDoc(db, estimateId);
       await updateDoc(docRef, {
         scheduledStartDate: newDateStr,
         scheduledEndDate: endStr,
@@ -473,7 +473,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         await deleteDoc(doc(db, 'schedule_events', id));
     } else {
-        const docRef = doc(db, 'estimates', id);
+        const docRef = getEstimateDoc(db, id);
         await updateDoc(docRef, {
             scheduledStartDate: null,
             scheduledEndDate: null,

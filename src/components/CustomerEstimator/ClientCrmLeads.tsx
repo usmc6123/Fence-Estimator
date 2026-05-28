@@ -1,6 +1,6 @@
 import React from 'react';
 import { collection, query, where, getDocs, doc, updateDoc, writeBatch, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { db, getEstimateDoc, getEstimatesCollection } from '../../lib/firebase';
 import { 
   Users, TrendingUp, DollarSign, Search, MapPin, 
   Trash2, FileText, CheckCircle2, RotateCcw, AlertCircle, Bookmark, ExternalLink 
@@ -33,8 +33,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
     setError(null);
     
     const q = query(
-      collection(db, 'estimates'), 
-      where('companyId', '==', 'lonestarfence')
+      getEstimatesCollection(db)
     );
 
     const unsubscribe = onSnapshot(q, 
@@ -155,7 +154,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
 
       const batch = writeBatch(db);
       for (const item of mockLeads) {
-        const docRef = doc(db, 'estimates', item.id);
+        const docRef = getEstimateDoc(db, item.id);
         batch.set(docRef, item);
       }
       await batch.commit();
@@ -170,7 +169,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
   // Update status
   const handleUpdateStatus = async (leadId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'estimates', leadId), {
+      await updateDoc(getEstimateDoc(db, leadId), {
         status: newStatus,
         jobStatus: newStatus === 'New' ? 'Estimate Pending' : newStatus === 'Contacted' ? 'Contacted' : 'Quote Approved',
         lastModified: new Date().toISOString()
@@ -192,7 +191,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
       return;
     }
     try {
-      await deleteDoc(doc(db, 'estimates', leadId));
+      await deleteDoc(getEstimateDoc(db, leadId));
       
       // Let's also remove it from localStorage for parity!
       try {

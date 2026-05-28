@@ -23,9 +23,11 @@ import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
-import { testConnection } from './lib/firebase';
+import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
 import { useUser, useClerk } from '@clerk/clerk-react';
-import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { db, handleFirestoreError, OperationType, auth as firebaseClientAuth } from './lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import AdminSystem from './components/AdminSystem';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
 
@@ -89,6 +91,103 @@ export default function App() {
     };
   }, [isLoaded, clerkUser, localUser]);
 
+  // Routing current path state
+  const [currentPath, setCurrentPath] = React.useState(() => window.location.pathname);
+  const [adminSubPath, setAdminSubPath] = React.useState('/admin');
+  
+  // Admin Authorization Session State
+  const [adminToken, setAdminToken] = React.useState<string | null>(() => {
+    return localStorage.getItem('company_admin_token');
+  });
+
+  // Auto-elevate Clerk admins to security JWT session and redirect
+  React.useEffect(() => {
+    if (user && (user.email === 'bradens@lonestarfenceworks.com' || user.email === 'usmc6123@gmail.com')) {
+      if (!adminToken) {
+        fetch('/api/admin/token-for-clerk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.token) {
+            setAdminToken(data.token);
+            localStorage.setItem('company_admin_token', data.token);
+            console.log("Automatically elevated Clerk user session to Admin Privileges.");
+          }
+        })
+        .catch(err => console.error("Error auto-elevating Clerk user to admin:", err));
+      }
+      
+      // Auto-redirect standalone admin paths to the primary Layout under Admin Console tab
+      const pathname = window.location.pathname;
+      if (pathname === '/admin' || pathname === '/admin/settings') {
+        setActiveTab('admin-console');
+        setAdminSubPath(pathname);
+        window.history.replaceState(null, '', '/');
+        React.startTransition(() => {
+          setCurrentPath('/');
+        });
+      }
+    }
+  }, [user, adminToken]);
+
+  // Track path history pushstate popstate
+  React.useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    
+    window.history.pushState = function(...args) {
+      originalPushState.apply(this, args);
+      handleLocationChange();
+    };
+    window.history.replaceState = function(...args) {
+      originalReplaceState.apply(this, args);
+      handleLocationChange();
+    };
+    
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+    };
+  }, []);
+
+  // Update transparent client-use path translation with global currentUserId
+  React.useEffect(() => {
+    setGlobalUserId(user?.uid || null);
+  }, [user]);
+
+  // Synchronize Clerk Users with standard client-use Firebase Authentication
+  React.useEffect(() => {
+    if (!isLoaded) return;
+    if (clerkUser) {
+      const email = clerkUser.primaryEmailAddress?.emailAddress;
+      const fakePass = 'clerk_user_' + clerkUser.id;
+      if (email) {
+        signInWithEmailAndPassword(firebaseClientAuth, email, fakePass)
+          .then(() => console.log("Standard Clerk Firebase Auth login secure session established."))
+          .catch((err) => {
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+              createUserWithEmailAndPassword(firebaseClientAuth, email, fakePass)
+                .then(() => {
+                  console.log("Registered new Clerk user standard Firebase Auth identity.");
+                  signInWithEmailAndPassword(firebaseClientAuth, email, fakePass);
+                })
+                .catch(cErr => console.error("Standard Clerk auto registration had issues:", cErr));
+            } else {
+              console.error("Firebase auth bridge connection failed:", err);
+            }
+          });
+      }
+    }
+  }, [isLoaded, clerkUser]);
+
   const [userTier, setUserTier] = React.useState<'free' | 'paid'>('free');
   const [userNextBilling, setUserNextBilling] = React.useState<string | null>(null);
 
@@ -104,6 +203,13 @@ export default function App() {
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const uData = docSnap.data();
+        if (uData.isDisabled) {
+          alert("Your client profile account has been suspended or disabled by administrator control.");
+          clerkSignOut();
+          setLocalUser(null);
+          localStorage.removeItem('company_local_user');
+          return;
+        }
         setUserTier(uData.tier || 'free');
         setUserNextBilling(uData.nextBillingDate || null);
       } else {
@@ -264,7 +370,7 @@ export default function App() {
         return () => {};
       }
 
-      const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
+      const q = query(getEstimatesCollection(db));
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const cloudEstimates = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate));
@@ -575,7 +681,7 @@ export default function App() {
     // If the estimate has an ID and the user is logged in, sync the specific update to Firestore
     if (estimate.id && user) {
       try {
-        const docRef = doc(db, 'estimates', estimate.id);
+        const docRef = getEstimateDoc(db, estimate.id);
         const updateWithTimestamp = {
           ...update,
           lastModified: new Date().toISOString()
@@ -592,6 +698,36 @@ export default function App() {
       }
     }
   };
+
+  // Render Admin Routes if currentPath starts with /admin or /admin-login or /admin/settings
+  const isClerkAdmin = user && (user.email === 'bradens@lonestarfenceworks.com' || user.email === 'usmc6123@gmail.com');
+  const isAdminPath = (currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings') && !isClerkAdmin;
+  
+  if (isAdminPath) {
+    if (!adminToken && currentPath !== '/admin-login') {
+      window.history.replaceState(null, '', '/admin-login');
+      setTimeout(() => setCurrentPath('/admin-login'), 0);
+    }
+    
+    return (
+      <AdminSystem 
+        currentPath={currentPath} 
+        onNavigate={(path) => {
+          window.history.pushState(null, '', path);
+          setCurrentPath(path);
+        }}
+        adminToken={adminToken}
+        setAdminToken={(token) => {
+          setAdminToken(token);
+          if (token) {
+            localStorage.setItem('company_admin_token', token);
+          } else {
+            localStorage.removeItem('company_admin_token');
+          }
+        }}
+      />
+    );
+  }
 
   if (isEmployeeView) {
     return <EmployeePortal />;
@@ -643,6 +779,23 @@ export default function App() {
       onLogin={handleLogin} 
       onLogout={handleLogout}
     >
+      {activeTab === 'admin-console' && (
+        <AdminSystem 
+          currentPath={adminSubPath}
+          onNavigate={(path) => {
+            setAdminSubPath(path);
+          }}
+          adminToken={adminToken}
+          setAdminToken={(token) => {
+            setAdminToken(token);
+            if (token) {
+              localStorage.setItem('company_admin_token', token);
+            } else {
+              localStorage.removeItem('company_admin_token');
+            }
+          }}
+        />
+      )}
       {activeTab === 'pricing' && (
         <PricingPage 
           userId={user.uid}

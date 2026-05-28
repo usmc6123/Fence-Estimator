@@ -8,7 +8,7 @@ import {
   doc, getDoc, onSnapshot, query, collection, where 
 } from 'firebase/firestore';
 import { 
-  auth, db, handleFirestoreError, OperationType 
+  auth, db, handleFirestoreError, OperationType, getEstimatesCollection 
 } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, signOut, onAuthStateChanged, User 
@@ -81,7 +81,7 @@ export default function EmployeePortal() {
       return;
     }
 
-    const q = query(collection(db, 'estimates'), where('companyId', '==', 'lonestarfence'));
+    const q = query(getEstimatesCollection(db));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
         setSavedEstimates(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate)));

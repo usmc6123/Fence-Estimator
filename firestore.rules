@@ -12,7 +12,11 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token != null && request.auth.token.email == 'usmc6123@gmail.com';
+      return isSignedIn() && request.auth.token != null && (
+        request.auth.token.email == 'usmc6123@gmail.com' ||
+        request.auth.token.email == 'bradens@lonestarfenceworks.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     function isEmployee() {
@@ -124,6 +128,15 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming());
       allow update: if (isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming()))
                       || isAdmin();
+      allow delete: if isAdmin();
+
+      match /estimates/{estimate} {
+        allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+      }
+    }
+
+    match /admins/{admin} {
+      allow read, write: if (isSignedIn() && request.auth.uid == admin) || isAdmin();
     }
 
     match /employees/{email} {
