@@ -136,7 +136,8 @@ service cloud.firestore {
     }
 
     match /admins/{admin} {
-      allow read, write: if (isSignedIn() && request.auth.uid == admin) || isAdmin();
+      allow read: if true;
+      allow write: if (isSignedIn() && request.auth.uid == admin) || isAdmin();
     }
 
     match /employees/{email} {

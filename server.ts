@@ -23,21 +23,20 @@ async function startServer() {
     const adminEmail = 'bradens@lonestarfenceworks.com';
     const adminPassword = 'password123';
     try {
-      // 1. Ensure the admin document exists in Firestore under "admins"
+      // 1. Ensure the admin document exists in Firestore under "admins" with designated password
       const adminDocRef = doc(database, 'admins', 'braden-lonestar-uid');
-      const docSnap = await getDoc(adminDocRef);
-      if (!docSnap.exists()) {
-        const passwordHash = await bcrypt.hash(adminPassword, 10);
-        await setDoc(adminDocRef, {
-          uid: 'braden-lonestar-uid',
-          email: adminEmail,
-          passwordHash: passwordHash,
-          createdAt: new Date().toISOString(),
-          canAccessAllData: true,
-          isAdmin: true
-        });
-        console.log("Admin Firestore document registered successfully.");
-      }
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      
+      await setDoc(adminDocRef, {
+        uid: 'braden-lonestar-uid',
+        email: adminEmail,
+        passwordHash: passwordHash,
+        createdAt: new Date().toISOString(),
+        canAccessAllData: true,
+        isAdmin: true,
+        passwordChanged: false
+      }, { merge: true });
+      console.log("Admin Firestore document registered/reset to password123 successfully.");
 
       // 2. Ensure they are signed in or registered in Firebase client Auth so server requests are authenticated
       try {
@@ -221,7 +220,24 @@ async function startServer() {
       const adminData = docSnap.data();
       const isMatch = await bcrypt.compare(password, adminData.passwordHash);
       if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid admin credentials.' });
+        return res.status(412).json({ error: 'Invalid admin credentials.' });
+      }
+
+      // Force align server authentication session so dynamic reads are fully certified in Firestore Rules
+      if (auth) {
+        try {
+          await signInWithEmailAndPassword(auth, email.toLowerCase(), password);
+          console.log("Dynamically logged backend client-sdk into Firebase Auth successfully.");
+        } catch (authErr: any) {
+          console.warn("Backend dynamic Auth sign-in failed during login:", authErr.message);
+          // If auth user wasn't initialized or credential was expired, attempt creating or updating password state
+          try {
+            await createUserWithEmailAndPassword(auth, email.toLowerCase(), password);
+            console.log("Created admin user on-the-fly in Firebase Auth.");
+          } catch (createErr: any) {
+            console.warn("Admin registration skip/retry failed:", createErr.message);
+          }
+        }
       }
 
       // Create JWT
@@ -457,7 +473,21 @@ async function startServer() {
       }
 
       const newHash = await bcrypt.hash(newPassword, 10);
-      await updateDoc(adminRef, { passwordHash: newHash, updatedAt: new Date().toISOString() });
+      await updateDoc(adminRef, { 
+        passwordHash: newHash, 
+        passwordChanged: true,
+        updatedAt: new Date().toISOString() 
+      });
+
+      if (auth && auth.currentUser) {
+        try {
+          const { updatePassword } = await import('firebase/auth');
+          await updatePassword(auth.currentUser, newPassword);
+          console.log("Successfully updated password in Live Firebase Auth.");
+        } catch (pwErr: any) {
+          console.warn("Could not sync change-password to Firebase Auth:", pwErr.message);
+        }
+      }
 
       res.json({ success: true, message: 'Password changed successfully.' });
     } catch (error: any) {
