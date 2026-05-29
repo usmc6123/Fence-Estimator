@@ -10,7 +10,7 @@ import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
-import { doc, updateDoc, deleteDoc, collection, query, where, limit, onSnapshot, or } from 'firebase/firestore';
+import { updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface SavedEstimatesProps {
   savedEstimates: SavedEstimate[];
@@ -29,56 +29,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
 
-  const [estimates, setEstimates] = React.useState<SavedEstimate[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!user?.uid) return;
-    
-    setLoading(true);
-
-    const q = query(
-      collection(db, 'estimates'),
-      or(
-        where('clerkUserId', '==', user.uid),
-        where('userId', '==', user.uid)
-      ),
-      limit(100)
-    );
-
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const fetched = snapshot.docs.map(d => {
-          const data = d.data();
-          return {
-            ...data,
-            id: d.id,
-            createdAt: data.createdAt?.seconds ? new Date(data.createdAt.seconds * 1000).toISOString() : (data.createdAt || new Date().toISOString()),
-            lastModified: data.lastModified?.seconds ? new Date(data.lastModified.seconds * 1000).toISOString() : (data.lastModified || data.createdAt || new Date().toISOString())
-          } as SavedEstimate;
-        });
-
-        // Client-side sort by createdAt descending to avoid index requirements
-        fetched.sort((a, b) => {
-          const tA = new Date(a.createdAt || 0).getTime();
-          const tB = new Date(b.createdAt || 0).getTime();
-          return tB - tA;
-        });
-
-        setEstimates(fetched);
-        if (typeof setSavedEstimates === 'function') {
-          setSavedEstimates(fetched);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Failed to load user estimates of clerkUserId or userId from /estimates:", error);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user?.uid, setSavedEstimates]);
+  const [loading] = React.useState(false);
 
   const filteredEstimates = savedEstimates.filter(est => {
     const name = est.customerName || 'Unnamed Prospect';
@@ -504,10 +455,10 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             </div>
             <div>
               <p className="text-xl font-black text-american-blue">
-                {estimates.length === 0 ? "No estimates yet" : "No matching dossiers found"}
+                {savedEstimates.length === 0 ? "No estimates yet" : "No matching dossiers found"}
               </p>
               <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
-                {estimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
+                {savedEstimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
               </p>
             </div>
           </div>

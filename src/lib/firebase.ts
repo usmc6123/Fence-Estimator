@@ -20,16 +20,20 @@ export function setGlobalUserId(uid: string | null, isCompanyUser: boolean = fal
   console.log("Global Firestore user ID translated context set to:", uid, "isCompanyUser:", isCompanyUser);
 }
 
-export function getEstimatesCollection(database: any) {
-  if (currentUserId && !currentIsCompanyUser) {
-    return collection(database, 'users', currentUserId, 'estimates');
+export function getEstimatesCollection(database: any, uid?: string | null, isCompany?: boolean) {
+  const targetUid = uid !== undefined ? uid : currentUserId;
+  const targetIsCompany = isCompany !== undefined ? isCompany : currentIsCompanyUser;
+  if (targetUid && !targetIsCompany) {
+    return collection(database, 'users', targetUid, 'estimates');
   }
   return collection(database, 'estimates');
 }
 
-export function getEstimateDoc(database: any, id: string) {
-  if (currentUserId && !currentIsCompanyUser) {
-    return doc(database, 'users', currentUserId, 'estimates', id);
+export function getEstimateDoc(database: any, id: string, uid?: string | null, isCompany?: boolean) {
+  const targetUid = uid !== undefined ? uid : currentUserId;
+  const targetIsCompany = isCompany !== undefined ? isCompany : currentIsCompanyUser;
+  if (targetUid && !targetIsCompany) {
+    return doc(database, 'users', targetUid, 'estimates', id);
   }
   return doc(database, 'estimates', id);
 }

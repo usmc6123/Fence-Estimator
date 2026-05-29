@@ -95,6 +95,10 @@ export default function App() {
   // Routing current path state
   const [currentPath, setCurrentPath] = React.useState(() => window.location.pathname);
   
+  // Real-time verified role states
+  const [isCompanyUser, setIsCompanyUser] = React.useState(false);
+  const [roleChecked, setRoleChecked] = React.useState(false);
+  
   // Admin Authorization Session State
   const [adminToken, setAdminToken] = React.useState<string | null>(() => {
     return localStorage.getItem('company_admin_token');
@@ -129,33 +133,45 @@ export default function App() {
   React.useEffect(() => {
     if (!user) {
       setGlobalUserId(null, false);
+      setIsCompanyUser(false);
+      setRoleChecked(true);
       return;
     }
 
+    setRoleChecked(false);
+    let active = true;
+
     const checkRoleAndSet = async () => {
-      let isCompanyUser = false;
+      let isCompany = false;
       const emailLower = user.email?.toLowerCase();
       if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-        isCompanyUser = true;
+        isCompany = true;
       } else if (emailLower) {
         try {
           const empSnap = await getDoc(doc(db, 'employees', emailLower));
           if (empSnap.exists()) {
-            isCompanyUser = true;
+            isCompany = true;
           } else {
             const adminSnap = await getDoc(doc(db, 'admins', user.uid));
             if (adminSnap.exists()) {
-              isCompanyUser = true;
+              isCompany = true;
             }
           }
         } catch (err) {
           console.warn("Could not check company user collections, assuming standard user.", err);
         }
       }
-      setGlobalUserId(user.uid, isCompanyUser);
+      if (active) {
+        setGlobalUserId(user.uid, isCompany);
+        setIsCompanyUser(isCompany);
+        setRoleChecked(true);
+      }
     };
 
     checkRoleAndSet();
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   // Synchronize Clerk Users with standard client-use Firebase Authentication
@@ -272,8 +288,8 @@ export default function App() {
     if (activeTab === 'admin-console') {
       if (window.location.pathname !== '/admin-console') {
         window.history.pushState(null, '', '/admin-console');
+        setCurrentPath('/admin-console');
       }
-      setCurrentPath('/admin-console');
     } else {
       if (window.location.pathname === '/admin-console') {
         window.history.pushState(null, '', '/');
@@ -283,10 +299,14 @@ export default function App() {
   }, [activeTab]);
 
   React.useEffect(() => {
-    if (currentPath === '/admin-console' && activeTab !== 'admin-console') {
-      setActiveTab('admin-console');
-    } else if (currentPath !== '/admin-console' && activeTab === 'admin-console') {
-      setActiveTab('estimator');
+    if (currentPath === '/admin-console') {
+      if (activeTab !== 'admin-console') {
+        setActiveTab('admin-console');
+      }
+    } else {
+      if (activeTab === 'admin-console' && currentPath === '/') {
+        setActiveTab('estimator');
+      }
     }
   }, [currentPath]);
   
@@ -374,6 +394,10 @@ export default function App() {
 
   // Fetch estimates from Firestore if user is logged in, and merge with local ledger backup
   React.useEffect(() => {
+    // Wait until the role of the user (e.g. employee vs. customer) is confirmed
+    // before subscribing to any collection path to avoid race conditions
+    if (user && !roleChecked) return;
+
     let unsubCloud: () => void = () => {};
 
     const syncEstimates = () => {
@@ -392,10 +416,28 @@ export default function App() {
         return () => {};
       }
 
-      const q = query(getEstimatesCollection(db));
+      // Explicitly pass user.uid and isCompanyUser to guarantee correct reactive path building
+      const q = query(getEstimatesCollection(db, user.uid, isCompanyUser));
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
-          const cloudEstimates = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate));
+          const cloudEstimates = snapshot.docs.map(d => {
+            const data = d.data();
+            const createdAt = data.createdAt?.seconds 
+              ? new Date(data.createdAt.seconds * 1000).toISOString() 
+              : (typeof data.createdAt === 'string' ? data.createdAt : (data.createdAt || new Date().toISOString()));
+              
+            const lastModified = data.lastModified?.seconds 
+              ? new Date(data.lastModified.seconds * 1000).toISOString() 
+              : (typeof data.lastModified === 'string' ? data.lastModified : (data.lastModified || createdAt || new Date().toISOString()));
+
+            return {
+              ...data,
+              id: d.id,
+              createdAt,
+              lastModified
+            } as SavedEstimate;
+          });
+
           // Merge cloud with unique local estimates
           const cloudIds = new Set(cloudEstimates.map(e => e.id));
           const uniqueLocal = localEstimates.filter(e => !cloudIds.has(e.id));
@@ -435,7 +477,7 @@ export default function App() {
       window.removeEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
       window.removeEventListener('message', handleMessageReceived);
     };
-  }, [user]);
+  }, [user, roleChecked, isCompanyUser]);
 
   // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
