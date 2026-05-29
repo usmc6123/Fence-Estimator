@@ -27,6 +27,10 @@ interface EstimatorProps {
   setSavedEstimates: React.Dispatch<React.SetStateAction<SavedEstimate[]>>;
   user: User | null;
   setActiveTab?: (tab: string) => void;
+  adminToken: string | null;
+  setAdminToken: (token: string | null) => void;
+  onNavigate: (path: string) => void;
+  isAdminVerifying?: boolean;
 }
 
 export default function Estimator({ 
@@ -38,7 +42,11 @@ export default function Estimator({
   savedEstimates,
   setSavedEstimates,
   user,
-  setActiveTab
+  setActiveTab,
+  adminToken,
+  setAdminToken,
+  onNavigate,
+  isAdminVerifying = false
 }: EstimatorProps) {
   const [step, setStep] = React.useState(() => {
     return Number(localStorage.getItem('fence_pro_estimator_step')) || 1;
@@ -2374,6 +2382,7 @@ export default function Estimator({
         </div>
       </div>
     </div>
+
 
       {/* Supplier Order Form Modal */}
       <AnimatePresence>

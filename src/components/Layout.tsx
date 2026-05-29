@@ -36,9 +36,11 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
   ];
 
   const isAdmin = user && (user.email === 'usmc6123@gmail.com' || user.email === 'bradens@lonestarfenceworks.com');
-  const displayItems = isAdmin 
-    ? [...navItems, { id: 'employees', label: 'Manage Employees', icon: Users }, { id: 'admin-console', label: 'ADMIN CONSOLE', icon: Shield }] 
-    : navItems;
+  const displayItems = [
+    ...navItems,
+    ...(isAdmin ? [{ id: 'employees', label: 'Manage Employees', icon: Users }] : []),
+    { id: 'admin-console', label: 'ADMIN CONSOLE', icon: Shield }
+  ];
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#1A1A1A]">

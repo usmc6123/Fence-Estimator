@@ -103,6 +103,48 @@ export default function App() {
   const [adminToken, setAdminToken] = React.useState<string | null>(() => {
     return localStorage.getItem('company_admin_token');
   });
+  const [isAdminVerifying, setIsAdminVerifying] = React.useState(!!localStorage.getItem('company_admin_token'));
+
+  // Verify and refresh the admin token on application boot
+  React.useEffect(() => {
+    const verifyToken = async () => {
+      const storedToken = localStorage.getItem('company_admin_token');
+      if (!storedToken || storedToken === 'null' || storedToken === 'undefined') {
+        setIsAdminVerifying(false);
+        setAdminToken(null);
+        localStorage.removeItem('company_admin_token');
+        return;
+      }
+      try {
+        const response = await fetch('/api/admin/verify-credentials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${storedToken}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.token) {
+            setAdminToken(data.token);
+            localStorage.setItem('company_admin_token', data.token);
+          } else {
+            setAdminToken(null);
+            localStorage.removeItem('company_admin_token');
+          }
+        } else {
+          setAdminToken(null);
+          localStorage.removeItem('company_admin_token');
+        }
+      } catch (err) {
+        console.error('Failed to verify stored admin token during boot:', err);
+      } finally {
+        setIsAdminVerifying(false);
+      }
+    };
+
+    verifyToken();
+  }, []);
 
   // Track path history pushstate popstate
   React.useEffect(() => {
@@ -302,33 +344,56 @@ export default function App() {
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
 
   const [activeTab, setActiveTab] = React.useState(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/admin-console') {
+    const isConsolePath = typeof window !== 'undefined' && (
+      window.location.pathname === '/admin-console' || 
+      window.location.pathname === '/admin' || 
+      window.location.pathname === '/admin-login' || 
+      window.location.pathname === '/admin/settings'
+    );
+    if (isConsolePath) {
       return 'admin-console';
     }
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
 
+  const handleSetActiveTab = (tab: string) => {
+    setActiveTab(tab);
+  };
+
   React.useEffect(() => {
     if (activeTab === 'admin-console') {
-      if (window.location.pathname !== '/admin-console') {
-        window.history.pushState(null, '', '/admin-console');
-        setCurrentPath('/admin-console');
+      const isConsolePath = window.location.pathname === '/admin-console' || 
+                            window.location.pathname === '/admin' || 
+                            window.location.pathname === '/admin-login' || 
+                            window.location.pathname === '/admin/settings';
+      if (!isConsolePath) {
+        const targetPath = adminToken ? '/admin-console' : '/admin-login';
+        window.history.pushState(null, '', targetPath);
+        setCurrentPath(targetPath);
       }
     } else {
-      if (window.location.pathname === '/admin-console') {
+      const isConsolePath = window.location.pathname === '/admin-console' || 
+                            window.location.pathname === '/admin' || 
+                            window.location.pathname === '/admin-login' || 
+                            window.location.pathname === '/admin/settings';
+      if (isConsolePath) {
         window.history.pushState(null, '', '/');
         setCurrentPath('/');
       }
     }
-  }, [activeTab]);
+  }, [activeTab, adminToken]);
 
   React.useEffect(() => {
-    if (currentPath === '/admin-console') {
+    const isConsolePath = currentPath === '/admin-console' || 
+                          currentPath === '/admin' || 
+                          currentPath === '/admin-login' || 
+                          currentPath === '/admin/settings';
+    if (isConsolePath) {
       if (activeTab !== 'admin-console') {
         setActiveTab('admin-console');
       }
     } else {
-      if (activeTab === 'admin-console' && currentPath === '/') {
+      if (activeTab === 'admin-console' && (currentPath === '/' || currentPath === '')) {
         setActiveTab('estimator');
       }
     }
@@ -785,47 +850,7 @@ export default function App() {
     }
   };
 
-  // Render Admin Routes if currentPath starts with /admin or /admin-login or /admin/settings
-  const isAdminPath = currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings';
-
-  // Redirect unauthenticated admin access to login
-  React.useEffect(() => {
-    if (isAdminPath && !adminToken && currentPath !== '/admin-login') {
-      window.history.replaceState(null, '', '/admin-login');
-      setCurrentPath('/admin-login');
-    }
-  }, [isAdminPath, adminToken, currentPath]);
-
-  if (isAdminPath) {
-    if (!adminToken && currentPath !== '/admin-login') {
-      return (
-        <div className="flex h-screen items-center justify-center bg-slate-50">
-          <div className="text-sm font-semibold text-gray-500 animate-pulse font-sans">
-            Verifying Admin Status...
-          </div>
-        </div>
-      );
-    }
-    
-    return (
-      <AdminSystem 
-        currentPath={currentPath} 
-        onNavigate={(path) => {
-          window.history.pushState(null, '', path);
-          setCurrentPath(path);
-        }}
-        adminToken={adminToken}
-        setAdminToken={(token) => {
-          setAdminToken(token);
-          if (token) {
-            localStorage.setItem('company_admin_token', token);
-          } else {
-            localStorage.removeItem('company_admin_token');
-          }
-        }}
-      />
-    );
-  }
+  // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
 
   if (isEmployeeView) {
     return <EmployeePortal />;
@@ -839,7 +864,7 @@ export default function App() {
     return (
       <Layout 
         activeTab="pricing" 
-        setActiveTab={setActiveTab} 
+        setActiveTab={handleSetActiveTab} 
         user={null} 
         userTier="free"
         onLogin={handleLogin} 
@@ -858,8 +883,17 @@ export default function App() {
             <AuthPage 
               onSuccess={() => setActiveTab('estimator')} 
               onLocalLogin={(u) => {
-                setLocalUser(u);
-                localStorage.setItem('company_local_user', JSON.stringify(u));
+                const userObj = {
+                  uid: u.uid,
+                  email: u.email,
+                  displayName: u.displayName
+                };
+                setLocalUser(userObj);
+                localStorage.setItem('company_local_user', JSON.stringify(userObj));
+                if (u.isAdmin && u.token) {
+                  setAdminToken(u.token);
+                  localStorage.setItem('company_admin_token', u.token);
+                }
               }}
             />
           </div>
@@ -871,7 +905,7 @@ export default function App() {
   return (
     <Layout 
       activeTab={activeTab} 
-      setActiveTab={setActiveTab} 
+      setActiveTab={handleSetActiveTab} 
       user={user} 
       userTier={userTier}
       onLogin={handleLogin} 
@@ -907,6 +941,20 @@ export default function App() {
           setSavedEstimates={setSavedEstimates}
           user={user}
           setActiveTab={setActiveTab}
+          adminToken={adminToken}
+          setAdminToken={(token) => {
+            setAdminToken(token);
+            if (token) {
+              localStorage.setItem('company_admin_token', token);
+            } else {
+              localStorage.removeItem('company_admin_token');
+            }
+          }}
+          onNavigate={(path) => {
+            window.history.pushState(null, '', path);
+            setCurrentPath(path);
+          }}
+          isAdminVerifying={isAdminVerifying}
         />
       )}
       {activeTab === 'scheduler' && (
@@ -994,11 +1042,9 @@ export default function App() {
           onNavigate={(path) => {
             window.history.pushState(null, '', path);
             setCurrentPath(path);
-            if (path === '/' || path === '' || path === '/estimator' || !path.includes('admin')) {
-              setActiveTab('estimator');
-            }
           }}
           currentUser={user}
+          isAdminVerifying={isAdminVerifying}
         />
       )}
     </Layout>

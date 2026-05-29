@@ -89,13 +89,15 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
+      } else if (response.status === 401 || response.status === 403) {
+        setAdminToken(null);
       }
     } catch (err) {
       console.error("Failed to fetch users:", err);
     } finally {
       setLoadingUsers(false);
     }
-  }, [adminToken]);
+  }, [adminToken, setAdminToken]);
 
   // Fetch specific user estimates
   const fetchUserEstimates = async (userId: string) => {

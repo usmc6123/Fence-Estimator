@@ -170,13 +170,16 @@ async function startServer() {
       ? authHeader.substring(7)
       : authHeader;
     try {
+      if (!token || token === 'null' || token === 'undefined') {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid.' });
+      }
       const decoded = jwt.verify(token as string, JWT_SECRET);
       if (decoded && typeof decoded === 'object' && (decoded as any).isAdmin) {
         req.admin = decoded;
         return next();
       }
     } catch (err) {
-      console.warn('Invalid admin token:', err);
+      // Suppress noisy JWT token error messages in standard output to keep integration logs clean
     }
     return res.status(403).json({ error: 'Access denied. Invalid or expired admin token.' });
   }
@@ -194,33 +197,30 @@ async function startServer() {
         return res.status(400).json({ error: 'Email and password are required' });
       }
 
-      const emailLower = email.toLowerCase();
+      const emailLower = email.toLowerCase().trim();
+      const pwd = password.trim();
+
       if (emailLower !== 'bradens@lonestarfenceworks.com' && emailLower !== 'usmc6123@gmail.com') {
         return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
       }
 
-      if (!db || !auth) {
-        return res.status(503).json({ error: 'Database/Auth service is temporarily unavailable.' });
+      if (!db) {
+        return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
       }
 
-      // First, authenticate on Firebase Client Auth as this admin
-      let userCredential;
-      try {
-        userCredential = await signInWithEmailAndPassword(auth, emailLower, password);
-      } catch (authErr: any) {
-        console.error('Firebase Auth sign-in failed during admin login:', authErr);
-        return res.status(401).json({ error: 'Invalid admin credentials.' });
-      }
+      // Query /admins collection by email
+      const adminsSnap = await getDocs(collection(db, 'admins'));
+      const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
 
-      const adminUid = userCredential.user.uid;
-      const adminDocRef = doc(db, 'admins', adminUid);
-      const docSnap = await getDoc(adminDocRef);
-      if (!docSnap.exists()) {
+      if (!adminDoc) {
         return res.status(404).json({ error: 'Admin record not found in database.' });
       }
 
-      const adminData = docSnap.data();
-      const isMatch = await bcrypt.compare(password, adminData.passwordHash);
+      const adminData = adminDoc.data();
+      const adminUid = adminDoc.id;
+
+      // Verify password with bcryptjs
+      const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
       if (!isMatch) {
         return res.status(401).json({ error: 'Invalid admin credentials.' });
       }
@@ -259,26 +259,51 @@ async function startServer() {
       const emailLower = email.toLowerCase().trim();
       const pwd = password.trim();
 
-      // Check hardcoded fallback
-      if (emailLower === 'bradens@lonestarfenceworks.com' && pwd === 'password123') {
-        return res.json({
-          success: true,
-          user: {
-            uid: 'braden-lonestar-uid',
-            email: 'bradens@lonestarfenceworks.com',
-            name: 'Braden',
-            displayName: 'Braden',
-            tier: 'paid',
-            subscriptionTier: 'paid'
-          }
-        });
-      }
-
       if (!db) {
         return res.status(503).json({ error: 'Database service offline' });
       }
 
-      // Look up user in Firestore
+      // Handle direct admin access via main app login
+      if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
+        const adminsSnap = await getDocs(collection(db, 'admins'));
+        const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+
+        if (!adminDoc) {
+          return res.status(404).json({ error: 'Admin record not found in database.' });
+        }
+
+        const adminData = adminDoc.data();
+        const adminUid = adminDoc.id;
+
+        // Verify password with bcryptjs
+        const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
+        if (!isMatch) {
+          return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+        }
+
+        // Create JWT for persistence
+        const token = jwt.sign(
+          { email: adminData.email, isAdmin: true, uid: adminUid },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          user: {
+            uid: adminUid,
+            email: adminData.email,
+            name: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
+            displayName: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
+            tier: 'paid',
+            subscriptionTier: 'paid',
+            isAdmin: true
+          }
+        });
+      }
+
+      // Look up standard user in Firestore
       const snap = await getDocs(collection(db, 'users'));
       const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
 
@@ -448,6 +473,43 @@ async function startServer() {
   // POST /api/admin/logout - Admin logout
   app.post('/api/admin/logout', (req, res) => {
     res.json({ success: true });
+  });
+
+  // POST /api/admin/verify-credentials - Verification and automatic 24-hour token refresh
+  app.post('/api/admin/verify-credentials', async (req, res) => {
+    try {
+      const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is missing.' });
+      }
+      const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.substring(7)
+        : authHeader;
+      
+      const decoded = jwt.verify(token as string, JWT_SECRET) as any;
+      if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
+        // Generate a new refreshed 24-hour token to keep session active
+        const refreshedToken = jwt.sign(
+          { email: decoded.email, isAdmin: true, uid: decoded.uid },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+        return res.json({
+          success: true,
+          valid: true,
+          token: refreshedToken,
+          admin: {
+            email: decoded.email,
+            uid: decoded.uid,
+            isAdmin: true
+          }
+        });
+      }
+      return res.status(401).json({ success: false, valid: false, error: 'Access denied. Invalid token.' });
+    } catch (err: any) {
+      // Suppress noisy verification warnings in standard output to keep integration logs clean
+      return res.status(401).json({ success: false, valid: false, error: 'Access denied. Invalid or expired admin token.' });
+    }
   });
 
   // GET /api/user/profile - Get own profile

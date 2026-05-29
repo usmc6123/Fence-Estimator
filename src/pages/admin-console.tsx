@@ -22,9 +22,10 @@ interface AdminConsoleProps {
   setAdminToken: (token: string | null) => void;
   onNavigate: (path: string) => void;
   currentUser: { email?: string; name?: string } | null;
+  isAdminVerifying?: boolean;
 }
 
-export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser }: AdminConsoleProps) {
+export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, isAdminVerifying = false }: AdminConsoleProps) {
   const [activeSubTab, setActiveSubTab] = React.useState('dashboard');
   const [users, setUsers] = React.useState<UserProfile[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -52,6 +53,9 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       } else {
         const errData = await response.json().catch(() => ({}));
         setError(errData.error || 'Identity verification failed. Please authenticate.');
+        if (response.status === 401 || response.status === 403) {
+          setAdminToken(null);
+        }
       }
     } catch (err) {
       setError('Communication with core services timed out.');
@@ -61,12 +65,14 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   };
 
   React.useEffect(() => {
+    if (isAdminVerifying) return;
+
     if (adminToken) {
       fetchUsers();
     } else {
       setLoading(false);
     }
-  }, [adminToken]);
+  }, [adminToken, isAdminVerifying]);
 
   const handleSignOut = () => {
     setAdminToken(null);
@@ -166,6 +172,15 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
         return null;
     }
   };
+
+  if (isAdminVerifying) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#E5E5E5] p-12 text-center shadow-sm flex flex-col items-center justify-center gap-4 min-h-[400px]">
+        <div id="loading_spinner" className="animate-spin rounded-full h-8 w-8 border-b-2 border-american-blue"></div>
+        <p className="text-xs text-gray-500 font-sans font-semibold">Verifying secure admin credentials clearance...</p>
+      </div>
+    );
+  }
 
   if (!adminToken) {
     return (

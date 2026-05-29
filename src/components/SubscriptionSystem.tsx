@@ -11,7 +11,7 @@ interface UserTierInfo {
 // 1. Protective Auth / Login Component
 interface AuthPageProps {
   onSuccess?: () => void;
-  onLocalLogin?: (user: { uid: string; email: string; displayName: string }) => void;
+  onLocalLogin?: (user: { uid: string; email: string; displayName: string; token?: string; isAdmin?: boolean }) => void;
 }
 
 export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
@@ -45,7 +45,9 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
           onLocalLogin({
             uid: data.user.uid,
             email: data.user.email,
-            displayName: data.user.name || data.user.displayName || 'Client'
+            displayName: data.user.name || data.user.displayName || 'Client',
+            token: data.token,
+            isAdmin: data.user.isAdmin
           });
         }
         if (onSuccess) {
