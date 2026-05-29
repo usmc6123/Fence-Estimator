@@ -73,26 +73,33 @@ async function startServer() {
         }
 
         // 2. Now that we are signed in, the Firestore client has full permissions to read/write this document
-        const adminDocRef = doc(database, 'admins', currentUid);
-        const docSnap = await getDoc(adminDocRef);
-        const passwordHash = await bcrypt.hash(adminPassword, 10);
-        
-        if (!docSnap.exists()) {
-          await setDoc(adminDocRef, {
-            uid: currentUid,
-            email: adm.email,
-            passwordHash: passwordHash,
-            createdAt: new Date().toISOString(),
-            canAccessAllData: true,
-            isAdmin: true
-          });
-          console.log(`Admin Firestore document for ${adm.email} registered successfully.`);
-        } else {
-          await updateDoc(adminDocRef, {
-            passwordHash: passwordHash,
-            email: adm.email
-          });
-          console.log(`Admin Firestore password reset for ${adm.email} completed successfully.`);
+        const uidsToCreate = [currentUid];
+        if (adm.email.toLowerCase().trim() === 'bradens@lonestarfenceworks.com') {
+          uidsToCreate.push('braden-lonestar-uid');
+        }
+
+        for (const uid of uidsToCreate) {
+          const adminDocRef = doc(database, 'admins', uid);
+          const docSnap = await getDoc(adminDocRef);
+          const passwordHash = await bcrypt.hash(adminPassword, 10);
+          
+          if (!docSnap.exists()) {
+            await setDoc(adminDocRef, {
+              uid: uid,
+              email: adm.email,
+              passwordHash: passwordHash,
+              createdAt: new Date().toISOString(),
+              canAccessAllData: true,
+              isAdmin: true
+            });
+            console.log(`Admin Firestore document for ${adm.email} (${uid}) registered successfully.`);
+          } else {
+            await updateDoc(adminDocRef, {
+              passwordHash: passwordHash,
+              email: adm.email
+            });
+            console.log(`Admin Firestore password reset for ${adm.email} (${uid}) completed successfully.`);
+          }
         }
       } catch (err) {
         console.error(`Error during admin bootstrapping for ${adm.email}:`, err);
@@ -217,12 +224,15 @@ async function startServer() {
       }
 
       const adminData = adminDoc.data();
-      const adminUid = adminDoc.id;
+      let adminUid = adminDoc.id;
+      if (emailLower === 'bradens@lonestarfenceworks.com') {
+        adminUid = 'braden-lonestar-uid';
+      }
 
       // Verify password with bcryptjs
       const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
       if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid admin credentials.' });
+         return res.status(401).json({ error: 'Invalid admin credentials.' });
       }
 
       // Create JWT
@@ -273,7 +283,10 @@ async function startServer() {
         }
 
         const adminData = adminDoc.data();
-        const adminUid = adminDoc.id;
+        let adminUid = adminDoc.id;
+        if (emailLower === 'bradens@lonestarfenceworks.com') {
+          adminUid = 'braden-lonestar-uid';
+        }
 
         // Verify password with bcryptjs
         const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
@@ -449,6 +462,7 @@ async function startServer() {
       if (!db) return res.status(503).json({ error: 'Database offline' });
 
       const adminUid = (req as any).admin?.uid || 'braden-lonestar-uid';
+      const adminEmail = (req as any).admin?.email;
       const adminRef = doc(db, 'admins', adminUid);
       const snap = await getDoc(adminRef);
       if (!snap.exists()) {
@@ -462,7 +476,31 @@ async function startServer() {
       }
 
       const newHash = await bcrypt.hash(newPassword, 10);
-      await updateDoc(adminRef, { passwordHash: newHash, updatedAt: new Date().toISOString() });
+
+      // Find all matching admin documents to synchronize the password update
+      const syncUids = [adminUid];
+      if (adminEmail) {
+        try {
+          const adminsSnap = await getDocs(collection(db, 'admins'));
+          adminsSnap.docs.forEach(d => {
+            const dEmail = d.data().email?.toLowerCase()?.trim();
+            if (dEmail === adminEmail.toLowerCase().trim() && !syncUids.includes(d.id)) {
+              syncUids.push(d.id);
+            }
+          });
+        } catch (syncErr) {
+          console.error("Error finding duplicate admin docs to synchronize:", syncErr);
+        }
+      }
+
+      for (const uid of syncUids) {
+        try {
+          const ref = doc(db, 'admins', uid);
+          await updateDoc(ref, { passwordHash: newHash, updatedAt: new Date().toISOString() });
+        } catch (updateErr) {
+          console.error(`Error syncing password update for admin uid ${uid}:`, updateErr);
+        }
+      }
 
       res.json({ success: true, message: 'Password changed successfully.' });
     } catch (error: any) {
