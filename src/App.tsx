@@ -274,14 +274,21 @@ export default function App() {
         window.history.pushState(null, '', '/admin-console');
       }
       setCurrentPath('/admin-console');
+    } else {
+      if (window.location.pathname === '/admin-console') {
+        window.history.pushState(null, '', '/');
+        setCurrentPath('/');
+      }
     }
   }, [activeTab]);
 
   React.useEffect(() => {
     if (currentPath === '/admin-console' && activeTab !== 'admin-console') {
       setActiveTab('admin-console');
+    } else if (currentPath !== '/admin-console' && activeTab === 'admin-console') {
+      setActiveTab('estimator');
     }
-  }, [currentPath, activeTab]);
+  }, [currentPath]);
   
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
     return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
