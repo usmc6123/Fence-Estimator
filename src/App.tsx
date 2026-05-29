@@ -28,6 +28,7 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import { db, handleFirestoreError, OperationType, auth as firebaseClientAuth } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import AdminSystem from './components/AdminSystem';
+import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
 
@@ -162,7 +163,9 @@ export default function App() {
     if (!isLoaded) return;
     if (clerkUser) {
       const email = clerkUser.primaryEmailAddress?.emailAddress;
-      const fakePass = 'clerk_user_' + clerkUser.id;
+      const emailLower = email?.toLowerCase();
+      const isAdminEmail = emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com';
+      const fakePass = isAdminEmail ? 'password123' : ('clerk_user_' + clerkUser.id);
       if (email) {
         signInWithEmailAndPassword(firebaseClientAuth, email, fakePass)
           .then(() => console.log("Standard Clerk Firebase Auth login secure session established."))
@@ -259,8 +262,26 @@ export default function App() {
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
 
   const [activeTab, setActiveTab] = React.useState(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/admin-console') {
+      return 'admin-console';
+    }
     return getInitialValue('activeTab', 'fence_pro_active_tab', 'estimator');
   });
+
+  React.useEffect(() => {
+    if (activeTab === 'admin-console') {
+      if (window.location.pathname !== '/admin-console') {
+        window.history.pushState(null, '', '/admin-console');
+      }
+      setCurrentPath('/admin-console');
+    }
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    if (currentPath === '/admin-console' && activeTab !== 'admin-console') {
+      setActiveTab('admin-console');
+    }
+  }, [currentPath, activeTab]);
   
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
     return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
@@ -693,7 +714,7 @@ export default function App() {
 
   // Render Admin Routes if currentPath starts with /admin or /admin-login or /admin/settings
   const isAdminPath = currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings';
-  
+
   if (isAdminPath) {
     if (!adminToken && currentPath !== '/admin-login') {
       window.history.replaceState(null, '', '/admin-login');
@@ -873,6 +894,27 @@ export default function App() {
       )}
       {activeTab === 'settings' && <Settings />}
       {activeTab === 'employees' && <ManageEmployees />}
+      {activeTab === 'admin-console' && (
+        <AdminConsole 
+          adminToken={adminToken}
+          setAdminToken={(token) => {
+            setAdminToken(token);
+            if (token) {
+              localStorage.setItem('company_admin_token', token);
+            } else {
+              localStorage.removeItem('company_admin_token');
+            }
+          }}
+          onNavigate={(path) => {
+            window.history.pushState(null, '', path);
+            setCurrentPath(path);
+            if (path === '/' || path === '' || path === '/estimator' || !path.includes('admin')) {
+              setActiveTab('estimator');
+            }
+          }}
+          currentUser={user}
+        />
+      )}
     </Layout>
   );
 }

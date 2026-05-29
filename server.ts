@@ -10,6 +10,12 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } f
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+// Modular Admin APIs
+import { listUsers } from './api/admin/users/list';
+import { createUser } from './api/admin/users/create';
+import { updateUser } from './api/admin/users/update';
+import { deleteUser } from './api/admin/users/delete';
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -21,21 +27,51 @@ async function startServer() {
 
   async function bootstrapAdmin(database: any, firebaseAuth: any) {
     const defaultAdmins = [
-      { email: 'bradens@lonestarfenceworks.com', uid: 'braden-lonestar-uid' },
-      { email: 'usmc6123@gmail.com', uid: 'usmc6123-lonestar-uid' }
+      { email: 'bradens@lonestarfenceworks.com' },
+      { email: 'usmc6123@gmail.com' }
     ];
     const adminPassword = 'password123';
     
     for (const adm of defaultAdmins) {
       try {
-        // 1. Ensure the admin document exists in Firestore under "admins" with correct passwordHash set to 'password123'
-        const adminDocRef = doc(database, 'admins', adm.uid);
+        let currentUid = '';
+        
+        // 1. Authenticate first to establish standard user authenticated Firebase Client session on the backend
+        try {
+          const userCredential = await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+          currentUid = userCredential.user.uid;
+          console.log(`Firebase server authenticated as admin ${adm.email} successfully with UID: ${currentUid}`);
+        } catch (authErr: any) {
+          if (
+            authErr.code === 'auth/user-not-found' || 
+            authErr.code === 'auth/invalid-credential' || 
+            authErr.code === 'auth/invalid-email' ||
+            authErr.code === 'auth/wrong-password' ||
+            authErr.code === 'auth/cannot-find-user'
+          ) {
+            try {
+              const userCredential = await createUserWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+              currentUid = userCredential.user.uid;
+              console.log(`Admin user registered in Firebase Auth ${adm.email} successfully with UID: ${currentUid}`);
+              await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+            } catch (createErr) {
+              console.error(`Failed to register admin ${adm.email} in Firebase Auth:`, createErr);
+              continue;
+            }
+          } else {
+            console.error(`Firebase Auth admin ${adm.email} login failed:`, authErr);
+            continue;
+          }
+        }
+
+        // 2. Now that we are signed in, the Firestore client has full permissions to read/write this document
+        const adminDocRef = doc(database, 'admins', currentUid);
         const docSnap = await getDoc(adminDocRef);
         const passwordHash = await bcrypt.hash(adminPassword, 10);
         
         if (!docSnap.exists()) {
           await setDoc(adminDocRef, {
-            uid: adm.uid,
+            uid: currentUid,
             email: adm.email,
             passwordHash: passwordHash,
             createdAt: new Date().toISOString(),
@@ -49,24 +85,6 @@ async function startServer() {
             email: adm.email
           });
           console.log(`Admin Firestore password reset for ${adm.email} completed successfully.`);
-        }
-
-        // 2. Ensure they are signed in or registered in Firebase client Auth so server requests are authenticated
-        try {
-          await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
-          console.log(`Firebase server authenticated as admin ${adm.email} successfully.`);
-        } catch (authErr: any) {
-          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
-            try {
-              await createUserWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
-              console.log(`Admin user registered in Firebase Auth ${adm.email} successfully.`);
-              await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
-            } catch (createErr) {
-              console.error(`Failed to create admin ${adm.email} in Firebase Auth:`, createErr);
-            }
-          } else {
-            console.error(`Firebase Auth admin ${adm.email} login failed:`, authErr);
-          }
         }
       } catch (err) {
         console.error(`Error during admin bootstrapping for ${adm.email}:`, err);
@@ -173,11 +191,20 @@ async function startServer() {
         return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
       }
 
-      if (!db) {
-        return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
+      if (!db || !auth) {
+        return res.status(503).json({ error: 'Database/Auth service is temporarily unavailable.' });
       }
 
-      const adminUid = emailLower === 'bradens@lonestarfenceworks.com' ? 'braden-lonestar-uid' : 'usmc6123-lonestar-uid';
+      // First, authenticate on Firebase Client Auth as this admin
+      let userCredential;
+      try {
+        userCredential = await signInWithEmailAndPassword(auth, emailLower, password);
+      } catch (authErr: any) {
+        console.error('Firebase Auth sign-in failed during admin login:', authErr);
+        return res.status(401).json({ error: 'Invalid admin credentials.' });
+      }
+
+      const adminUid = userCredential.user.uid;
       const adminDocRef = doc(db, 'admins', adminUid);
       const docSnap = await getDoc(adminDocRef);
       if (!docSnap.exists()) {
@@ -214,36 +241,7 @@ async function startServer() {
   });
 
   // GET /api/admin/users - Get all users (admin only)
-  app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
-    try {
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const usersRef = collection(db, 'users');
-      const snap = await getDocs(usersRef);
-      const usersList: any[] = [];
-
-      for (const d of snap.docs) {
-        const u = d.data();
-        // Count user's estimates
-        const estRef = collection(db, 'users', d.id, 'estimates');
-        const estSnap = await getDocs(estRef);
-        usersList.push({
-          uid: d.id,
-          email: u.email || '',
-          name: u.name || u.displayName || u.email?.split('@')[0] || 'No Name',
-          subscriptionTier: u.tier || u.subscriptionTier || 'free',
-          createdAt: u.createdAt || '',
-          isDisabled: u.isDisabled || false,
-          estimatesCount: estSnap.size
-        });
-      }
-
-      res.json(usersList);
-    } catch (error: any) {
-      console.error('Error listing all users:', error);
-      res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
-  });
+  app.get('/api/admin/users', authenticateAdmin, (req, res) => listUsers(req, res, db));
 
   // GET /api/admin/users/:userId - Get specific user details
   app.get('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
@@ -325,83 +323,13 @@ async function startServer() {
   });
 
   // DELETE /api/admin/users/:userId - Delete user
-  app.delete('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      // Clean up subcollection estimates
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const estSnap = await getDocs(estRef);
-      for (const d of estSnap.docs) {
-        await deleteDoc(doc(db, 'users', userId, 'estimates', d.id));
-      }
-
-      // Delete user doc
-      const uRef = doc(db, 'users', userId);
-      await deleteDoc(uRef);
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+  app.delete('/api/admin/users/:userId', authenticateAdmin, (req, res) => deleteUser(req, res, db));
 
   // POST /api/admin/users - Create new user (admin only)
-  app.post('/api/admin/users', authenticateAdmin, async (req, res) => {
-    try {
-      const { email, name, subscriptionTier } = req.body;
-      if (!email || !name) {
-        return res.status(400).json({ error: 'Email and Name are required' });
-      }
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      // Generate a clean user id (manual user)
-      const userId = `usr-${Math.random().toString(36).substr(2, 9)}`;
-      const uRef = doc(db, 'users', userId);
-      
-      const newUser = {
-        uid: userId,
-        email: email,
-        name: name,
-        displayName: name,
-        tier: subscriptionTier || 'free',
-        subscriptionTier: subscriptionTier || 'free',
-        createdAt: new Date().toISOString(),
-        isDisabled: false
-      };
-
-      await setDoc(uRef, newUser);
-      res.json({ success: true, user: newUser });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+  app.post('/api/admin/users', authenticateAdmin, (req, res) => createUser(req, res, db));
 
   // PUT /api/admin/users/:userId - Edit user details (admin only)
-  app.put('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { email, name, subscriptionTier } = req.body;
-      if (!email || !name) {
-        return res.status(400).json({ error: 'Email and Name are required' });
-      }
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, {
-        email: email,
-        name: name,
-        displayName: name,
-        tier: subscriptionTier || 'free',
-        subscriptionTier: subscriptionTier || 'free',
-        updatedAt: new Date().toISOString()
-      });
-
-      res.json({ success: true, user: { uid: userId, email, name, subscriptionTier } });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+  app.put('/api/admin/users/:userId', authenticateAdmin, (req, res) => updateUser(req, res, db));
 
   // POST /api/admin/change-password - Change admin password
   app.post('/api/admin/change-password', authenticateAdmin, async (req, res) => {
@@ -417,7 +345,8 @@ async function startServer() {
 
       if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const adminRef = doc(db, 'admins', 'braden-lonestar-uid');
+      const adminUid = (req as any).admin?.uid || 'braden-lonestar-uid';
+      const adminRef = doc(db, 'admins', adminUid);
       const snap = await getDoc(adminRef);
       if (!snap.exists()) {
         return res.status(404).json({ error: 'Admin record not found.' });
@@ -742,7 +671,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
