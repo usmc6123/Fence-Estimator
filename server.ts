@@ -54,12 +54,20 @@ async function startServer() {
               currentUid = userCredential.user.uid;
               console.log(`Admin user registered in Firebase Auth ${adm.email} successfully with UID: ${currentUid}`);
               await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
-            } catch (createErr) {
-              console.error(`Failed to register admin ${adm.email} in Firebase Auth:`, createErr);
+            } catch (createErr: any) {
+              if (
+                createErr.code === 'auth/email-already-in-use' || 
+                (createErr.message && createErr.message.includes('auth/email-already-in-use')) ||
+                (createErr.message && createErr.message.includes('email-already-in-use'))
+              ) {
+                console.log(`Admin user ${adm.email} already exists in Firebase Auth. Skipping creation.`);
+                continue;
+              }
+              console.warn(`Failed to register admin ${adm.email} in Firebase Auth: ${createErr?.message || createErr}`);
               continue;
             }
           } else {
-            console.error(`Firebase Auth admin ${adm.email} login failed:`, authErr);
+            console.warn(`Firebase Auth admin ${adm.email} login failed: ${authErr?.message || authErr}`);
             continue;
           }
         }
