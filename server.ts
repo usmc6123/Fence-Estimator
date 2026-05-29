@@ -248,6 +248,76 @@ async function startServer() {
     }
   });
 
+  // POST /api/user/login - Custom client login
+  app.post('/api/user/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const emailLower = email.toLowerCase().trim();
+      const pwd = password.trim();
+
+      // Check hardcoded fallback
+      if (emailLower === 'bradens@lonestarfenceworks.com' && pwd === 'password123') {
+        return res.json({
+          success: true,
+          user: {
+            uid: 'braden-lonestar-uid',
+            email: 'bradens@lonestarfenceworks.com',
+            name: 'Braden',
+            displayName: 'Braden',
+            tier: 'paid',
+            subscriptionTier: 'paid'
+          }
+        });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: 'Database service offline' });
+      }
+
+      // Look up user in Firestore
+      const snap = await getDocs(collection(db, 'users'));
+      const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+
+      if (!userDoc) {
+        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+      }
+
+      const userData = userDoc.data();
+      
+      if (userData.isDisabled) {
+        return res.status(403).json({ error: 'Access Denied: This account has been disabled.' });
+      }
+
+      if (!userData.passwordHash) {
+        return res.status(401).json({ error: 'Access Denied: Account not configured with local password login.' });
+      }
+
+      const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+      }
+
+      res.json({
+        success: true,
+        user: {
+          uid: userData.uid || userDoc.id,
+          email: userData.email,
+          name: userData.name || userData.displayName || 'Client',
+          displayName: userData.displayName || userData.name || 'Client',
+          tier: userData.tier || userData.subscriptionTier || 'free',
+          subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
+        }
+      });
+    } catch (error: any) {
+      console.error('Error in custom client login:', error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
+    }
+  });
+
   // GET /api/admin/users - Get all users (admin only)
   app.get('/api/admin/users', authenticateAdmin, (req, res) => listUsers(req, res, db));
 

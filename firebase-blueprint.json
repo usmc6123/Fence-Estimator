@@ -155,6 +155,7 @@
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "tier": { "type": "string", "enum": ["free", "paid"] },
+        "passwordHash": { "type": "string" },
         "stripeCustomerId": { "type": "string" },
         "stripeSubscriptionId": { "type": "string" },
         "nextBillingDate": { "type": "string" },

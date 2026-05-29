@@ -764,10 +764,23 @@ export default function App() {
   // Render Admin Routes if currentPath starts with /admin or /admin-login or /admin/settings
   const isAdminPath = currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings';
 
+  // Redirect unauthenticated admin access to login
+  React.useEffect(() => {
+    if (isAdminPath && !adminToken && currentPath !== '/admin-login') {
+      window.history.replaceState(null, '', '/admin-login');
+      setCurrentPath('/admin-login');
+    }
+  }, [isAdminPath, adminToken, currentPath]);
+
   if (isAdminPath) {
     if (!adminToken && currentPath !== '/admin-login') {
-      window.history.replaceState(null, '', '/admin-login');
-      setTimeout(() => setCurrentPath('/admin-login'), 0);
+      return (
+        <div className="flex h-screen items-center justify-center bg-slate-50">
+          <div className="text-sm font-semibold text-gray-500 animate-pulse font-sans">
+            Verifying Admin Status...
+          </div>
+        </div>
+      );
     }
     
     return (

@@ -23,7 +23,7 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
   const [loading, setLoading] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -31,21 +31,34 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
     const targetEmail = email.trim().toLowerCase();
     const targetPassword = password.trim();
 
-    if (targetEmail === 'bradens@lonestarfenceworks.com' && targetPassword === 'password123') {
-      if (onLocalLogin) {
-        onLocalLogin({
-          uid: 'braden-lonestar-uid',
-          email: 'bradens@lonestarfenceworks.com',
-          displayName: 'Braden',
-        });
+    try {
+      const response = await fetch('/api/user/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: targetEmail, password: targetPassword })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        if (onLocalLogin) {
+          onLocalLogin({
+            uid: data.user.uid,
+            email: data.user.email,
+            displayName: data.user.name || data.user.displayName || 'Client'
+          });
+        }
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        setError(data.error || 'Access Denied: Incorrect email or password.');
       }
-      if (onSuccess) {
-        onSuccess();
-      }
-    } else {
-      setError('Access Denied: Incorrect email or password.');
+    } catch (err: any) {
+      setError('Connection failure to authentication server.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

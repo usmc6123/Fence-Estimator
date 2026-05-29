@@ -1,9 +1,10 @@
 import { doc, updateDoc } from 'firebase/firestore';
+import bcrypt from 'bcryptjs';
 
 export async function updateUser(req: any, res: any, db: any) {
   try {
     const { userId } = req.params;
-    const { email, name, subscriptionTier, isDisabled } = req.body;
+    const { email, name, subscriptionTier, isDisabled, password } = req.body;
     if (!db) {
       return res.status(503).json({ error: 'Database offline' });
     }
@@ -25,6 +26,10 @@ export async function updateUser(req: any, res: any, db: any) {
     }
     if (isDisabled !== undefined) {
       updateData.isDisabled = isDisabled;
+    }
+    if (password !== undefined && password !== '') {
+      const salt = await bcrypt.genSalt(10);
+      updateData.passwordHash = await bcrypt.hash(password, salt);
     }
 
     await updateDoc(uRef, updateData);

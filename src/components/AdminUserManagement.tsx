@@ -48,6 +48,14 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
   const [successToast, setSuccessToast] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // New Password states
+  const [formPassword, setFormPassword] = React.useState('');
+  const [isResetPassOpen, setIsResetPassOpen] = React.useState(false);
+  const [resetPassUser, setResetPassUser] = React.useState<UserProfile | null>(null);
+  const [formResetPassword, setFormResetPassword] = React.useState('');
+  const [showFormPassword, setShowFormPassword] = React.useState(false);
+  const [showResetPassword, setShowResetPassword] = React.useState(false);
+
   // Auto-hide toast
   React.useEffect(() => {
     if (successToast) {
@@ -199,7 +207,8 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         body: JSON.stringify({
           email: formEmail,
           name: formName,
-          subscriptionTier: formTier
+          subscriptionTier: formTier,
+          password: formPassword
         })
       });
       const data = await res.json();
@@ -208,10 +217,43 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         setIsAddUserOpen(false);
         setFormEmail('');
         setFormName('');
+        setFormPassword('');
         setFormTier('free');
         onRefresh();
       } else {
         setFormError(data.error || "Failed to create user.");
+      }
+    } catch (err) {
+      setFormError("Communication failure.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassUser) return;
+    setFormError(null);
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch(`/api/admin/users/${resetPassUser.uid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          password: formResetPassword
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessToast(`Password reset successfully for ${resetPassUser.name}!`);
+        setIsResetPassOpen(false);
+        setFormResetPassword('');
+      } else {
+        setFormError(data.error || "Failed to reset password.");
       }
     } catch (err) {
       setFormError("Communication failure.");
@@ -422,7 +464,7 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 font-sans leading-none">
                           {/* Edit Details */}
                           <button
                             onClick={() => {
@@ -434,10 +476,24 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                               setFormError(null);
                               setIsEditUserOpen(true);
                             }}
-                            className="p-1 px-2 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-xs font-bold text-gray-600 transition-colors"
+                            className="p-1 px-2 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
                             title="Edit User"
                           >
                             Edit
+                          </button>
+
+                          {/* Reset Password Button */}
+                          <button
+                            onClick={() => {
+                              setResetPassUser(item);
+                              setFormResetPassword('');
+                              setFormError(null);
+                              setIsResetPassOpen(true);
+                            }}
+                            className="p-1 px-2 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
+                            title="Reset User Password"
+                          >
+                            Password
                           </button>
 
                           {/* Quick Toggle Disable status */}
@@ -505,6 +561,21 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                         {selectedUser.isDisabled ? 'Disabled' : 'Active'}
                       </strong>
                     </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-200/50">
+                    <button
+                      onClick={() => {
+                        setResetPassUser(selectedUser);
+                        setFormResetPassword('');
+                        setFormError(null);
+                        setIsResetPassOpen(true);
+                      }}
+                      className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-black uppercase tracking-wider border border-[#D5D5D5] bg-[#FAF9F9] text-gray-700 hover:bg-[#F0FAF4] rounded-xl transition-all"
+                    >
+                      <Shield size={13} className="text-american-blue" />
+                      Reset Password
+                    </button>
                   </div>
                 </div>
 
@@ -601,6 +672,27 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                     className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
                     placeholder="name@company.com"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">Initial Password</label>
+                  <div className="relative">
+                    <input
+                      type={showFormPassword ? 'text' : 'password'}
+                      required
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 pr-12 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all font-mono"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPassword(!showFormPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#666666] font-extrabold transition-colors text-xs"
+                    >
+                      {showFormPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -744,6 +836,99 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                       {isSubmitting ? 'Saving...' : 'Save File'}
                     </button>
                   </div>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Reset Password Modal */}
+      <AnimatePresence>
+        {isResetPassOpen && resetPassUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              id="admin_reset_password_modal" 
+              className="bg-white w-full max-w-md p-6 rounded-2xl border border-[#E5E5E5] shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsResetPassOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-all font-bold text-lg"
+              >
+                ✕
+              </button>
+              
+              <h3 className="text-md font-black text-american-blue uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Shield size={18} className="text-american-blue" /> User Password Reset
+              </h3>
+              <p className="text-xs text-gray-500 mb-4 font-bold">
+                Enter or generate a temporary password for: <span className="text-american-blue font-extrabold">{resetPassUser.name}</span>
+              </p>
+              
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">Temporary Password</label>
+                  <div className="relative">
+                    <input
+                      type={showResetPassword ? 'text' : 'password'}
+                      required
+                      value={formResetPassword}
+                      onChange={(e) => setFormResetPassword(e.target.value)}
+                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 pr-20 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all font-mono"
+                      placeholder="••••••••"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPassword(!showResetPassword)}
+                        className="text-gray-400 hover:text-[#666666] transition-colors text-xs font-extrabold"
+                      >
+                        {showResetPassword ? 'Hide' : 'Show'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#";
+                          let pass = "";
+                          for (let i = 0; i < 10; ++i) {
+                            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+                          }
+                          setFormResetPassword(pass);
+                          setShowResetPassword(true);
+                        }}
+                        className="text-american-blue hover:underline text-xs font-black"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">Provide a secure temporary/new password that the user can use to log in.</p>
+                </div>
+
+                {formError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold font-mono">
+                    {formError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsResetPassOpen(false)}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider border border-[#D5D5D5] text-[#666666] rounded-xl hover:bg-gray-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 text-xs font-black uppercase tracking-wider bg-american-blue text-white rounded-xl hover:bg-american-blue/90 shadow-lg shadow-american-blue/15 transition-all"
+                  >
+                    {isSubmitting ? 'Resetting...' : 'Save Temporary Password'}
+                  </button>
                 </div>
               </form>
             </motion.div>
