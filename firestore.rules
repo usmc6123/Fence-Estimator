@@ -123,21 +123,20 @@ service cloud.firestore {
     // --- Collection Routes ---
 
     match /users/{userId} {
-      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow get: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == resource.data.email);
       allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming());
-      allow update: if (isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming()))
+      allow create: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == incoming().email) && isValidUserProfile(incoming());
+      allow update: if (isSignedIn() && (request.auth.uid == userId || request.auth.token.email == incoming().email) && isValidUserProfile(incoming()))
                       || isAdmin();
       allow delete: if isAdmin();
 
       match /estimates/{estimate} {
-        allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+        allow read, write: if (isSignedIn() && (request.auth.uid == userId || request.auth.token.email == get(/databases/$(database)/documents/users/$(userId)).data.email)) || isAdmin();
       }
     }
 
     match /admins/{admin} {
-      allow read: if true;
-      allow write: if (isSignedIn() && request.auth.uid == admin) || isAdmin();
+      allow read, write: if (isSignedIn() && request.auth.uid == admin) || isAdmin();
     }
 
     match /employees/{email} {
@@ -154,49 +153,49 @@ service cloud.firestore {
     }
 
     match /expenses/{expenseId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidExpense(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidExpense(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /estimates/{estimateId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
-      allow create:    if (canWriteData() || (incoming().isCustomerEstimate == true)) && isValidEstimate(incoming());
-      allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidEstimate(incoming());
-      allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
+      allow read:      if isCompanyMember() || (isSignedIn() && (resource == null || resource.data.clerkUserId == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email));
+      allow create:    if (canWriteData() || (incoming().isCustomerEstimate == true) || (isSignedIn() && (incoming().clerkUserId == request.auth.uid || incoming().userId == request.auth.uid || incoming().customerEmail == request.auth.token.email))) && isValidEstimate(incoming());
+      allow update:    if (canWriteData() && resource.data.companyId == 'lonestarfence' && isValidEstimate(incoming())) || (isSignedIn() && (resource.data.clerkUserId == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email) && isValidEstimate(incoming()));
+      allow delete:    if (canWriteData() && resource.data.companyId == 'lonestarfence') || (isSignedIn() && (resource.data.clerkUserId == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email));
     }
 
     match /bankAccounts/{accountId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidBankAccount(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidBankAccount(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /transactions/{transactionId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidTransaction(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidTransaction(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /inventory/{inventoryId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidInventory(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidInventory(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /journalEntries/{entryId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidJournal(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidJournal(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
     match /quotes/{quoteId} {
-      allow get, list: if isCompanyMember() && resource.data.companyId == 'lonestarfence';
+      allow get, list: if isCompanyMember();
       allow create:    if canWriteData() && isValidQuote(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidQuote(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';

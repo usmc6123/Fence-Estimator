@@ -229,6 +229,7 @@ export interface Estimate {
   createdAt: string;
   version?: number;
   parentId?: string; // Links to the original version id
+  totalCost?: number;
 
   scheduledStartDate?: string;
   scheduledEndDate?: string;

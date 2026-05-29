@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Shield, Users, Lock, Mail, Trash2, Settings, Check, X, 
-  ChevronRight, Search, ArrowUpDown, UserCheck, UserX, Calendar, Sparkles, Briefcase, Key, UserPlus 
+  ChevronRight, Search, ArrowUpDown, UserCheck, UserX, Calendar, Sparkles, Briefcase, Key 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,50 +60,13 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
   const [selectedUserEstimates, setSelectedUserEstimates] = React.useState<EstimateItem[]>([]);
   const [loadingEstimates, setLoadingEstimates] = React.useState(false);
 
-  // User Creation Form Fields
-  const [showAddUserForm, setShowAddUserForm] = React.useState(false);
-  const [newUserName, setNewUserName] = React.useState('');
+  // User Add/Edit Modal states
+  const [isUserModalOpen, setIsUserModalOpen] = React.useState(false);
   const [newUserEmail, setNewUserEmail] = React.useState('');
+  const [newUserName, setNewUserName] = React.useState('');
   const [newUserTier, setNewUserTier] = React.useState<'free' | 'paid'>('free');
-  const [isCreatingUser, setIsCreatingUser] = React.useState(false);
-  const [createUserError, setCreateUserError] = React.useState<string | null>(null);
-
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreateUserError(null);
-    setIsCreatingUser(true);
-
-    try {
-      const response = await fetch('/api/admin/users/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`,
-          'x-admin-token': adminToken
-        },
-        body: JSON.stringify({
-          email: newUserEmail,
-          name: newUserName,
-          subscriptionTier: newUserTier
-        })
-      });
-
-      const result = await response.json();
-      if (response.ok && result.success) {
-        setUsers(prev => [result.user, ...prev]);
-        setNewUserName('');
-        setNewUserEmail('');
-        setNewUserTier('free');
-        setShowAddUserForm(false);
-      } else {
-        setCreateUserError(result.error || 'Failed to register corporate user profile.');
-      }
-    } catch (err: any) {
-      setCreateUserError('Failed to communicate with authentication registry.');
-    } finally {
-      setIsCreatingUser(false);
-    }
-  };
+  const [editingUser, setEditingUser] = React.useState<UserProfile | null>(null);
+  const [userModalError, setUserModalError] = React.useState<string | null>(null);
 
   // Settings Password Fields
   const [currentPassword, setCurrentPassword] = React.useState('');
@@ -256,6 +219,47 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
       }
     } catch (err) {
       console.error("Delete user failed:", err);
+    }
+  };
+
+  // Create or Update User
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserModalError(null);
+    const body = {
+      email: newUserEmail,
+      name: newUserName,
+      subscriptionTier: newUserTier,
+    };
+    
+    try {
+      const url = editingUser 
+        ? `/api/admin/users/${editingUser.uid}`
+        : `/api/admin/users`;
+      const method = editingUser ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'x-admin-token': adminToken
+        },
+        body: JSON.stringify(body)
+      });
+      
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setIsUserModalOpen(false);
+        fetchUsers();
+        if (editingUser && selectedUser?.uid === editingUser.uid) {
+          setSelectedUser(prev => prev ? { ...prev, name: newUserName, email: newUserEmail, subscriptionTier: newUserTier } : null);
+        }
+      } else {
+        setUserModalError(result.error || 'Failed to save user profile');
+      }
+    } catch (err) {
+      setUserModalError('Communication error with endpoint');
     }
   };
 
@@ -552,96 +556,21 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
         {/* Main User List Section */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#F0F0F0] pb-2">
+            <div className="flex justify-between items-center border-b border-[#F0F0F0] pb-2">
               <h2 className="text-sm font-black text-american-blue uppercase tracking-widest">Client Base Directory</h2>
-              <button
-                onClick={() => setShowAddUserForm(!showAddUserForm)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider bg-american-blue text-white hover:bg-american-blue/90 rounded-xl transition-all shadow-md shadow-american-blue/10 shrink-0"
+              <button 
+                onClick={() => {
+                  setEditingUser(null);
+                  setNewUserEmail('');
+                  setNewUserName('');
+                  setNewUserTier('free');
+                  setIsUserModalOpen(true);
+                }}
+                className="px-3 py-1.5 bg-american-blue hover:bg-american-blue/90 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
               >
-                <UserPlus size={14} />
-                {showAddUserForm ? 'Close Form' : 'Add User Profile'}
+                + Add User
               </button>
             </div>
-
-            <AnimatePresence>
-              {showAddUserForm && (
-                <motion.form
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                  onSubmit={handleCreateUser}
-                >
-                  <div className="bg-[#FAF9F9] border border-[#E5E5E5] p-5 rounded-xl space-y-4 mb-4">
-                    <div className="flex items-center gap-2 text-american-blue border-b border-[#E1E1E1] pb-2">
-                      <UserPlus size={16} />
-                      <h3 className="text-xs font-black uppercase tracking-widest">Register New User Profile</h3>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div>
-                        <label className="block text-[10px] font-black uppercase text-[#666666] tracking-widest mb-1">Full Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={newUserName}
-                          onChange={(e) => setNewUserName(e.target.value)}
-                          placeholder="e.g. Braden Stephens"
-                          className="block w-full rounded-xl border border-[#D5D5D5] bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue transition-all"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase text-[#666666] tracking-widest mb-1">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={newUserEmail}
-                          onChange={(e) => setNewUserEmail(e.target.value)}
-                          placeholder="e.g. user@domain.com"
-                          className="block w-full rounded-xl border border-[#D5D5D5] bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue transition-all"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase text-[#666666] tracking-widest mb-1">Subscription Tier</label>
-                        <select
-                          value={newUserTier}
-                          onChange={(e) => setNewUserTier(e.target.value as any)}
-                          className="block w-full rounded-xl border border-[#D5D5D5] bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue transition-all"
-                        >
-                          <option value="free">Standard (Free)</option>
-                          <option value="paid">Premium (Paid)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {createUserError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold leading-tight">
-                        {createUserError}
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 pt-2 border-t border-[#E1E1E1]">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddUserForm(false)}
-                        className="px-3 py-2 text-xs font-bold uppercase tracking-wider border border-[#D5D5D5] text-gray-600 rounded-xl hover:bg-gray-50 transition-all font-sans"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isCreatingUser}
-                        className="px-4 py-2 text-xs font-black uppercase tracking-widest bg-american-blue text-white rounded-xl hover:bg-american-blue/90 transition-all shadow-md shadow-american-blue/15"
-                      >
-                        {isCreatingUser ? 'Registering...' : 'Register User'}
-                      </button>
-                    </div>
-                  </div>
-                </motion.form>
-              )}
-            </AnimatePresence>
             
             {/* Filter and search bar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
@@ -756,6 +685,22 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
                         </td>
                         <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Edit Details Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingUser(item);
+                                setNewUserEmail(item.email);
+                                setNewUserName(item.name);
+                                setNewUserTier(item.subscriptionTier);
+                                setIsUserModalOpen(true);
+                              }}
+                              className="p-1.5 bg-[#EBF5FF] border border-[#D0E7FF] text-[#0066CC] rounded-lg hover:bg-[#D0E7FF] transition-all"
+                              title="Edit Profile"
+                            >
+                              <Settings size={13} />
+                            </button>
+
                             {/* Toggle Disable Button */}
                             <button
                               onClick={() => handleToggleStatus(item)}
@@ -871,6 +816,92 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
           </div>
         </div>
       </div>
+      
+      {/* Add / Edit User Modal */}
+      <AnimatePresence>
+        {isUserModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              id="admin_user_modal" 
+              className="bg-white w-full max-w-md p-6 rounded-2xl border border-[#E5E5E5] shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setIsUserModalOpen(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-all font-bold text-lg"
+              >
+                ✕
+              </button>
+              
+              <h3 className="text-xl font-black text-american-blue uppercase tracking-tight mb-4">
+                {editingUser ? 'Edit System User' : 'Register New User'}
+              </h3>
+              
+              <form onSubmit={handleSaveUser} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                    placeholder="Braden Smith"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                    placeholder="name@company.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1">Subscription Tier</label>
+                  <select
+                    value={newUserTier}
+                    onChange={(e) => setNewUserTier(e.target.value as any)}
+                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                  >
+                    <option value="free">Standard (Free)</option>
+                    <option value="paid">Premium (Paid)</option>
+                  </select>
+                </div>
+
+                {userModalError && (
+                  <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold font-mono">
+                    {userModalError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsUserModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider border border-[#D5D5D5] text-[#666666] rounded-xl hover:bg-gray-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-black uppercase tracking-wider bg-american-blue text-white rounded-xl hover:bg-american-blue/90 shadow-lg transition-all"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

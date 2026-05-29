@@ -1,34 +1,34 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer, collection } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, collection } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const storage = getStorage(app);
 
 // Global user tracking for transparent client-side Firestore path translation
 let currentUserId: string | null = null;
+let currentIsCompanyUser: boolean = false;
 
-export function setGlobalUserId(uid: string | null) {
+export function setGlobalUserId(uid: string | null, isCompanyUser: boolean = false) {
   currentUserId = uid;
-  console.log("Global Firestore user ID translated context set to:", uid);
+  currentIsCompanyUser = isCompanyUser;
+  console.log("Global Firestore user ID translated context set to:", uid, "isCompanyUser:", isCompanyUser);
 }
 
 export function getEstimatesCollection(database: any) {
-  if (currentUserId) {
+  if (currentUserId && !currentIsCompanyUser) {
     return collection(database, 'users', currentUserId, 'estimates');
   }
   return collection(database, 'estimates');
 }
 
 export function getEstimateDoc(database: any, id: string) {
-  if (currentUserId) {
+  if (currentUserId && !currentIsCompanyUser) {
     return doc(database, 'users', currentUserId, 'estimates', id);
   }
   return doc(database, 'estimates', id);

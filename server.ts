@@ -5,7 +5,7 @@ import fs from 'fs';
 import Stripe from 'stripe';
 import { createServer as createViteServer } from 'vite';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -20,43 +20,57 @@ async function startServer() {
   let auth: any = null;
 
   async function bootstrapAdmin(database: any, firebaseAuth: any) {
-    const adminEmail = 'bradens@lonestarfenceworks.com';
+    const defaultAdmins = [
+      { email: 'bradens@lonestarfenceworks.com', uid: 'braden-lonestar-uid' },
+      { email: 'usmc6123@gmail.com', uid: 'usmc6123-lonestar-uid' }
+    ];
     const adminPassword = 'password123';
-    try {
-      // 1. Ensure the admin document exists in Firestore under "admins" with designated password
-      const adminDocRef = doc(database, 'admins', 'braden-lonestar-uid');
-      const passwordHash = await bcrypt.hash(adminPassword, 10);
-      
-      await setDoc(adminDocRef, {
-        uid: 'braden-lonestar-uid',
-        email: adminEmail,
-        passwordHash: passwordHash,
-        createdAt: new Date().toISOString(),
-        canAccessAllData: true,
-        isAdmin: true,
-        passwordChanged: false
-      }, { merge: true });
-      console.log("Admin Firestore document registered/reset to password123 successfully.");
-
-      // 2. Ensure they are signed in or registered in Firebase client Auth so server requests are authenticated
+    
+    for (const adm of defaultAdmins) {
       try {
-        await signInWithEmailAndPassword(firebaseAuth, adminEmail, adminPassword);
-        console.log("Firebase server authenticated as admin successfully.");
-      } catch (authErr: any) {
-        if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
-          try {
-            await createUserWithEmailAndPassword(firebaseAuth, adminEmail, adminPassword);
-            console.log("Admin user registered in Firebase Auth successfully.");
-            await signInWithEmailAndPassword(firebaseAuth, adminEmail, adminPassword);
-          } catch (createErr) {
-            console.error("Failed to create admin in Firebase Auth:", createErr);
-          }
+        // 1. Ensure the admin document exists in Firestore under "admins" with correct passwordHash set to 'password123'
+        const adminDocRef = doc(database, 'admins', adm.uid);
+        const docSnap = await getDoc(adminDocRef);
+        const passwordHash = await bcrypt.hash(adminPassword, 10);
+        
+        if (!docSnap.exists()) {
+          await setDoc(adminDocRef, {
+            uid: adm.uid,
+            email: adm.email,
+            passwordHash: passwordHash,
+            createdAt: new Date().toISOString(),
+            canAccessAllData: true,
+            isAdmin: true
+          });
+          console.log(`Admin Firestore document for ${adm.email} registered successfully.`);
         } else {
-          console.error("Firebase Auth admin login failed:", authErr);
+          await updateDoc(adminDocRef, {
+            passwordHash: passwordHash,
+            email: adm.email
+          });
+          console.log(`Admin Firestore password reset for ${adm.email} completed successfully.`);
         }
+
+        // 2. Ensure they are signed in or registered in Firebase client Auth so server requests are authenticated
+        try {
+          await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+          console.log(`Firebase server authenticated as admin ${adm.email} successfully.`);
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/invalid-email') {
+            try {
+              await createUserWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+              console.log(`Admin user registered in Firebase Auth ${adm.email} successfully.`);
+              await signInWithEmailAndPassword(firebaseAuth, adm.email, adminPassword);
+            } catch (createErr) {
+              console.error(`Failed to create admin ${adm.email} in Firebase Auth:`, createErr);
+            }
+          } else {
+            console.error(`Firebase Auth admin ${adm.email} login failed:`, authErr);
+          }
+        }
+      } catch (err) {
+        console.error(`Error during admin bootstrapping for ${adm.email}:`, err);
       }
-    } catch (err) {
-      console.error("Error during admin bootstrapping:", err);
     }
   }
 
@@ -146,55 +160,6 @@ async function startServer() {
     res.json({ status: 'ok' });
   });
 
-  // POST /api/admin/token-for-clerk - Elevate verified Clerk email to Admin JWT token
-  app.post('/api/admin/token-for-clerk', async (req, res) => {
-    try {
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ error: 'Email is required' });
-      }
-      const lowerEmail = email.toLowerCase();
-      if (lowerEmail !== 'bradens@lonestarfenceworks.com' && lowerEmail !== 'usmc6123@gmail.com') {
-        return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
-      }
-
-      if (!db) {
-        return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
-      }
-
-      const adminDocRef = doc(db, 'admins', 'braden-lonestar-uid');
-      let adminData: any = { email: lowerEmail };
-      try {
-        const docSnap = await getDoc(adminDocRef);
-        if (docSnap.exists()) {
-          adminData = docSnap.data();
-        }
-      } catch (err) {
-        console.warn("Bootstrap admin check failed or skipped, using fallback");
-      }
-
-      const token = jwt.sign(
-        { email: lowerEmail, isAdmin: true, uid: 'braden-lonestar-uid' },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
-      res.json({
-        success: true,
-        token,
-        admin: {
-          email: lowerEmail,
-          uid: 'braden-lonestar-uid',
-          canAccessAllData: true,
-          isAdmin: true
-        }
-      });
-    } catch (error: any) {
-      console.error('Error in clerk elevation:', error);
-      res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
-  });
-
   // POST /api/admin/login - Admin email/password login
   app.post('/api/admin/login', async (req, res) => {
     try {
@@ -203,7 +168,8 @@ async function startServer() {
         return res.status(400).json({ error: 'Email and password are required' });
       }
 
-      if (email.toLowerCase() !== 'bradens@lonestarfenceworks.com') {
+      const emailLower = email.toLowerCase();
+      if (emailLower !== 'bradens@lonestarfenceworks.com' && emailLower !== 'usmc6123@gmail.com') {
         return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
       }
 
@@ -211,7 +177,8 @@ async function startServer() {
         return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
       }
 
-      const adminDocRef = doc(db, 'admins', 'braden-lonestar-uid');
+      const adminUid = emailLower === 'bradens@lonestarfenceworks.com' ? 'braden-lonestar-uid' : 'usmc6123-lonestar-uid';
+      const adminDocRef = doc(db, 'admins', adminUid);
       const docSnap = await getDoc(adminDocRef);
       if (!docSnap.exists()) {
         return res.status(404).json({ error: 'Admin record not found in database.' });
@@ -220,29 +187,12 @@ async function startServer() {
       const adminData = docSnap.data();
       const isMatch = await bcrypt.compare(password, adminData.passwordHash);
       if (!isMatch) {
-        return res.status(412).json({ error: 'Invalid admin credentials.' });
-      }
-
-      // Force align server authentication session so dynamic reads are fully certified in Firestore Rules
-      if (auth) {
-        try {
-          await signInWithEmailAndPassword(auth, email.toLowerCase(), password);
-          console.log("Dynamically logged backend client-sdk into Firebase Auth successfully.");
-        } catch (authErr: any) {
-          console.warn("Backend dynamic Auth sign-in failed during login:", authErr.message);
-          // If auth user wasn't initialized or credential was expired, attempt creating or updating password state
-          try {
-            await createUserWithEmailAndPassword(auth, email.toLowerCase(), password);
-            console.log("Created admin user on-the-fly in Firebase Auth.");
-          } catch (createErr: any) {
-            console.warn("Admin registration skip/retry failed:", createErr.message);
-          }
-        }
+        return res.status(401).json({ error: 'Invalid admin credentials.' });
       }
 
       // Create JWT
       const token = jwt.sign(
-        { email: adminData.email, isAdmin: true, uid: 'braden-lonestar-uid' },
+        { email: adminData.email, isAdmin: true, uid: adminUid },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
@@ -252,7 +202,7 @@ async function startServer() {
         token,
         admin: {
           email: adminData.email,
-          uid: 'braden-lonestar-uid',
+          uid: adminUid,
           canAccessAllData: adminData.canAccessAllData || true,
           isAdmin: true
         }
@@ -291,56 +241,6 @@ async function startServer() {
       res.json(usersList);
     } catch (error: any) {
       console.error('Error listing all users:', error);
-      res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
-  });
-
-  // POST /api/admin/users/create - Create a user manually (admin only)
-  app.post('/api/admin/users/create', authenticateAdmin, async (req, res) => {
-    try {
-      const { email, name, subscriptionTier } = req.body;
-      if (!email || !name) {
-        return res.status(400).json({ error: 'Email and Name are required.' });
-      }
-
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      // Check if user already exists
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', email.trim().toLowerCase()));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return res.status(400).json({ error: 'User with this email already exists.' });
-      }
-
-      const newUserId = 'manual_' + Math.random().toString(36).substr(2, 9);
-      const userRef = doc(db, 'users', newUserId);
-      const userData = {
-        email: email.trim().toLowerCase(),
-        name: name.trim(),
-        displayName: name.trim(),
-        tier: subscriptionTier || 'free',
-        isDisabled: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await setDoc(userRef, userData);
-
-      res.status(201).json({
-        success: true,
-        user: {
-          uid: newUserId,
-          email: userData.email,
-          name: userData.name,
-          subscriptionTier: userData.tier,
-          createdAt: userData.createdAt,
-          isDisabled: userData.isDisabled,
-          estimatesCount: 0
-        }
-      });
-    } catch (error: any) {
-      console.error('Error creating user:', error);
       res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   });
@@ -446,6 +346,63 @@ async function startServer() {
     }
   });
 
+  // POST /api/admin/users - Create new user (admin only)
+  app.post('/api/admin/users', authenticateAdmin, async (req, res) => {
+    try {
+      const { email, name, subscriptionTier } = req.body;
+      if (!email || !name) {
+        return res.status(400).json({ error: 'Email and Name are required' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database offline' });
+
+      // Generate a clean user id (manual user)
+      const userId = `usr-${Math.random().toString(36).substr(2, 9)}`;
+      const uRef = doc(db, 'users', userId);
+      
+      const newUser = {
+        uid: userId,
+        email: email,
+        name: name,
+        displayName: name,
+        tier: subscriptionTier || 'free',
+        subscriptionTier: subscriptionTier || 'free',
+        createdAt: new Date().toISOString(),
+        isDisabled: false
+      };
+
+      await setDoc(uRef, newUser);
+      res.json({ success: true, user: newUser });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /api/admin/users/:userId - Edit user details (admin only)
+  app.put('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { email, name, subscriptionTier } = req.body;
+      if (!email || !name) {
+        return res.status(400).json({ error: 'Email and Name are required' });
+      }
+      if (!db) return res.status(503).json({ error: 'Database offline' });
+
+      const uRef = doc(db, 'users', userId);
+      await updateDoc(uRef, {
+        email: email,
+        name: name,
+        displayName: name,
+        tier: subscriptionTier || 'free',
+        subscriptionTier: subscriptionTier || 'free',
+        updatedAt: new Date().toISOString()
+      });
+
+      res.json({ success: true, user: { uid: userId, email, name, subscriptionTier } });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // POST /api/admin/change-password - Change admin password
   app.post('/api/admin/change-password', authenticateAdmin, async (req, res) => {
     try {
@@ -473,21 +430,7 @@ async function startServer() {
       }
 
       const newHash = await bcrypt.hash(newPassword, 10);
-      await updateDoc(adminRef, { 
-        passwordHash: newHash, 
-        passwordChanged: true,
-        updatedAt: new Date().toISOString() 
-      });
-
-      if (auth && auth.currentUser) {
-        try {
-          const { updatePassword } = await import('firebase/auth');
-          await updatePassword(auth.currentUser, newPassword);
-          console.log("Successfully updated password in Live Firebase Auth.");
-        } catch (pwErr: any) {
-          console.warn("Could not sync change-password to Firebase Auth:", pwErr.message);
-        }
-      }
+      await updateDoc(adminRef, { passwordHash: newHash, updatedAt: new Date().toISOString() });
 
       res.json({ success: true, message: 'Password changed successfully.' });
     } catch (error: any) {

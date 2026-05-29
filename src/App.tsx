@@ -93,45 +93,11 @@ export default function App() {
 
   // Routing current path state
   const [currentPath, setCurrentPath] = React.useState(() => window.location.pathname);
-  const [adminSubPath, setAdminSubPath] = React.useState('/admin');
   
   // Admin Authorization Session State
   const [adminToken, setAdminToken] = React.useState<string | null>(() => {
     return localStorage.getItem('company_admin_token');
   });
-
-  // Auto-elevate Clerk admins to security JWT session and redirect
-  React.useEffect(() => {
-    if (user && (user.email === 'bradens@lonestarfenceworks.com' || user.email === 'usmc6123@gmail.com')) {
-      if (!adminToken) {
-        fetch('/api/admin/token-for-clerk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.token) {
-            setAdminToken(data.token);
-            localStorage.setItem('company_admin_token', data.token);
-            console.log("Automatically elevated Clerk user session to Admin Privileges.");
-          }
-        })
-        .catch(err => console.error("Error auto-elevating Clerk user to admin:", err));
-      }
-      
-      // Auto-redirect standalone admin paths to the primary Layout under Admin Console tab
-      const pathname = window.location.pathname;
-      if (pathname === '/admin' || pathname === '/admin/settings') {
-        setActiveTab('admin-console');
-        setAdminSubPath(pathname);
-        window.history.replaceState(null, '', '/');
-        React.startTransition(() => {
-          setCurrentPath('/');
-        });
-      }
-    }
-  }, [user, adminToken]);
 
   // Track path history pushstate popstate
   React.useEffect(() => {
@@ -160,7 +126,35 @@ export default function App() {
 
   // Update transparent client-use path translation with global currentUserId
   React.useEffect(() => {
-    setGlobalUserId(user?.uid || null);
+    if (!user) {
+      setGlobalUserId(null, false);
+      return;
+    }
+
+    const checkRoleAndSet = async () => {
+      let isCompanyUser = false;
+      const emailLower = user.email?.toLowerCase();
+      if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
+        isCompanyUser = true;
+      } else if (emailLower) {
+        try {
+          const empSnap = await getDoc(doc(db, 'employees', emailLower));
+          if (empSnap.exists()) {
+            isCompanyUser = true;
+          } else {
+            const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+            if (adminSnap.exists()) {
+              isCompanyUser = true;
+            }
+          }
+        } catch (err) {
+          console.warn("Could not check company user collections, assuming standard user.", err);
+        }
+      }
+      setGlobalUserId(user.uid, isCompanyUser);
+    };
+
+    checkRoleAndSet();
   }, [user]);
 
   // Synchronize Clerk Users with standard client-use Firebase Authentication
@@ -391,14 +385,12 @@ export default function App() {
 
     // Re-check anytime a new customer estimate is submitted
     const handleLocalSubmitted = () => {
+      // Unsubscribe from the old listener first to avoid leaking listeners/streams!
+      if (unsubCloud) {
+        unsubCloud();
+      }
       // Re-run syncing to grab latest items from localStorage
-      const unsubNew = syncEstimates();
-      // Update original unsubscribe reference
-      const prevUnsubVal = unsubCloud;
-      unsubCloud = () => {
-        prevUnsubVal();
-        unsubNew();
-      };
+      unsubCloud = syncEstimates();
     };
     window.addEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
 
@@ -700,8 +692,7 @@ export default function App() {
   };
 
   // Render Admin Routes if currentPath starts with /admin or /admin-login or /admin/settings
-  const isClerkAdmin = user && (user.email === 'bradens@lonestarfenceworks.com' || user.email === 'usmc6123@gmail.com');
-  const isAdminPath = (currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings') && !isClerkAdmin;
+  const isAdminPath = currentPath === '/admin' || currentPath === '/admin-login' || currentPath === '/admin/settings';
   
   if (isAdminPath) {
     if (!adminToken && currentPath !== '/admin-login') {
@@ -779,23 +770,6 @@ export default function App() {
       onLogin={handleLogin} 
       onLogout={handleLogout}
     >
-      {activeTab === 'admin-console' && (
-        <AdminSystem 
-          currentPath={adminSubPath}
-          onNavigate={(path) => {
-            setAdminSubPath(path);
-          }}
-          adminToken={adminToken}
-          setAdminToken={(token) => {
-            setAdminToken(token);
-            if (token) {
-              localStorage.setItem('company_admin_token', token);
-            } else {
-              localStorage.removeItem('company_admin_token');
-            }
-          }}
-        />
-      )}
       {activeTab === 'pricing' && (
         <PricingPage 
           userId={user.uid}

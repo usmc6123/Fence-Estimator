@@ -10,7 +10,7 @@ import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, collection, query, where, limit, onSnapshot, or } from 'firebase/firestore';
 
 interface SavedEstimatesProps {
   savedEstimates: SavedEstimate[];
@@ -28,6 +28,57 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
+
+  const [estimates, setEstimates] = React.useState<SavedEstimate[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!user?.uid) return;
+    
+    setLoading(true);
+
+    const q = query(
+      collection(db, 'estimates'),
+      or(
+        where('clerkUserId', '==', user.uid),
+        where('userId', '==', user.uid)
+      ),
+      limit(100)
+    );
+
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const fetched = snapshot.docs.map(d => {
+          const data = d.data();
+          return {
+            ...data,
+            id: d.id,
+            createdAt: data.createdAt?.seconds ? new Date(data.createdAt.seconds * 1000).toISOString() : (data.createdAt || new Date().toISOString()),
+            lastModified: data.lastModified?.seconds ? new Date(data.lastModified.seconds * 1000).toISOString() : (data.lastModified || data.createdAt || new Date().toISOString())
+          } as SavedEstimate;
+        });
+
+        // Client-side sort by createdAt descending to avoid index requirements
+        fetched.sort((a, b) => {
+          const tA = new Date(a.createdAt || 0).getTime();
+          const tB = new Date(b.createdAt || 0).getTime();
+          return tB - tA;
+        });
+
+        setEstimates(fetched);
+        if (typeof setSavedEstimates === 'function') {
+          setSavedEstimates(fetched);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Failed to load user estimates of clerkUserId or userId from /estimates:", error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.uid, setSavedEstimates]);
 
   const filteredEstimates = savedEstimates.filter(est => {
     const name = est.customerName || 'Unnamed Prospect';
@@ -319,15 +370,21 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 py-4 border-y-2 border-[#F5F5F7]">
+                <div className="grid grid-cols-3 gap-2 py-4 border-y-2 border-[#F5F5F7]">
                   <div>
                     <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Project Size</p>
-                    <p className="text-sm font-bold text-american-blue">{estimate.linearFeet} LF</p>
+                    <p className="text-xs font-bold text-american-blue truncate">{estimate.linearFeet} LF</p>
                   </div>
                   <div>
                     <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Created</p>
-                    <p className="text-sm font-bold text-american-blue">
+                    <p className="text-xs font-bold text-american-blue truncate font-mono">
                       {new Date(estimate.lastModified || estimate.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Est. Cost</p>
+                    <p className="text-xs font-black text-emerald-800 truncate font-mono">
+                      {formatCurrency(estimate.totalCost || estimate.manualGrandTotal || 0)}
                     </p>
                   </div>
                 </div>
@@ -429,7 +486,16 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           ))}
         </AnimatePresence>
 
-        {filteredEstimates.length === 0 && (
+        {loading && (
+          <div className="col-span-full py-20 text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="h-10 w-10 border-4 border-american-blue/20 border-t-american-blue rounded-full animate-spin" />
+            </div>
+            <p className="text-xs font-black uppercase tracking-widest text-[#999999]">Loading your estimates...</p>
+          </div>
+        )}
+
+        {!loading && filteredEstimates.length === 0 && (
           <div className="col-span-full py-20 text-center space-y-4">
             <div className="flex justify-center">
               <div className="h-20 w-20 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#CCCCCC]">
@@ -437,8 +503,12 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               </div>
             </div>
             <div>
-              <p className="text-xl font-black text-american-blue">No matching dossiers found</p>
-              <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">Adjust your search or filters</p>
+              <p className="text-xl font-black text-american-blue">
+                {estimates.length === 0 ? "No estimates yet" : "No matching dossiers found"}
+              </p>
+              <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
+                {estimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
+              </p>
             </div>
           </div>
         )}
