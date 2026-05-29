@@ -115,11 +115,35 @@ export default function App() {
     
     window.history.pushState = function(...args) {
       originalPushState.apply(this, args);
-      handleLocationChange();
+      const url = args[2];
+      if (url) {
+        const urlStr = typeof url === 'string' ? url : url.toString();
+        let path = urlStr.split('?')[0].split('#')[0];
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          try {
+            path = new URL(path).pathname;
+          } catch (e) {}
+        }
+        setCurrentPath(path);
+      } else {
+        handleLocationChange();
+      }
     };
     window.history.replaceState = function(...args) {
       originalReplaceState.apply(this, args);
-      handleLocationChange();
+      const url = args[2];
+      if (url) {
+        const urlStr = typeof url === 'string' ? url : url.toString();
+        let path = urlStr.split('?')[0].split('#')[0];
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          try {
+            path = new URL(path).pathname;
+          } catch (e) {}
+        }
+        setCurrentPath(path);
+      } else {
+        handleLocationChange();
+      }
     };
     
     return () => {
