@@ -58,57 +58,71 @@ export default async function handler(req: any, res: any) {
 
     // Handle Admin Users (Direct Email Sign-In / Estimator Admin Account)
     if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-      let adminDoc: any = null;
-
-      // 1. Try querying /admins collection
-      try {
-        const adminsCollection = collection(firestoreDb, 'admins');
-        const adminQuery = query(adminsCollection, where('email', '==', emailLower));
-        const querySnapshot = await getDocs(adminQuery);
-        if (!querySnapshot.empty) {
-          adminDoc = querySnapshot.docs[0];
-        }
-      } catch (err) {
-        console.warn('Failed to query admins collection:', err);
+      let adminUid = '';
+      if (emailLower === 'bradens@lonestarfenceworks.com') {
+        adminUid = 'braden-lonestar-uid';
+        console.log(`[UserLogin-Admin] Explicit hardcoded check matched: "${emailLower}". Using doc ID: "${adminUid}"`);
+      } else {
+        adminUid = emailLower.replace(/[^a-zA-Z0-9]/g, '-');
+        console.log(`[UserLogin-Admin] Custom email matched: "${emailLower}". Derived doc ID: "${adminUid}"`);
       }
 
-      // 2. Fallback: Try querying /admin_users collection if admins didn't yield result
-      if (!adminDoc) {
+      console.log(`[UserLogin-Admin] Attempting login. Received Email: "${emailLower}". Final query UID: "${adminUid}"`);
+
+      // Direct fetch of the /admins collection by document ID (UID)
+      const adminDocRef = doc(firestoreDb, 'admins', adminUid);
+      console.log(`[UserLogin-Admin] Fetching "/admins" collection document with ID: "${adminUid}"`);
+      const adminSnap = await getDoc(adminDocRef);
+
+      let adminData: any = null;
+
+      if (adminSnap.exists()) {
+        adminData = adminSnap.data();
+        console.log(`[UserLogin-Admin] SUCCESS: Found admin record in "/admins/${adminUid}". Payload attributes:`, JSON.stringify(adminData));
+      } else {
+        console.warn(`[UserLogin-Admin] WARNING: Admin record not found in "/admins/${adminUid}". Trying fallback "/admin_users"...`);
         try {
-          const adminUsersCollection = collection(firestoreDb, 'admin_users');
-          const adminUsersQuery = query(adminUsersCollection, where('email', '==', emailLower));
-          const querySnapshotFallback = await getDocs(adminUsersQuery);
-          if (!querySnapshotFallback.empty) {
-            adminDoc = querySnapshotFallback.docs[0];
+          const fallbackDocRef = doc(firestoreDb, 'admin_users', adminUid);
+          const fallbackSnap = await getDoc(fallbackDocRef);
+          if (fallbackSnap.exists()) {
+            adminData = fallbackSnap.data();
+            console.log(`[UserLogin-Admin] SUCCESS: Found admin record in fallback "/admin_users/${adminUid}". Data:`, JSON.stringify(adminData));
+          } else {
+            console.error(`[UserLogin-Admin] ERROR: Admin record not found in fallback "/admin_users/${adminUid}" either.`);
           }
-        } catch (err) {
-          console.warn('Failed to query admin_users collection:', err);
+        } catch (fallbackErr: any) {
+          console.error(`[UserLogin-Admin] CRITICAL fallback admin_users document query failed:`, fallbackErr.message || fallbackErr);
         }
       }
 
-      if (!adminDoc) {
+      if (!adminData) {
+        console.error(`[UserLogin-Admin] Admin record not found in database for derived UID: "${adminUid}" (email: "${emailLower}")`);
         return res.status(404).json({ success: false, error: 'Admin record not found in database.' });
       }
 
-      const adminData = adminDoc.data();
-      let adminUid = adminDoc.id;
-      if (emailLower === 'bradens@lonestarfenceworks.com') {
-        adminUid = 'braden-lonestar-uid'; // Enforce the required ID
+      const storedHash = adminData.passwordHash;
+
+      if (!storedHash) {
+        console.error(`[UserLogin-Admin] Admin record exists but has no passwordHash set.`);
+        return res.status(401).json({ success: false, error: 'Invalid password' });
       }
 
       // Verify password with bcryptjs
-      const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
+      const isMatch = await bcrypt.compare(pwd, storedHash);
       if (!isMatch) {
+        console.warn(`[UserLogin-Admin] Password mismatch for derived UID: "${adminUid}"`);
         return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
       }
 
       // Create JWT token for session persistence
       const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
       const token = jwt.sign(
-        { email: adminData.email, isAdmin: true, uid: adminUid },
+        { email: adminData.email || emailLower, isAdmin: true, uid: adminUid },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
+
+      console.log(`[UserLogin-Admin] Password matched successfully. Generated JWT for UID: "${adminUid}".`);
 
       return res.status(200).json({
         success: true,
@@ -116,7 +130,7 @@ export default async function handler(req: any, res: any) {
         token,
         user: {
           uid: adminUid,
-          email: adminData.email,
+          email: adminData.email || emailLower,
           name: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
           displayName: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
           tier: 'paid',

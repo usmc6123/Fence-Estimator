@@ -497,6 +497,8 @@ export default function App() {
     return getInitialValue('aiProjectScope', 'fence_pro_ai_scope', null);
   });
 
+  const [isSettingsLoaded, setIsSettingsLoaded] = React.useState(false);
+
   React.useEffect(() => {
     testConnection();
   }, []);
@@ -657,6 +659,8 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Failed to load global settings from Firestore:', err);
+      } finally {
+        setIsSettingsLoaded(true);
       }
     };
 
@@ -665,7 +669,7 @@ export default function App() {
 
   // Global Sync of laborRates and estimatorSettings back to Firestore (Only for authenticated company members)
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || !isSettingsLoaded) return;
 
     const syncSettingsToCloud = async () => {
       try {
