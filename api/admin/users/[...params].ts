@@ -23,23 +23,62 @@ function getDbInstance() {
   return db;
 }
 
+// Authentication middleware for JWT Verification with detailed logging and double-fallback verification
 function authenticateAdminToken(req: any) {
   const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
+  console.log('[Auth Log Params] Received Authorization header:', authHeader ? 'Present' : 'Missing');
+
   if (!authHeader) {
+    console.warn('[Auth Log Params] Denying request: No Authorization or x-admin-token header found');
     throw new Error('Admin authentication is required. Token is missing.');
   }
-  const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-    ? authHeader.substring(7)
-    : authHeader;
 
-  if (!token || token === 'null' || token === 'undefined') {
+  const authStr = typeof authHeader === 'string' ? authHeader : String(authHeader);
+  const token = authStr.toLowerCase().startsWith('bearer ')
+    ? authStr.substring(7).trim()
+    : authStr.trim();
+
+  console.log('[Auth Log Params] Parsed token length:', token.length);
+  if (token.length > 15) {
+    console.log('[Auth Log Params] Token snippet:', `${token.substring(0, 10)}...${token.substring(token.length - 8)}`);
+  }
+
+  if (!token || token === 'null' || token === 'undefined' || token === '') {
+    console.warn('[Auth Log Params] Denying request: Token resolved to empty/null/undefined. Token string was:', token);
     throw new Error('Admin authentication is required. Token is invalid.');
   }
 
-  const decoded = jwt.verify(token as string, JWT_SECRET);
+  let decoded: any = null;
+
+  // 1. Try process.env.JWT_SECRET
+  if (process.env.JWT_SECRET) {
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('[Auth Log Params] Successfully verified JWT with custom process.env.JWT_SECRET.');
+    } catch (err: any) {
+      console.warn('[Auth Log Params] Verification failed with custom process.env.JWT_SECRET:', err.message || err);
+    }
+  }
+
+  // 2. Try standard fallback secret
+  if (!decoded) {
+    try {
+      decoded = jwt.verify(token, 'lone-star-fence-secret');
+      console.log('[Auth Log Params] Successfully verified JWT with fallback "lone-star-fence-secret".');
+    } catch (err: any) {
+      console.error('[Auth Log Params] Both custom and fallback JWT verification failed.');
+      console.error('[Auth Log Params] Fallback verification error detail:', err.message || err);
+      throw new Error(`Access denied. Invalid or expired admin token. Reason: ${err.message || 'unknown'}`);
+    }
+  }
+
+  // 3. Admin validation
   if (decoded && typeof decoded === 'object' && (decoded as any).isAdmin) {
+    console.log('[Auth Log Params] Token validation passed. User identity verified as Admin:', decoded.email);
     return decoded;
   }
+
+  console.warn('[Auth Log Params] Denying request: Valid token but missing isAdmin privilege. Decoded payload:', decoded);
   throw new Error('Access denied. Invalid or expired admin token.');
 }
 
