@@ -95,6 +95,9 @@ export default function App() {
   // Routing current path state
   const [currentPath, setCurrentPath] = React.useState(() => window.location.pathname);
   
+  // Track serialized state strings to prevent cross-tab infinite feedback loops
+  const lastSerializedRef = React.useRef<Record<string, string>>({});
+  
   // Real-time verified role states
   const [isCompanyUser, setIsCompanyUser] = React.useState(false);
   const [roleChecked, setRoleChecked] = React.useState(false);
@@ -255,7 +258,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user?.uid]);
 
   // Synchronize Clerk Users with standard client-use Firebase Authentication
   React.useEffect(() => {
@@ -282,7 +285,7 @@ export default function App() {
           });
       }
     }
-  }, [isLoaded, clerkUser]);
+  }, [isLoaded, clerkUser?.id]);
 
   const [userTier, setUserTier] = React.useState<'free' | 'paid'>('free');
   const [userNextBilling, setUserNextBilling] = React.useState<string | null>(null);
@@ -325,7 +328,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   // Handle return from Stripe checkout and verify session results
   React.useEffect(() => {
@@ -356,7 +359,7 @@ export default function App() {
       }
     };
     handleCheckSessionResult();
-  }, [user]);
+  }, [user?.uid]);
 
   const [savedEstimates, setSavedEstimates] = React.useState<SavedEstimate[]>([]);
 
@@ -583,7 +586,7 @@ export default function App() {
       window.removeEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
       window.removeEventListener('message', handleMessageReceived);
     };
-  }, [user, roleChecked, isCompanyUser]);
+  }, [user?.uid, roleChecked, isCompanyUser]);
 
   // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
@@ -632,7 +635,7 @@ export default function App() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
     );
     return () => unsubscribe();
-  }, [user, isCustomerPortal]);
+  }, [user?.uid, isCustomerPortal]);
 
   // Fetch global company settings on mount/initially (especially for unauthenticated customer portal)
   React.useEffect(() => {
@@ -658,7 +661,7 @@ export default function App() {
     };
 
     fetchGlobalSettings();
-  }, [user]);
+  }, [user?.uid]);
 
   // Global Sync of laborRates and estimatorSettings back to Firestore (Only for authenticated company members)
   React.useEffect(() => {
@@ -703,7 +706,7 @@ export default function App() {
     estimate.footingType, 
     estimate.postWidth, 
     estimate.postThickness, 
-    user
+    user?.uid
   ]);
 
   // Fetch quotes from Firestore if user is logged in
@@ -732,7 +735,7 @@ export default function App() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'quotes')
     );
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   const handleLogin = async () => {
     setActiveTab('pricing');
@@ -763,29 +766,72 @@ export default function App() {
 
   // Global Sync to localStorage
   React.useEffect(() => {
-    localStorage.setItem('fence_pro_estimate', JSON.stringify(estimate));
-    localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
+    const estStr = JSON.stringify(estimate);
+    const matStr = JSON.stringify(materials);
+    const lrStr = JSON.stringify(laborRates);
+    const qStr = JSON.stringify(quotes);
+    const prStr = JSON.stringify(aiProjectScope);
+    const coStr = JSON.stringify(aiContractScope);
+
+    lastSerializedRef.current['fence_pro_estimate'] = estStr;
+    lastSerializedRef.current['fence_pro_materials'] = matStr;
+    lastSerializedRef.current['fence_pro_labor_rates'] = lrStr;
+    lastSerializedRef.current['fence_pro_quotes'] = qStr;
+    lastSerializedRef.current['fence_pro_ai_scope'] = prStr;
+    lastSerializedRef.current['fence_pro_customer_contract_ai_scope'] = coStr;
+
+    localStorage.setItem('fence_pro_estimate', estStr);
+    localStorage.setItem('fence_pro_labor_rates', lrStr);
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
-    localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
-    localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
-    localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
-    localStorage.setItem('fence_pro_customer_contract_ai_scope', JSON.stringify(aiContractScope));
-  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, aiContractScope, user]);
+    localStorage.setItem('fence_pro_quotes', qStr);
+    localStorage.setItem('fence_pro_materials', matStr);
+    localStorage.setItem('fence_pro_ai_scope', prStr);
+    localStorage.setItem('fence_pro_customer_contract_ai_scope', coStr);
+  }, [estimate, materials, laborRates, activeTab, quotes, aiProjectScope, aiContractScope, user?.uid]);
 
   // Sync state across tabs using the storage event (enables simultaneous updates)
   React.useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (!e.newValue || e.newValue === 'undefined' || e.newValue === 'null') return;
+
+      // Prevent infinite feedback loops between open browser tabs/windows or frames
+      if (lastSerializedRef.current[e.key || ''] === e.newValue) {
+        return;
+      }
       
       try {
         const parsed = JSON.parse(e.newValue);
         switch (e.key) {
-          case 'fence_pro_estimate': setEstimate(parsed); break;
-          case 'fence_pro_materials': setMaterials(parsed); break;
-          case 'fence_pro_labor_rates': setLaborRates(parsed); break;
-          case 'fence_pro_quotes': setQuotes(parsed); break;
-          case 'fence_pro_ai_scope': setAiProjectScope(parsed); break;
-          case 'fence_pro_customer_contract_ai_scope': setAiContractScope(parsed); break;
+          case 'fence_pro_estimate': {
+            lastSerializedRef.current['fence_pro_estimate'] = e.newValue;
+            setEstimate(parsed); 
+            break;
+          }
+          case 'fence_pro_materials': {
+            lastSerializedRef.current['fence_pro_materials'] = e.newValue;
+            setMaterials(parsed); 
+            break;
+          }
+          case 'fence_pro_labor_rates': {
+            lastSerializedRef.current['fence_pro_labor_rates'] = e.newValue;
+            setLaborRates(parsed); 
+            break;
+          }
+          case 'fence_pro_quotes': {
+            lastSerializedRef.current['fence_pro_quotes'] = e.newValue;
+            setQuotes(parsed); 
+            break;
+          }
+          case 'fence_pro_ai_scope': {
+            lastSerializedRef.current['fence_pro_ai_scope'] = e.newValue;
+            setAiProjectScope(parsed); 
+            break;
+          }
+          case 'fence_pro_customer_contract_ai_scope': {
+            lastSerializedRef.current['fence_pro_customer_contract_ai_scope'] = e.newValue;
+            setAiContractScope(parsed); 
+            break;
+          }
           // Note: Avoid syncing activeTab across windows as they should be independent
         }
       } catch (err) {
