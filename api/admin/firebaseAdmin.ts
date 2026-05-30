@@ -1,4 +1,4 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -10,6 +10,8 @@ export function getAdminDb() {
   if (firestoreDb) return firestoreDb;
 
   console.log('[FirebaseAdmin] Starting getAdminDb stabilization sequence...');
+  console.log('[FirebaseAdmin] DEBUG: process.env.FIREBASE_CONFIG exists?', !!process.env.FIREBASE_CONFIG);
+  console.log('[FirebaseAdmin] DEBUG: FIREBASE_CONFIG length:', process.env.FIREBASE_CONFIG?.length);
 
   try {
     let credential: any = undefined;
@@ -17,7 +19,7 @@ export function getAdminDb() {
     let firestoreDatabaseId: string | undefined = undefined;
 
     // 1. Try FIREBASE_CONFIG first (checks for service account credential)
-    if (process.env.FIREBASE_CONFIG) {
+    if (process.env.FIREBASE_CONFIG && process.env.FIREBASE_CONFIG.length > 0) {
       try {
         const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
         const pId = serviceAccount.project_id || serviceAccount.projectId;
@@ -27,7 +29,7 @@ export function getAdminDb() {
 
         if (pId && privateKey && clientEmail) {
           const formattedKey = privateKey.replace(/\\n/g, '\n');
-          credential = admin.credential.cert({
+          credential = cert({
             projectId: pId,
             clientEmail: clientEmail,
             privateKey: formattedKey
@@ -72,7 +74,7 @@ export function getAdminDb() {
         const clientEmail = configObj.clientEmail || configObj.client_email;
 
         if (privateKey && clientEmail) {
-          credential = admin.credential.cert({
+          credential = cert({
             projectId: projectId,
             clientEmail: clientEmail,
             privateKey: privateKey.replace(/\\n/g, '\n')
@@ -89,7 +91,7 @@ export function getAdminDb() {
     }
 
     // 4. Initialize administrative app singleton safely
-    const apps = admin.apps;
+    const apps = getApps();
     let app: any;
     if (apps.length === 0) {
       const options: any = {};
@@ -101,7 +103,7 @@ export function getAdminDb() {
       }
 
       console.log(`[FirebaseAdmin] Initializing, Project ID: "${projectId || 'Default'}", Credential provided: ${!!credential}`);
-      app = admin.initializeApp(options);
+      app = initializeApp(options);
       console.log('✅ Firebase Admin app initialized successfully');
     } else {
       app = apps[0];
