@@ -8,30 +8,51 @@ const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 let dbInstance: any = null;
 
 function getAdminDb() {
+  console.log('FIREBASE_CONFIG env var exists:', !!process.env.FIREBASE_CONFIG);
+  console.log('FIREBASE_CONFIG length:', process.env.FIREBASE_CONFIG?.length);
+  if (process.env.FIREBASE_CONFIG) {
+    try {
+      const parsed = JSON.parse(process.env.FIREBASE_CONFIG);
+      console.log('Successfully parsed FIREBASE_CONFIG env var. Project ID:', parsed.projectId);
+    } catch (parseErr: any) {
+      console.error('Error parsing FIREBASE_CONFIG env var:', parseErr.message || parseErr);
+    }
+  }
+
   if (dbInstance) return dbInstance;
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
+      console.log('Local config file "firebase-applet-config.json" exists. Processing...');
       const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       if (admin.apps.length === 0) {
         admin.initializeApp({
           projectId: firebaseConfig.projectId,
         });
+        console.log('Admin SDK initialized successfully with local JSON config. Project ID:', firebaseConfig.projectId);
+      } else {
+        console.log('Admin SDK already initialized with existing apps.');
       }
       const databaseId = firebaseConfig.firestoreDatabaseId;
       if (databaseId && databaseId !== '(default)') {
         try {
+          console.log(`Setting firestore instance to custom databaseId: "${databaseId}"`);
           dbInstance = admin.firestore(databaseId);
         } catch (err) {
           console.warn('Failed to construct firestore with databaseId, trying default:', err);
           dbInstance = admin.firestore();
         }
       } else {
+        console.log('Setting firestore instance to default database.');
         dbInstance = admin.firestore();
       }
     } else {
+      console.log('No local configuration file. Initializing Admin SDK with fallback/default credential environment paths...');
       if (admin.apps.length === 0) {
         admin.initializeApp();
+        console.log('Admin v1 SDK app initialized successfully with default environment credential settings.');
+      } else {
+        console.log('Admin SDK already initialized with existing apps.');
       }
       dbInstance = admin.firestore();
     }
