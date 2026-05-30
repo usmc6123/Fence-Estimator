@@ -1,29 +1,47 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import admin from 'firebase-admin';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
-let db: any = null;
+let dbInstance: any = null;
 
-function getDbInstance() {
-  if (db) return db;
+function getAdminDb() {
+  if (dbInstance) return dbInstance;
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
       const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      if (admin.apps.length === 0) {
+        admin.initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
+      }
+      const databaseId = firebaseConfig.firestoreDatabaseId;
+      if (databaseId && databaseId !== '(default)') {
+        try {
+          dbInstance = admin.firestore(databaseId);
+        } catch (err) {
+          console.warn('Failed to construct firestore with databaseId, trying default:', err);
+          dbInstance = admin.firestore();
+        }
+      } else {
+        dbInstance = admin.firestore();
+      }
+    } else {
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      dbInstance = admin.firestore();
     }
   } catch (err) {
-    console.error('Failed to initialize Firebase in users function:', err);
+    console.error('Failed to initialize Admin Firestore:', err);
   }
-  return db;
+  return dbInstance;
 }
 
-// Authentication middleware
+// Authentication middleware for JWT Verification
 function authenticateAdminToken(req: any) {
   const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
   if (!authHeader) {
@@ -62,21 +80,20 @@ export default async function handler(req: any, res: any) {
     // Authenticate the admin
     authenticateAdminToken(req);
 
-    const firestoreDb = getDbInstance();
+    const firestoreDb = getAdminDb();
     if (!firestoreDb) {
       return res.status(503).json({ error: 'Database service is offline' });
     }
 
     if (req.method === 'GET') {
-      // GET /api/admin/users -> List all users
-      const usersRef = collection(firestoreDb, 'users');
-      const snap = await getDocs(usersRef);
+      // GET /api/admin/users -> List all users using firebase-admin
+      const usersSnap = await firestoreDb.collection('users').get();
       const usersList: any[] = [];
 
-      for (const d of snap.docs) {
+      for (const d of usersSnap.docs) {
         const u = d.data();
-        const estRef = collection(firestoreDb, 'users', d.id, 'estimates');
-        const estSnap = await getDocs(estRef);
+        // Fetch subcollection estimates count
+        const estSnap = await firestoreDb.collection('users').doc(d.id).collection('estimates').get();
         usersList.push({
           uid: d.id,
           email: u.email || '',
@@ -91,7 +108,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json(usersList);
 
     } else if (req.method === 'POST') {
-      // POST /api/admin/users -> Create user
+      // POST /api/admin/users -> Create user using firebase-admin
       const { email, name, subscriptionTier, password } = req.body;
       if (!email || !name) {
         return res.status(400).json({ error: 'Email and Name are required' });
@@ -104,8 +121,6 @@ export default async function handler(req: any, res: any) {
       const passwordHash = await bcrypt.hash(password, salt);
 
       const userId = `usr-${Math.random().toString(36).substring(2, 11)}`;
-      const uRef = doc(firestoreDb, 'users', userId);
-
       const newUser = {
         uid: userId,
         email: email,
@@ -119,14 +134,16 @@ export default async function handler(req: any, res: any) {
         isAdmin: false
       };
 
-      await setDoc(uRef, newUser);
+      await firestoreDb.collection('users').doc(userId).set(newUser);
       return res.status(200).json({ success: true, user: newUser });
     } else {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
   } catch (error: any) {
     console.error('Error in /api/admin/users:', error);
-    return res.status(error.message?.includes('Access denied') || error.message?.includes('authentication') ? 401 : 500).json({
+    return res.status(
+      error.message?.includes('Access denied') || error.message?.includes('authentication') ? 401 : 500
+    ).json({
       error: error.message || 'Internal Server Error'
     });
   }
