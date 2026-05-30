@@ -1,203 +1,123 @@
 import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
-import { getFirestore } from 'firebase-admin/firestore';
 
-let adminDb: any = null;
-let app: any = null;
+let firestoreDb: any = null;
 
 export function getAdminDb() {
-  if (adminDb) return adminDb;
+  if (firestoreDb) return firestoreDb;
 
-  console.log('[FirebaseAdmin] Starting getAdminDb initialization...');
+  console.log('[FirebaseAdmin] Starting getAdminDb stabilization sequence...');
 
-  let configObj: any = null;
-  let credential: any = undefined;
-  let projectId: string | undefined = undefined;
-  let databaseId: string | undefined = undefined;
-
-  // 1. Try reading configuration from process.env.FIREBASE_CONFIG
   try {
+    let credential: any = undefined;
+    let projectId: string | undefined = undefined;
+    let firestoreDatabaseId: string | undefined = undefined;
+
+    // 1. Try FIREBASE_CONFIG first (checks for service account credential)
     if (process.env.FIREBASE_CONFIG) {
-      console.log('[FirebaseAdmin] Found process.env.FIREBASE_CONFIG environment variable.');
-      configObj = JSON.parse(process.env.FIREBASE_CONFIG);
-      console.log('[FirebaseAdmin] Successfully parsed process.env.FIREBASE_CONFIG of length:', process.env.FIREBASE_CONFIG.length);
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+        const pId = serviceAccount.project_id || serviceAccount.projectId;
+        const privateKey = serviceAccount.private_key || serviceAccount.privateKey;
+        const clientEmail = serviceAccount.client_email || serviceAccount.clientEmail;
+        firestoreDatabaseId = serviceAccount.firestoreDatabaseId || serviceAccount.databaseId || serviceAccount.firestore_database_id;
 
-      // Clean private_key spaces and newlines if they are escaped as literal '\n'
-      if (configObj.private_key) {
-        configObj.private_key = configObj.private_key.replace(/\\n/g, '\n');
+        if (pId && privateKey && clientEmail) {
+          const formattedKey = privateKey.replace(/\\n/g, '\n');
+          credential = admin.credential.cert({
+            projectId: pId,
+            clientEmail: clientEmail,
+            privateKey: formattedKey
+          });
+          projectId = pId;
+          console.log('✅ Firebase Admin SDK credential successfully created from FIREBASE_CONFIG');
+        } else {
+          // Captures projectId if it is set in client config but not service account
+          projectId = pId;
+        }
+      } catch (jsonErr: any) {
+        console.error('[FirebaseAdmin] Error parsing FIREBASE_CONFIG:', jsonErr.message);
       }
-      if (configObj.privateKey) {
-        configObj.privateKey = configObj.privateKey.replace(/\\n/g, '\n');
-      }
-
-      const prId = configObj.project_id || configObj.projectId;
-      const key = configObj.private_key || configObj.privateKey;
-      const email = configObj.client_email || configObj.clientEmail;
-
-      if (prId && key && email) {
-        console.log('[FirebaseAdmin] Configuration has valid Service Account private key & email. Initializing credential via cert...');
-        credential = admin.credential.cert(configObj);
-        projectId = prId;
-        databaseId = configObj.firestoreDatabaseId || configObj.databaseId || configObj.firestore_database_id;
-        console.log('[FirebaseAdmin] Successfully built admin.credential.cert credential.');
-      } else {
-        console.log('[FirebaseAdmin] process.env.FIREBASE_CONFIG is a Client SDK config or missing credentials. Will proceed with disk fallback.');
-        configObj = null; // Reset to trigger disk configuration lookup
-      }
-    } else {
-      console.log('[FirebaseAdmin] process.env.FIREBASE_CONFIG is empty.');
     }
+
+    // 2. Fallback to reading firebase-applet-config.json from disk
+    if (!projectId) {
+      let configObj: any = null;
+      const pathsToTry = [
+        join(process.cwd(), 'firebase-applet-config.json'),
+        './firebase-applet-config.json',
+        '../firebase-applet-config.json'
+      ];
+
+      for (const p of pathsToTry) {
+        if (existsSync(p)) {
+          try {
+            const raw = readFileSync(p, 'utf-8');
+            configObj = JSON.parse(raw);
+            break;
+          } catch (readErr: any) {
+            // ignore loading error, check next path
+          }
+        }
+      }
+
+      if (configObj) {
+        projectId = configObj.projectId || configObj.project_id;
+        firestoreDatabaseId = configObj.firestoreDatabaseId || configObj.databaseId || configObj.firestore_database_id;
+
+        const privateKey = configObj.privateKey || configObj.private_key;
+        const clientEmail = configObj.clientEmail || configObj.client_email;
+
+        if (privateKey && clientEmail) {
+          credential = admin.credential.cert({
+            projectId: projectId,
+            clientEmail: clientEmail,
+            privateKey: privateKey.replace(/\\n/g, '\n')
+          });
+          console.log('✅ Firebase Admin SDK credential successfully created from disk configuration file');
+        }
+      }
+    }
+
+    // 3. Last fallback: individual env variables
+    if (!projectId) {
+      projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+      firestoreDatabaseId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID;
+    }
+
+    // 4. Initialize administrative app singleton safely
+    const apps = admin.apps;
+    let app: any;
+    if (apps.length === 0) {
+      const options: any = {};
+      if (projectId) {
+        options.projectId = projectId;
+      }
+      if (credential) {
+        options.credential = credential;
+      }
+
+      console.log(`[FirebaseAdmin] Initializing, Project ID: "${projectId || 'Default'}", Credential provided: ${!!credential}`);
+      app = admin.initializeApp(options);
+      console.log('✅ Firebase Admin app initialized successfully');
+    } else {
+      app = apps[0];
+    }
+
+    const dbId = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
+      ? firestoreDatabaseId
+      : undefined;
+
+    firestoreDb = getFirestore(app, dbId);
+    console.log(`✅ Firestore db instance initialized successfully. Database ID: "${dbId || '(default)'}"`);
+
   } catch (err: any) {
-    console.error('[FirebaseAdmin] Failed to parse/initialize process.env.FIREBASE_CONFIG:', err);
-    // Do not throw, allow code path to attempt disk configuration fallbacks
+    console.error('[FirebaseAdmin] Failed to initialize Firebase Admin service:', err);
+    // Keep it robust, don't throw to avoid killing server startup
   }
 
-  // 2. Fallback to reading firebase-applet-config.json from disk
-  let diskConfig: any = null;
-  const pathsToTry: { name: string; path: string }[] = [];
-
-  try {
-    pathsToTry.push({
-      name: 'process.cwd()',
-      path: join(process.cwd(), 'firebase-applet-config.json'),
-    });
-  } catch (e: any) {
-    console.log('[FirebaseAdmin] Failed to compute process.cwd() path:', e.message);
-  }
-
-  try {
-    if (import.meta.url) {
-      const currentFilePath = fileURLToPath(import.meta.url);
-      pathsToTry.push({
-        name: 'import.meta.url resolver',
-        path: join(currentFilePath, '../../..', 'firebase-applet-config.json'),
-      });
-    }
-  } catch (e: any) {
-    // ignore if import.meta.url is not supported or errors out
-  }
-
-  try {
-    if (typeof __dirname !== 'undefined') {
-      pathsToTry.push({
-        name: '__dirname resolver',
-        path: join(__dirname, '../../..', 'firebase-applet-config.json'),
-      });
-    }
-  } catch (e: any) {
-    // ignore
-  }
-
-  pathsToTry.push({
-    name: 'Direct Relative Root (./firebase-applet-config.json)',
-    path: './firebase-applet-config.json',
-  });
-  pathsToTry.push({
-    name: 'Direct Relative Up (../firebase-applet-config.json)',
-    path: '../firebase-applet-config.json',
-  });
-
-  console.log('[FirebaseAdmin] Evaluating disk paths for firebase-applet-config.json...');
-  for (const p of pathsToTry) {
-    console.log(`[FirebaseAdmin] Checking if file exists at [${p.name}]: "${p.path}"`);
-    if (existsSync(p.path)) {
-      console.log(`[FirebaseAdmin] Found file at [${p.name}]!`);
-      try {
-        const raw = readFileSync(p.path, 'utf-8');
-        diskConfig = JSON.parse(raw);
-        console.log(`[FirebaseAdmin] Successfully read/parsed file from: "${p.path}"`);
-        break;
-      } catch (readErr: any) {
-        console.error(`[FirebaseAdmin] Error reading file at "${p.path}":`, readErr.message);
-      }
-    }
-  }
-
-  // Merge disk configuration back if not already established
-  if (!configObj && diskConfig) {
-    console.log('[FirebaseAdmin] Initializing using loaded disk config details');
-    configObj = diskConfig;
-    projectId = configObj.projectId || configObj.project_id;
-    databaseId = configObj.firestoreDatabaseId || configObj.databaseId || configObj.firestore_database_id;
-  }
-
-  // 3. Last fallback check against individual environment variables (for developer environment configurations)
-  if (!projectId) {
-    projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
-    console.log('[FirebaseAdmin] ProjectId fell back to environment process.env.FIREBASE_PROJECT_ID / VITE_FIREBASE_PROJECT_ID:', projectId);
-  }
-  if (!databaseId) {
-    databaseId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || process.env.FIREBASE_FIRESTORE_DATABASE_ID;
-  }
-
-  // Reject if no ProjectId is resolved
-  if (!projectId) {
-    const errorMsg = 'Firebase Admin initialization failed: No project configuration resolved from env (FIREBASE_CONFIG), disk (firebase-applet-config.json), or environment process.env.FIREBASE_PROJECT_ID.';
-    console.error(`[FirebaseAdmin] CRITICAL: ${errorMsg}`);
-    throw new Error(errorMsg);
-  }
-
-  console.log(`[FirebaseAdmin] Resolved ProjectId: "${projectId}"`);
-  console.log(`[FirebaseAdmin] Resolved databaseId: "${databaseId || '(default)'}"`);
-
-  // Build credentials cert from custom environment variables if not loaded yet
-  if (!credential && configObj) {
-    const privateKey = configObj.privateKey || configObj.private_key;
-    const clientEmail = configObj.clientEmail || configObj.client_email;
-
-    if (privateKey && clientEmail) {
-      try {
-        console.log('[FirebaseAdmin] Initializing credential with custom serviceAccount cert parsed from disk file configuration');
-        credential = admin.credential.cert({
-          projectId: projectId,
-          clientEmail: clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n')
-        });
-        console.log('[FirebaseAdmin] Service account cert built successfully.');
-      } catch (credErr: any) {
-        console.error('[FirebaseAdmin] Failed to construct credentialcert:', credErr);
-      }
-    }
-  }
-
-  // 4. Initialize administration app singleton
-  try {
-    if (!app) {
-      const apps = admin.apps;
-      if (apps.length === 0) {
-        console.log('[FirebaseAdmin] Standard initializeApp with properties:', {
-          projectId,
-          hasCredential: !!credential,
-          databaseId
-        });
-        app = admin.initializeApp({
-          credential,
-          projectId
-        });
-        console.log('[FirebaseAdmin] Firebase admin App initialized successfully.');
-      } else {
-        app = apps[0];
-        console.log('[FirebaseAdmin] Reusing existing default firebase-admin app.');
-      }
-    }
-
-    const dbId = databaseId && databaseId !== '(default)' ? databaseId : undefined;
-    console.log(`[FirebaseAdmin] Fetching Firestore database reference. DB ID used: "${dbId || '(default)'}"`);
-
-    if (getFirestore) {
-      adminDb = getFirestore(app, dbId);
-    } else {
-      adminDb = admin.firestore(app);
-    }
-
-    console.log('[FirebaseAdmin] Firestore db instance created successfully.');
-
-  } catch (initErr: any) {
-    console.error('[FirebaseAdmin] CRITICAL: Failed to initialize Firebase Admin app or database instance:', initErr);
-    throw initErr;
-  }
-
-  return adminDb;
+  return firestoreDb;
 }

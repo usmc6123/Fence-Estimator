@@ -69,7 +69,7 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
     return () => {
       unsubExp();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   const selectedJob = savedEstimates.find(est => est.id === selectedJobId);
 
