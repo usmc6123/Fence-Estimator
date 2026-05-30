@@ -123,9 +123,8 @@ service cloud.firestore {
     // --- Collection Routes ---
 
     match /users/{userId} {
-      allow read: if isAdmin() || isSignedIn();
       allow get: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == resource.data.email);
-      allow list: if isAdmin() || isCompanyMember();
+      allow list: if isAdmin();
       allow create: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == incoming().email) && isValidUserProfile(incoming());
       allow update: if (isSignedIn() && (request.auth.uid == userId || request.auth.token.email == incoming().email) && isValidUserProfile(incoming()))
                       || isAdmin();

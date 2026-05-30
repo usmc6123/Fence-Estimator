@@ -21,7 +21,7 @@ import Financials from './components/Financials';
 import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
-import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
+import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
 import { useUser, useClerk } from '@clerk/clerk-react';
@@ -497,18 +497,6 @@ export default function App() {
     return getInitialValue('aiProjectScope', 'fence_pro_ai_scope', null);
   });
 
-  const [isSettingsLoaded, setIsSettingsLoaded] = React.useState(false);
-  const [isMaterialsLoaded, setIsMaterialsLoaded] = React.useState(false);
-
-  React.useEffect(() => {
-    // Safety timeout to ensure loading screen goes away even if Firestore is slow or offline
-    const fallbackTimer = setTimeout(() => {
-      setIsSettingsLoaded(true);
-      setIsMaterialsLoaded(true);
-    }, 4000);
-    return () => clearTimeout(fallbackTimer);
-  }, []);
-
   React.useEffect(() => {
     testConnection();
   }, []);
@@ -602,10 +590,9 @@ export default function App() {
 
   // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
-    // If not logged in and not customer portal, set initial/offline materials immediately
+    // If not logged in and not customer portal, set initial/offline materials
     if (!user && !isCustomerPortal) {
       setMaterials(MATERIALS);
-      setIsMaterialsLoaded(true);
       return;
     }
 
@@ -625,8 +612,8 @@ export default function App() {
             console.log(`Syncing ${missingItems.length} missing materials to Firestore...`);
             const batch = writeBatch(db);
             missingItems.forEach((mat) => {
-               const docRef = doc(db, 'materials', mat.id);
-               batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
+              const docRef = doc(db, 'materials', mat.id);
+              batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
             });
             await batch.commit();
             console.log('Sync complete.');
@@ -644,12 +631,8 @@ export default function App() {
         if (fetched.length > 0) {
           setMaterials(fetched);
         }
-        setIsMaterialsLoaded(true);
       },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'materials');
-        setIsMaterialsLoaded(true);
-      }
+      (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
     );
     return () => unsubscribe();
   }, [user?.uid, isCustomerPortal]);
@@ -674,8 +657,6 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Failed to load global settings from Firestore:', err);
-      } finally {
-        setIsSettingsLoaded(true);
       }
     };
 
@@ -684,7 +665,7 @@ export default function App() {
 
   // Global Sync of laborRates and estimatorSettings back to Firestore (Only for authenticated company members)
   React.useEffect(() => {
-    if (!user || !isSettingsLoaded) return;
+    if (!user) return;
 
     const syncSettingsToCloud = async () => {
       try {
@@ -933,34 +914,6 @@ export default function App() {
   };
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
-
-  const isLoading = (!isLoaded && !localUser) || !isSettingsLoaded || !isMaterialsLoaded;
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center font-sans">
-        <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-3xl shadow-xl border border-black/5 max-w-sm w-full mx-4 text-center">
-          {COMPANY_INFO.logo ? (
-            <img 
-              src={COMPANY_INFO.logo} 
-              alt={COMPANY_INFO.name} 
-              className="h-14 w-auto object-contain mb-2"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="flex flex-col items-center mb-2">
-              <span className="text-xl font-black uppercase leading-none tracking-tighter text-[#0F2C59]">Lone Star</span>
-              <span className="text-[12px] font-bold uppercase tracking-[0.2em] text-[#C21807]">Fence Works</span>
-            </div>
-          )}
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#F8F9FA] rounded-xl border border-black/5">
-            <div className="w-5 h-5 border-2 border-[#0F2C59] border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Initializing...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (isEmployeeView) {
     return <EmployeePortal />;

@@ -1,6 +1,28 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getAdminDb } from '../admin/firebaseAdmin';
+import { readFileSync, existsSync } from 'fs';
+
+let db: any = null;
+
+function getDbInstance() {
+  if (db) return db;
+
+  try {
+    const configUrl = new URL('../../firebase-applet-config.json', import.meta.url);
+    if (existsSync(configUrl)) {
+      const firebaseConfig = JSON.parse(readFileSync(configUrl, 'utf-8'));
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+    } else {
+      console.warn('firebase-applet-config.json not found inside local file system.');
+    }
+  } catch (err) {
+    console.error('Failed to initialize Firebase inside serverless function:', err);
+  }
+  return db;
+}
 
 export default async function handler(req: any, res: any) {
   // CORS setup
@@ -26,15 +48,9 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
 
-    let firestoreDb: any = null;
-    try {
-      firestoreDb = getAdminDb();
-      if (!firestoreDb) {
-        throw new Error('getAdminDb returned null');
-      }
-    } catch (err: any) {
-      console.error('[AdminLogin] Firebase init failed:', err.message);
-      return res.status(503).json({ success: false, error: 'Firebase initialization failed' });
+    const firestoreDb = getDbInstance();
+    if (!firestoreDb) {
+      return res.status(503).json({ success: false, error: 'Database service is offline or misconfigured' });
     }
 
     const emailLower = email.toLowerCase().trim();
@@ -42,79 +58,65 @@ export default async function handler(req: any, res: any) {
 
     // Handle Admin Users (Direct Email Sign-In / Estimator Admin Account)
     if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-      let adminUid = '';
-      if (emailLower === 'bradens@lonestarfenceworks.com') {
-        adminUid = 'braden-lonestar-uid';
-        console.log(`[UserLogin-Admin] Explicit hardcoded check matched: "${emailLower}". Using doc ID: "${adminUid}"`);
-      } else {
-        adminUid = emailLower.replace(/[^a-zA-Z0-9]/g, '-');
-        console.log(`[UserLogin-Admin] Custom email matched: "${emailLower}". Derived doc ID: "${adminUid}"`);
+      let adminDoc: any = null;
+
+      // 1. Try querying /admins collection
+      try {
+        const adminsCollection = collection(firestoreDb, 'admins');
+        const adminQuery = query(adminsCollection, where('email', '==', emailLower));
+        const querySnapshot = await getDocs(adminQuery);
+        if (!querySnapshot.empty) {
+          adminDoc = querySnapshot.docs[0];
+        }
+      } catch (err) {
+        console.warn('Failed to query admins collection:', err);
       }
 
-      console.log(`[UserLogin-Admin] Attempting login. Received Email: "${emailLower}". Final query UID: "${adminUid}"`);
-
-      // Direct fetch of the /admins collection by document ID (UID) using Firebase Admin
-      const adminDocRef = firestoreDb.collection('admins').doc(adminUid);
-      console.log(`[UserLogin-Admin] Fetching "/admins" collection document with ID: "${adminUid}" using Admin SDK`);
-      const adminSnap = await adminDocRef.get();
-
-      let adminData: any = null;
-
-      if (adminSnap.exists) {
-        adminData = adminSnap.data();
-        console.log(`[UserLogin-Admin] SUCCESS: Found admin record in "/admins/${adminUid}". Payload attributes:`, JSON.stringify(adminData));
-      } else {
-        console.warn(`[UserLogin-Admin] WARNING: Admin record not found in "/admins/${adminUid}". Trying fallback "/admin_users"...`);
+      // 2. Fallback: Try querying /admin_users collection if admins didn't yield result
+      if (!adminDoc) {
         try {
-          const fallbackDocRef = firestoreDb.collection('admin_users').doc(adminUid);
-          const fallbackSnap = await fallbackDocRef.get();
-          if (fallbackSnap.exists) {
-            adminData = fallbackSnap.data();
-            console.log(`[UserLogin-Admin] SUCCESS: Found admin record in fallback "/admin_users/${adminUid}". Data:`, JSON.stringify(adminData));
-          } else {
-            console.error(`[UserLogin-Admin] ERROR: Admin record not found in fallback "/admin_users/${adminUid}" either.`);
+          const adminUsersCollection = collection(firestoreDb, 'admin_users');
+          const adminUsersQuery = query(adminUsersCollection, where('email', '==', emailLower));
+          const querySnapshotFallback = await getDocs(adminUsersQuery);
+          if (!querySnapshotFallback.empty) {
+            adminDoc = querySnapshotFallback.docs[0];
           }
-        } catch (fallbackErr: any) {
-          console.error(`[UserLogin-Admin] CRITICAL fallback admin_users document query failed:`, fallbackErr.message || fallbackErr);
+        } catch (err) {
+          console.warn('Failed to query admin_users collection:', err);
         }
       }
 
-      if (!adminData) {
-        console.error(`[UserLogin-Admin] Admin record not found in database for derived UID: "${adminUid}" (email: "${emailLower}")`);
+      if (!adminDoc) {
         return res.status(404).json({ success: false, error: 'Admin record not found in database.' });
       }
 
-      const storedHash = adminData.passwordHash;
-
-      if (!storedHash) {
-        console.error(`[UserLogin-Admin] Admin record exists but has no passwordHash set.`);
-        return res.status(401).json({ success: false, error: 'Invalid password' });
+      const adminData = adminDoc.data();
+      let adminUid = adminDoc.id;
+      if (emailLower === 'bradens@lonestarfenceworks.com') {
+        adminUid = 'braden-lonestar-uid'; // Enforce the required ID
       }
 
       // Verify password with bcryptjs
-      const isMatch = await bcrypt.compare(pwd, storedHash);
+      const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
       if (!isMatch) {
-         console.warn(`[UserLogin-Admin] Password mismatch for derived UID: "${adminUid}"`);
-         return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
+        return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
       }
 
       // Create JWT token for session persistence
       const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
       const token = jwt.sign(
-        { email: adminData.email || emailLower, isAdmin: true, uid: adminUid },
+        { email: adminData.email, isAdmin: true, uid: adminUid },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
 
-      console.log(`[UserLogin-Admin] Password matched successfully. Generated JWT for UID: "${adminUid}".`);
-
       return res.status(200).json({
         success: true,
-        userId: adminUid,
+        userId: adminUid, // support any legacy format expecting userId
         token,
         user: {
           uid: adminUid,
-          email: adminData.email || emailLower,
+          email: adminData.email,
           name: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
           displayName: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
           tier: 'paid',
@@ -124,12 +126,12 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Handle normal customers using Admin SDK
-    console.log(`[UserLogin-Customer] Querying "/users" collection for email: "${emailLower}" using Admin SDK`);
-    const querySnapshot = await firestoreDb.collection('users').where('email', '==', emailLower).get();
+    // Handle normal customers
+    const usersCollection = collection(firestoreDb, 'users');
+    const userQuery = query(usersCollection, where('email', '==', emailLower));
+    const querySnapshot = await getDocs(userQuery);
 
     if (querySnapshot.empty) {
-      console.warn(`[UserLogin-Customer] No customer found with email: "${emailLower}"`);
       return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
     }
 
@@ -137,28 +139,22 @@ export default async function handler(req: any, res: any) {
     const userData = userDoc.data();
 
     if (userData.isDisabled) {
-      console.warn(`[UserLogin-Customer] Customer with email: "${emailLower}" is disabled`);
       return res.status(403).json({ success: false, error: 'Access Denied: This account has been disabled.' });
     }
 
     if (!userData.passwordHash) {
-      console.error(`[UserLogin-Customer] Customer found but has no passwordHash set.`);
       return res.status(401).json({ success: false, error: 'Access Denied: Account not configured with local password login.' });
     }
 
     const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
     if (!isMatch) {
-      console.warn(`[UserLogin-Customer] Password mismatch for customer email: "${emailLower}"`);
       return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
     }
-
-    const customerUid = userData.uid || userDoc.id;
-    console.log(`[UserLogin-Customer] SUCCESS: Customer Authenticated, UID: "${customerUid}"`);
 
     return res.status(200).json({
       success: true,
       user: {
-        uid: customerUid,
+        uid: userData.uid || userDoc.id,
         email: userData.email,
         name: userData.name || userData.displayName || 'Client',
         displayName: userData.displayName || userData.name || 'Client',
@@ -168,16 +164,10 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (error: any) {
-    console.error('[AdminLogin] CRITICAL ERROR:', {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-      name: error.name
-    });
+    console.error('Serverless error in user login handler:', error);
     return res.status(500).json({ 
       success: false, 
-      error: error.message || 'Internal Server Error',
-      details: error.code || error.name
+      error: error.message || 'Internal Server Error' 
     });
   }
 }

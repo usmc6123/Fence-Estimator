@@ -187,7 +187,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       (error) => handleFirestoreError(error, OperationType.LIST, 'schedule_events')
     );
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [user]);
 
   const saveConfig = async (newConfig: SchedulerConfig) => {
     if (!user) return;
