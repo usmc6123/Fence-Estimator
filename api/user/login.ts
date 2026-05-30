@@ -1,28 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import * as admin from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { cert } from 'firebase-admin/app';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { readFileSync, existsSync } from 'fs';
-
-let db: any = null;
-
-function getDbInstance() {
-  if (db) return db;
-
-  try {
-    const configUrl = new URL('../../firebase-applet-config.json', import.meta.url);
-    if (existsSync(configUrl)) {
-      const firebaseConfig = JSON.parse(readFileSync(configUrl, 'utf-8'));
-      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
-    } else {
-      console.warn('firebase-applet-config.json not found inside local file system.');
-    }
-  } catch (err) {
-    console.error('Failed to initialize Firebase inside serverless function:', err);
-  }
-  return db;
-}
+import { getAdminDb } from '../admin/firebaseAdmin';
 
 export default async function handler(req: any, res: any) {
   // CORS setup
@@ -50,10 +31,10 @@ export default async function handler(req: any, res: any) {
 
     let firestoreDb: any;
     try {
-      firestoreDb = getDbInstance();
+      firestoreDb = getAdminDb();
     } catch (initErr: any) {
-      console.error('[AdminLogin] Firebase init failed:', initErr.message);
-      return res.status(503).json({ success: false, error: 'Firebase initialization failed' });
+      console.error('[UserLogin-Admin] Firebase Admin init failed:', initErr.message);
+      return res.status(503).json({ success: false, error: 'Firebase Admin initialization failed' });
     }
 
     if (!firestoreDb) {
@@ -76,22 +57,22 @@ export default async function handler(req: any, res: any) {
 
       console.log(`[UserLogin-Admin] Attempting login. Received Email: "${emailLower}". Final query UID: "${adminUid}"`);
 
-      // Direct fetch of the /admins collection by document ID (UID)
-      const adminDocRef = doc(firestoreDb, 'admins', adminUid);
-      console.log(`[UserLogin-Admin] Fetching "/admins" collection document with ID: "${adminUid}"`);
-      const adminSnap = await getDoc(adminDocRef);
+      // Direct fetch of the /admins collection by document ID (UID) using Firebase Admin
+      const adminDocRef = firestoreDb.collection('admins').doc(adminUid);
+      console.log(`[UserLogin-Admin] Fetching "/admins" collection document with ID: "${adminUid}" using Admin SDK`);
+      const adminSnap = await adminDocRef.get();
 
       let adminData: any = null;
 
-      if (adminSnap.exists()) {
+      if (adminSnap.exists) {
         adminData = adminSnap.data();
         console.log(`[UserLogin-Admin] SUCCESS: Found admin record in "/admins/${adminUid}". Payload attributes:`, JSON.stringify(adminData));
       } else {
         console.warn(`[UserLogin-Admin] WARNING: Admin record not found in "/admins/${adminUid}". Trying fallback "/admin_users"...`);
         try {
-          const fallbackDocRef = doc(firestoreDb, 'admin_users', adminUid);
-          const fallbackSnap = await getDoc(fallbackDocRef);
-          if (fallbackSnap.exists()) {
+          const fallbackDocRef = firestoreDb.collection('admin_users').doc(adminUid);
+          const fallbackSnap = await fallbackDocRef.get();
+          if (fallbackSnap.exists) {
             adminData = fallbackSnap.data();
             console.log(`[UserLogin-Admin] SUCCESS: Found admin record in fallback "/admin_users/${adminUid}". Data:`, JSON.stringify(adminData));
           } else {
@@ -117,8 +98,8 @@ export default async function handler(req: any, res: any) {
       // Verify password with bcryptjs
       const isMatch = await bcrypt.compare(pwd, storedHash);
       if (!isMatch) {
-        console.warn(`[UserLogin-Admin] Password mismatch for derived UID: "${adminUid}"`);
-        return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
+         console.warn(`[UserLogin-Admin] Password mismatch for derived UID: "${adminUid}"`);
+         return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
       }
 
       // Create JWT token for session persistence
@@ -133,7 +114,7 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({
         success: true,
-        userId: adminUid, // support any legacy format expecting userId
+        userId: adminUid,
         token,
         user: {
           uid: adminUid,
@@ -147,12 +128,12 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Handle normal customers
-    const usersCollection = collection(firestoreDb, 'users');
-    const userQuery = query(usersCollection, where('email', '==', emailLower));
-    const querySnapshot = await getDocs(userQuery);
+    // Handle normal customers using Admin SDK
+    console.log(`[UserLogin-Customer] Querying "/users" collection for email: "${emailLower}" using Admin SDK`);
+    const querySnapshot = await firestoreDb.collection('users').where('email', '==', emailLower).get();
 
     if (querySnapshot.empty) {
+      console.warn(`[UserLogin-Customer] No customer found with email: "${emailLower}"`);
       return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
     }
 
@@ -160,22 +141,28 @@ export default async function handler(req: any, res: any) {
     const userData = userDoc.data();
 
     if (userData.isDisabled) {
+      console.warn(`[UserLogin-Customer] Customer with email: "${emailLower}" is disabled`);
       return res.status(403).json({ success: false, error: 'Access Denied: This account has been disabled.' });
     }
 
     if (!userData.passwordHash) {
+      console.error(`[UserLogin-Customer] Customer found but has no passwordHash set.`);
       return res.status(401).json({ success: false, error: 'Access Denied: Account not configured with local password login.' });
     }
 
     const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
     if (!isMatch) {
+      console.warn(`[UserLogin-Customer] Password mismatch for customer email: "${emailLower}"`);
       return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
     }
+
+    const customerUid = userData.uid || userDoc.id;
+    console.log(`[UserLogin-Customer] SUCCESS: Customer Authenticated, UID: "${customerUid}"`);
 
     return res.status(200).json({
       success: true,
       user: {
-        uid: userData.uid || userDoc.id,
+        uid: customerUid,
         email: userData.email,
         name: userData.name || userData.displayName || 'Client',
         displayName: userData.displayName || userData.name || 'Client',

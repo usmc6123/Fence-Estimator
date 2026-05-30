@@ -498,6 +498,16 @@ export default function App() {
   });
 
   const [isSettingsLoaded, setIsSettingsLoaded] = React.useState(false);
+  const [isMaterialsLoaded, setIsMaterialsLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    // Safety timeout to ensure loading screen goes away even if Firestore is slow or offline
+    const fallbackTimer = setTimeout(() => {
+      setIsSettingsLoaded(true);
+      setIsMaterialsLoaded(true);
+    }, 4000);
+    return () => clearTimeout(fallbackTimer);
+  }, []);
 
   React.useEffect(() => {
     testConnection();
@@ -592,9 +602,10 @@ export default function App() {
 
   // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
-    // If not logged in and not customer portal, set initial/offline materials
+    // If not logged in and not customer portal, set initial/offline materials immediately
     if (!user && !isCustomerPortal) {
       setMaterials(MATERIALS);
+      setIsMaterialsLoaded(true);
       return;
     }
 
@@ -614,8 +625,8 @@ export default function App() {
             console.log(`Syncing ${missingItems.length} missing materials to Firestore...`);
             const batch = writeBatch(db);
             missingItems.forEach((mat) => {
-              const docRef = doc(db, 'materials', mat.id);
-              batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
+               const docRef = doc(db, 'materials', mat.id);
+               batch.set(docRef, { ...mat, companyId: 'lonestarfence' });
             });
             await batch.commit();
             console.log('Sync complete.');
@@ -633,8 +644,12 @@ export default function App() {
         if (fetched.length > 0) {
           setMaterials(fetched);
         }
+        setIsMaterialsLoaded(true);
       },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'materials');
+        setIsMaterialsLoaded(true);
+      }
     );
     return () => unsubscribe();
   }, [user?.uid, isCustomerPortal]);
@@ -919,7 +934,9 @@ export default function App() {
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
 
-  if (!isLoaded && !localUser) {
+  const isLoading = (!isLoaded && !localUser) || !isSettingsLoaded || !isMaterialsLoaded;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center font-sans">
         <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-3xl shadow-xl border border-black/5 max-w-sm w-full mx-4 text-center">
@@ -938,7 +955,7 @@ export default function App() {
           )}
           <div className="flex items-center gap-3 px-4 py-2.5 bg-[#F8F9FA] rounded-xl border border-black/5">
             <div className="w-5 h-5 border-2 border-[#0F2C59] border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Securing Session...</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Initializing...</span>
           </div>
         </div>
       </div>
