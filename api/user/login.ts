@@ -48,7 +48,14 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
 
-    const firestoreDb = getDbInstance();
+    let firestoreDb: any;
+    try {
+      firestoreDb = getDbInstance();
+    } catch (initErr: any) {
+      console.error('[AdminLogin] Firebase init failed:', initErr.message);
+      return res.status(503).json({ success: false, error: 'Firebase initialization failed' });
+    }
+
     if (!firestoreDb) {
       return res.status(503).json({ success: false, error: 'Database service is offline or misconfigured' });
     }
@@ -178,10 +185,16 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (error: any) {
-    console.error('Serverless error in user login handler:', error);
+    console.error('[AdminLogin] CRITICAL ERROR:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+      name: error.name
+    });
     return res.status(500).json({ 
       success: false, 
-      error: error.message || 'Internal Server Error' 
+      error: error.message || 'Internal Server Error',
+      details: error.code || error.name
     });
   }
 }
