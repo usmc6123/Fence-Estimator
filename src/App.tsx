@@ -113,6 +113,7 @@ export default function App() {
         setIsAdminVerifying(false);
         setAdminToken(null);
         localStorage.removeItem('company_admin_token');
+        localStorage.removeItem('company_admin_uid');
         return;
       }
       try {
@@ -128,13 +129,18 @@ export default function App() {
           if (data.success && data.token) {
             setAdminToken(data.token);
             localStorage.setItem('company_admin_token', data.token);
+            if (data.admin && data.admin.uid) {
+              localStorage.setItem('company_admin_uid', data.admin.uid);
+            }
           } else {
             setAdminToken(null);
             localStorage.removeItem('company_admin_token');
+            localStorage.removeItem('company_admin_uid');
           }
         } else {
           setAdminToken(null);
           localStorage.removeItem('company_admin_token');
+          localStorage.removeItem('company_admin_uid');
         }
       } catch (err) {
         console.error('Failed to verify stored admin token during boot:', err);
@@ -893,6 +899,9 @@ export default function App() {
                 if (u.isAdmin && u.token) {
                   setAdminToken(u.token);
                   localStorage.setItem('company_admin_token', u.token);
+                  if (u.uid) {
+                    localStorage.setItem('company_admin_uid', u.uid);
+                  }
                 }
               }}
             />
@@ -948,6 +957,7 @@ export default function App() {
               localStorage.setItem('company_admin_token', token);
             } else {
               localStorage.removeItem('company_admin_token');
+              localStorage.removeItem('company_admin_uid');
             }
           }}
           onNavigate={(path) => {
@@ -1037,6 +1047,7 @@ export default function App() {
               localStorage.setItem('company_admin_token', token);
             } else {
               localStorage.removeItem('company_admin_token');
+              localStorage.removeItem('company_admin_uid');
             }
           }}
           onNavigate={(path) => {

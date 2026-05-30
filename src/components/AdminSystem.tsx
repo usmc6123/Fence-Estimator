@@ -45,6 +45,19 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
   const [password, setPassword] = React.useState('password123');
   const [loginError, setLoginError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [adminUid, setAdminUid] = React.useState<string | null>(null);
+
+  // Load both token and uid on mount if present
+  React.useEffect(() => {
+    const storedToken = localStorage.getItem('company_admin_token');
+    const storedUid = localStorage.getItem('company_admin_uid');
+    if (storedToken) {
+      setAdminToken(storedToken);
+    }
+    if (storedUid) {
+      setAdminUid(storedUid);
+    }
+  }, [setAdminToken]);
 
   // Dashboard Data List
   const [users, setUsers] = React.useState<UserProfile[]>([]);
@@ -91,6 +104,8 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
         setUsers(data);
       } else if (response.status === 401 || response.status === 403) {
         setAdminToken(null);
+        setAdminUid(null);
+        localStorage.removeItem('company_admin_uid');
       }
     } catch (err) {
       console.error("Failed to fetch users:", err);
@@ -143,6 +158,10 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
       if (response.ok && result.success) {
         setAdminToken(result.token);
         localStorage.setItem('company_admin_token', result.token);
+        if (result.admin && result.admin.uid) {
+          setAdminUid(result.admin.uid);
+          localStorage.setItem('company_admin_uid', result.admin.uid);
+        }
         onNavigate('/admin');
       } else {
         setLoginError(result.error || 'Invalid credentials');
@@ -543,7 +562,9 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
           <button 
             onClick={() => {
               setAdminToken(null);
+              setAdminUid(null);
               localStorage.removeItem('company_admin_token');
+              localStorage.removeItem('company_admin_uid');
               onNavigate('/admin-login');
             }}
             className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-american-red text-white hover:bg-american-red/90 rounded-xl transition-all"
