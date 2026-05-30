@@ -11,27 +11,9 @@ let db: any = null;
 function getDbInstance() {
   if (db) return db;
   try {
-    let firebaseConfig: any = null;
-
-    // 1. Try to read FIREBASE_CONFIG from process.env.FIREBASE_CONFIG
-    const envConfig = process.env.FIREBASE_CONFIG;
-    if (envConfig) {
-      try {
-        firebaseConfig = JSON.parse(envConfig);
-      } catch (e: any) {
-        console.error('Failed to parse FIREBASE_CONFIG env variable in [...params].ts:', e);
-      }
-    }
-
-    // 2. Fall back to firebase-applet-config.json for local dev
-    if (!firebaseConfig) {
-      const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-      if (fs.existsSync(configPath)) {
-        firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      }
-    }
-
-    if (firebaseConfig) {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
     }

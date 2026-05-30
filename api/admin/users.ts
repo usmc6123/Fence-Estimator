@@ -10,48 +10,15 @@ let dbInstance: any = null;
 function getAdminDb() {
   if (dbInstance) return dbInstance;
   try {
-    let firebaseConfig: any = null;
-
-    // 1. Try to read FIREBASE_CONFIG from process.env.FIREBASE_CONFIG
-    const envConfig = process.env.FIREBASE_CONFIG;
-    if (envConfig) {
-      try {
-        firebaseConfig = JSON.parse(envConfig);
-        console.log('Successfully parsed FIREBASE_CONFIG env variable for firebase-admin.');
-      } catch (e: any) {
-        console.error('Failed to parse FIREBASE_CONFIG env variable:', e);
-      }
-    }
-
-    // 2. Fall back to firebase-applet-config.json for local dev
-    if (!firebaseConfig) {
-      const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-      if (fs.existsSync(configPath)) {
-        firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        console.log('Successfully loaded firebase-applet-config.json for firebase-admin.');
-      }
-    }
-
-    if (firebaseConfig) {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       if (admin.apps.length === 0) {
-        const initOptions: any = {};
-
-        // Parse service account credentials if present
-        if (firebaseConfig.private_key && firebaseConfig.client_email) {
-          const privateKey = typeof firebaseConfig.private_key === 'string'
-            ? firebaseConfig.private_key.replace(/\\n/g, '\n')
-            : firebaseConfig.private_key;
-          initOptions.credential = admin.credential.cert({
-            ...firebaseConfig,
-            private_key: privateKey,
-          });
-        }
-
-        initOptions.projectId = firebaseConfig.projectId || firebaseConfig.project_id;
-        admin.initializeApp(initOptions);
+        admin.initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
       }
-
-      const databaseId = firebaseConfig.firestoreDatabaseId || firebaseConfig.databaseId;
+      const databaseId = firebaseConfig.firestoreDatabaseId;
       if (databaseId && databaseId !== '(default)') {
         try {
           dbInstance = admin.firestore(databaseId);
