@@ -68,9 +68,24 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: 'Database service is offline' });
     }
 
+    // Log the request object to see what's actually being passed and aid debugging
+    console.log('Incoming /api/admin/users request details:', {
+      method: req?.method,
+      url: req?.url,
+      hasQuery: !!req?.query,
+      hasBody: !!req?.body,
+      queryKeys: req?.query ? Object.keys(req.query) : [],
+      bodyKeys: req?.body ? Object.keys(req.body) : [],
+      query: req?.query,
+      body: req?.body
+    });
+
+    const query = req?.query || {};
+    const body = req?.body || {};
+
     // Extract potential user IDs or actions from queries or body (to function perfectly as a single-point handler)
-    const userId = req.query.id || req.query.userId || req.body.userId || req.body.uid;
-    const action = req.query.action || req.body.action;
+    const userId = query.id || query.userId || body.userId || body.uid;
+    const action = query.action || body.action;
 
     // --- GET METHODS ---
     if (req.method === 'GET') {
@@ -119,7 +134,7 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       if (!userId) {
         // POST /api/admin/users -> Create user
-        const { email, name, subscriptionTier, password } = req.body;
+        const { email, name, subscriptionTier, password } = body;
         if (!email || !name) {
           return res.status(400).json({ error: 'Email and Name are required' });
         }
@@ -153,7 +168,7 @@ export default async function handler(req: any, res: any) {
         const uRef = doc(firestoreDb, 'users', userId);
         
         if (action === 'tier') {
-          const { tier } = req.body;
+          const { tier } = body;
           if (!tier || !['free', 'paid'].includes(tier)) {
             return res.status(400).json({ error: 'Invalid subscription tier' });
           }
@@ -181,7 +196,7 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Target User ID (userId) is required' });
       }
 
-      const { email, name, subscriptionTier, isDisabled, password } = req.body;
+      const { email, name, subscriptionTier, isDisabled, password } = body;
       const uRef = doc(firestoreDb, 'users', userId);
       const updateData: any = {
         updatedAt: new Date().toISOString()
