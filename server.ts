@@ -16,6 +16,7 @@ import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
 import { getAdminDb } from './api/admin/firebaseAdmin';
+import userLoginHandler from './api/user/login';
 
 async function startServer() {
   const app = express();
@@ -260,102 +261,7 @@ async function startServer() {
   });
 
   // POST /api/user/login - Custom client login
-  app.post('/api/user/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-      }
-
-      const emailLower = email.toLowerCase().trim();
-      const pwd = password.trim();
-
-      if (!db) {
-        return res.status(503).json({ error: 'Database service offline' });
-      }
-
-      // Handle direct admin access via main app login
-      if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-        const adminsSnap = await getDocs(collection(db, 'admins'));
-        const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
-
-        if (!adminDoc) {
-          return res.status(404).json({ error: 'Admin record not found in database.' });
-        }
-
-        const adminData = adminDoc.data();
-        let adminUid = adminDoc.id;
-        if (emailLower === 'bradens@lonestarfenceworks.com') {
-          adminUid = 'braden-lonestar-uid';
-        }
-
-        // Verify password with bcryptjs
-        const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
-        if (!isMatch) {
-          return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
-        }
-
-        // Create JWT for persistence
-        const token = jwt.sign(
-          { email: adminData.email, isAdmin: true, uid: adminUid },
-          JWT_SECRET,
-          { expiresIn: '24h' }
-        );
-
-        return res.json({
-          success: true,
-          token,
-          user: {
-            uid: adminUid,
-            email: adminData.email,
-            name: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
-            displayName: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
-            tier: 'paid',
-            subscriptionTier: 'paid',
-            isAdmin: true
-          }
-        });
-      }
-
-      // Look up standard user in Firestore
-      const snap = await getDocs(collection(db, 'users'));
-      const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
-
-      if (!userDoc) {
-        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
-      }
-
-      const userData = userDoc.data();
-      
-      if (userData.isDisabled) {
-        return res.status(403).json({ error: 'Access Denied: This account has been disabled.' });
-      }
-
-      if (!userData.passwordHash) {
-        return res.status(401).json({ error: 'Access Denied: Account not configured with local password login.' });
-      }
-
-      const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
-      }
-
-      res.json({
-        success: true,
-        user: {
-          uid: userData.uid || userDoc.id,
-          email: userData.email,
-          name: userData.name || userData.displayName || 'Client',
-          displayName: userData.displayName || userData.name || 'Client',
-          tier: userData.tier || userData.subscriptionTier || 'free',
-          subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
-        }
-      });
-    } catch (error: any) {
-      console.error('Error in custom client login:', error);
-      res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
-  });
+  app.post('/api/user/login', userLoginHandler);
 
   // GET /api/admin/users - Get all users (admin only)
   app.get('/api/admin/users', authenticateAdmin, (req, res) => listUsers(req, res, db));
