@@ -74,6 +74,48 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
     }
   }, [adminToken, isAdminVerifying]);
 
+  // Handle automatic token refresh every 5 minutes to keep session alive and prevent premature kick out
+  React.useEffect(() => {
+    if (!adminToken) return;
+
+    const refreshAdminToken = async () => {
+      console.log('[AdminConsole] Initiating credentials verification/token refresh sequence...');
+      try {
+        const response = await fetch('/api/admin/verify-credentials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.token) {
+            console.log('[AdminConsole] Admin session verified. Local token extended.');
+            setAdminToken(data.token);
+            localStorage.setItem('company_admin_token', data.token);
+          } else {
+            console.warn('[AdminConsole] Token validation response indicates invalid token status.', data);
+          }
+        } else {
+          console.error('[AdminConsole] Credentials validation failed with status:', response.status);
+          if (response.status === 401 || response.status === 403) {
+            console.warn('[AdminConsole] Session expired on backend, logging out.');
+            setAdminToken(null);
+            localStorage.removeItem('company_admin_token');
+          }
+        }
+      } catch (err) {
+        console.error('[AdminConsole] Communication with validation server timed out:', err);
+      }
+    };
+
+    // Keep-alive check every 5 minutes
+    const intervalId = setInterval(refreshAdminToken, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [adminToken, setAdminToken]);
+
   const handleSignOut = () => {
     setAdminToken(null);
     localStorage.removeItem('company_admin_token');
