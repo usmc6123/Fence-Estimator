@@ -21,7 +21,7 @@ import Financials from './components/Financials';
 import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
-import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
+import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
 import { useUser, useClerk } from '@clerk/clerk-react';
@@ -31,6 +31,7 @@ import AdminSystem from './components/AdminSystem';
 import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
 
 
 // Helper to get state from Hash or LocalStorage
@@ -852,6 +853,74 @@ export default function App() {
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
 
+  const isAuthLoading = !isLoaded && !localUser;
+  const isRoleVerifying = !!user && !roleChecked;
+  const isLoading = isAuthLoading || isRoleVerifying || isAdminVerifying;
+
+  const [loadingText, setLoadingText] = React.useState('Initializing Portal...');
+
+  React.useEffect(() => {
+    if (isAuthLoading) {
+      setLoadingText('Securing credential gateway...');
+    } else if (isAdminVerifying) {
+      setLoadingText('Verifying admin privileges...');
+    } else if (isRoleVerifying) {
+      setLoadingText('Syncing security configurations...');
+    } else {
+      setLoadingText('Connecting to engine database...');
+    }
+  }, [isAuthLoading, isRoleVerifying, isAdminVerifying]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] px-4 font-sans text-[#1A1A1A]" id="app-loading-screen">
+        <div className="flex flex-col items-center max-w-md text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="mb-8 flex flex-col items-center"
+          >
+            {COMPANY_INFO.logo && (
+              <img 
+                src={COMPANY_INFO.logo} 
+                alt="Lone Star Fence Works" 
+                className="h-20 md:h-24 w-auto object-contain animate-pulse"
+                style={{ animationDuration: '2000ms' }}
+                referrerPolicy="no-referrer"
+              />
+            )}
+            <div className="mt-4 flex flex-col items-center">
+              <span className="text-xl font-black uppercase leading-none tracking-tighter text-american-blue">Lone Star</span>
+              <span className="text-xs font-bold uppercase tracking-[0.25em] text-american-red mt-1">Fence Works</span>
+            </div>
+          </motion.div>
+
+          <div className="relative flex h-14 w-14 items-center justify-center my-4">
+            <div className="absolute inset-0 rounded-full border-4 border-american-blue/10"></div>
+            <motion.div 
+              className="absolute inset-0 rounded-full border-4 border-t-american-blue border-r-american-red"
+              style={{ borderBottomColor: 'transparent', borderLeftColor: 'transparent' }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            />
+          </div>
+
+          <motion.p
+            key={loadingText}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="text-xs font-semibold uppercase tracking-widest text-[#666666] font-mono mt-4 h-5 animate-pulse"
+            style={{ animationDuration: '1500ms' }}
+          >
+            {loadingText}
+          </motion.p>
+        </div>
+      </div>
+    );
+  }
+
   if (isEmployeeView) {
     return <EmployeePortal />;
   }
@@ -911,142 +980,153 @@ export default function App() {
       onLogin={handleLogin} 
       onLogout={handleLogout}
     >
-      {activeTab === 'pricing' && (
-        <PricingPage 
-          userId={user.uid}
-          userEmail={user.email}
-          currentTier={userTier}
-          onGetStarted={() => setActiveTab('estimator')}
-        />
-      )}
-      {activeTab === 'billing' && (
-        <SubscriptionDashboard 
-          userId={user.uid}
-          currentTier={userTier}
-          nextBillingDate={userNextBilling}
-          onNavigatePricing={() => setActiveTab('pricing')}
-        />
-      )}
-      {activeTab === 'customer-estimator' && (
-        <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} />
-      )}
-      {activeTab === 'estimator' && (
-        <Estimator 
-          materials={materials} 
-          laborRates={laborRates} 
-          estimate={estimate} 
-          quotes={quotes}
-          setEstimate={setEstimate}
-          savedEstimates={savedEstimates}
-          setSavedEstimates={setSavedEstimates}
-          user={user}
-          setActiveTab={setActiveTab}
-          adminToken={adminToken}
-          setAdminToken={(token) => {
-            setAdminToken(token);
-            if (token) {
-              localStorage.setItem('company_admin_token', token);
-            } else {
-              localStorage.removeItem('company_admin_token');
-            }
-          }}
-          onNavigate={(path) => {
-            window.history.pushState(null, '', path);
-            setCurrentPath(path);
-          }}
-          isAdminVerifying={isAdminVerifying}
-        />
-      )}
-      {activeTab === 'scheduler' && (
-        <Scheduler 
-          savedEstimates={savedEstimates} 
-          user={user}
-        />
-      )}
-      {activeTab === 'dossiers' && (
-        <SavedEstimates 
-          savedEstimates={savedEstimates} 
-          setSavedEstimates={setSavedEstimates}
-          onLoadEstimate={handleLoadEstimate}
-          setActiveTab={setActiveTab}
-          user={user}
-        />
-      )}
-      {activeTab === 'financials' && (
-        <Financials savedEstimates={savedEstimates} user={user} />
-      )}
-      {activeTab === 'library' && (
-        <MaterialLibrary materials={materials} setMaterials={setMaterials} user={user} />
-      )}
-      {activeTab === 'labor' && (
-        <LaborPricing laborRates={laborRates} setLaborRates={setLaborRates} />
-      )}
-      {activeTab === 'takeoff' && (
-        <MaterialTakeOff 
-          estimate={estimate} 
-          materials={materials} 
-          laborRates={laborRates}
-          quotes={quotes}
-          setEstimate={handleUpdateEstimate}
-          setMaterials={setMaterials}
-          user={user}
-        />
-      )}
-      {activeTab === 'labor-breakdown' && (
-        <LaborTakeOff 
-          estimate={estimate} 
-          materials={materials} 
-          laborRates={laborRates} 
-          quotes={quotes}
-          aiProjectScope={aiProjectScope}
-          setAiProjectScope={setAiProjectScope}
-          onUpdateEstimate={handleUpdateEstimate}
-        />
-      )}
-      {activeTab === 'customer-contract' && (
-        <CustomerContract 
-          estimate={estimate} 
-          materials={materials} 
-          laborRates={laborRates}
-          quotes={quotes}
-          aiContractScope={aiContractScope}
-          setAiContractScope={setAiContractScope}
-          onUpdateEstimate={handleUpdateEstimate}
-        />
-      )}
-      {activeTab === 'supplier-order' && (
-        <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} />
-      )}
-      {activeTab === 'quotes' && (
-        <QuoteManager 
-          materials={materials} 
-          setMaterials={setMaterials} 
-          quotes={quotes} 
-          setQuotes={setQuotes} 
-          user={user}
-        />
-      )}
-      {activeTab === 'settings' && <Settings />}
-      {activeTab === 'employees' && <ManageEmployees />}
-      {activeTab === 'admin-console' && (
-        <AdminConsole 
-          adminToken={adminToken}
-          setAdminToken={(token) => {
-            setAdminToken(token);
-            if (token) {
-              localStorage.setItem('company_admin_token', token);
-            } else {
-              localStorage.removeItem('company_admin_token');
-            }
-          }}
-          onNavigate={(path) => {
-            window.history.pushState(null, '', path);
-            setCurrentPath(path);
-          }}
-          currentUser={user}
-          isAdminVerifying={isAdminVerifying}
-        />
-      )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          className="w-full h-full"
+        >
+          {activeTab === 'pricing' && (
+            <PricingPage 
+              userId={user.uid}
+              userEmail={user.email}
+              currentTier={userTier}
+              onGetStarted={() => setActiveTab('estimator')}
+            />
+          )}
+          {activeTab === 'billing' && (
+            <SubscriptionDashboard 
+              userId={user.uid}
+              currentTier={userTier}
+              nextBillingDate={userNextBilling}
+              onNavigatePricing={() => setActiveTab('pricing')}
+            />
+          )}
+          {activeTab === 'customer-estimator' && (
+            <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} />
+          )}
+          {activeTab === 'estimator' && (
+            <Estimator 
+              materials={materials} 
+              laborRates={laborRates} 
+              estimate={estimate} 
+              quotes={quotes}
+              setEstimate={setEstimate}
+              savedEstimates={savedEstimates}
+              setSavedEstimates={setSavedEstimates}
+              user={user}
+              setActiveTab={setActiveTab}
+              adminToken={adminToken}
+              setAdminToken={(token) => {
+                setAdminToken(token);
+                if (token) {
+                  localStorage.setItem('company_admin_token', token);
+                } else {
+                  localStorage.removeItem('company_admin_token');
+                }
+              }}
+              onNavigate={(path) => {
+                window.history.pushState(null, '', path);
+                setCurrentPath(path);
+              }}
+              isAdminVerifying={isAdminVerifying}
+            />
+          )}
+          {activeTab === 'scheduler' && (
+            <Scheduler 
+              savedEstimates={savedEstimates} 
+              user={user}
+            />
+          )}
+          {activeTab === 'dossiers' && (
+            <SavedEstimates 
+              savedEstimates={savedEstimates} 
+              setSavedEstimates={setSavedEstimates}
+              onLoadEstimate={handleLoadEstimate}
+              setActiveTab={setActiveTab}
+              user={user}
+            />
+          )}
+          {activeTab === 'financials' && (
+            <Financials savedEstimates={savedEstimates} user={user} />
+          )}
+          {activeTab === 'library' && (
+            <MaterialLibrary materials={materials} setMaterials={setMaterials} user={user} />
+          )}
+          {activeTab === 'labor' && (
+            <LaborPricing laborRates={laborRates} setLaborRates={setLaborRates} />
+          )}
+          {activeTab === 'takeoff' && (
+            <MaterialTakeOff 
+              estimate={estimate} 
+              materials={materials} 
+              laborRates={laborRates}
+              quotes={quotes}
+              setEstimate={handleUpdateEstimate}
+              setMaterials={setMaterials}
+              user={user}
+            />
+          )}
+          {activeTab === 'labor-breakdown' && (
+            <LaborTakeOff 
+              estimate={estimate} 
+              materials={materials} 
+              laborRates={laborRates} 
+              quotes={quotes}
+              aiProjectScope={aiProjectScope}
+              setAiProjectScope={setAiProjectScope}
+              onUpdateEstimate={handleUpdateEstimate}
+            />
+          )}
+          {activeTab === 'customer-contract' && (
+            <CustomerContract 
+              estimate={estimate} 
+              materials={materials} 
+              laborRates={laborRates}
+              quotes={quotes}
+              aiContractScope={aiContractScope}
+              setAiContractScope={setAiContractScope}
+              onUpdateEstimate={handleUpdateEstimate}
+            />
+          )}
+          {activeTab === 'supplier-order' && (
+            <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} />
+          )}
+          {activeTab === 'quotes' && (
+            <QuoteManager 
+              materials={materials} 
+              setMaterials={setMaterials} 
+              quotes={quotes} 
+              setQuotes={setQuotes} 
+              user={user}
+            />
+          )}
+          {activeTab === 'settings' && <Settings />}
+          {activeTab === 'employees' && <ManageEmployees />}
+          {activeTab === 'admin-console' && (
+            <AdminConsole 
+              adminToken={adminToken}
+              setAdminToken={(token) => {
+                setAdminToken(token);
+                if (token) {
+                  localStorage.setItem('company_admin_token', token);
+                } else {
+                  localStorage.removeItem('company_admin_token');
+                }
+              }}
+              onNavigate={(path) => {
+                window.history.pushState(null, '', path);
+                setCurrentPath(path);
+              }}
+              currentUser={user}
+              isAdminVerifying={isAdminVerifying}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </Layout>
   );
 }
