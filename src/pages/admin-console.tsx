@@ -77,7 +77,6 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   const handleSignOut = () => {
     setAdminToken(null);
     localStorage.removeItem('company_admin_token');
-    localStorage.removeItem('company_admin_uid');
   };
 
   const handleInlineLogin = async (e: React.FormEvent) => {
@@ -96,9 +95,6 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       if (response.ok && result.success) {
         setAdminToken(result.token);
         localStorage.setItem('company_admin_token', result.token);
-        if (result.admin && result.admin.uid) {
-          localStorage.setItem('company_admin_uid', result.admin.uid);
-        }
         setLoginError(null);
       } else {
         setLoginError(result.error || 'Invalid credentials');

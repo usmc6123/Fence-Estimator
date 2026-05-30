@@ -2,7 +2,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { readFileSync, existsSync } from 'fs';
+import fs from 'fs';
+import path from 'path';
 
 // Load Firebase configuration
 let db: any = null;
@@ -11,9 +12,9 @@ function getDbInstance() {
   if (db) return db;
 
   try {
-    const configUrl = new URL('../../firebase-applet-config.json', import.meta.url);
-    if (existsSync(configUrl)) {
-      const firebaseConfig = JSON.parse(readFileSync(configUrl, 'utf-8'));
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
     } else {

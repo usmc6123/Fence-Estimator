@@ -1,19 +1,20 @@
-import { getAdminDb } from '../firebaseAdmin';
+import { collection, getDocs } from 'firebase/firestore';
 
-export async function listUsers(req: any, res: any, _db: any) {
+export async function listUsers(req: any, res: any, db: any) {
   try {
-    const adminDb = getAdminDb();
-    if (!adminDb) {
+    if (!db) {
       return res.status(503).json({ error: 'Database offline' });
     }
 
-    const snap = await adminDb.collection('users').get();
+    const usersRef = collection(db, 'users');
+    const snap = await getDocs(usersRef);
     const usersList: any[] = [];
 
     for (const d of snap.docs) {
       const u = d.data();
-      // Count user's estimates bypassing security rules via Admin SDK
-      const estSnap = await adminDb.collection('users').doc(d.id).collection('estimates').get();
+      // Count user's estimates
+      const estRef = collection(db, 'users', d.id, 'estimates');
+      const estSnap = await getDocs(estRef);
       usersList.push({
         uid: d.id,
         email: u.email || '',

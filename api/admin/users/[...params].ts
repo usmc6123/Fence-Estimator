@@ -1,8 +1,27 @@
-import { getAdminDb } from '../firebaseAdmin';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
 import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
+let db: any = null;
+
+function getDbInstance() {
+  if (db) return db;
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+    }
+  } catch (err) {
+    console.error('Failed to initialize Firebase in users router:', err);
+  }
+  return db;
+}
 
 function authenticateAdminToken(req: any) {
   const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
@@ -41,13 +60,12 @@ export default async function handler(req: any, res: any) {
   try {
     authenticateAdminToken(req);
 
-    const firestoreDb = getAdminDb();
+    const firestoreDb = getDbInstance();
     if (!firestoreDb) {
       return res.status(503).json({ error: 'Database service is offline' });
     }
 
-    const query = req && req.query ? req.query : {};
-    const params = query && query.params ? query.params : null;
+    const { params } = req.query;
     if (!params || !Array.isArray(params) || params.length === 0) {
       return res.status(400).json({ error: 'Missing parameters' });
     }
@@ -58,9 +76,9 @@ export default async function handler(req: any, res: any) {
     if (!action) {
       // Endpoints for: /api/admin/users/:userId
       if (req.method === 'GET') {
-        const uRef = firestoreDb.collection('users').doc(userId);
-        const snap = await uRef.get();
-        if (!snap.exists) {
+        const uRef = doc(firestoreDb, 'users', userId);
+        const snap = await getDoc(uRef);
+        if (!snap.exists()) {
           return res.status(404).json({ error: 'User not found' });
         }
         return res.status(200).json({ uid: snap.id, ...snap.data() });
@@ -68,7 +86,7 @@ export default async function handler(req: any, res: any) {
       } else if (req.method === 'PUT') {
         // Edit / update user details
         const { email, name, subscriptionTier, isDisabled, password } = req.body;
-        const uRef = firestoreDb.collection('users').doc(userId);
+        const uRef = doc(firestoreDb, 'users', userId);
         const updateData: any = {
           updatedAt: new Date().toISOString()
         };
@@ -90,21 +108,21 @@ export default async function handler(req: any, res: any) {
           updateData.passwordHash = await bcrypt.hash(password, salt);
         }
 
-        await uRef.update(updateData);
+        await updateDoc(uRef, updateData);
         return res.status(200).json({ success: true, user: { uid: userId, email, name, subscriptionTier, isDisabled } });
 
       } else if (req.method === 'DELETE') {
         // Delete user
         // 1. Clean subcollections
-        const estRef = firestoreDb.collection('users').doc(userId).collection('estimates');
-        const estSnap = await estRef.get();
+        const estRef = collection(firestoreDb, 'users', userId, 'estimates');
+        const estSnap = await getDocs(estRef);
         for (const d of estSnap.docs) {
-          await firestoreDb.collection('users').doc(userId).collection('estimates').doc(d.id).delete();
+          await deleteDoc(doc(firestoreDb, 'users', userId, 'estimates', d.id));
         }
 
         // 2. Delete main user doc
-        const uRef = firestoreDb.collection('users').doc(userId);
-        await uRef.delete();
+        const uRef = doc(firestoreDb, 'users', userId);
+        await deleteDoc(uRef);
         return res.status(200).json({ success: true });
 
       } else {
@@ -114,9 +132,9 @@ export default async function handler(req: any, res: any) {
     } else {
       // Endpoints with a sub-route: /api/admin/users/:userId/:action
       if (action === 'estimates' && req.method === 'GET') {
-        const estRef = firestoreDb.collection('users').doc(userId).collection('estimates');
-        const snap = await estRef.get();
-        const list = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+        const estRef = collection(firestoreDb, 'users', userId, 'estimates');
+        const snap = await getDocs(estRef);
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return res.status(200).json(list);
 
       } else if (action === 'tier' && req.method === 'POST') {
@@ -124,18 +142,18 @@ export default async function handler(req: any, res: any) {
         if (!tier || !['free', 'paid'].includes(tier)) {
           return res.status(400).json({ error: 'Invalid subscription tier' });
         }
-        const uRef = firestoreDb.collection('users').doc(userId);
-        await uRef.update({ tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
+        const uRef = doc(firestoreDb, 'users', userId);
+        await updateDoc(uRef, { tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
         return res.status(200).json({ success: true, tier });
 
       } else if (action === 'disable' && req.method === 'POST') {
-        const uRef = firestoreDb.collection('users').doc(userId);
-        await uRef.update({ isDisabled: true, updatedAt: new Date().toISOString() });
+        const uRef = doc(firestoreDb, 'users', userId);
+        await updateDoc(uRef, { isDisabled: true, updatedAt: new Date().toISOString() });
         return res.status(200).json({ success: true, isDisabled: true });
 
       } else if (action === 'enable' && req.method === 'POST') {
-        const uRef = firestoreDb.collection('users').doc(userId);
-        await uRef.update({ isDisabled: false, updatedAt: new Date().toISOString() });
+        const uRef = doc(firestoreDb, 'users', userId);
+        await updateDoc(uRef, { isDisabled: false, updatedAt: new Date().toISOString() });
         return res.status(200).json({ success: true, isDisabled: false });
 
       } else {

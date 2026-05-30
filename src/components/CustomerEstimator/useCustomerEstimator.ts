@@ -50,14 +50,9 @@ export function useCustomerEstimator(
     calculateCustomerEstimate(INITIAL_DATA, propMaterials, propLaborRates, propEstimate)
   );
 
-  const dataString = JSON.stringify(data);
-  const materialsString = JSON.stringify(propMaterials);
-  const laborRatesString = JSON.stringify(propLaborRates);
-  const estimateString = JSON.stringify(propEstimate);
-
   React.useEffect(() => {
     setBreakdown(calculateCustomerEstimate(data, propMaterials, propLaborRates, propEstimate));
-  }, [dataString, materialsString, laborRatesString, estimateString]);
+  }, [data, propMaterials, propLaborRates, propEstimate]);
 
   const updateField = React.useCallback(<K extends keyof CustomerEstimateData>(
     field: K,

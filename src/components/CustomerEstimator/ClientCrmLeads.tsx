@@ -27,8 +27,6 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
     }, 600);
   }, []);
 
-  const lastLeadsCountRef = React.useRef<number | null>(null);
-
   // Set up real-time firebase subscriber
   React.useEffect(() => {
     setLoading(true);
@@ -60,8 +58,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
         });
 
         setLeads(fetchedItems);
-        if (onLeadsCountChange && lastLeadsCountRef.current !== fetchedItems.length) {
-          lastLeadsCountRef.current = fetchedItems.length;
+        if (onLeadsCountChange) {
           onLeadsCountChange(fetchedItems.length);
         }
         setLoading(false);

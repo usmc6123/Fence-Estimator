@@ -15,8 +15,6 @@ import { listUsers } from './api/admin/users/list';
 import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
-import { getAdminDb } from './api/admin/firebaseAdmin';
-import userLoginHandler from './api/user/login';
 
 async function startServer() {
   const app = express();
@@ -261,7 +259,102 @@ async function startServer() {
   });
 
   // POST /api/user/login - Custom client login
-  app.post('/api/user/login', userLoginHandler);
+  app.post('/api/user/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const emailLower = email.toLowerCase().trim();
+      const pwd = password.trim();
+
+      if (!db) {
+        return res.status(503).json({ error: 'Database service offline' });
+      }
+
+      // Handle direct admin access via main app login
+      if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
+        const adminsSnap = await getDocs(collection(db, 'admins'));
+        const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+
+        if (!adminDoc) {
+          return res.status(404).json({ error: 'Admin record not found in database.' });
+        }
+
+        const adminData = adminDoc.data();
+        let adminUid = adminDoc.id;
+        if (emailLower === 'bradens@lonestarfenceworks.com') {
+          adminUid = 'braden-lonestar-uid';
+        }
+
+        // Verify password with bcryptjs
+        const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
+        if (!isMatch) {
+          return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+        }
+
+        // Create JWT for persistence
+        const token = jwt.sign(
+          { email: adminData.email, isAdmin: true, uid: adminUid },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          user: {
+            uid: adminUid,
+            email: adminData.email,
+            name: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
+            displayName: emailLower === 'bradens@lonestarfenceworks.com' ? 'Braden' : 'Admin',
+            tier: 'paid',
+            subscriptionTier: 'paid',
+            isAdmin: true
+          }
+        });
+      }
+
+      // Look up standard user in Firestore
+      const snap = await getDocs(collection(db, 'users'));
+      const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+
+      if (!userDoc) {
+        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+      }
+
+      const userData = userDoc.data();
+      
+      if (userData.isDisabled) {
+        return res.status(403).json({ error: 'Access Denied: This account has been disabled.' });
+      }
+
+      if (!userData.passwordHash) {
+        return res.status(401).json({ error: 'Access Denied: Account not configured with local password login.' });
+      }
+
+      const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
+      }
+
+      res.json({
+        success: true,
+        user: {
+          uid: userData.uid || userDoc.id,
+          email: userData.email,
+          name: userData.name || userData.displayName || 'Client',
+          displayName: userData.displayName || userData.name || 'Client',
+          tier: userData.tier || userData.subscriptionTier || 'free',
+          subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
+        }
+      });
+    } catch (error: any) {
+      console.error('Error in custom client login:', error);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
+    }
+  });
 
   // GET /api/admin/users - Get all users (admin only)
   app.get('/api/admin/users', authenticateAdmin, (req, res) => listUsers(req, res, db));
@@ -270,12 +363,11 @@ async function startServer() {
   app.get('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
+      if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = adminDb.collection('users').doc(userId);
-      const snap = await uRef.get();
-      if (!snap.exists) {
+      const uRef = doc(db, 'users', userId);
+      const snap = await getDoc(uRef);
+      if (!snap.exists()) {
         return res.status(404).json({ error: 'User not found' });
       }
       res.json({ uid: snap.id, ...snap.data() });
@@ -288,12 +380,11 @@ async function startServer() {
   app.get('/api/admin/users/:userId/estimates', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
+      if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const estRef = adminDb.collection('users').doc(userId).collection('estimates');
-      const snap = await estRef.get();
-      const list = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      const estRef = collection(db, 'users', userId, 'estimates');
+      const snap = await getDocs(estRef);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -309,11 +400,10 @@ async function startServer() {
         return res.status(400).json({ error: 'Invalid subscription tier' });
       }
 
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
+      if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = adminDb.collection('users').doc(userId);
-      await uRef.update({ tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
+      const uRef = doc(db, 'users', userId);
+      await updateDoc(uRef, { tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
       res.json({ success: true, tier });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -324,11 +414,10 @@ async function startServer() {
   app.post('/api/admin/users/:userId/disable', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
+      if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = adminDb.collection('users').doc(userId);
-      await uRef.update({ isDisabled: true, updatedAt: new Date().toISOString() });
+      const uRef = doc(db, 'users', userId);
+      await updateDoc(uRef, { isDisabled: true, updatedAt: new Date().toISOString() });
       res.json({ success: true, isDisabled: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -339,11 +428,10 @@ async function startServer() {
   app.post('/api/admin/users/:userId/enable', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      const adminDb = getAdminDb();
-      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
+      if (!db) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = adminDb.collection('users').doc(userId);
-      await uRef.update({ isDisabled: false, updatedAt: new Date().toISOString() });
+      const uRef = doc(db, 'users', userId);
+      await updateDoc(uRef, { isDisabled: false, updatedAt: new Date().toISOString() });
       res.json({ success: true, isDisabled: false });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
