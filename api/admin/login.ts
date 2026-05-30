@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
@@ -41,75 +41,51 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const emailLower = email.toLowerCase().trim();
+    const pwd = password.trim();
+
+    if (emailLower !== 'bradens@lonestarfenceworks.com' && emailLower !== 'usmc6123@gmail.com') {
+      return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
     }
 
     const firestoreDb = getDbInstance();
     if (!firestoreDb) {
-      return res.status(503).json({ success: false, error: 'Database service is offline or misconfigured' });
+      return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
     }
 
-    const emailLower = email.toLowerCase();
-
-    // Query /admins collection for the email
-    const adminsCollection = collection(firestoreDb, 'admins');
-    const adminQuery = query(adminsCollection, where('email', '==', emailLower));
-    const querySnapshot = await getDocs(adminQuery);
-
-    let adminDoc: any = null;
-
-    if (!querySnapshot.empty) {
-      adminDoc = querySnapshot.docs[0];
-    } else {
-      // Fallback: Query /admin_users collection
-      try {
-        const adminUsersCollection = collection(firestoreDb, 'admin_users');
-        const adminUsersQuery = query(adminUsersCollection, where('email', '==', emailLower));
-        const querySnapshotFallback = await getDocs(adminUsersQuery);
-        if (!querySnapshotFallback.empty) {
-          adminDoc = querySnapshotFallback.docs[0];
-        }
-      } catch (err) {
-        console.warn('Failed fallback query to admin_users:', err);
-      }
-    }
+    // Query /admins collection by email
+    const adminsSnap = await getDocs(collection(firestoreDb, 'admins'));
+    const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
 
     if (!adminDoc) {
-      return res.status(404).json({ success: false, error: 'Admin record not found in database.' });
+      return res.status(404).json({ error: 'Admin record not found in database.' });
     }
 
     const adminData = adminDoc.data();
-    const storedHash = adminData.passwordHash;
-
-    if (!storedHash) {
-      return res.status(401).json({ success: false, error: 'Invalid password' });
-    }
-
-    // Compare incoming password with stored hash using bcryptjs
-    const isMatch = await bcrypt.compare(password, storedHash);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Invalid password' });
-    }
-
     let adminUid = adminDoc.id;
     if (emailLower === 'bradens@lonestarfenceworks.com') {
       adminUid = 'braden-lonestar-uid';
     }
 
-    // Generate JWT token
+    // Verify password with bcryptjs
+    const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
+    if (!isMatch) {
+       return res.status(401).json({ error: 'Invalid admin credentials.' });
+    }
+
+    // Create JWT
     const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
     const token = jwt.sign(
-      { 
-        email: adminData.email, 
-        isAdmin: true, 
-        uid: adminUid 
-      },
+      { email: adminData.email, isAdmin: true, uid: adminUid },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -124,12 +100,8 @@ export default async function handler(req: any, res: any) {
         isAdmin: true
       }
     });
-
   } catch (error: any) {
-    console.error('Serverless error in admin login handler:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Internal Server Error' 
-    });
+    console.error('Admin login error:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }

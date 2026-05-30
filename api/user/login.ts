@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
@@ -40,70 +40,45 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
-    }
-
-    const firestoreDb = getDbInstance();
-    if (!firestoreDb) {
-      return res.status(503).json({ success: false, error: 'Database service is offline or misconfigured' });
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const emailLower = email.toLowerCase().trim();
     const pwd = password.trim();
 
-    // Handle Admin Users (Direct Email Sign-In / Estimator Admin Account)
+    const firestoreDb = getDbInstance();
+    if (!firestoreDb) {
+      return res.status(503).json({ error: 'Database service offline' });
+    }
+
+    // Handle direct admin access via main app login
     if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-      let adminDoc: any = null;
-
-      // 1. Try querying /admins collection
-      try {
-        const adminsCollection = collection(firestoreDb, 'admins');
-        const adminQuery = query(adminsCollection, where('email', '==', emailLower));
-        const querySnapshot = await getDocs(adminQuery);
-        if (!querySnapshot.empty) {
-          adminDoc = querySnapshot.docs[0];
-        }
-      } catch (err) {
-        console.warn('Failed to query admins collection:', err);
-      }
-
-      // 2. Fallback: Try querying /admin_users collection if admins didn't yield result
-      if (!adminDoc) {
-        try {
-          const adminUsersCollection = collection(firestoreDb, 'admin_users');
-          const adminUsersQuery = query(adminUsersCollection, where('email', '==', emailLower));
-          const querySnapshotFallback = await getDocs(adminUsersQuery);
-          if (!querySnapshotFallback.empty) {
-            adminDoc = querySnapshotFallback.docs[0];
-          }
-        } catch (err) {
-          console.warn('Failed to query admin_users collection:', err);
-        }
-      }
+      const adminsSnap = await getDocs(collection(firestoreDb, 'admins'));
+      const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
 
       if (!adminDoc) {
-        return res.status(404).json({ success: false, error: 'Admin record not found in database.' });
+        return res.status(404).json({ error: 'Admin record not found in database.' });
       }
 
       const adminData = adminDoc.data();
       let adminUid = adminDoc.id;
       if (emailLower === 'bradens@lonestarfenceworks.com') {
-        adminUid = 'braden-lonestar-uid'; // Enforce the required ID
+        adminUid = 'braden-lonestar-uid';
       }
 
       // Verify password with bcryptjs
       const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
       if (!isMatch) {
-        return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
+        return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
       }
 
-      // Create JWT token for session persistence
+      // Create JWT for persistence
       const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
       const token = jwt.sign(
         { email: adminData.email, isAdmin: true, uid: adminUid },
@@ -113,7 +88,6 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({
         success: true,
-        userId: adminUid, // support any legacy format expecting userId
         token,
         user: {
           uid: adminUid,
@@ -127,29 +101,27 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Handle normal customers
-    const usersCollection = collection(firestoreDb, 'users');
-    const userQuery = query(usersCollection, where('email', '==', emailLower));
-    const querySnapshot = await getDocs(userQuery);
+    // Look up standard user in Firestore
+    const snap = await getDocs(collection(firestoreDb, 'users'));
+    const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
 
-    if (querySnapshot.empty) {
-      return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
+    if (!userDoc) {
+      return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
     }
 
-    const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
-
+    
     if (userData.isDisabled) {
-      return res.status(403).json({ success: false, error: 'Access Denied: This account has been disabled.' });
+      return res.status(403).json({ error: 'Access Denied: This account has been disabled.' });
     }
 
     if (!userData.passwordHash) {
-      return res.status(401).json({ success: false, error: 'Access Denied: Account not configured with local password login.' });
+      return res.status(401).json({ error: 'Access Denied: Account not configured with local password login.' });
     }
 
     const isMatch = await bcrypt.compare(pwd, userData.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Access Denied: Incorrect email or password.' });
+      return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
     }
 
     return res.status(200).json({
@@ -163,12 +135,8 @@ export default async function handler(req: any, res: any) {
         subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
       }
     });
-
   } catch (error: any) {
-    console.error('Serverless error in user login handler:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Internal Server Error' 
-    });
+    console.error('Error in custom client login:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }
