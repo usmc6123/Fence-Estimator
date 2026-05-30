@@ -1,8 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
+import { readFileSync, existsSync } from 'fs';
 import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
@@ -11,9 +10,9 @@ let db: any = null;
 function getDbInstance() {
   if (db) return db;
   try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const configUrl = new URL('../../../firebase-applet-config.json', import.meta.url);
+    if (existsSync(configUrl)) {
+      const firebaseConfig = JSON.parse(readFileSync(configUrl, 'utf-8'));
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
     }
