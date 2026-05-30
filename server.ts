@@ -15,6 +15,7 @@ import { listUsers } from './api/admin/users/list';
 import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
+import { getAdminDb } from './api/admin/firebaseAdmin';
 
 async function startServer() {
   const app = express();
@@ -363,11 +364,12 @@ async function startServer() {
   app.get('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = doc(db, 'users', userId);
-      const snap = await getDoc(uRef);
-      if (!snap.exists()) {
+      const uRef = adminDb.collection('users').doc(userId);
+      const snap = await uRef.get();
+      if (!snap.exists) {
         return res.status(404).json({ error: 'User not found' });
       }
       res.json({ uid: snap.id, ...snap.data() });
@@ -380,11 +382,12 @@ async function startServer() {
   app.get('/api/admin/users/:userId/estimates', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
 
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const snap = await getDocs(estRef);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const estRef = adminDb.collection('users').doc(userId).collection('estimates');
+      const snap = await estRef.get();
+      const list = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -400,10 +403,11 @@ async function startServer() {
         return res.status(400).json({ error: 'Invalid subscription tier' });
       }
 
-      if (!db) return res.status(503).json({ error: 'Database offline' });
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
+      const uRef = adminDb.collection('users').doc(userId);
+      await uRef.update({ tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
       res.json({ success: true, tier });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -414,10 +418,11 @@ async function startServer() {
   app.post('/api/admin/users/:userId/disable', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { isDisabled: true, updatedAt: new Date().toISOString() });
+      const uRef = adminDb.collection('users').doc(userId);
+      await uRef.update({ isDisabled: true, updatedAt: new Date().toISOString() });
       res.json({ success: true, isDisabled: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -428,10 +433,11 @@ async function startServer() {
   app.post('/api/admin/users/:userId/enable', authenticateAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
+      const adminDb = getAdminDb();
+      if (!adminDb) return res.status(503).json({ error: 'Database offline' });
 
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { isDisabled: false, updatedAt: new Date().toISOString() });
+      const uRef = adminDb.collection('users').doc(userId);
+      await uRef.update({ isDisabled: false, updatedAt: new Date().toISOString() });
       res.json({ success: true, isDisabled: false });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

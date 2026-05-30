@@ -1,15 +1,17 @@
-import { doc, updateDoc } from 'firebase/firestore';
+import { getAdminDb } from '../firebaseAdmin';
 import bcrypt from 'bcryptjs';
 
-export async function updateUser(req: any, res: any, db: any) {
+export async function updateUser(req: any, res: any, _db: any) {
   try {
     const { userId } = req.params;
     const { email, name, subscriptionTier, isDisabled, password } = req.body;
-    if (!db) {
+    
+    const adminDb = getAdminDb();
+    if (!adminDb) {
       return res.status(503).json({ error: 'Database offline' });
     }
 
-    const uRef = doc(db, 'users', userId);
+    const uRef = adminDb.collection('users').doc(userId);
     
     const updateData: any = {
       updatedAt: new Date().toISOString()
@@ -32,7 +34,7 @@ export async function updateUser(req: any, res: any, db: any) {
       updateData.passwordHash = await bcrypt.hash(password, salt);
     }
 
-    await updateDoc(uRef, updateData);
+    await uRef.update(updateData);
     res.json({ success: true, user: { uid: userId, email, name, subscriptionTier, isDisabled } });
   } catch (error: any) {
     console.error('Error updating user:', error);
