@@ -57,7 +57,7 @@ export default function AdminSystem({ currentPath, onNavigate, adminToken, setAd
     if (storedUid) {
       setAdminUid(storedUid);
     }
-  }, [setAdminToken]);
+  }, []);
 
   // Dashboard Data List
   const [users, setUsers] = React.useState<UserProfile[]>([]);

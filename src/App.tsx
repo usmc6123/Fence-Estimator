@@ -105,6 +105,17 @@ export default function App() {
   });
   const [isAdminVerifying, setIsAdminVerifying] = React.useState(!!localStorage.getItem('company_admin_token'));
 
+  // Stable callback handler for setting admin token to prevent re-render loops in child components
+  const handleSetAdminToken = React.useCallback((token: string | null) => {
+    setAdminToken(token);
+    if (token) {
+      localStorage.setItem('company_admin_token', token);
+    } else {
+      localStorage.removeItem('company_admin_token');
+      localStorage.removeItem('company_admin_uid');
+    }
+  }, []);
+
   // Verify and refresh the admin token on application boot
   React.useEffect(() => {
     const verifyToken = async () => {
@@ -951,15 +962,7 @@ export default function App() {
           user={user}
           setActiveTab={setActiveTab}
           adminToken={adminToken}
-          setAdminToken={(token) => {
-            setAdminToken(token);
-            if (token) {
-              localStorage.setItem('company_admin_token', token);
-            } else {
-              localStorage.removeItem('company_admin_token');
-              localStorage.removeItem('company_admin_uid');
-            }
-          }}
+          setAdminToken={handleSetAdminToken}
           onNavigate={(path) => {
             window.history.pushState(null, '', path);
             setCurrentPath(path);
@@ -1041,15 +1044,7 @@ export default function App() {
       {activeTab === 'admin-console' && (
         <AdminConsole 
           adminToken={adminToken}
-          setAdminToken={(token) => {
-            setAdminToken(token);
-            if (token) {
-              localStorage.setItem('company_admin_token', token);
-            } else {
-              localStorage.removeItem('company_admin_token');
-              localStorage.removeItem('company_admin_uid');
-            }
-          }}
+          setAdminToken={handleSetAdminToken}
           onNavigate={(path) => {
             window.history.pushState(null, '', path);
             setCurrentPath(path);
