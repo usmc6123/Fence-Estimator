@@ -1,22 +1,24 @@
-import { doc, collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { getAdminDb } from '../firebaseAdmin';
 
-export async function deleteUser(req: any, res: any, db: any) {
+export async function deleteUser(req: any, res: any, _db: any) {
   try {
     const { userId } = req.params;
-    if (!db) {
+    
+    const adminDb = getAdminDb();
+    if (!adminDb) {
       return res.status(503).json({ error: 'Database offline' });
     }
 
-    // Clean up subcollection estimates
-    const estRef = collection(db, 'users', userId, 'estimates');
-    const estSnap = await getDocs(estRef);
+    // Clean up subcollection estimates bypassing security rules via Admin SDK
+    const estRef = adminDb.collection('users').doc(userId).collection('estimates');
+    const estSnap = await estRef.get();
     for (const d of estSnap.docs) {
-      await deleteDoc(doc(db, 'users', userId, 'estimates', d.id));
+      await adminDb.collection('users').doc(userId).collection('estimates').doc(d.id).delete();
     }
 
     // Delete user doc
-    const uRef = doc(db, 'users', userId);
-    await deleteDoc(uRef);
+    const uRef = adminDb.collection('users').doc(userId);
+    await uRef.delete();
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting user:', error);

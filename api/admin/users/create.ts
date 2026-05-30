@@ -1,7 +1,7 @@
-import { doc, setDoc } from 'firebase/firestore';
+import { getAdminDb } from '../firebaseAdmin';
 import bcrypt from 'bcryptjs';
 
-export async function createUser(req: any, res: any, db: any) {
+export async function createUser(req: any, res: any, _db: any) {
   try {
     const { email, name, subscriptionTier, password } = req.body;
     if (!email || !name) {
@@ -10,7 +10,9 @@ export async function createUser(req: any, res: any, db: any) {
     if (!password) {
       return res.status(400).json({ error: 'Initial Password is required' });
     }
-    if (!db) {
+
+    const adminDb = getAdminDb();
+    if (!adminDb) {
       return res.status(503).json({ error: 'Database offline' });
     }
 
@@ -19,7 +21,7 @@ export async function createUser(req: any, res: any, db: any) {
 
     // Generate a clean user id (manual user)
     const userId = `usr-${Math.random().toString(36).substring(2, 11)}`;
-    const uRef = doc(db, 'users', userId);
+    const uRef = adminDb.collection('users').doc(userId);
     
     // We store tier, subscriptionTier, display name, status, etc.
     const newUser = {
@@ -35,7 +37,7 @@ export async function createUser(req: any, res: any, db: any) {
       isAdmin: false
     };
 
-    await setDoc(uRef, newUser);
+    await uRef.set(newUser);
     res.json({ success: true, user: newUser });
   } catch (error: any) {
     console.error('Error creating user:', error);
