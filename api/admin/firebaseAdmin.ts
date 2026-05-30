@@ -4,163 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-// Client Firebase Fallback Imports
-import { initializeApp as initializeClientApp, getApps as getClientApps } from 'firebase/app';
-import { 
-  getFirestore as getClientFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  collection, 
-  getDocs, 
-  deleteDoc 
-} from 'firebase/firestore';
-import { getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
-
 let firestoreDb: any = null;
-let authPromise: Promise<any> | null = null;
-
-// Initialize the fully-authenticated Fallback Client DB
-function initializeFallbackDb(): Promise<any> {
-  if (authPromise) return authPromise;
-
-  authPromise = (async () => {
-    try {
-      console.log('[FirebaseAdmin Fallback] Initiating secure synchronized client fallback sequence...');
-      const configPath = join(process.cwd(), 'firebase-applet-config.json');
-      if (!existsSync(configPath)) {
-        throw new Error('firebase-applet-config.json not found on disk, cannot initialize fallback.');
-      }
-
-      const firebaseConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
-      const clientApps = getClientApps();
-      let clientApp;
-      if (clientApps.length === 0) {
-        clientApp = initializeClientApp(firebaseConfig);
-      } else {
-        clientApp = clientApps[0];
-      }
-
-      const clientDb = getClientFirestore(clientApp, firebaseConfig.firestoreDatabaseId);
-      const clientAuth = getClientAuth(clientApp);
-
-      console.log('[FirebaseAdmin Fallback] Client SDK initialized, logging in supervisor/administrator...');
-      await signInWithEmailAndPassword(clientAuth, 'bradens@lonestarfenceworks.com', 'password123');
-      console.log('✅ [FirebaseAdmin Fallback] Authenticated standard admin session successfully.');
-      return clientDb;
-    } catch (err: any) {
-      console.error('❌ [FirebaseAdmin Fallback] Fatal error during Client adaptation setup:', err.message);
-      throw err;
-    }
-  })();
-
-  return authPromise;
-}
-
-// Client SDK Adapter to perfectly mimic Firebase Admin SDK expectations
-class AdminDbClientAdapter {
-  collection(collectionPath: string) {
-    return new CollectionAdapter(collectionPath);
-  }
-}
-
-class CollectionAdapter {
-  private path: string;
-
-  constructor(path: string) {
-    this.path = path;
-  }
-
-  doc(docId: string) {
-    return new DocAdapter(`${this.path}/${docId}`);
-  }
-
-  async get() {
-    const clientDb = await initializeFallbackDb();
-    const colRef = collection(clientDb, this.path);
-    const snap = await getDocs(colRef);
-    return new QuerySnapshotAdapter(snap);
-  }
-}
-
-class DocAdapter {
-  private path: string;
-
-  constructor(path: string) {
-    this.path = path;
-  }
-
-  get id() {
-    const parts = this.path.split('/');
-    return parts[parts.length - 1];
-  }
-
-  collection(collectionPath: string) {
-    return new CollectionAdapter(`${this.path}/${collectionPath}`);
-  }
-
-  async get() {
-    const clientDb = await initializeFallbackDb();
-    const docRef = doc(clientDb, this.path);
-    const snap = await getDoc(docRef);
-    return new DocumentSnapshotAdapter(snap);
-  }
-
-  async set(data: any, options?: any) {
-    const clientDb = await initializeFallbackDb();
-    const docRef = doc(clientDb, this.path);
-    await setDoc(docRef, data, options);
-  }
-
-  async update(data: any) {
-    const clientDb = await initializeFallbackDb();
-    const docRef = doc(clientDb, this.path);
-    await updateDoc(docRef, data);
-  }
-
-  async delete() {
-    const clientDb = await initializeFallbackDb();
-    const docRef = doc(clientDb, this.path);
-    await deleteDoc(docRef);
-  }
-}
-
-class QuerySnapshotAdapter {
-  private snap: any;
-
-  constructor(snap: any) {
-    this.snap = snap;
-  }
-
-  get size() {
-    return this.snap.size;
-  }
-
-  get docs() {
-    return this.snap.docs.map((d: any) => new DocumentSnapshotAdapter(d));
-  }
-}
-
-class DocumentSnapshotAdapter {
-  private docSnap: any;
-
-  constructor(docSnap: any) {
-    this.docSnap = docSnap;
-  }
-
-  get id() {
-    return this.docSnap.id;
-  }
-
-  get exists() {
-    return this.docSnap.exists();
-  }
-
-  data() {
-    return this.docSnap.data();
-  }
-}
 
 export function getAdminDb() {
   if (firestoreDb) return firestoreDb;
@@ -246,41 +90,35 @@ export function getAdminDb() {
       firestoreDatabaseId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID;
     }
 
-    // 4. Initialize administrative app singleton safely OR engage adapter
-    if (credential) {
-      const apps = getApps();
-      let app: any;
-      if (apps.length === 0) {
-        const options: any = {};
-        if (projectId) {
-          options.projectId = projectId;
-        }
-        if (credential) {
-          options.credential = credential;
-        }
-
-        console.log(`[FirebaseAdmin] Initializing, Project ID: "${projectId || 'Default'}", Credential provided: ${!!credential}`);
-        app = initializeApp(options);
-        console.log('✅ Firebase Admin app initialized successfully');
-      } else {
-        app = apps[0];
+    // 4. Initialize administrative app singleton safely
+    const apps = getApps();
+    let app: any;
+    if (apps.length === 0) {
+      const options: any = {};
+      if (projectId) {
+        options.projectId = projectId;
+      }
+      if (credential) {
+        options.credential = credential;
       }
 
-      const dbId = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
-        ? firestoreDatabaseId
-        : undefined;
-
-      firestoreDb = getFirestore(app, dbId);
-      console.log(`✅ Firestore db instance initialized successfully. Database ID: "${dbId || '(default)'}"`);
+      console.log(`[FirebaseAdmin] Initializing, Project ID: "${projectId || 'Default'}", Credential provided: ${!!credential}`);
+      app = initializeApp(options);
+      console.log('✅ Firebase Admin app initialized successfully');
     } else {
-      console.log('⚠️ [FirebaseAdmin] No administrative credentials detected. Engaging Client Adapter sequence fallback.');
-      firestoreDb = new AdminDbClientAdapter();
+      app = apps[0];
     }
+
+    const dbId = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
+      ? firestoreDatabaseId
+      : undefined;
+
+    firestoreDb = getFirestore(app, dbId);
+    console.log(`✅ Firestore db instance initialized successfully. Database ID: "${dbId || '(default)'}"`);
 
   } catch (err: any) {
     console.error('[FirebaseAdmin] Failed to initialize Firebase Admin service:', err);
-    console.log('⚠️ [FirebaseAdmin] Engaging adapter due to initialization crash');
-    firestoreDb = new AdminDbClientAdapter();
+    // Keep it robust, don't throw to avoid killing server startup
   }
 
   return firestoreDb;
