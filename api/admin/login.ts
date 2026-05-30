@@ -62,11 +62,28 @@ export default async function handler(req: any, res: any) {
     const adminQuery = query(adminsCollection, where('email', '==', emailLower));
     const querySnapshot = await getDocs(adminQuery);
 
-    if (querySnapshot.empty) {
-      return res.status(404).json({ success: false, error: 'Admin not found' });
+    let adminDoc: any = null;
+
+    if (!querySnapshot.empty) {
+      adminDoc = querySnapshot.docs[0];
+    } else {
+      // Fallback: Query /admin_users collection
+      try {
+        const adminUsersCollection = collection(firestoreDb, 'admin_users');
+        const adminUsersQuery = query(adminUsersCollection, where('email', '==', emailLower));
+        const querySnapshotFallback = await getDocs(adminUsersQuery);
+        if (!querySnapshotFallback.empty) {
+          adminDoc = querySnapshotFallback.docs[0];
+        }
+      } catch (err) {
+        console.warn('Failed fallback query to admin_users:', err);
+      }
     }
 
-    const adminDoc = querySnapshot.docs[0];
+    if (!adminDoc) {
+      return res.status(404).json({ success: false, error: 'Admin record not found in database.' });
+    }
+
     const adminData = adminDoc.data();
     const storedHash = adminData.passwordHash;
 
@@ -80,13 +97,18 @@ export default async function handler(req: any, res: any) {
       return res.status(401).json({ success: false, error: 'Invalid password' });
     }
 
+    let adminUid = adminDoc.id;
+    if (emailLower === 'bradens@lonestarfenceworks.com') {
+      adminUid = 'braden-lonestar-uid';
+    }
+
     // Generate JWT token
     const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
     const token = jwt.sign(
       { 
         email: adminData.email, 
         isAdmin: true, 
-        uid: adminDoc.id 
+        uid: adminUid 
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -94,7 +116,13 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       success: true,
-      token
+      token,
+      admin: {
+        email: adminData.email,
+        uid: adminUid,
+        canAccessAllData: adminData.canAccessAllData || true,
+        isAdmin: true
+      }
     });
 
   } catch (error: any) {
