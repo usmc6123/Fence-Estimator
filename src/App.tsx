@@ -5,7 +5,7 @@
 
 import React from 'react';
 import Layout from './components/Layout';
-import { AuthPage, PricingPage, SubscriptionDashboard } from './components/SubscriptionSystem';
+import { AuthPage, PricingPage, SubscriptionDashboard, PricingPlansAndBilling } from './components/SubscriptionSystem';
 import Estimator from './components/Estimator';
 import MaterialLibrary from './components/MaterialLibrary';
 import LaborPricing from './components/LaborPricing';
@@ -990,19 +990,12 @@ export default function App() {
           className="w-full h-full"
         >
           {activeTab === 'pricing' && (
-            <PricingPage 
+            <PricingPlansAndBilling 
               userId={user.uid}
               userEmail={user.email}
               currentTier={userTier}
-              onGetStarted={() => setActiveTab('estimator')}
-            />
-          )}
-          {activeTab === 'billing' && (
-            <SubscriptionDashboard 
-              userId={user.uid}
-              currentTier={userTier}
               nextBillingDate={userNextBilling}
-              onNavigatePricing={() => setActiveTab('pricing')}
+              onGetStarted={() => setActiveTab('estimator')}
             />
           )}
           {activeTab === 'customer-estimator' && (

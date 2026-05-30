@@ -20,8 +20,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
 
   const navItems = [
     { id: 'estimator', label: 'Estimator', icon: Calculator },
-    { id: 'pricing', label: 'Pricing Plans', icon: Sparkles },
-    { id: 'billing', label: 'Premium & Billing', icon: CreditCard },
+    { id: 'pricing', label: 'Pricing Plans & Billing', icon: CreditCard },
     { id: 'customer-estimator', label: 'Customer Estimator', icon: Globe },
     { id: 'scheduler', label: 'Job Scheduler', icon: CalendarIcon },
     { id: 'dossiers', label: 'Saved Dossiers', icon: Archive },
