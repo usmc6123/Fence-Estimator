@@ -1,9 +1,36 @@
-import * as admin from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { cert } from 'firebase-admin/app';
+import * as admin from 'firebase-admin';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getAdminDb } from '../admin/firebaseAdmin';
+
+// Safely parse service account credentials from environment variables
+const serviceAccount = process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG) : null;
+let adminApp: any = null;
+
+if (serviceAccount) {
+  try {
+    const apps = admin.apps || [];
+    if (apps.length === 0) {
+      let privateKey = serviceAccount.private_key || serviceAccount.privateKey;
+      if (privateKey) {
+        privateKey = privateKey.replace(/\\n/g, '\n');
+      }
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: serviceAccount.project_id || serviceAccount.projectId,
+          clientEmail: serviceAccount.client_email || serviceAccount.clientEmail,
+          privateKey: privateKey
+        }),
+        projectId: serviceAccount.project_id || serviceAccount.projectId
+      });
+      console.log('[UserLogin-Admin] Direct Firebase Admin initialized successfully.');
+    } else {
+      adminApp = apps[0];
+      console.log('[UserLogin-Admin] Utilizing existing initialized Firebase Admin App.');
+    }
+  } catch (initErr: any) {
+    console.error('[UserLogin-Admin] Error during inline Admin SDK initialization:', initErr.message || initErr);
+  }
+}
 
 export default async function handler(req: any, res: any) {
   // CORS setup
@@ -29,12 +56,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
 
-    let firestoreDb: any;
+    let firestoreDb: any = null;
     try {
-      firestoreDb = getAdminDb();
+      firestoreDb = admin.firestore(adminApp);
     } catch (initErr: any) {
-      console.error('[UserLogin-Admin] Firebase Admin init failed:', initErr.message);
-      return res.status(503).json({ success: false, error: 'Firebase Admin initialization failed' });
+      console.error('[UserLogin-Admin] Firebase Admin Firestore acquisition failed:', initErr.message);
+      return res.status(503).json({ success: false, error: 'Firebase Admin Firestore acquisition failed' });
     }
 
     if (!firestoreDb) {
