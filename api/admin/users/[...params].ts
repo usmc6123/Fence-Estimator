@@ -64,7 +64,8 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: 'Database service is offline' });
     }
 
-    const { params } = req.query;
+    const query = req && req.query ? req.query : {};
+    const params = query && query.params ? query.params : null;
     if (!params || !Array.isArray(params) || params.length === 0) {
       return res.status(400).json({ error: 'Missing parameters' });
     }

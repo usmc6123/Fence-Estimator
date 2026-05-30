@@ -70,22 +70,22 @@ export default async function handler(req: any, res: any) {
 
     // Log the request object to see what's actually being passed and aid debugging
     console.log('Incoming /api/admin/users request details:', {
-      method: req?.method,
-      url: req?.url,
-      hasQuery: !!req?.query,
-      hasBody: !!req?.body,
-      queryKeys: req?.query ? Object.keys(req.query) : [],
-      bodyKeys: req?.body ? Object.keys(req.body) : [],
-      query: req?.query,
-      body: req?.body
+      method: req ? req.method : undefined,
+      url: req ? req.url : undefined,
+      hasQuery: !!(req && req.query),
+      hasBody: !!(req && req.body),
+      queryKeys: req && req.query ? Object.keys(req.query) : [],
+      bodyKeys: req && req.body ? Object.keys(req.body) : [],
+      query: req ? req.query : undefined,
+      body: req ? req.body : undefined
     });
 
-    const query = req?.query || {};
-    const body = req?.body || {};
+    const query = req && req.query ? req.query : {};
+    const body = req && req.body ? req.body : {};
 
-    // Extract potential user IDs or actions from queries or body (to function perfectly as a single-point handler)
-    const userId = query.id || query.userId || body.userId || body.uid;
-    const action = query.action || body.action;
+    // Safely extract potential user IDs or actions with complete null/undefined safety
+    const userId = (query && (query.id || query.userId)) || (body && (body.userId || body.uid)) || null;
+    const action = (query && query.action) || (body && body.action) || null;
 
     // --- GET METHODS ---
     if (req.method === 'GET') {

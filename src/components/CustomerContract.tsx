@@ -124,11 +124,44 @@ export default function CustomerContract({
 
   // Sync state if estimate changes (e.g. from Estimator tab)
   useEffect(() => {
-    if (estimate.manualSectionTotals) setSectionTotals(estimate.manualSectionTotals);
-    if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
-    if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
-    if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
-  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal]);
+    if (estimate.manualSectionTotals) {
+      setSectionTotals(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(estimate.manualSectionTotals)) {
+          return estimate.manualSectionTotals;
+        }
+        return prev;
+      });
+    }
+    if (estimate.manualGateTotals) {
+      setGateTotals(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(estimate.manualGateTotals)) {
+          return estimate.manualGateTotals;
+        }
+        return prev;
+      });
+    }
+    if (estimate.manualDemoTotals) {
+      setDemoTotals(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(estimate.manualDemoTotals)) {
+          return estimate.manualDemoTotals;
+        }
+        return prev;
+      });
+    }
+    if (estimate.manualGrandTotal !== undefined) {
+      setManualGrandTotal(prev => {
+        if (prev !== estimate.manualGrandTotal) {
+          return estimate.manualGrandTotal;
+        }
+        return prev;
+      });
+    }
+  }, [
+    JSON.stringify(estimate.manualSectionTotals),
+    JSON.stringify(estimate.manualGateTotals),
+    JSON.stringify(estimate.manualDemoTotals),
+    estimate.manualGrandTotal
+  ]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
