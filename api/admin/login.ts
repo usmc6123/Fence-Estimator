@@ -54,39 +54,42 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ success: false, error: 'Database service is offline or misconfigured' });
     }
 
-    const emailLower = email.toLowerCase();
-    let adminUid = 'braden-lonestar-uid';
+    const emailLower = email.trim().toLowerCase();
+    let adminUid = '';
+    
     if (emailLower === 'bradens@lonestarfenceworks.com') {
       adminUid = 'braden-lonestar-uid';
+      console.log(`[AdminLogin] Explicit hardcoded check matched for admin: "${emailLower}". Using doc ID: "${adminUid}"`);
     } else {
       adminUid = emailLower.replace(/[^a-zA-Z0-9]/g, '-');
+      console.log(`[AdminLogin] Custom email matched: "${emailLower}". Derived doc ID: "${adminUid}"`);
     }
 
-    console.log(`[AdminLogin] Attempting login. Received Email: "${emailLower}". Determined UID: "${adminUid}"`);
+    console.log(`[AdminLogin] Attempting login. Received Email: "${emailLower}". Final query UID: "${adminUid}"`);
 
     // Direct fetch of the /admins collection by document ID (UID)
     const adminDocRef = doc(firestoreDb, 'admins', adminUid);
-    console.log(`[AdminLogin] Querying "/admins" collection by document ID (UID): "${adminUid}"`);
+    console.log(`[AdminLogin] Fetching "/admins" collection document with ID: "${adminUid}"`);
     const adminSnap = await getDoc(adminDocRef);
 
     let adminData: any = null;
 
     if (adminSnap.exists()) {
       adminData = adminSnap.data();
-      console.log(`[AdminLogin] Found admin record in "/admins/${adminUid}". Payload attributes:`, JSON.stringify(adminData));
+      console.log(`[AdminLogin] SUCCESS: Found admin record in "/admins/${adminUid}". Payload attributes:`, JSON.stringify(adminData));
     } else {
-      console.log(`[AdminLogin] Admin record not found in "/admins/${adminUid}". Trying fallback "/admin_users"...`);
+      console.warn(`[AdminLogin] WARNING: Admin record not found in "/admins/${adminUid}". Trying fallback "/admin_users"...`);
       try {
         const fallbackDocRef = doc(firestoreDb, 'admin_users', adminUid);
         const fallbackSnap = await getDoc(fallbackDocRef);
         if (fallbackSnap.exists()) {
           adminData = fallbackSnap.data();
-          console.log(`[AdminLogin] Found admin record in fallback "/admin_users/${adminUid}". Data:`, JSON.stringify(adminData));
+          console.log(`[AdminLogin] SUCCESS: Found admin record in fallback "/admin_users/${adminUid}". Data:`, JSON.stringify(adminData));
         } else {
-          console.log(`[AdminLogin] Admin record not found in fallback "/admin_users/${adminUid}".`);
+          console.error(`[AdminLogin] ERROR: Admin record not found in fallback "/admin_users/${adminUid}" either.`);
         }
       } catch (fallbackErr: any) {
-        console.warn(`[AdminLogin] Fallback admin_users document query failed:`, fallbackErr.message || fallbackErr);
+        console.error(`[AdminLogin] CRITICAL fallback admin_users document query failed:`, fallbackErr.message || fallbackErr);
       }
     }
 

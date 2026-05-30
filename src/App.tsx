@@ -21,7 +21,7 @@ import Financials from './components/Financials';
 import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
-import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE } from './constants';
+import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
 import { useUser, useClerk } from '@clerk/clerk-react';
@@ -914,6 +914,32 @@ export default function App() {
   };
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
+
+  if (!isLoaded && !localUser) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-3xl shadow-xl border border-black/5 max-w-sm w-full mx-4 text-center">
+          {COMPANY_INFO.logo ? (
+            <img 
+              src={COMPANY_INFO.logo} 
+              alt={COMPANY_INFO.name} 
+              className="h-14 w-auto object-contain mb-2"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="flex flex-col items-center mb-2">
+              <span className="text-xl font-black uppercase leading-none tracking-tighter text-[#0F2C59]">Lone Star</span>
+              <span className="text-[12px] font-bold uppercase tracking-[0.2em] text-[#C21807]">Fence Works</span>
+            </div>
+          )}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#F8F9FA] rounded-xl border border-black/5">
+            <div className="w-5 h-5 border-2 border-[#0F2C59] border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Securing Session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isEmployeeView) {
     return <EmployeePortal />;
