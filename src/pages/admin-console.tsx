@@ -7,6 +7,8 @@ import AdminSubscriptionTiers from '../components/AdminSubscriptionTiers';
 import AdminSettings from '../components/AdminSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
+import { db } from '../lib/firebase';
+import { collection, getDocs, doc } from 'firebase/firestore';
 
 function AccessDenied() {
   return (
@@ -55,30 +57,30 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
-    const tokenToUse = adminToken || currentUser?.token;
-    if (!tokenToUse) {
-      setError('Admin token is missing. Please authenticate via the main app login.');
-      setLoading(false);
-      return;
-    }
     try {
-      const response = await fetch('/api/admin/users', {
-        headers: {
-          'Authorization': `Bearer ${tokenToUse}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        setError(errData.error || 'Identity verification failed. Please authenticate.');
-        if (response.status === 401 || response.status === 403) {
-          setAdminToken(null);
-        }
+      const usersRef = collection(db, 'users');
+      const snap = await getDocs(usersRef);
+      const usersList: UserProfile[] = [];
+
+      for (const d of snap.docs) {
+        const u = d.data();
+        // Count user's estimates
+        const estRef = collection(db, 'users', d.id, 'estimates');
+        const estSnap = await getDocs(estRef);
+        usersList.push({
+          uid: d.id,
+          email: u.email || '',
+          name: u.name || u.displayName || u.email?.split('@')[0] || 'No Name',
+          subscriptionTier: u.tier || u.subscriptionTier || 'free',
+          createdAt: u.createdAt || '',
+          isDisabled: u.isDisabled || false,
+          estimatesCount: estSnap.size
+        });
       }
-    } catch (err) {
-      setError('Communication with core services timed out.');
+      setUsers(usersList);
+    } catch (err: any) {
+      console.error('[AdminConsole] Failed to load users via Firestore Client SDK:', err);
+      setError(err.message || 'Identity verification failed. Please authenticate.');
     } finally {
       setLoading(false);
     }
@@ -87,12 +89,12 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   React.useEffect(() => {
     if (isAdminVerifying) return;
 
-    if (adminToken || currentUser?.token) {
+    if (currentUser?.isAdmin) {
       fetchUsers();
     } else {
       setLoading(false);
     }
-  }, [adminToken, currentUser?.token, isAdminVerifying]);
+  }, [currentUser, isAdminVerifying]);
 
   // Handle automatic token refresh every 5 minutes to keep session alive and prevent premature kick out
   React.useEffect(() => {
