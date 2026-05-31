@@ -14,9 +14,7 @@ function getAdminDb() {
     if (fs.existsSync(configPath)) {
       const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       if (admin.apps.length === 0) {
-        admin.initializeApp({
-          projectId: firebaseConfig.projectId,
-        });
+        admin.initializeApp();  // <-- NO arguments, use default credentials
       }
       const databaseId = firebaseConfig.firestoreDatabaseId;
       if (databaseId && databaseId !== '(default)') {
