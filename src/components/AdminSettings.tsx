@@ -58,7 +58,7 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         setTimeout(() => {
           setAdminToken(null);
           localStorage.removeItem('company_admin_token');
-          onNavigate('/admin-login');
+          onNavigate('/admin-console');
         }, 1500);
       } else {
         setPasswordError(result.error || "Password update rejected by LDAP node.");

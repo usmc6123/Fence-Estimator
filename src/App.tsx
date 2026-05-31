@@ -85,11 +85,15 @@ export default function App() {
   const user = React.useMemo<User | null>(() => {
     if (localUser) return localUser;
     if (!isLoaded || !clerkUser) return null;
+    const email = clerkUser.primaryEmailAddress?.emailAddress || null;
+    const emailLower = email?.toLowerCase();
+    const isAdmin = emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com';
     return {
       uid: clerkUser.id,
-      email: clerkUser.primaryEmailAddress?.emailAddress || null,
+      email: email,
       displayName: clerkUser.fullName || null,
-      photoURL: clerkUser.imageUrl || null
+      photoURL: clerkUser.imageUrl || null,
+      isAdmin: isAdmin
     };
   }, [isLoaded, clerkUser, localUser]);
 
@@ -348,7 +352,6 @@ export default function App() {
     const isConsolePath = typeof window !== 'undefined' && (
       window.location.pathname === '/admin-console' || 
       window.location.pathname === '/admin' || 
-      window.location.pathname === '/admin-login' || 
       window.location.pathname === '/admin/settings'
     );
     if (isConsolePath) {
@@ -365,17 +368,15 @@ export default function App() {
     if (activeTab === 'admin-console') {
       const isConsolePath = window.location.pathname === '/admin-console' || 
                             window.location.pathname === '/admin' || 
-                            window.location.pathname === '/admin-login' || 
                             window.location.pathname === '/admin/settings';
       if (!isConsolePath) {
-        const targetPath = adminToken ? '/admin-console' : '/admin-login';
+        const targetPath = '/admin-console';
         window.history.pushState(null, '', targetPath);
         setCurrentPath(targetPath);
       }
     } else {
       const isConsolePath = window.location.pathname === '/admin-console' || 
                             window.location.pathname === '/admin' || 
-                            window.location.pathname === '/admin-login' || 
                             window.location.pathname === '/admin/settings';
       if (isConsolePath) {
         window.history.pushState(null, '', '/');
@@ -387,7 +388,6 @@ export default function App() {
   React.useEffect(() => {
     const isConsolePath = currentPath === '/admin-console' || 
                           currentPath === '/admin' || 
-                          currentPath === '/admin-login' || 
                           currentPath === '/admin/settings';
     if (isConsolePath) {
       if (activeTab !== 'admin-console') {
@@ -955,7 +955,8 @@ export default function App() {
                 const userObj = {
                   uid: u.uid,
                   email: u.email,
-                  displayName: u.displayName
+                  displayName: u.displayName,
+                  isAdmin: u.isAdmin || false
                 };
                 setLocalUser(userObj);
                 localStorage.setItem('company_local_user', JSON.stringify(userObj));

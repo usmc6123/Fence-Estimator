@@ -6,6 +6,22 @@ import AdminUserManagement from '../components/AdminUserManagement';
 import AdminSubscriptionTiers from '../components/AdminSubscriptionTiers';
 import AdminSettings from '../components/AdminSettings';
 import { motion, AnimatePresence } from 'motion/react';
+import { User } from '../types';
+
+function AccessDenied() {
+  return (
+    <div className="bg-white rounded-2xl border border-[#E5E5E5] p-12 text-center shadow-sm flex flex-col items-center justify-center gap-4 min-h-[400px]">
+      <AlertTriangle size={48} className="text-american-red animate-pulse" />
+      <div className="space-y-2 mt-2">
+        <h3 className="text-lg font-black uppercase text-american-blue tracking-wide">Access Denied</h3>
+        <p className="text-xs text-gray-500 max-w-md mx-auto">
+          You do not have the required administrator privileges to view this console. 
+          Please log in with an authorized administrator account.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 interface UserProfile {
   uid: string;
@@ -21,11 +37,15 @@ interface AdminConsoleProps {
   adminToken: string | null;
   setAdminToken: (token: string | null) => void;
   onNavigate: (path: string) => void;
-  currentUser: { email?: string; name?: string } | null;
+  currentUser: User | null;
   isAdminVerifying?: boolean;
 }
 
 export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, isAdminVerifying = false }: AdminConsoleProps) {
+  if (!currentUser?.isAdmin) {
+    return <AccessDenied />;
+  }
+
   const [activeSubTab, setActiveSubTab] = React.useState('dashboard');
   const [users, setUsers] = React.useState<UserProfile[]>([]);
   const [loading, setLoading] = React.useState(true);

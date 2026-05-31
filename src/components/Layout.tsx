@@ -34,11 +34,13 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const currentUser = user;
+  const showAdminConsole = currentUser?.isAdmin === true;
   const isAdmin = user && (user.email === 'usmc6123@gmail.com' || user.email === 'bradens@lonestarfenceworks.com');
   const displayItems = [
     ...navItems,
     ...(isAdmin ? [{ id: 'employees', label: 'Manage Employees', icon: Users }] : []),
-    { id: 'admin-console', label: 'ADMIN CONSOLE', icon: Shield }
+    ...(showAdminConsole ? [{ id: 'admin-console', label: 'ADMIN CONSOLE', icon: Shield }] : [])
   ];
 
   return (
