@@ -8,18 +8,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 let dbInstance: any = null;
 
 function getAdminDb() {
-  console.log('DEBUG: FIREBASE_CONFIG exists:', !!process.env.FIREBASE_CONFIG);
-  console.log('DEBUG: FIREBASE_CONFIG length:', process.env.FIREBASE_CONFIG?.length);
-
-  if (process.env.FIREBASE_CONFIG) {
-    try {
-      const parsed = JSON.parse(process.env.FIREBASE_CONFIG);
-      console.log('DEBUG: FIREBASE_CONFIG parsed successfully. ProjectId:', parsed.projectId);
-    } catch (parseErr) {
-      console.error('DEBUG: Failed to parse FIREBASE_CONFIG:', parseErr);
-    }
-  }
-
   if (dbInstance) return dbInstance;
   
   try {
@@ -42,34 +30,10 @@ function getAdminDb() {
         dbInstance = admin.firestore();
       }
     } else {
-      // Use FIREBASE_CONFIG env var on Vercel
-      if (process.env.FIREBASE_CONFIG) {
-        try {
-          const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
-          if (admin.apps.length === 0) {
-            admin.initializeApp({
-              projectId: firebaseConfig.projectId,
-            });
-          }
-          const databaseId = firebaseConfig.firestoreDatabaseId;
-          if (databaseId && databaseId !== '(default)') {
-            try {
-              dbInstance = admin.firestore(databaseId);
-            } catch (err) {
-              dbInstance = admin.firestore();
-            }
-          } else {
-            dbInstance = admin.firestore();
-          }
-        } catch (err) {
-          console.error('Failed to parse FIREBASE_CONFIG:', err);
-        }
-      } else {
-        if (admin.apps.length === 0) {
-          admin.initializeApp();
-        }
-        dbInstance = admin.firestore();
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
       }
+      dbInstance = admin.firestore();
     }
   } catch (err) {
     console.error('Failed to initialize Admin Firestore:', err);
