@@ -7,6 +7,8 @@ import AdminSubscriptionTiers from '../components/AdminSubscriptionTiers';
 import AdminSettings from '../components/AdminSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
+import { db } from '../lib/firebase';
+import { collection, getDocs, doc } from 'firebase/firestore';
 
 function AccessDenied() {
   return (
@@ -51,34 +53,34 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Form states for inline authentication if token is missing
-  const [email, setEmail] = React.useState('bradens@lonestarfenceworks.com');
-  const [password, setPassword] = React.useState('password123');
-  const [loginError, setLoginError] = React.useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-
   // Fetch all users to populate the admin dashboards
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/admin/users', {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        setError(errData.error || 'Identity verification failed. Please authenticate.');
-        if (response.status === 401 || response.status === 403) {
-          setAdminToken(null);
-        }
+      const usersRef = collection(db, 'users');
+      const snap = await getDocs(usersRef);
+      const usersList: UserProfile[] = [];
+
+      for (const d of snap.docs) {
+        const u = d.data();
+        // Count user's estimates
+        const estRef = collection(db, 'users', d.id, 'estimates');
+        const estSnap = await getDocs(estRef);
+        usersList.push({
+          uid: d.id,
+          email: u.email || '',
+          name: u.name || u.displayName || u.email?.split('@')[0] || 'No Name',
+          subscriptionTier: u.tier || u.subscriptionTier || 'free',
+          createdAt: u.createdAt || '',
+          isDisabled: u.isDisabled || false,
+          estimatesCount: estSnap.size
+        });
       }
-    } catch (err) {
-      setError('Communication with core services timed out.');
+      setUsers(usersList);
+    } catch (err: any) {
+      console.error('[AdminConsole] Failed to load users via Firestore Client SDK:', err);
+      setError(err.message || 'Identity verification failed. Please authenticate.');
     } finally {
       setLoading(false);
     }
@@ -87,16 +89,17 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
   React.useEffect(() => {
     if (isAdminVerifying) return;
 
-    if (adminToken) {
+    if (currentUser?.isAdmin) {
       fetchUsers();
     } else {
       setLoading(false);
     }
-  }, [adminToken, isAdminVerifying]);
+  }, [currentUser, isAdminVerifying]);
 
   // Handle automatic token refresh every 5 minutes to keep session alive and prevent premature kick out
   React.useEffect(() => {
-    if (!adminToken) return;
+    const tokenToUse = adminToken || currentUser?.token;
+    if (!tokenToUse) return;
 
     const refreshAdminToken = async () => {
       console.log('[AdminConsole] Initiating credentials verification/token refresh sequence...');
@@ -105,7 +108,7 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${adminToken}`
+            'Authorization': `Bearer ${tokenToUse}`
           }
         });
         if (response.ok) {
@@ -134,38 +137,13 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
     const intervalId = setInterval(refreshAdminToken, 5 * 60 * 1000);
 
     return () => clearInterval(intervalId);
-  }, [adminToken, setAdminToken]);
+  }, [adminToken, currentUser?.token, setAdminToken]);
 
   const handleSignOut = () => {
     setAdminToken(null);
     localStorage.removeItem('company_admin_token');
-  };
-
-  const handleInlineLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setAdminToken(result.token);
-        localStorage.setItem('company_admin_token', result.token);
-        setLoginError(null);
-      } else {
-        setLoginError(result.error || 'Invalid credentials');
-      }
-    } catch (err) {
-      setLoginError('Could not connect to the remote server.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    localStorage.removeItem('company_local_user');
+    window.location.reload();
   };
 
   const renderContent = () => {
@@ -177,7 +155,7 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
           <AdminUserManagement 
             users={users} 
             loading={loading} 
-            adminToken={adminToken}
+            adminToken={adminToken || currentUser?.token || null}
             onRefresh={fetchUsers}
           />
         );
@@ -186,8 +164,8 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       case 'settings':
         return (
           <AdminSettings 
-            adminEmail="bradens@lonestarfenceworks.com"
-            adminToken={adminToken}
+            adminEmail={currentUser?.email || "bradens@lonestarfenceworks.com"}
+            adminToken={adminToken || currentUser?.token || null}
             setAdminToken={setAdminToken}
             onNavigate={onNavigate}
           />
@@ -207,7 +185,7 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
               <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-start">
                 <div className="space-y-1">
                   <p className="text-american-blue font-bold">Admin session token created successfully</p>
-                  <p className="text-[10px] text-gray-400">bradens@lonestarfenceworks.com authenticated from active node</p>
+                  <p className="text-[10px] text-gray-400">{currentUser?.email || 'bradens@lonestarfenceworks.com'} authenticated from active node</p>
                 </div>
                 <span className="text-[10px] text-gray-400">2 hours ago</span>
               </div>
@@ -244,83 +222,6 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
     );
   }
 
-  if (!adminToken) {
-    return (
-      <div className="space-y-6">
-        <div id="admin_console_nav_header" className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 bg-american-blue text-white rounded-2xl flex items-center justify-center shadow-lg shadow-american-blue/20">
-              <Shield size={24} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-american-blue uppercase tracking-wider">Admin Console</h2>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-american-blue/10 text-american-blue border border-american-blue/10">
-                  L1 Master System
-                </span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1 font-sans">
-                Lone Star Fence Works — Full System Administration
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm">
-          <div className="max-w-md mx-auto py-12 px-4">
-            <div className="text-center mb-8">
-              <div className="mx-auto h-14 w-14 bg-american-blue/5 rounded-full flex items-center justify-center text-american-blue mb-4 shadow-sm">
-                <Shield size={32} />
-              </div>
-              <h2 className="text-2xl font-black text-american-blue tracking-tight uppercase">Admin Console Authentication</h2>
-              <p className="mt-1.5 text-xs text-[#666666] font-medium">Please sign in as an administrator to access console controls</p>
-            </div>
-            
-            <form className="space-y-4" onSubmit={handleInlineLogin}>
-              <div>
-                <label className="block text-[10px] font-black uppercase text-[#666666] tracking-widest mb-1">Corporate Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-3 text-sm text-[#1A1A1A] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                  placeholder="admin@lonestarfenceworks.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase text-[#666666] tracking-widest mb-1">Security Credentials</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-3 text-sm text-[#1A1A1A] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                  placeholder="••••••••"
-                />
-              </div>
-
-              {loginError && (
-                <div id="inline_login_error" className="p-3 bg-red-50 border border-red-200 text-american-red rounded-xl text-xs font-bold leading-tight">
-                  {loginError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full flex justify-center py-3 px-4 border border-transparent text-xs font-black uppercase tracking-wider rounded-xl text-white bg-american-blue hover:bg-american-blue/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-american-blue transition-all shadow-lg shadow-american-blue/15"
-              >
-                {isSubmitting ? 'Authenticating...' : 'Sign In To Console'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Console Header */}
@@ -345,7 +246,7 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
         <div className="flex items-center gap-3 self-end md:self-center font-sans">
           <div className="text-right hidden sm:block">
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest block">Active Supervisor</span>
-            <span className="text-xs font-black text-american-blue block mt-0.5">bradens@lonestarfenceworks.com</span>
+            <span className="text-xs font-black text-american-blue block mt-0.5">{currentUser?.email || 'bradens@lonestarfenceworks.com'}</span>
           </div>
 
           <button
