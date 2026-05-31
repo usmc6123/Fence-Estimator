@@ -1,9 +1,6 @@
 import React from 'react';
 import { Key, Shield, HardDrive, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import bcrypt from 'bcryptjs';
 
 interface AdminSettingsProps {
   adminEmail: string;
@@ -42,49 +39,32 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
     }
 
     try {
-      const adminUid = auth.currentUser?.uid;
-      if (!adminUid) {
-        setPasswordError("You are not currently authenticated as an admin.");
-        setIsChangingPass(false);
-        return;
-      }
-
-      const adminRef = doc(db, 'admins', adminUid);
-      const snap = await getDoc(adminRef);
-      if (!snap.exists()) {
-        setPasswordError("Admin record not found in the database.");
-        setIsChangingPass(false);
-        return;
-      }
-
-      const adminData = snap.data();
-      const isMatch = await bcrypt.compare(currentPassword, adminData.passwordHash);
-      if (!isMatch) {
-        setPasswordError("Incorrect current password.");
-        setIsChangingPass(false);
-        return;
-      }
-
-      const newHash = await bcrypt.hash(newPassword, 10);
-      await updateDoc(adminRef, {
-        passwordHash: newHash,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
       });
-
-      setPasswordSuccess("Master Credentials updated successfully! Logging out session.");
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      
-      // Requirements say: Password change succeeds and logs user out!
-      setTimeout(() => {
-        setAdminToken(null);
-        localStorage.removeItem('company_admin_token');
-        onNavigate('/admin-console');
-      }, 1500);
-    } catch (err: any) {
-      console.error("Failed to change admin password:", err);
-      setPasswordError(err.message || "Communication failure with authorization server.");
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setPasswordSuccess(result.message || "Master Credentials regenerated successfully! Logging out session.");
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        
+        // Requirements say: Password change succeeds and logs user out!
+        setTimeout(() => {
+          setAdminToken(null);
+          localStorage.removeItem('company_admin_token');
+          onNavigate('/admin-console');
+        }, 1500);
+      } else {
+        setPasswordError(result.error || "Password update rejected by LDAP node.");
+      }
+    } catch (err) {
+      setPasswordError("Communication failure with authorization server.");
     } finally {
       setIsChangingPass(false);
     }

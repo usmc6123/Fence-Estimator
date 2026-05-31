@@ -4,9 +4,6 @@ import {
   HelpCircle, Shield, Mail, Check, X, UserPlus, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import bcrypt from 'bcryptjs';
 
 interface UserProfile {
   uid: string;
@@ -71,10 +68,13 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
   const fetchUserEstimates = async (userId: string) => {
     setLoadingEstimates(true);
     try {
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const snap = await getDocs(estRef);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setUserEstimates(list);
+      const res = await fetch(`/api/admin/users/${userId}/estimates`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserEstimates(data);
+      }
     } catch (err) {
       console.error("Failed to fetch estimates:", err);
     } finally {
@@ -128,40 +128,43 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
   const handleToggleTier = async (u: UserProfile) => {
     const nextTier = u.subscriptionTier === 'free' ? 'paid' : 'free';
     try {
-      const uRef = doc(db, 'users', u.uid);
-      await updateDoc(uRef, {
-        tier: nextTier,
-        subscriptionTier: nextTier,
-        updatedAt: new Date().toISOString()
+      const res = await fetch(`/api/admin/users/${u.uid}/tier`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ tier: nextTier })
       });
-      setSuccessToast(`Tier updated for ${u.name}!`);
-      onRefresh();
-      if (selectedUser?.uid === u.uid) {
-        setSelectedUser({ ...u, subscriptionTier: nextTier });
+      if (res.ok) {
+        setSuccessToast(`Tier updated for ${u.name}!`);
+        onRefresh();
+        if (selectedUser?.uid === u.uid) {
+          setSelectedUser({ ...u, subscriptionTier: nextTier });
+        }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to toggle tier:", err);
-      alert("Failed to toggle tier: " + err.message);
     }
   };
 
   // Toggle disable status
   const handleToggleStatus = async (u: UserProfile) => {
-    const nextStatus = !u.isDisabled;
+    const action = u.isDisabled ? 'enable' : 'disable';
     try {
-      const uRef = doc(db, 'users', u.uid);
-      await updateDoc(uRef, {
-        isDisabled: nextStatus,
-        updatedAt: new Date().toISOString()
+      const res = await fetch(`/api/admin/users/${u.uid}/${action}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
       });
-      setSuccessToast(`User ${nextStatus ? 'Disabled' : 'Enabled'}!`);
-      onRefresh();
-      if (selectedUser?.uid === u.uid) {
-        setSelectedUser({ ...u, isDisabled: nextStatus });
+      if (res.ok) {
+        setSuccessToast(`User ${u.isDisabled ? 'Enabled' : 'Disabled'}!`);
+        onRefresh();
+        if (selectedUser?.uid === u.uid) {
+          setSelectedUser({ ...u, isDisabled: !u.isDisabled });
+        }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to toggle status:", err);
-      alert("Failed to toggle status: " + err.message);
     }
   };
 
@@ -171,24 +174,20 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     if (!doubleCheck) return;
 
     try {
-      // Clean up subcollection estimates
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const estSnap = await getDocs(estRef);
-      for (const d of estSnap.docs) {
-        await deleteDoc(doc(db, 'users', userId, 'estimates', d.id));
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        setSuccessToast("User permanently deleted!");
+        setIsEditUserOpen(false);
+        setSelectedUser(null);
+        onRefresh();
+      } else {
+        alert("Deletion failed.");
       }
-
-      // Delete user doc
-      const uRef = doc(db, 'users', userId);
-      await deleteDoc(uRef);
-
-      setSuccessToast("User permanently deleted!");
-      setIsEditUserOpen(false);
-      setSelectedUser(null);
-      onRefresh();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to delete user:", err);
-      alert("Deletion failed: " + err.message);
     }
   };
 
@@ -199,43 +198,33 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     setIsSubmitting(true);
 
     try {
-      if (!formEmail || !formName || !formPassword) {
-        setFormError('Name, Email, and Password are required');
-        setIsSubmitting(false);
-        return;
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          email: formEmail,
+          name: formName,
+          subscriptionTier: formTier,
+          password: formPassword
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessToast("New User created successfully!");
+        setIsAddUserOpen(false);
+        setFormEmail('');
+        setFormName('');
+        setFormPassword('');
+        setFormTier('free');
+        onRefresh();
+      } else {
+        setFormError(data.error || "Failed to create user.");
       }
-
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(formPassword, salt);
-
-      const userId = `usr-${Math.random().toString(36).substring(2, 11)}`;
-      const uRef = doc(db, 'users', userId);
-
-      const newUser = {
-        uid: userId,
-        email: formEmail,
-        name: formName,
-        displayName: formName,
-        tier: formTier || 'free',
-        subscriptionTier: formTier || 'free',
-        passwordHash: passwordHash,
-        createdAt: new Date().toISOString(),
-        isDisabled: false,
-        isAdmin: false
-      };
-
-      await setDoc(uRef, newUser);
-
-      setSuccessToast("New User created successfully!");
-      setIsAddUserOpen(false);
-      setFormEmail('');
-      setFormName('');
-      setFormPassword('');
-      setFormTier('free');
-      onRefresh();
-    } catch (err: any) {
-      console.error("Failed to add user:", err);
-      setFormError(err.message || "Failed to create user.");
+    } catch (err) {
+      setFormError("Communication failure.");
     } finally {
       setIsSubmitting(false);
     }
@@ -248,27 +237,26 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     setIsSubmitting(true);
 
     try {
-      if (!formResetPassword) {
-        setFormError('Password is required');
-        setIsSubmitting(false);
-        return;
-      }
-
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(formResetPassword, salt);
-
-      const uRef = doc(db, 'users', resetPassUser.uid);
-      await updateDoc(uRef, {
-        passwordHash: passwordHash,
-        updatedAt: new Date().toISOString()
+      const res = await fetch(`/api/admin/users/${resetPassUser.uid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          password: formResetPassword
+        })
       });
-
-      setSuccessToast(`Password reset successfully for ${resetPassUser.name}!`);
-      setIsResetPassOpen(false);
-      setFormResetPassword('');
-    } catch (err: any) {
-      console.error("Failed to reset password:", err);
-      setFormError(err.message || "Failed to reset password.");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessToast(`Password reset successfully for ${resetPassUser.name}!`);
+        setIsResetPassOpen(false);
+        setFormResetPassword('');
+      } else {
+        setFormError(data.error || "Failed to reset password.");
+      }
+    } catch (err) {
+      setFormError("Communication failure.");
     } finally {
       setIsSubmitting(false);
     }
@@ -282,23 +270,39 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     setIsSubmitting(true);
 
     try {
-      const uRef = doc(db, 'users', editingUser.uid);
-      await updateDoc(uRef, {
-        name: formName,
-        displayName: formName,
-        tier: formTier,
-        subscriptionTier: formTier,
-        isDisabled: formDisabled,
-        updatedAt: new Date().toISOString()
+      const res = await fetch(`/api/admin/users/${editingUser.uid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          email: formEmail,
+          name: formName,
+          subscriptionTier: formTier
+        })
       });
+      
+      // Also update status if different
+      if (editingUser.isDisabled !== formDisabled) {
+        const action = formDisabled ? 'disable' : 'enable';
+        await fetch(`/api/admin/users/${editingUser.uid}/${action}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+      }
 
-      setSuccessToast("User details updated successfully!");
-      setIsEditUserOpen(false);
-      onRefresh();
-      setSelectedUser(null);
-    } catch (err: any) {
-      console.error("Failed to edit user profile:", err);
-      setFormError(err.message || "Failed to edit user profile.");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccessToast("User details updated successfully!");
+        setIsEditUserOpen(false);
+        onRefresh();
+        setSelectedUser(null);
+      } else {
+        setFormError(data.error || "Failed to edit user profile.");
+      }
+    } catch (err) {
+      setFormError("Communication failure.");
     } finally {
       setIsSubmitting(false);
     }
