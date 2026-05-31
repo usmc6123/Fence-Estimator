@@ -1,28 +1,43 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import admin from 'firebase-admin';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 
-let db: any = null;
+const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
+let dbInstance: any = null;
 
-function getDbInstance() {
-  if (db) return db;
-
+function getAdminDb() {
+  if (dbInstance) return dbInstance;
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
       const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      if (admin.apps.length === 0) {
+        admin.initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
+      }
+      const databaseId = firebaseConfig.firestoreDatabaseId;
+      if (databaseId && databaseId !== '(default)') {
+        try {
+          dbInstance = admin.firestore(databaseId);
+        } catch (err) {
+          dbInstance = admin.firestore();
+        }
+      } else {
+        dbInstance = admin.firestore();
+      }
     } else {
-      console.warn('firebase-applet-config.json not found inside local file system.');
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      dbInstance = admin.firestore();
     }
   } catch (err) {
-    console.error('Failed to initialize Firebase inside serverless function:', err);
+    console.error('Failed to initialize Admin Firestore in login:', err);
   }
-  return db;
+  return dbInstance;
 }
 
 export default async function handler(req: any, res: any) {
@@ -52,15 +67,15 @@ export default async function handler(req: any, res: any) {
     const emailLower = email.toLowerCase().trim();
     const pwd = password.trim();
 
-    const firestoreDb = getDbInstance();
+    const firestoreDb = getAdminDb();
     if (!firestoreDb) {
       return res.status(503).json({ error: 'Database service offline' });
     }
 
     // Handle direct admin access via main app login
     if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
-      const adminsSnap = await getDocs(collection(firestoreDb, 'admins'));
-      const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+      const adminsSnap = await firestoreDb.collection('admins').get();
+      const adminDoc = adminsSnap.docs.find((d: any) => d.data().email?.toLowerCase() === emailLower);
 
       if (!adminDoc) {
         return res.status(404).json({ error: 'Admin record not found in database.' });
@@ -79,7 +94,6 @@ export default async function handler(req: any, res: any) {
       }
 
       // Create JWT for persistence
-      const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
       const token = jwt.sign(
         { email: adminData.email, isAdmin: true, uid: adminUid },
         JWT_SECRET,
@@ -101,9 +115,9 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Look up standard user in Firestore
-    const snap = await getDocs(collection(firestoreDb, 'users'));
-    const userDoc = snap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
+    // Look up standard user in Firestore using Admin SDK
+    const snap = await firestoreDb.collection('users').get();
+    const userDoc = snap.docs.find((d: any) => d.data().email?.toLowerCase() === emailLower);
 
     if (!userDoc) {
       return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
@@ -124,15 +138,27 @@ export default async function handler(req: any, res: any) {
       return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
     }
 
+    const uid = userData.uid || userDoc.id;
+    const isAdmin = userData.isAdmin || false;
+
+    // Sign token for standard authenticated user
+    const token = jwt.sign(
+      { email: userData.email, isAdmin, uid },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
     return res.status(200).json({
       success: true,
+      token,
       user: {
-        uid: userData.uid || userDoc.id,
+        uid,
         email: userData.email,
         name: userData.name || userData.displayName || 'Client',
         displayName: userData.displayName || userData.name || 'Client',
         tier: userData.tier || userData.subscriptionTier || 'free',
-        subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
+        subscriptionTier: userData.subscriptionTier || userData.tier || 'free',
+        isAdmin
       }
     });
   } catch (error: any) {
