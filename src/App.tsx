@@ -27,7 +27,6 @@ import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { db, handleFirestoreError, OperationType, auth as firebaseClientAuth } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import AdminSystem from './components/AdminSystem';
 import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { getCanonicalSupplierName } from './lib/utils';
@@ -109,6 +108,14 @@ export default function App() {
     return localStorage.getItem('company_admin_token');
   });
   const [isAdminVerifying, setIsAdminVerifying] = React.useState(!!localStorage.getItem('company_admin_token'));
+
+  // Sync adminToken with currentUser token for admins
+  React.useEffect(() => {
+    if (user?.isAdmin && user?.token && adminToken !== user.token) {
+      setAdminToken(user.token);
+      localStorage.setItem('company_admin_token', user.token);
+    }
+  }, [user, adminToken]);
 
   // Verify and refresh the admin token on application boot
   React.useEffect(() => {
@@ -956,11 +963,12 @@ export default function App() {
                   uid: u.uid,
                   email: u.email,
                   displayName: u.displayName,
-                  isAdmin: u.isAdmin || false
+                  isAdmin: u.isAdmin || false,
+                  token: u.token
                 };
                 setLocalUser(userObj);
                 localStorage.setItem('company_local_user', JSON.stringify(userObj));
-                if (u.isAdmin && u.token) {
+                if (u.token) {
                   setAdminToken(u.token);
                   localStorage.setItem('company_admin_token', u.token);
                 }
