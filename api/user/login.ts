@@ -19,6 +19,16 @@ function getDbInstance() {
     } else {
       console.warn('firebase-applet-config.json not found inside local file system.');
     }
+
+    if (!db && process.env.FIREBASE_CONFIG) {
+      try {
+        const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      } catch (err) {
+        console.error('Failed to parse FIREBASE_CONFIG env var:', err);
+      }
+    }
   } catch (err) {
     console.error('Failed to initialize Firebase inside serverless function:', err);
   }

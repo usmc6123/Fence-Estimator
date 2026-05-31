@@ -17,6 +17,16 @@ function getDbInstance() {
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
     }
+
+    if (!db && process.env.FIREBASE_CONFIG) {
+      try {
+        const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+      } catch (err) {
+        console.error('Failed to parse FIREBASE_CONFIG env var in users router:', err);
+      }
+    }
   } catch (err) {
     console.error('Failed to initialize Firebase in users router:', err);
   }
