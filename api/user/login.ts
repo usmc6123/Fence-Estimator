@@ -8,6 +8,10 @@ import path from 'path';
 let db: any = null;
 
 function getDbInstance() {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  console.log('DEBUG: configPath:', configPath);
+  console.log('DEBUG: File exists:', fs.existsSync(configPath));
+
   if (db) return db;
 
   try {
