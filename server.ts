@@ -158,8 +158,8 @@ async function startServer() {
     const token = authHeader.substring(7);
     try {
       const decoded = jwt.decode(token);
-      if (decoded && typeof decoded === 'object' && decoded.sub) {
-        return decoded.sub;
+      if (decoded && typeof decoded === 'object') {
+        return decoded.uid || decoded.sub || null;
       }
     } catch (err) {
       console.error('Failed to decode Clerk token:', err);

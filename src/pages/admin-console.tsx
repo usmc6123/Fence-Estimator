@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, LogOut, CheckCircle, HelpCircle, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Shield, CheckCircle, HelpCircle, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminDashboard from '../components/AdminDashboard';
 import AdminUserManagement from '../components/AdminUserManagement';
@@ -248,14 +248,6 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
             <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest block">Active Supervisor</span>
             <span className="text-xs font-black text-american-blue block mt-0.5">{currentUser?.email || 'bradens@lonestarfenceworks.com'}</span>
           </div>
-
-          <button
-            onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-american-blue hover:bg-american-blue/95 hover:scale-102 hover:-translate-y-0.5 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-american-blue/15 transition-all"
-          >
-            <LogOut size={14} />
-            Sign Out Admin
-          </button>
         </div>
       </div>
 
