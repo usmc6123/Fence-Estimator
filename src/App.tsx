@@ -24,7 +24,6 @@ import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator'
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
-import { useUser, useClerk } from '@clerk/clerk-react';
 import { db, handleFirestoreError, OperationType, auth as firebaseClientAuth } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import AdminConsole from './pages/admin-console';
@@ -69,9 +68,6 @@ function getInitialValue(key: string, storageKey: string, defaultValue: any) {
 }
 
 export default function App() {
-  const { isLoaded, isSignedIn, user: clerkUser } = useUser();
-  const { signOut: clerkSignOut } = useClerk();
-
   const [localUser, setLocalUser] = React.useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('company_local_user');
@@ -81,20 +77,7 @@ export default function App() {
     }
   });
 
-  const user = React.useMemo<User | null>(() => {
-    if (localUser) return localUser;
-    if (!isLoaded || !clerkUser) return null;
-    const email = clerkUser.primaryEmailAddress?.emailAddress || null;
-    const emailLower = email?.toLowerCase();
-    const isAdmin = emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com';
-    return {
-      uid: clerkUser.id,
-      email: email,
-      displayName: clerkUser.fullName || null,
-      photoURL: clerkUser.imageUrl || null,
-      isAdmin: isAdmin
-    };
-  }, [isLoaded, clerkUser, localUser]);
+  const user = localUser;
 
   // Routing current path state
   const [currentPath, setCurrentPath] = React.useState(() => window.location.pathname);
@@ -252,32 +235,31 @@ export default function App() {
     };
   }, [user]);
 
-  // Synchronize Clerk Users with standard client-use Firebase Authentication
+  // Synchronize localUser with standard client-use Firebase Authentication
   React.useEffect(() => {
-    if (!isLoaded) return;
-    if (clerkUser) {
-      const email = clerkUser.primaryEmailAddress?.emailAddress;
-      const emailLower = email?.toLowerCase();
+    if (!user) return;
+    const email = user.email;
+    if (email) {
+      const emailLower = email.toLowerCase();
       const isAdminEmail = emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com';
-      const fakePass = isAdminEmail ? 'password123' : ('clerk_user_' + clerkUser.id);
-      if (email) {
-        signInWithEmailAndPassword(firebaseClientAuth, email, fakePass)
-          .then(() => console.log("Standard Clerk Firebase Auth login secure session established."))
-          .catch((err) => {
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-              createUserWithEmailAndPassword(firebaseClientAuth, email, fakePass)
-                .then(() => {
-                  console.log("Registered new Clerk user standard Firebase Auth identity.");
-                  signInWithEmailAndPassword(firebaseClientAuth, email, fakePass);
-                })
-                .catch(cErr => console.error("Standard Clerk auto registration had issues:", cErr));
-            } else {
-              console.error("Firebase auth bridge connection failed:", err);
-            }
-          });
-      }
+      const fakePass = isAdminEmail ? 'password123' : ('user_pass_' + user.uid);
+      
+      signInWithEmailAndPassword(firebaseClientAuth, email, fakePass)
+        .then(() => console.log("Standard Local user Firebase Auth session established."))
+        .catch((err) => {
+          if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+            createUserWithEmailAndPassword(firebaseClientAuth, email, fakePass)
+              .then(() => {
+                console.log("Registered new Local user standard Firebase Auth identity.");
+                signInWithEmailAndPassword(firebaseClientAuth, email, fakePass);
+              })
+              .catch(cErr => console.error("Standard Local user auto registration issue:", cErr));
+          } else {
+            console.error("Firebase auth bridge connection failed:", err);
+          }
+        });
     }
-  }, [isLoaded, clerkUser]);
+  }, [user]);
 
   const [userTier, setUserTier] = React.useState<'free' | 'paid'>('free');
   const [userNextBilling, setUserNextBilling] = React.useState<string | null>(null);
@@ -296,7 +278,6 @@ export default function App() {
         const uData = docSnap.data();
         if (uData.isDisabled) {
           alert("Your client profile account has been suspended or disabled by administrator control.");
-          clerkSignOut();
           setLocalUser(null);
           localStorage.removeItem('company_local_user');
           return;
@@ -731,12 +712,10 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      if (localUser) {
-        setLocalUser(null);
-        localStorage.removeItem('company_local_user');
-      } else {
-        await clerkSignOut();
-      }
+      setLocalUser(null);
+      localStorage.removeItem('company_local_user');
+      localStorage.removeItem('company_admin_token');
+      setAdminToken(null);
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -860,7 +839,7 @@ export default function App() {
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.
 
-  const isAuthLoading = !isLoaded && !localUser;
+  const isAuthLoading = false;
   const isRoleVerifying = !!user && !roleChecked;
   const isLoading = isAuthLoading || isRoleVerifying || isAdminVerifying;
 

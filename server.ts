@@ -149,20 +149,23 @@ async function startServer() {
     }
   });
 
-  // Helper to extract clerk user ID from Bearer token
-  function getUserIdFromClerk(req: any): string | null {
+  // Helper to extract user ID from Bearer custom JWT token
+  function getUserIdFromToken(req: any): string | null {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return null;
     }
     const token = authHeader.substring(7);
     try {
-      const decoded = jwt.decode(token);
-      if (decoded && typeof decoded === 'object' && decoded.sub) {
-        return decoded.sub;
+      if (!token || token === 'null' || token === 'undefined') {
+        return null;
+      }
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded && typeof decoded === 'object' && decoded.uid) {
+        return decoded.uid;
       }
     } catch (err) {
-      console.error('Failed to decode Clerk token:', err);
+      console.error('Failed to decode/verify user token:', err);
     }
     return null;
   }
@@ -339,15 +342,27 @@ async function startServer() {
         return res.status(401).json({ error: 'Access Denied: Incorrect email or password.' });
       }
 
+      const uid = userData.uid || userDoc.id;
+      const isAdmin = userData.isAdmin || emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com' || false;
+
+      // Sign token for standard authenticated user
+      const token = jwt.sign(
+        { email: userData.email, isAdmin, uid },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
       res.json({
         success: true,
+        token,
         user: {
-          uid: userData.uid || userDoc.id,
+          uid,
           email: userData.email,
           name: userData.name || userData.displayName || 'Client',
           displayName: userData.displayName || userData.name || 'Client',
           tier: userData.tier || userData.subscriptionTier || 'free',
-          subscriptionTier: userData.subscriptionTier || userData.tier || 'free'
+          subscriptionTier: userData.subscriptionTier || userData.tier || 'free',
+          isAdmin
         }
       });
     } catch (error: any) {
@@ -553,9 +568,9 @@ async function startServer() {
   // GET /api/user/profile - Get own profile
   app.get('/api/user/profile', async (req, res) => {
     try {
-      const userId = getUserIdFromClerk(req);
+      const userId = getUserIdFromToken(req);
       if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized. Sign in via Clerk is required.' });
+        return res.status(401).json({ error: 'Unauthorized. Sign in is required.' });
       }
 
       if (!db) return res.status(503).json({ error: 'Database offline' });
@@ -574,7 +589,7 @@ async function startServer() {
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {
     try {
-      const userId = getUserIdFromClerk(req);
+      const userId = getUserIdFromToken(req);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized.' });
       }
