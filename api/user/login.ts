@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
@@ -7,7 +8,18 @@ import path from 'path';
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 let dbInstance: any = null;
 
-function getAdminDb() {
+function getDbInstance() {
+  if (process.env.FIREBASE_CONFIG) {
+    try {
+      const config = JSON.parse(process.env.FIREBASE_CONFIG);
+      const app = getApps().length === 0 ? initializeApp(config) : getApp();
+      const db = admin.firestore();
+      return db;
+    } catch (err) {
+      console.error('Failed to parse FIREBASE_CONFIG:', err);
+    }
+  }
+
   if (dbInstance) return dbInstance;
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -67,7 +79,7 @@ export default async function handler(req: any, res: any) {
     const emailLower = email.toLowerCase().trim();
     const pwd = password.trim();
 
-    const firestoreDb = getAdminDb();
+    const firestoreDb = getDbInstance();
     if (!firestoreDb) {
       return res.status(503).json({ error: 'Database service offline' });
     }
