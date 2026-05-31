@@ -8,6 +8,18 @@ const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 let dbInstance: any = null;
 
 function getAdminDb() {
+  console.log('DEBUG: FIREBASE_CONFIG exists:', !!process.env.FIREBASE_CONFIG);
+  console.log('DEBUG: FIREBASE_CONFIG length:', process.env.FIREBASE_CONFIG?.length);
+
+  if (process.env.FIREBASE_CONFIG) {
+    try {
+      const parsed = JSON.parse(process.env.FIREBASE_CONFIG);
+      console.log('DEBUG: FIREBASE_CONFIG parsed successfully. ProjectId:', parsed.projectId);
+    } catch (parseErr) {
+      console.error('DEBUG: Failed to parse FIREBASE_CONFIG:', parseErr);
+    }
+  }
+
   if (dbInstance) return dbInstance;
   
   try {
