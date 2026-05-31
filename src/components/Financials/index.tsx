@@ -60,11 +60,7 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
     if (!user) return;
 
     // Fetch all expenses for all jobs (for global reporting/search)
-    const isUserAdmin = user.isAdmin || user.email?.toLowerCase() === 'bradens@lonestarfenceworks.com' || user.email?.toLowerCase() === 'usmc6123@gmail.com';
-    const qExp = isUserAdmin
-      ? query(collection(db, 'expenses'), where('companyId', '==', 'lonestarfence'), orderBy('date', 'desc'))
-      : query(collection(db, 'users', user.uid, 'financials'), orderBy('date', 'desc'));
-
+    const qExp = query(collection(db, 'expenses'), where('companyId', '==', 'lonestarfence'), orderBy('date', 'desc'));
     const unsubExp = onSnapshot(qExp, 
       (snapshot) => setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as JobExpense))),
       (error) => handleFirestoreError(error, OperationType.LIST, 'expenses')
@@ -512,12 +508,7 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
 
     setIsSaving(true);
     try {
-      const isUserAdmin = user.isAdmin || user.email?.toLowerCase() === 'bradens@lonestarfenceworks.com' || user.email?.toLowerCase() === 'usmc6123@gmail.com';
-      const baseColl = isUserAdmin
-        ? collection(db, 'expenses')
-        : collection(db, 'users', user.uid, 'financials');
-
-      await addDoc(baseColl, {
+      await addDoc(collection(db, 'expenses'), {
         ...newExp,
         amount: Number(newExp.amount),
         userId: user.uid,

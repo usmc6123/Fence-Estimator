@@ -131,15 +131,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /estimates/{estimate} {
-        allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
-      }
-
-      match /dossiers/{dossier} {
-        allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
-      }
-
-      match /financials/{financial} {
-        allow read, write: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+        allow read, write: if (isSignedIn() && (request.auth.uid == userId || request.auth.token.email == get(/databases/$(database)/documents/users/$(userId)).data.email)) || isAdmin();
       }
     }
 
