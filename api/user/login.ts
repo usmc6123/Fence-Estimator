@@ -1,42 +1,21 @@
-import admin from 'firebase-admin';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
 import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
-let dbInstance: any = null;
 
-function getAdminDb() {
-  if (dbInstance) return dbInstance;
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      if (admin.apps.length === 0) {
-        admin.initializeApp();  // <-- NO arguments, use default credentials
-      }
-      const databaseId = firebaseConfig.firestoreDatabaseId;
-      if (databaseId && databaseId !== '(default)') {
-        try {
-          dbInstance = admin.firestore(databaseId);
-        } catch (err) {
-          dbInstance = admin.firestore();
-        }
-      } else {
-        dbInstance = admin.firestore();
-      }
-    } else {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      dbInstance = admin.firestore();
-    }
-  } catch (err) {
-    console.error('Failed to initialize Admin Firestore:', err);
-  }
-  return dbInstance;
-}
+const firebaseConfig = {
+  projectId: "dazzling-card-485210-r8",
+  apiKey: "AIzaSyDzF73c-QZN6T0_ldVELubP5mEvucsZ9JQ",
+  authDomain: "dazzling-card-485210-r8.firebaseapp.com",
+  firestoreDatabaseId: "ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb",
+  storageBucket: "dazzling-card-485210-r8.firebasestorage.app",
+  messagingSenderId: "301045874568"
+};
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -52,14 +31,12 @@ export default async function handler(req: any, res: any) {
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
     const emailLower = email.toLowerCase().trim();
-    const firestoreDb = getAdminDb();
-    if (!firestoreDb) return res.status(503).json({ error: 'Database offline' });
 
     let targetUser: any = null;
     let isAdminUser = false;
     let userUid = '';
 
-    const adminsSnap = await firestoreDb.collection('admins').get();
+    const adminsSnap = await getDocs(collection(db, 'admins'));
     const adminDoc = adminsSnap.docs.find((d: any) => d.data().email?.toLowerCase() === emailLower);
 
     if (adminDoc) {
@@ -70,7 +47,7 @@ export default async function handler(req: any, res: any) {
       }
       isAdminUser = true;
     } else {
-      const usersSnap = await firestoreDb.collection('users').get();
+      const usersSnap = await getDocs(collection(db, 'users'));
       const userDoc = usersSnap.docs.find((d: any) => d.data().email?.toLowerCase() === emailLower);
       if (userDoc) {
         targetUser = userDoc.data();
