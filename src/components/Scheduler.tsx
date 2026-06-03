@@ -1658,7 +1658,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
                             <div className="flex items-center justify-between mb-2 mt-4">
                                <h4 className="text-[10px] font-black text-[#999999] uppercase tracking-[0.2em]">
-                                   {isCreatingNewDossier ? 'New Lead Details' : 'Select Estimate Dossier'}
+                                   {isCreatingNewDossier ? 'New Lead Details' : 'Select Estimate'}
                                </h4>
                                <button 
                                  onClick={() => {
@@ -1737,7 +1737,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                         ))
                                     ) : (
                                         <div className="text-center py-6 px-4">
-                                            <p className="text-xs italic text-[#999999] mb-4">No pending dossiers available.</p>
+                                            <p className="text-xs italic text-[#999999] mb-4">No pending estimates available.</p>
                                             <button 
                                               onClick={() => setIsCreatingNewDossier(true)}
                                               className="text-[10px] font-black text-american-blue uppercase tracking-widest bg-american-blue/5 px-6 py-3 rounded-xl hover:bg-american-blue hover:text-white transition-all shadow-sm border border-american-blue/10 min-h-[44px]"

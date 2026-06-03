@@ -148,6 +148,7 @@ export interface JobExpense {
 
 export interface Estimate {
   id: string;
+  estimateNumber?: number;
   customerName: string;
   customerEmail: string;
   customerPhone: string;

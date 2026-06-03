@@ -27,7 +27,7 @@ import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
-import { getCanonicalSupplierName } from './lib/utils';
+import { getCanonicalSupplierName, assignEstimateNumbers } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 
@@ -495,11 +495,12 @@ export default function App() {
           // Merge cloud with unique local estimates
           const cloudIds = new Set(cloudEstimates.map(e => e.id));
           const uniqueLocal = localEstimates.filter(e => !cloudIds.has(e.id));
-          setSavedEstimates([...cloudEstimates, ...uniqueLocal]);
+          const combined = [...cloudEstimates, ...uniqueLocal];
+          setSavedEstimates(assignEstimateNumbers(combined));
         },
         (error) => {
           console.error('Error listening to cloud estimates, falling back to local registry:', error);
-          setSavedEstimates(localEstimates);
+          setSavedEstimates(assignEstimateNumbers(localEstimates));
         }
       );
       return unsubscribe;

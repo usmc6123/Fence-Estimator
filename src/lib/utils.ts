@@ -63,3 +63,44 @@ export function getCanonicalSupplierName(name: string): string {
   return finalized;
 }
 
+export function assignEstimateNumbers<T extends { id: string; createdAt?: string; estimateNumber?: number }>(estimates: T[]): T[] {
+  // Sort a copy by createdAt ascending to determine stable visual order
+  const sorted = [...estimates].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateA - dateB;
+  });
+
+  const usedNumbers = new Set<number>();
+  sorted.forEach(est => {
+    if (typeof est.estimateNumber === 'number' && est.estimateNumber >= 1201) {
+      usedNumbers.add(est.estimateNumber);
+    }
+  });
+
+  let nextNum = 1201;
+  const result = sorted.map(est => {
+    if (typeof est.estimateNumber === 'number' && est.estimateNumber >= 1201) {
+      return est;
+    }
+    while (usedNumbers.has(nextNum)) {
+      nextNum++;
+    }
+    usedNumbers.add(nextNum);
+    return {
+      ...est,
+      estimateNumber: nextNum
+    };
+  });
+
+  const idToNumber = new Map<string, number>();
+  result.forEach(est => {
+    idToNumber.set(est.id, est.estimateNumber!);
+  });
+
+  return estimates.map(est => ({
+    ...est,
+    estimateNumber: idToNumber.get(est.id)
+  }));
+}
+

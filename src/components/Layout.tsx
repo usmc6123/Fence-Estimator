@@ -23,7 +23,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
     { id: 'pricing', label: 'Pricing Plans & Billing', icon: CreditCard },
     { id: 'customer-estimator', label: 'Customer Estimator', icon: Globe },
     { id: 'scheduler', label: 'Job Scheduler', icon: CalendarIcon },
-    { id: 'dossiers', label: 'Saved Dossiers', icon: Archive },
+    { id: 'dossiers', label: 'Saved Estimates', icon: Archive },
     { id: 'financials', label: 'Financials', icon: Wallet },
     { id: 'takeoff', label: 'Material Take-off', icon: FileText },
     { id: 'labor-breakdown', label: 'Labor Breakdown', icon: Shield },

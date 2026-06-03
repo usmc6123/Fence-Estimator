@@ -62,7 +62,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         <div>
           <h2 className="text-3xl font-black text-american-blue uppercase tracking-tighter">Authentication Required</h2>
           <p className="text-sm font-bold text-[#999999] uppercase tracking-widest mt-2 max-w-md mx-auto">
-            Please sign in on the sidebar to access the Lone Star company cloud dossiers.
+            Please sign in on the sidebar to access the Lone Star company cloud estimates.
           </p>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           </div>
           <div>
             <h1 className="text-3xl font-black text-american-blue uppercase tracking-tighter">Saved Estimates</h1>
-            <p className="text-xs font-bold text-american-red uppercase tracking-widest leading-none mt-1">VIRTUAL DOSSIER ARCHIVE</p>
+            <p className="text-xs font-bold text-american-red uppercase tracking-widest leading-none mt-1">VIRTUAL ESTIMATE ARCHIVE</p>
           </div>
         </div>
 
@@ -309,6 +309,13 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
               <div className="space-y-6">
                 <div>
+                  {estimate.estimateNumber && (
+                    <div className="mb-2">
+                      <span className="inline-block px-2.5 py-1 bg-american-blue text-white text-[9px] font-black tracking-widest rounded-lg leading-none uppercase">
+                        Estimate #{estimate.estimateNumber}
+                      </span>
+                    </div>
+                  )}
                   <h3 className="text-xl font-black text-american-blue tracking-tight leading-tight group-hover:text-american-red transition-colors">
                     {estimate.customerName || 'Unnamed Prospect'}
                   </h3>
@@ -455,7 +462,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             </div>
             <div>
               <p className="text-xl font-black text-american-blue">
-                {savedEstimates.length === 0 ? "No estimates yet" : "No matching dossiers found"}
+                {savedEstimates.length === 0 ? "No estimates yet" : "No matching estimates found"}
               </p>
               <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
                 {savedEstimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
@@ -508,7 +515,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                       ) : (
                         <div className="col-span-full py-20 flex flex-col items-center justify-center opacity-30 italic">
                           <ImageIcon size={48} className="mb-4" />
-                          <p className="text-xs font-black uppercase tracking-widest">No photos for this dossier</p>
+                          <p className="text-xs font-black uppercase tracking-widest">No photos for this estimate</p>
                         </div>
                       )}
                    </div>
