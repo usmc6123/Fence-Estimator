@@ -28,7 +28,10 @@ export default function Step5({
       data.lastName.trim().length > 0 &&
       data.email.trim().length > 0 &&
       data.phone.trim().length > 0 &&
-      data.address.trim().length > 0
+      (data.street?.trim().length || 0) > 0 &&
+      (data.city?.trim().length || 0) > 0 &&
+      (data.state?.trim().length || 0) > 0 &&
+      (data.zip?.trim().length || 0) > 0
     );
   }, [data]);
 
@@ -113,16 +116,63 @@ export default function Step5({
           {/* Address */}
           <div className="space-y-1">
             <label className="block text-xs font-bold text-[#555555] uppercase tracking-wider flex items-center gap-1">
-              <MapPin size={12} /> Site / Project Address <span className="text-red-500">*</span>
+              <MapPin size={12} /> Street Address <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               required
-              placeholder="123 Lone Star Hwy, Austin TX..."
-              value={data.address}
-              onChange={(e) => onChangeField('address', e.target.value)}
+              placeholder="123 Main St..."
+              value={data.street || ''}
+              onChange={(e) => onChangeField('street', e.target.value)}
               className="block w-full rounded-xl border border-[#D5D5D5] px-4 py-2.5 text-sm font-bold text-[#111111]"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* City */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-[#555555] uppercase tracking-wider">
+                City <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="City"
+                value={data.city || ''}
+                onChange={(e) => onChangeField('city', e.target.value)}
+                className="block w-full rounded-xl border border-[#D5D5D5] px-3 py-2.5 text-sm font-bold text-[#111111]"
+              />
+            </div>
+
+            {/* State */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-[#555555] uppercase tracking-wider">
+                State <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="TX"
+                value={data.state || ''}
+                onChange={(e) => onChangeField('state', e.target.value)}
+                className="block w-full rounded-xl border border-[#D5D5D5] px-3 py-2.5 text-sm font-bold text-[#111111]"
+              />
+            </div>
+
+            {/* Zip */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-[#555555] uppercase tracking-wider">
+                Zip <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="12345"
+                value={data.zip || ''}
+                onChange={(e) => onChangeField('zip', e.target.value)}
+                className="block w-full rounded-xl border border-[#D5D5D5] px-3 py-2.5 text-sm font-bold text-[#111111]"
+              />
+            </div>
           </div>
 
           <div className="text-slate-400 text-[10px] flex items-center gap-2 mt-4 pt-4 border-t border-[#E5E5E5]">

@@ -17,6 +17,10 @@ export interface CustomerEstimateData {
   email: string;
   phone: string;
   address: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   isPreStained?: boolean;
   reusePosts?: boolean;
   picketStyle?: 'w-side' | 'w-bob';

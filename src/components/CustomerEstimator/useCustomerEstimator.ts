@@ -23,6 +23,10 @@ const INITIAL_DATA: CustomerEstimateData = {
   email: '',
   phone: '',
   address: '',
+  street: '',
+  city: '',
+  state: '',
+  zip: '',
   isPreStained: false,
   reusePosts: false,
   picketStyle: 'w-side',
@@ -60,6 +64,13 @@ export function useCustomerEstimator(
   ) => {
     setData(prev => {
       const newData = { ...prev, [field]: value };
+      if (['street', 'city', 'state', 'zip'].includes(field as string)) {
+        const s = field === 'street' ? (value as string) : (prev.street || '');
+        const c = field === 'city' ? (value as string) : (prev.city || '');
+        const st = field === 'state' ? (value as string) : (prev.state || '');
+        const z = field === 'zip' ? (value as string) : (prev.zip || '');
+        newData.address = `${s}, ${c}, ${st} ${z}`.trim().replace(/^,|,$/g, '').trim();
+      }
       if (field === 'fenceType') {
         if (value === 'Wood Fence') {
           newData.material = 'PT Pine';
@@ -129,8 +140,8 @@ export function useCustomerEstimator(
 
   const handleSubmit = React.useCallback(async () => {
     // Form verification for step 5
-    if (!data.firstName.trim() || !data.lastName.trim() || !data.email.trim() || !data.phone.trim() || !data.address.trim()) {
-      setError('All contact fields are required to submit the estimate.');
+    if (!data.firstName.trim() || !data.lastName.trim() || !data.email.trim() || !data.phone.trim() || !data.street?.trim() || !data.city?.trim() || !data.state?.trim() || !data.zip?.trim()) {
+      setError('All contact and address fields are required to submit the estimate.');
       return;
     }
 
@@ -178,10 +189,10 @@ export function useCustomerEstimator(
       customerEmail: data.email,
       customerPhone: data.phone,
       customerAddress: data.address,
-      customerStreet: data.address,
-      customerCity: '',
-      customerState: '',
-      customerZip: '',
+      customerStreet: data.street || data.address || '',
+      customerCity: data.city || '',
+      customerState: data.state || '',
+      customerZip: data.zip || '',
       date: now,
       createdAt: now,
       lastModified: now,
