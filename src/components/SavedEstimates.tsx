@@ -4,7 +4,7 @@ import {
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
-  FolderOpen, ArrowLeft
+  FolderOpen, ArrowLeft, ChevronDown
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
@@ -28,6 +28,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
+  const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
 
   const [loading] = React.useState(false);
 
@@ -252,225 +253,279 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               ))}
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence mode="popLayout">
-          {filteredEstimates.map((estimate) => (
-            <motion.div
-              layout
-              key={estimate.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={cn(
-                "group relative bg-white rounded-[32px] p-8 shadow-xl hover:shadow-2xl transition-all border-2",
-                estimate.status === 'archived' ? "border-dashed border-[#EEEEEE] opacity-75" : "border-transparent hover:border-american-blue/10"
-              )}
-            >
-              {/* Status Flow Visualization */}
-              <div className="pb-4">
-                <div className="flex justify-between items-center mb-2 px-1">
-                  <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Workflow State</span>
-                  <select 
-                    value={estimate.jobStatus || 'Estimate Pending'}
-                    onChange={(e) => updateJobStatus(estimate.id, e.target.value as JobStatus, e as any)}
-                    onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border outline-none cursor-pointer appearance-none transition-colors text-center",
-                      estimate.jobStatus === 'Completed' ? "bg-emerald-100 text-emerald-600 border-emerald-200" :
-                      estimate.jobStatus === 'Accepted' ? "bg-blue-100 text-blue-600 border-blue-200" :
-                      estimate.jobStatus === 'Estimate Sent' ? "bg-amber-100 text-amber-600 border-amber-200" :
-                      "bg-american-red/10 text-american-red border-american-red/20"
-                    )}
-                  >
-                    {STATUS_FLOW.map(status => (
-                      <option key={status} value={status} className="bg-white text-american-blue">{status}</option>
-                    ))}
-                    {/* Add others if needed like Draft/Proposed but flow is preferred */}
-                  </select>
-                </div>
-                <div className="flex gap-1.5 h-1.5 px-0.5">
-                  {STATUS_FLOW.slice(0, 4).map((status, i) => {
-                    const currentIndex = STATUS_FLOW.indexOf(estimate.jobStatus || 'Estimate Pending');
-                    const isActive = i <= currentIndex;
-                    return (
-                      <div 
-                        key={status}
-                        className={cn(
-                          "flex-1 rounded-full transition-all duration-500",
-                          isActive 
-                            ? (estimate.jobStatus === 'Completed' ? "bg-emerald-500" : "bg-american-red") 
-                            : "bg-[#EEEEEE]"
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="bg-white rounded-[32px] border border-gray-200 overflow-hidden shadow-xl">
+              <div className="overflow-x-auto overflow-y-visible">
+                <table className="w-full min-w-[900px] border-collapse text-left text-sm text-american-blue">
+                  <thead>
+                    <tr className="bg-[#F9F9FA] border-b border-[#E5E5E5]">
+                      <th className="py-4 px-6 w-12 text-[#999999] font-black uppercase text-[10px] tracking-wider">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-gray-300 text-american-blue focus:ring-american-blue/20" 
+                        />
+                      </th>
+                      <th className="py-4 px-4 text-[#999999] font-black uppercase text-[10px] tracking-wider">Date</th>
+                      <th className="py-4 px-4 text-[#999999] font-black uppercase text-[10px] tracking-wider">Est #</th>
+                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Customer Name / Address</th>
+                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Est. Cost</th>
+                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Status</th>
+                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <AnimatePresence mode="popLayout">
+                      {filteredEstimates.map((estimate) => {
+                        const isAcceptedOrCompleted = estimate.jobStatus === 'Accepted' || estimate.jobStatus === 'Completed';
+                        const isSent = estimate.jobStatus === 'Estimate Sent';
+                        const isPending = !estimate.jobStatus || estimate.jobStatus === 'Estimate Pending';
+                        
+                        const dateFormatted = new Date(estimate.createdAt || estimate.lastModified || '').toLocaleDateString('en-US', {
+                          month: 'numeric',
+                          day: 'numeric',
+                          year: '2-digit'
+                        });
+                        const lastModFormatted = new Date(estimate.lastModified || estimate.createdAt || '').toLocaleDateString('en-US', {
+                          month: 'numeric',
+                          day: 'numeric',
+                          year: '2-digit'
+                        });
 
-              <div className="space-y-6">
+                        return (
+                          <motion.tr 
+                            layout
+                            key={estimate.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className={cn(
+                              "border-b border-[#F0F0F2] hover:bg-slate-50/50 transition-colors",
+                              estimate.status === 'archived' && "opacity-60 bg-gray-50/50"
+                            )}
+                          >
+                            <td className="py-4 px-6 w-12">
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-american-blue focus:ring-american-blue/20" 
+                              />
+                            </td>
+                            <td className="py-4 px-4 font-bold text-[#555555] whitespace-nowrap">
+                              {dateFormatted}
+                            </td>
+                            <td className="py-4 px-4 font-bold text-[#111111] font-mono text-xs whitespace-nowrap">
+                              {estimate.estimateNumber || 1201}
+                            </td>
+                            <td className="py-4 px-6 text-american-blue">
+                              <div className="font-bold text-sm text-[#111111] flex items-center gap-2">
+                                {estimate.customerName || 'Unnamed Prospect'}
+                                {estimate.version && estimate.version > 1 && (
+                                  <span className="px-1.5 py-0.5 bg-american-blue/5 text-american-blue text-[8px] font-black rounded uppercase">v{estimate.version}</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-medium text-gray-400 truncate max-w-sm flex items-center gap-1 mt-0.5" title={estimate.customerAddress || 'No Address'}>
+                                <MapPin size={10} className="shrink-0" />
+                                <span className="truncate">{estimate.customerAddress || 'No Address'}</span>
+                                <span className="mx-1 text-gray-300">|</span>
+                                <span className="font-bold text-gray-500">{estimate.linearFeet} LF</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-[#111111] font-mono text-sm leading-none whitespace-nowrap">
+                              {formatCurrency(estimate.totalCost || estimate.manualGrandTotal || 0)}
+                            </td>
+                            <td className="py-4 px-6 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                {isAcceptedOrCompleted ? (
+                                  <div className="flex items-center justify-center text-emerald-600 rounded-full shrink-0">
+                                    <CheckCircle2 size={16} fill="#10B981" className="text-white" />
+                                  </div>
+                                ) : (
+                                  <div className="h-4 w-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 shrink-0">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                  </div>
+                                )}
+                                <div className="leading-tight">
+                                  <div className="text-xs font-bold text-[#222222]">
+                                    {estimate.jobStatus === 'Completed' ? 'Completed' :
+                                     estimate.jobStatus === 'Accepted' ? 'Accepted' :
+                                     estimate.jobStatus === 'Estimate Sent' ? 'Sent' : 'Pending'}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-medium">
+                                    {estimate.jobStatus === 'Completed' ? `Finished ${lastModFormatted}` :
+                                     estimate.jobStatus === 'Accepted' ? `Viewed ${lastModFormatted}` :
+                                     estimate.jobStatus === 'Estimate Sent' ? `Sent ${lastModFormatted}` :
+                                     `Viewed ${dateFormatted}`}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2.5 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => onLoadEstimate(estimate)}
+                                  className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                >
+                                  View/Edit
+                                </button>
+                                
+                                <span className="text-gray-300">|</span>
+
+                                {isPending && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => updateJobStatus(estimate.id, 'Estimate Sent', e)}
+                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                  >
+                                    Send
+                                  </button>
+                                )}
+                                {isSent && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => updateJobStatus(estimate.id, 'Accepted', e)}
+                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                  >
+                                    Mark accepted
+                                  </button>
+                                )}
+                                {estimate.jobStatus === 'Accepted' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => updateJobStatus(estimate.id, 'Completed', e)}
+                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                  >
+                                    Convert to invoice
+                                  </button>
+                                )}
+                                {estimate.jobStatus === 'Completed' && (
+                                  <span className="text-xs font-bold text-gray-400 capitalize">Invoiced</span>
+                                )}
+
+                                <div className="relative inline-block text-left" id={`dropdown-wrapper-${estimate.id}`}>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenDropdownId(openDropdownId === estimate.id ? null : estimate.id);
+                                    }}
+                                    className="p-1 hover:bg-slate-100 rounded-md transition-all text-[#444444] inline-flex items-center gap-0.5 justify-center min-h-[28px] min-w-[28px] border border-transparent hover:border-gray-200"
+                                  >
+                                    <ChevronDown size={14} className="text-gray-500" />
+                                  </button>
+
+                                  {/* Dropdown Menu Portal/Overlay list */}
+                                  {openDropdownId === estimate.id && (
+                                    <>
+                                      {/* Invisible backdrop to dismiss click */}
+                                      <div 
+                                        className="fixed inset-0 z-40 cursor-default" 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenDropdownId(null);
+                                        }}
+                                      />
+                                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-100 py-1.5 z-50 text-left origin-top-right">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setView('files');
+                                            setSelectedJobPhotos(estimate);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                        >
+                                          <ImageIcon size={14} /> Project Photos
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveTab('scheduler');
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                        >
+                                          <Calendar size={14} /> Schedule Job
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleArchive(estimate.id, e);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2 border-t border-slate-50 mt-1 pt-1"
+                                        >
+                                          <Archive size={14} />
+                                          {estimate.status === 'active' ? 'Archive' : 'Restore'}
+                                        </button>
+                                        
+                                        <div className="border-t border-slate-100 my-1" />
+
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteEstimate(estimate.id, e);
+                                            if (deleteConfirmId !== estimate.id) {
+                                              // Keep open to let them confirm
+                                            } else {
+                                              setOpenDropdownId(null);
+                                            }
+                                          }}
+                                          className={cn(
+                                            "w-full text-left px-4 py-2 text-xs font-bold flex items-center justify-between gap-2 transition-colors",
+                                            deleteConfirmId === estimate.id
+                                              ? "bg-american-red text-white hover:bg-american-red/90"
+                                              : "text-american-red hover:bg-red-50"
+                                          )}
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            <Trash2 size={14} /> 
+                                            {deleteConfirmId === estimate.id ? 'Confirm Delete!' : 'Delete Permanently'}
+                                          </span>
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {loading && (
+              <div className="col-span-full py-20 text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="h-10 w-10 border-4 border-american-blue/20 border-t-american-blue rounded-full animate-spin" />
+                </div>
+                <p className="text-xs font-black uppercase tracking-widest text-[#999999]">Loading your estimates...</p>
+              </div>
+            )}
+
+            {!loading && filteredEstimates.length === 0 && (
+              <div className="col-span-full py-20 text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="h-20 w-20 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#CCCCCC]">
+                    <FileText size={40} />
+                  </div>
+                </div>
                 <div>
-                  {estimate.estimateNumber && (
-                    <div className="mb-2">
-                      <span className="inline-block px-2.5 py-1 bg-american-blue text-white text-[9px] font-black tracking-widest rounded-lg leading-none uppercase">
-                        Estimate #{estimate.estimateNumber}
-                      </span>
-                    </div>
-                  )}
-                  <h3 className="text-xl font-black text-american-blue tracking-tight leading-tight group-hover:text-american-red transition-colors">
-                    {estimate.customerName || 'Unnamed Prospect'}
-                  </h3>
-                  <div className="flex items-center gap-2 text-[#999999] mt-1">
-                    <MapPin size={12} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest truncate">{estimate.customerAddress || 'No Address'}</span>
-                    {estimate.version && estimate.version > 1 && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-american-blue/5 text-american-blue text-[8px] font-black rounded uppercase">v{estimate.version}</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 py-4 border-y-2 border-[#F5F5F7]">
-                  <div>
-                    <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Project Size</p>
-                    <p className="text-xs font-bold text-american-blue truncate">{estimate.linearFeet} LF</p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Created</p>
-                    <p className="text-xs font-bold text-american-blue truncate font-mono">
-                      {new Date(estimate.lastModified || estimate.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-[#CCCCCC] uppercase tracking-widest mb-1">Est. Cost</p>
-                    <p className="text-xs font-black text-emerald-800 truncate font-mono">
-                      {formatCurrency(estimate.totalCost || estimate.manualGrandTotal || 0)}
-                    </p>
-                  </div>
-                </div>
-
-                 <div className="flex items-center justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onLoadEstimate(estimate)}
-                      className="p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all"
-                      title="Open Estimate"
-                    >
-                      <ExternalLink size={18} />
-                    </button>
-
-                    {/* Workflow Actions */}
-                    {(estimate.jobStatus === 'Estimate Pending' || !estimate.jobStatus) && (
-                      <button
-                        type="button"
-                        onClick={(e) => updateJobStatus(estimate.id, 'Estimate Sent', e)}
-                        className="p-3 bg-american-red text-white rounded-xl shadow-lg shadow-american-red/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
-                      >
-                        Send Est
-                      </button>
-                    )}
-                    {estimate.jobStatus === 'Estimate Sent' && (
-                      <button
-                        type="button"
-                        onClick={(e) => updateJobStatus(estimate.id, 'Accepted', e)}
-                        className="p-3 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
-                      >
-                        Mark Accepted
-                      </button>
-                    )}
-                    {estimate.jobStatus === 'Accepted' && (
-                      <button
-                        type="button"
-                        onClick={(e) => updateJobStatus(estimate.id, 'Completed', e)}
-                        className="p-3 bg-american-blue text-white rounded-xl shadow-lg shadow-american-blue/20 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
-                      >
-                        Mark Done
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setView('files');
-                        setSelectedJobPhotos(estimate);
-                      }}
-                      className="p-3 bg-american-blue/5 text-american-blue rounded-xl hover:bg-american-blue/10 hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest px-4"
-                    >
-                      Photos
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setActiveTab('scheduler');
-                      }}
-                      className="p-3 bg-american-blue/5 text-american-blue rounded-xl hover:bg-american-blue/10 hover:scale-110 active:scale-95 transition-all"
-                      title="Schedule"
-                    >
-                      <Calendar size={18} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => toggleArchive(estimate.id, e)}
-                      className="p-3 bg-[#F5F5F7] text-[#999999] hover:text-american-blue rounded-xl hover:scale-110 active:scale-95 transition-all"
-                      title={estimate.status === 'active' ? 'Archive' : 'Restore'}
-                    >
-                      {estimate.status === 'active' ? <Archive size={18} /> : <RotateCcw size={18} />}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => deleteEstimate(estimate.id, e)}
-                    className={cn(
-                      "relative z-30 p-3 rounded-xl flex items-center gap-2",
-                      deleteConfirmId === estimate.id 
-                        ? "bg-american-red text-white animate-pulse px-4" 
-                        : "bg-american-red/10 text-american-red hover:bg-american-red hover:text-white hover:scale-110 active:scale-95 transition-all"
-                    )}
-                    title={deleteConfirmId === estimate.id ? "Confirm Delete" : "Delete Permanently"}
-                  >
-                    <Trash2 size={18} className="pointer-events-none" />
-                    {deleteConfirmId === estimate.id && (
-                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap pointer-events-none">Sure?</span>
-                    )}
-                  </button>
+                  <p className="text-xl font-black text-american-blue">
+                    {savedEstimates.length === 0 ? "No estimates yet" : "No matching estimates found"}
+                  </p>
+                  <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
+                    {savedEstimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
+                  </p>
                 </div>
               </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {loading && (
-          <div className="col-span-full py-20 text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="h-10 w-10 border-4 border-american-blue/20 border-t-american-blue rounded-full animate-spin" />
-            </div>
-            <p className="text-xs font-black uppercase tracking-widest text-[#999999]">Loading your estimates...</p>
-          </div>
-        )}
-
-        {!loading && filteredEstimates.length === 0 && (
-          <div className="col-span-full py-20 text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="h-20 w-20 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#CCCCCC]">
-                <FileText size={40} />
-              </div>
-            </div>
-            <div>
-              <p className="text-xl font-black text-american-blue">
-                {savedEstimates.length === 0 ? "No estimates yet" : "No matching estimates found"}
-              </p>
-              <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">
-                {savedEstimates.length === 0 ? "Start by creating a new estimate in the Estimator." : "Adjust your search or filters"}
-              </p>
-            </div>
-          </div>
-        )}
-            </div>
+            )}
           </motion.div>
         ) : (
           <motion.div
