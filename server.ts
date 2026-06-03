@@ -9,6 +9,7 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, dele
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 
 // Modular Admin APIs
 import { listUsers } from './api/admin/users/list';
@@ -587,6 +588,305 @@ async function startServer() {
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/estimates/:estimateId/public - Fetch estimate for customer signing/review (No auth required)
+  app.get('/api/estimates/:estimateId/public', async (req, res) => {
+    try {
+      const { estimateId } = req.params;
+      if (!db) return res.status(503).json({ error: 'Database service offline' });
+
+      // First try root /estimates
+      const docRef = doc(db, 'estimates', estimateId);
+      const snap = await getDoc(docRef);
+      
+      if (snap.exists()) {
+        return res.json({ id: snap.id, ...snap.data() });
+      }
+
+      // If not found in root, fallback/scan in /users/*/estimates for backward compatibility
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const uDoc of usersSnap.docs) {
+        const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
+        const nestedSnap = await getDoc(nestedRef);
+        if (nestedSnap.exists()) {
+          return res.json({ id: nestedSnap.id, ...nestedSnap.data() });
+        }
+      }
+      
+      return res.status(404).json({ error: 'Estimate not found in database.' });
+    } catch (error: any) {
+      console.error('Error fetching public estimate:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/estimates/:estimateId/viewed - Record customer opening/viewing the estimate
+  app.post('/api/estimates/:estimateId/viewed', async (req, res) => {
+    try {
+      const { estimateId } = req.params;
+      if (!db) return res.status(503).json({ error: 'Database service offline' });
+
+      let targetRef = doc(db, 'estimates', estimateId);
+      let snap = await getDoc(targetRef);
+
+      if (!snap.exists()) {
+        // Find nested estimate if any
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
+          const nestedSnap = await getDoc(nestedRef);
+          if (nestedSnap.exists()) {
+            targetRef = nestedRef;
+            snap = nestedSnap;
+            break;
+          }
+        }
+      }
+
+      if (!snap.exists()) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const docData = snap.data();
+      const now = new Date().toISOString();
+      const updates: any = {
+        customerOpenedAt: docData.customerOpenedAt || now,
+        customerViewedAt: now,
+        customerOpenedIp: (req.ip || req.headers['x-forwarded-for'] || 'unknown').toString(),
+        viewCount: (docData.viewCount || 0) + 1
+      };
+
+      await updateDoc(targetRef, updates);
+      console.log(`Estimate ${estimateId} viewed tracking updated:`, updates);
+      res.json({ success: true, tracking: updates });
+    } catch (error: any) {
+      console.error('Error recording estimate view:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/estimates/:estimateId/decision - Customer Accept/Decline action
+  app.post('/api/estimates/:estimateId/decision', async (req, res) => {
+    try {
+      const { estimateId } = req.params;
+      const { decision, signature, declineReason } = req.body;
+
+      if (!decision || !['accepted', 'declined'].includes(decision)) {
+        return res.status(400).json({ error: 'Invalid decision parameter. Must be "accepted" or "declined".' });
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database service offline' });
+
+      let targetRef = doc(db, 'estimates', estimateId);
+      let snap = await getDoc(targetRef);
+
+      if (!snap.exists()) {
+        // Look up nested
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
+          const nestedSnap = await getDoc(nestedRef);
+          if (nestedSnap.exists()) {
+            targetRef = nestedRef;
+            snap = nestedSnap;
+            break;
+          }
+        }
+      }
+
+      if (!snap.exists()) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const now = new Date().toISOString();
+      const updates: any = {
+        customerDecision: decision,
+        customerDecisionDate: now,
+        updatedAt: now
+      };
+
+      if (decision === 'accepted') {
+        updates.customerSignature = signature || 'Digitally Signed';
+        updates.jobStatus = 'Approved'; // Update CRM/Scheduler jobStatus automatically!
+      } else {
+        updates.customerDeclineReason = declineReason || 'Not specified';
+        updates.jobStatus = 'Declined';
+      }
+
+      await updateDoc(targetRef, updates);
+      console.log(`Estimate ${estimateId} decision recorded:`, updates);
+      res.json({ success: true, decision: updates });
+    } catch (error: any) {
+      console.error('Error processing estimate decision:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/estimates/:estimateId/send - Send estimate URL to customer email (Authenticated user only)
+  app.post('/api/estimates/:estimateId/send', async (req, res) => {
+    try {
+      const { estimateId } = req.params;
+      const { customerEmail, subject, message, senderEmail } = req.body;
+
+      if (!customerEmail) {
+        return res.status(400).json({ error: 'Customer email is required.' });
+      }
+
+      if (!db) return res.status(503).json({ error: 'Database service offline' });
+
+      // Find the estimate document
+      let targetRef = doc(db, 'estimates', estimateId);
+      let snap = await getDoc(targetRef);
+
+      if (!snap.exists()) {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
+          const nestedSnap = await getDoc(nestedRef);
+          if (nestedSnap.exists()) {
+            targetRef = nestedRef;
+            snap = nestedSnap;
+            break;
+          }
+        }
+      }
+
+      if (!snap.exists()) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data();
+      const customerName = estimateData.customerName || 'Value Customer';
+      
+      // Build the direct access portal URL safely mirroring whatever protocol/host was requested
+      const host = req.headers.host || 'localhost:3000';
+      const protocol = req.headers['x-forwarded-proto'] === 'https' || req.secure ? 'https' : 'http';
+      const estimateLink = `${protocol}://${host}/?portal=contract&estimateId=${estimateId}`;
+
+      const defaultSubject = `Fence Installation Contract Agreement - Lone Star Fence Works`;
+      const defaultMessage = `Hello ${customerName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the link below:\n\n${estimateLink}\n\nThank you for choosing Lone Star Fence Works!\n\nBest regards,\nLone Star Fence Works Estimations Department`;
+
+      const mailSubject = subject || defaultSubject;
+      const mailMessage = message || defaultMessage;
+
+      const fromEmail = senderEmail || process.env.SMTP_USER || 'BradenS@LoneStarFenceWorks.com';
+
+      // 1. Send the email using Nodemailer
+      let mailSent = false;
+      let mailError = null;
+
+      try {
+        const smtpHost = process.env.SMTP_HOST;
+        const smtpPort = Number(process.env.SMTP_PORT) || 587;
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+
+        if (smtpHost && smtpUser && smtpPass) {
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: smtpUser,
+              pass: smtpPass
+            }
+          });
+
+          await transporter.sendMail({
+            from: `"${senderEmail ? 'Lone Star Estimator' : 'Lone Star Fence Works'}" <${fromEmail}>`,
+            to: customerEmail,
+            subject: mailSubject,
+            text: mailMessage,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">LONE STAR FENCE WORKS</h1>
+                  <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
+                </div>
+                <div style="padding: 32px 24px; background-color: #ffffff;">
+                  <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Fencing Estimate Prepared for ${customerName}</h2>
+                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
+                    Dear ${customerName},
+                  </p>
+                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
+                    We have compiled and drafted your structural fence installation contract. To review your customized line-by-line pricing and sign off on the workmanship warranty agreement, please click the secure button below:
+                  </p>
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="${estimateLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
+                      Review & Sign Contract Agreement
+                    </a>
+                  </div>
+                  <p style="color: #718096; font-size: 12px; line-height: 1.5;">
+                    If the button doesn't work, copy and paste the following URL into your browser's address bar:<br/>
+                    <a href="${estimateLink}" style="color: #3182ce;">${estimateLink}</a>
+                  </p>
+                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px; margin-top: 24px;">
+                    Our office is checking daily for signed contracts to finalize schedule options. Let us know if you need any adjustments.
+                  </p>
+                  <p style="color: #4a5568; margin-bottom: 0; font-size: 14px;">
+                    Best regards,<br/>
+                    <strong>Braden</strong><br/>
+                    Lone Star Fence Works
+                  </p>
+                </div>
+                <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
+                  <p style="color: #a0aec0; font-size: 11px; margin: 0;">
+                    Lone Star Fence Works &bull; Texas Premium Estimating System &bull; Confidential
+                  </p>
+                </div>
+              </div>
+            `
+          });
+          mailSent = true;
+          console.log(`Email successfully dispatched via SMTP to ${customerEmail}`);
+        } else {
+          console.log(`SMTP credentials are not configured. Falling back to backend logs for local preview delivery.`);
+          console.log("================= SIMULATED OUTBOX MESSAGE =================");
+          console.log(`From: ${fromEmail}`);
+          console.log(`To: ${customerEmail}`);
+          console.log(`Subject: ${mailSubject}`);
+          console.log(`Direct Link: ${estimateLink}`);
+          console.log(`Body:\n${mailMessage}`);
+          console.log("============================================================");
+          mailSent = true;
+        }
+      } catch (err: any) {
+        console.error('Nodemailer SMTP dispatch failed:', err);
+        mailError = err.message || err;
+      }
+
+      // 2. Update the Estimate document to record the send status
+      const now = new Date().toISOString();
+      const existingLogs = estimateData.customerEmailLog || [];
+      const updates: any = {
+        customerEmailSent: true,
+        customerSentAt: now,
+        customerEmailLog: [...existingLogs, {
+          sentAt: now,
+          customerEmail,
+          subject: mailSubject,
+          senderEmail: fromEmail,
+          mailSent,
+          mailError,
+          portalUrl: estimateLink
+        }],
+        updatedAt: now
+      };
+
+      await updateDoc(targetRef, updates);
+
+      res.json({
+        success: true,
+        mailSent,
+        mailError,
+        portalUrl: estimateLink,
+        sentAt: now
+      });
+    } catch (error: any) {
+      console.error('Error in send estimate route:', error);
+      res.status(500).json({ error: error.message || 'Error occurred while sending.' });
     }
   });
 

@@ -240,6 +240,14 @@ export interface Estimate {
   quotes?: SupplierQuote[];
   customLaborItems?: { id: string; name: string; cost: number }[];
   photos?: JobPhoto[];
+
+  // Customer Signature / Portal Engagement Logs
+  customerDecision?: 'accepted' | 'declined' | null;
+  customerSignature?: string;
+  customerDeclineReason?: string;
+  customerDecisionDate?: string;
+  customerOpenedIp?: string;
+  customerEmailLog?: any[];
 }
 
 export interface ScheduleEvent {

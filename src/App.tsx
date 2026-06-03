@@ -21,6 +21,7 @@ import Financials from './components/Financials';
 import EmployeePortal from './components/EmployeePortal';
 import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
+import CustomerSignaturePortal from './components/CustomerSignaturePortal';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
@@ -433,6 +434,7 @@ export default function App() {
   const portalParam = getPortalParam();
   const isEmployeeView = portalParam === 'employee' || portalParam === 'scheduler';
   const isCustomerPortal = portalParam === 'customer';
+  const isContractPortal = portalParam === 'contract';
   
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
     return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
@@ -890,6 +892,27 @@ export default function App() {
 
   if (isCustomerPortal) {
     return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
+  }
+
+  if (isContractPortal) {
+    const params = new URLSearchParams(window.location.search);
+    let estimateId = params.get('estimateId') || params.get('id') || '';
+    if (!estimateId) {
+      const hash = window.location.hash;
+      if (hash.includes('estimateId=')) {
+        estimateId = hash.substring(hash.indexOf('estimateId=') + 11).split('&')[0];
+      } else if (hash.includes('id=')) {
+        estimateId = hash.substring(hash.indexOf('id=') + 3).split('&')[0];
+      }
+    }
+    return (
+      <CustomerSignaturePortal 
+        estimateId={estimateId} 
+        materials={materials} 
+        laborRates={laborRates} 
+        quotes={quotes} 
+      />
+    );
   }
 
   if (!user) {

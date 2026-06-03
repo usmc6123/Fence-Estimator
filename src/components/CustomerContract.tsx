@@ -15,6 +15,7 @@ interface CustomerContractProps {
   aiContractScope: string | null;
   setAiContractScope: (scope: string | null) => void;
   onUpdateEstimate?: (update: Partial<Estimate>) => void;
+  isCustomerView?: boolean;
 }
 
 export default function CustomerContract({ 
@@ -24,7 +25,8 @@ export default function CustomerContract({
   quotes,
   aiContractScope,
   setAiContractScope,
-  onUpdateEstimate
+  onUpdateEstimate,
+  isCustomerView = false
 }: CustomerContractProps) {
   // Resolve materials based on chosen strategy
   const pricingStrategy = estimate.pricingStrategy || 'best';
@@ -342,9 +344,9 @@ export default function CustomerContract({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-20">
+    <div className={cn("max-w-5xl mx-auto space-y-8 pb-20", isCustomerView ? "px-0" : "")}>
       {/* Warning if overrides are active */}
-      {(isGrandTotalOverridden || hasSectionOverrides) && (
+      {(isGrandTotalOverridden || hasSectionOverrides) && !isCustomerView && (
         <div className="mb-6 p-4 bg-american-red/10 border-2 border-american-red rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 print:hidden">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-american-red text-white rounded-lg">
@@ -367,108 +369,110 @@ export default function CustomerContract({
       )}
 
       {/* Action Header */}
-      <div className="bg-white rounded-3xl p-8 shadow-md border border-[#E5E5E5] flex flex-col gap-6 relative overflow-hidden print:hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-5">
-           <FileText size={160} className="text-american-blue" strokeWidth={1} />
-        </div>
-        
-        {/* Top Row: Identity and Actions */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 w-full">
-          <div>
-            <h2 className="text-2xl font-black text-american-blue tracking-tighter uppercase mb-1 leading-none">Customer Agreement</h2>
-            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em] leading-tight opacity-80">Finalize and Print Professional Contract</p>
+      {!isCustomerView && (
+        <div className="bg-white rounded-3xl p-8 shadow-md border border-[#E5E5E5] flex flex-col gap-6 relative overflow-hidden print:hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-5">
+             <FileText size={160} className="text-american-blue" strokeWidth={1} />
           </div>
-
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <button
-              onClick={handleResetManualOverrides}
-              className="px-6 py-5 bg-[#F5F5F5] hover:bg-[#EAEAEA] text-american-blue rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-[#DDD]"
-            >
-              Reset Pricing
-            </button>
-            <button 
-              onClick={handlePrint}
-              className="flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[160px]"
-            >
-              <Printer size={18} />
-              Print
-            </button>
-            
-            <button 
-              onClick={handleSaveContract}
-              disabled={!hasUnsavedChanges}
-              className={`flex items-center justify-center gap-2 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl min-w-[180px] ${
-                hasUnsavedChanges 
-                ? 'bg-american-red text-white hover:scale-105 animate-pulse' 
-                : 'bg-green-600 text-white cursor-default'
-              }`}
-            >
-              {hasUnsavedChanges ? (
-                <>
-                  <Save size={18} />
-                  Save Changes
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={18} />
-                  Saved
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Row: AI Customization */}
-        <div className="relative z-10 w-full pt-8 border-t border-dashed border-[#E5E5E5]">
-          <div className="bg-american-blue group hover:bg-american-blue/95 transition-all p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
-            {/* Background Accent */}
-            <div className="absolute top-0 right-0 p-8 opacity-5">
-              <Sparkles size={120} className="text-white" />
+          
+          {/* Top Row: Identity and Actions */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 w-full">
+            <div>
+              <h2 className="text-2xl font-black text-american-blue tracking-tighter uppercase mb-1 leading-none">Customer Agreement</h2>
+              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-[0.2em] leading-tight opacity-80">Finalize and Print Professional Contract</p>
             </div>
 
-            <div className="flex flex-col lg:flex-row items-center gap-8 relative z-10">
-              <div className="flex-1 w-full flex flex-col gap-3">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-american-red" />
-                    <label className="text-[10px] font-black text-white/80 uppercase tracking-[0.2em]">AI Scope Customization</label>
-                  </div>
-                  <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Natural Language Enhancement</span>
-                </div>
-                <textarea
-                  placeholder="e.g., 'Emphasize the 1-year workmanship warranty and specify use of Japanese Cedar...' or 'Note that color variation is normal for new fences...'"
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  className="w-full h-36 p-6 rounded-2xl text-sm border-0 focus:ring-4 focus:ring-white/10 outline-none transition-all bg-white/10 text-white placeholder:text-white/30 font-medium leading-relaxed resize-none shadow-inner"
-                />
-              </div>
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <button
+                onClick={handleResetManualOverrides}
+                className="px-6 py-5 bg-[#F5F5F5] hover:bg-[#EAEAEA] text-american-blue rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-[#DDD]"
+              >
+                Reset Pricing
+              </button>
+              <button 
+                onClick={handlePrint}
+                className="flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[160px]"
+              >
+                <Printer size={18} />
+                Print
+              </button>
               
-              <div className="w-full lg:w-auto flex flex-col items-center justify-center pt-2">
-                <button 
-                  onClick={handleGenerateAIScope}
-                  disabled={isGenerating}
-                  className={cn(
-                    "w-full lg:w-64 flex flex-col items-center justify-center gap-4 px-10 py-10 rounded-2xl font-black text-xs uppercase tracking-[0.15em] transition-all shadow-2xl border-b-4",
-                    isGenerating 
-                      ? "bg-white/10 text-white/40 border-transparent cursor-not-allowed" 
-                      : "bg-american-red text-white border-american-red/30 hover:bg-american-red/90 hover:-translate-y-1 active:translate-y-0"
-                  )}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="animate-spin" size={32} />
-                  ) : (
-                    <Sparkles size={32} />
-                  )}
-                  <span className="text-center">
-                    {isGenerating ? 'Drafting Technical Narrative...' : ( (aiContractScope || estimate.contractScope) ? 'Regenerate Agreement' : 'Generate AI Agreement')}
-                  </span>
-                </button>
-                <p className="mt-4 text-[9px] font-bold text-white/40 uppercase tracking-widest text-center">Powered by Project Intelligence</p>
+              <button 
+                onClick={handleSaveContract}
+                disabled={!hasUnsavedChanges}
+                className={`flex items-center justify-center gap-2 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl min-w-[180px] ${
+                  hasUnsavedChanges 
+                  ? 'bg-american-red text-white hover:scale-105 animate-pulse' 
+                  : 'bg-green-600 text-white cursor-default'
+                }`}
+              >
+                {hasUnsavedChanges ? (
+                  <>
+                    <Save size={18} />
+                    Save Changes
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    Saved
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Row: AI Customization */}
+          <div className="relative z-10 w-full pt-8 border-t border-dashed border-[#E5E5E5]">
+            <div className="bg-american-blue group hover:bg-american-blue/95 transition-all p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
+              {/* Background Accent */}
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Sparkles size={120} className="text-white" />
+              </div>
+
+              <div className="flex flex-col lg:flex-row items-center gap-8 relative z-10">
+                <div className="flex-1 w-full flex flex-col gap-3">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={14} className="text-american-red" />
+                      <label className="text-[10px] font-black text-white/80 uppercase tracking-[0.2em]">AI Scope Customization</label>
+                    </div>
+                    <span className="text-[8px] font-bold text-white/40 uppercase tracking-widest">Natural Language Enhancement</span>
+                  </div>
+                  <textarea
+                    placeholder="e.g., 'Emphasize the 1-year workmanship warranty and specify use of Japanese Cedar...' or 'Note that color variation is normal for new fences...'"
+                    value={customInstructions}
+                    onChange={(e) => setCustomInstructions(e.target.value)}
+                    className="w-full h-36 p-6 rounded-2xl text-sm border-0 focus:ring-4 focus:ring-white/10 outline-none transition-all bg-white/10 text-white placeholder:text-white/30 font-medium leading-relaxed resize-none shadow-inner"
+                  />
+                </div>
+                
+                <div className="w-full lg:w-auto flex flex-col items-center justify-center pt-2">
+                  <button 
+                    onClick={handleGenerateAIScope}
+                    disabled={isGenerating}
+                    className={cn(
+                      "w-full lg:w-64 flex flex-col items-center justify-center gap-4 px-10 py-10 rounded-2xl font-black text-xs uppercase tracking-[0.15em] transition-all shadow-2xl border-b-4",
+                      isGenerating 
+                        ? "bg-white/10 text-white/40 border-transparent cursor-not-allowed" 
+                        : "bg-american-red text-white border-american-red/30 hover:bg-american-red/90 hover:-translate-y-1 active:translate-y-0"
+                    )}
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="animate-spin" size={32} />
+                    ) : (
+                      <Sparkles size={32} />
+                    )}
+                    <span className="text-center">
+                      {isGenerating ? 'Drafting Technical Narrative...' : ( (aiContractScope || estimate.contractScope) ? 'Regenerate Agreement' : 'Generate AI Agreement')}
+                    </span>
+                  </button>
+                  <p className="mt-4 text-[9px] font-bold text-white/40 uppercase tracking-widest text-center">Powered by Project Intelligence</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Contract Preview Area */}
       <div id="contract-view" className="bg-white rounded-[40px] shadow-2xl border border-[#E5E5E5] overflow-hidden print:border-0 print:shadow-none print:rounded-none">
@@ -495,13 +499,19 @@ export default function CustomerContract({
           <div className="text-right relative z-10">
             <div className="inline-block px-4 py-2 rounded-xl bg-white/10 border border-white/20 mb-4 group transition-all hover:bg-white/20">
               <span className="text-[10px] font-black uppercase tracking-widest opacity-60 mr-2">Project Date:</span>
-              <input 
-                type="text"
-                value={projectDate}
-                onChange={(e) => setProjectDate(e.target.value)}
-                className="text-sm font-bold bg-transparent border-none outline-none text-white text-right w-32 focus:ring-0 cursor-edit print:hidden"
-              />
-              <span className="hidden print:inline text-sm font-bold">{projectDate}</span>
+              {isCustomerView ? (
+                <span className="text-sm font-bold text-white">{projectDate}</span>
+              ) : (
+                <>
+                  <input 
+                    type="text"
+                    value={projectDate}
+                    onChange={(e) => setProjectDate(e.target.value)}
+                    className="text-sm font-bold bg-transparent border-none outline-none text-white text-right w-32 focus:ring-0 cursor-edit print:hidden"
+                  />
+                  <span className="hidden print:inline text-sm font-bold">{projectDate}</span>
+                </>
+              )}
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-american-red italic">Fences with Character</p>
           </div>
@@ -555,7 +565,13 @@ export default function CustomerContract({
               I. Scope of Work & Project Specifications
             </h3>
             
-            { (aiContractScope || estimate.contractScope) ? (
+            { isCustomerView ? (
+              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-semibold bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-8 print:border-0 print:bg-transparent transition-all">
+                <div className="whitespace-pre-wrap text-base font-semibold text-slate-800 leading-relaxed font-sans">
+                  {localAiScope || estimate.contractScope || "Detailed Scope of Work is being finalized."}
+                </div>
+              </div>
+            ) : (aiContractScope || estimate.contractScope) ? (
               <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
                 <textarea
                     value={localAiScope}
@@ -667,17 +683,21 @@ export default function CustomerContract({
                             </div>
                             <div className="text-right">
                               <p className="text-xs font-black text-american-red">
-                                <input 
-                                  type="number" 
-                                  value={((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
-                                  onChange={(e) => {
-                                    const newRate = parseFloat(e.target.value) || 0;
-                                    const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
-                                    newTotals[i] = newRate * run.netLF;
-                                    setSectionTotals(newTotals);
-                                  }}
-                                  className="w-16 bg-transparent text-right outline-none"
-                                /> 
+                                {isCustomerView ? (
+                                  <span>{formatCurrency((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1))}</span>
+                                ) : (
+                                  <input 
+                                    type="number" 
+                                    value={((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
+                                    onChange={(e) => {
+                                      const newRate = parseFloat(e.target.value) || 0;
+                                      const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
+                                      newTotals[i] = newRate * run.netLF;
+                                      setSectionTotals(newTotals);
+                                    }}
+                                    className="w-16 bg-transparent text-right outline-none"
+                                  /> 
+                                )}
                                 <span className="opacity-40">/ FT</span>
                               </p>
                               <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
@@ -688,54 +708,78 @@ export default function CustomerContract({
                             <div className="flex justify-between items-center group">
                               <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Total</span>
                               <div className="flex items-center gap-1">
-                                <span className="text-xs font-bold text-american-blue">$</span>
-                                <input 
-                                  type="number" 
-                                  value={(sectionTotals[i] ?? run.totalFenceCharge).toFixed(2)}
-                                  onChange={(e) => {
-                                    const newVal = parseFloat(e.target.value) || 0;
-                                    const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
-                                    newTotals[i] = newVal;
-                                    setSectionTotals(newTotals);
-                                  }}
-                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                />
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(sectionTotals[i] ?? run.totalFenceCharge)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={(sectionTotals[i] ?? run.totalFenceCharge).toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
+                                        newTotals[i] = newVal;
+                                        setSectionTotals(newTotals);
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
 
                             <div className="flex justify-between items-center group">
                               <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates Total</span>
                               <div className="flex items-center gap-1">
-                                <span className="text-xs font-bold text-american-blue">$</span>
-                                <input 
-                                  type="number" 
-                                  value={(gateTotals[i] ?? run.totalGateCharge).toFixed(2)}
-                                  onChange={(e) => {
-                                    const newVal = parseFloat(e.target.value) || 0;
-                                    const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
-                                    newTotals[i] = newVal;
-                                    setGateTotals(newTotals);
-                                  }}
-                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                />
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(gateTotals[i] ?? run.totalGateCharge)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={(gateTotals[i] ?? run.totalGateCharge).toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
+                                        newTotals[i] = newVal;
+                                        setGateTotals(newTotals);
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
 
                             <div className="flex justify-between items-center group">
                               <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo Total</span>
                               <div className="flex items-center gap-1">
-                                <span className="text-xs font-bold text-american-blue">$</span>
-                                <input 
-                                  type="number" 
-                                  value={(demoTotals[i] ?? run.demoCharge).toFixed(2)}
-                                  onChange={(e) => {
-                                    const newVal = parseFloat(e.target.value) || 0;
-                                    const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
-                                    newTotals[i] = newVal;
-                                    setDemoTotals(newTotals);
-                                  }}
-                                  className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                />
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(demoTotals[i] ?? run.demoCharge)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={(demoTotals[i] ?? run.demoCharge).toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
+                                        newTotals[i] = newVal;
+                                        setDemoTotals(newTotals);
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -759,14 +803,22 @@ export default function CustomerContract({
                 <div className="bg-[#F9F9F9] rounded-3xl p-8 border border-[#E5E5E5] text-center">
                   <p className="text-sm font-bold text-american-blue uppercase">Refer to Quickbooks Estimate for detailed breakdown.</p>
                   <div className="mt-2 flex items-center justify-center gap-1">
-                    <span className="text-xl font-black text-american-blue">$</span>
-                    <input 
-                      type="number"
-                      step="0.01"
-                      value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
-                      onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
-                      className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
-                    />
+                    {isCustomerView ? (
+                      <span className="text-xl font-black text-american-blue">
+                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-xl font-black text-american-blue">$</span>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
+                          className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -797,14 +849,22 @@ export default function CustomerContract({
                                 <p className="text-[10px] font-bold text-[#999999] uppercase tracking-wider">{run.name} • Professionally Installed</p>
                               </div>
                               <div className="flex items-center gap-1 bg-white border border-[#E5E5E5] rounded-xl px-4 py-2 shadow-sm">
-                                <span className="text-xs font-black text-american-blue">$</span>
-                                <input 
-                                  type="number"
-                                  value={displayPrice.toFixed(2)}
-                                  onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
-                                  className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
-                                  step="0.01"
-                                />
+                                {isCustomerView ? (
+                                  <span className="font-black text-american-blue text-sm">
+                                    {formatCurrency(displayPrice)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-black text-american-blue">$</span>
+                                    <input 
+                                      type="number"
+                                      value={displayPrice.toFixed(2)}
+                                      onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
+                                      className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
+                                      step="0.01"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -828,21 +888,29 @@ export default function CustomerContract({
                 </div>
                 <div className="relative z-10 text-center md:text-right w-full md:w-auto">
                   <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
-                    <span className="text-3xl font-black tabular-nums tracking-tighter self-center">$</span>
-                    <input 
-                      type="number"
-                      step="0.01"
-                      value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                        setManualGrandTotal(val);
-                        if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
-                      }}
-                      className={cn(
-                        "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
-                        isGrandTotalOverridden ? "text-american-red italic" : "text-white"
-                      )}
-                    />
+                    {isCustomerView ? (
+                      <span className="text-5xl md:text-7xl font-black tabular-nums tracking-tighter leading-none text-white">
+                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-3xl font-black tabular-nums tracking-tighter self-center">$</span>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                            setManualGrandTotal(val);
+                            if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
+                          }}
+                          className={cn(
+                            "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
+                            isGrandTotalOverridden ? "text-american-red italic" : "text-white"
+                          )}
+                        />
+                      </>
+                    )}
                   </div>
                   {isGrandTotalOverridden && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(editedGrandTotal)}</p>
