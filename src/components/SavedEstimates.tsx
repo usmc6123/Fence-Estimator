@@ -135,6 +135,10 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     }
 
     return matchesSearch && matchesFilter;
+  }).sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.date).getTime() || 0;
+    const timeB = new Date(b.createdAt || b.date).getTime() || 0;
+    return timeB - timeA;
   });
 
   if (!user) {
