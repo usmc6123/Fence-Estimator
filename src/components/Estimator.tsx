@@ -48,6 +48,24 @@ export default function Estimator({
   onNavigate,
   isAdminVerifying = false
 }: EstimatorProps) {
+  // Gracefully clean up case where last name is misplaced in the email field
+  const resolvedClientName = React.useMemo(() => {
+    let name = estimate.customerName || 'Valued Customer';
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@') && name && !name.toLowerCase().includes(email.toLowerCase())) {
+      name = `${name} ${email}`.trim();
+    }
+    return name;
+  }, [estimate.customerName, estimate.customerEmail]);
+
+  const resolvedClientEmail = React.useMemo(() => {
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@')) {
+      return '';
+    }
+    return email;
+  }, [estimate.customerEmail]);
+
   const [step, setStep] = React.useState(() => {
     return Number(localStorage.getItem('fence_pro_estimator_step')) || 1;
   });
@@ -1965,8 +1983,8 @@ export default function Estimator({
                  <div>
                    <h3 className="text-sm font-black uppercase tracking-widest text-white/60 mb-2">Customer Summary</h3>
                    <div className="grid gap-2">
-                     <p className="text-2xl font-black italic">"{estimate.customerName || 'No Name Provided'}"</p>
-                     <p className="text-sm font-bold opacity-80">{estimate.customerEmail || 'No Email'}</p>
+                     <p className="text-2xl font-black italic">"{resolvedClientName}"</p>
+                     <p className="text-sm font-bold opacity-80">{resolvedClientEmail || 'No Email'}</p>
                      <p className="text-sm font-bold opacity-80">{estimate.customerPhone || 'No Phone'}</p>
                      <p className="text-xs font-bold opacity-60 mt-2">{estimate.customerAddress || 'No Address'}</p>
                    </div>

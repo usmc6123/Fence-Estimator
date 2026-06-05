@@ -4,7 +4,7 @@ import {
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
-  FolderOpen, ArrowLeft, ChevronDown
+  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
@@ -29,6 +29,91 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
+
+  // Send Estimate Modal States
+  const [sendModalEstimate, setSendModalEstimate] = React.useState<SavedEstimate | null>(null);
+  const [senderEmail, setSenderEmail] = React.useState('BradenS@LoneStarFenceWorks.com');
+  const [customerEmail, setCustomerEmail] = React.useState('');
+  const [emailSubject, setEmailSubject] = React.useState('');
+  const [emailMessage, setEmailMessage] = React.useState('');
+  const [isSendingEmail, setIsSendingEmail] = React.useState(false);
+  const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
+  const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (sendModalEstimate) {
+      setCustomerEmail(sendModalEstimate.customerEmail || '');
+      setSenderEmail('BradenS@LoneStarFenceWorks.com');
+      setEmailSubject(`Fence Installation Contract Agreement - Lone Star Fence Works`);
+      
+      const host = window.location.host;
+      const protocol = window.location.protocol;
+      const estimateLink = `${protocol}//${host}/?portal=contract&estimateId=${sendModalEstimate.id}`;
+      
+      const clientName = sendModalEstimate.customerName || 'Valued Customer';
+      setEmailMessage(`Hello ${clientName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the secure link below:\n\n${estimateLink}\n\nThank you for choosing Lone Star Fence Works!\n\nBest regards,\nLone Star Fence Works Estimations Department`);
+      setSendSuccessMessage(null);
+      setSendErrorMessage(null);
+    }
+  }, [sendModalEstimate]);
+
+  const handleSendEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sendModalEstimate) return;
+    if (!customerEmail) {
+      setSendErrorMessage('Customer email is required.');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setSendSuccessMessage(null);
+    setSendErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/estimates/${sendModalEstimate.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerEmail,
+          senderEmail,
+          subject: emailSubject,
+          message: emailMessage
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to transmit email package.');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setSendSuccessMessage('Fencing contract estimate pack successfully sent!');
+        
+        // Update local estimate list jobStatus immediately in primary React parent state
+        setSavedEstimates(prev => prev.map(est => {
+          if (est.id === sendModalEstimate.id) {
+            return {
+              ...est,
+              jobStatus: 'Estimate Sent',
+              customerEmail: customerEmail,
+              lastModified: new Date().toISOString()
+            };
+          }
+          return est;
+        }));
+
+        setTimeout(() => {
+          setSendModalEstimate(null);
+        }, 1500);
+      } else {
+        setSendErrorMessage(result.error || 'Server rejected email relay config.');
+      }
+    } catch (err: any) {
+      setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   const [loading] = React.useState(false);
 
@@ -253,23 +338,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               ))}
             </div>
 
-            <div className="bg-white rounded-[32px] border border-gray-200 overflow-hidden shadow-xl">
+            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-2xl">
               <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[900px] border-collapse text-left text-sm text-american-blue">
                   <thead>
-                    <tr className="bg-[#F9F9FA] border-b border-[#E5E5E5]">
-                      <th className="py-4 px-6 w-12 text-[#999999] font-black uppercase text-[10px] tracking-wider">
+                    <tr className="bg-slate-50/50 border-b border-[#E5E5E5]">
+                      <th className="py-2.5 px-4 w-12 text-[#999999] font-black uppercase text-[9px] tracking-wider">
                         <input 
                           type="checkbox" 
                           className="rounded border-gray-300 text-american-blue focus:ring-american-blue/20" 
                         />
                       </th>
-                      <th className="py-4 px-4 text-[#999999] font-black uppercase text-[10px] tracking-wider">Date</th>
-                      <th className="py-4 px-4 text-[#999999] font-black uppercase text-[10px] tracking-wider">Est #</th>
-                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Customer Name / Address</th>
-                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Est. Cost</th>
-                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider">Status</th>
-                      <th className="py-4 px-6 text-[#999999] font-black uppercase text-[10px] tracking-wider text-right">Actions</th>
+                      <th className="py-2.5 px-3 text-[#999999] font-black uppercase text-[9px] tracking-wider">Date</th>
+                      <th className="py-2.5 px-3 text-[#999999] font-black uppercase text-[9px] tracking-wider">Est #</th>
+                      <th className="py-2.5 px-4 text-[#999999] font-black uppercase text-[9px] tracking-wider">Customer Name & Address</th>
+                      <th className="py-2.5 px-4 text-[#999999] font-black uppercase text-[9px] tracking-wider">Est. Cost</th>
+                      <th className="py-2.5 px-4 text-[#999999] font-black uppercase text-[9px] tracking-wider">Status</th>
+                      <th className="py-2.5 px-4 text-[#999999] font-black uppercase text-[9px] tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -290,6 +375,13 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           year: '2-digit'
                         });
 
+                        // Gracefully clean up case where last name is misplaced in the email field for the row preview
+                        let namePreview = estimate.customerName || 'Valued Customer';
+                        const emailField = estimate.customerEmail || '';
+                        if (emailField && !emailField.includes('@') && namePreview && !namePreview.toLowerCase().includes(emailField.toLowerCase())) {
+                          namePreview = `${namePreview} ${emailField}`.trim();
+                        }
+
                         return (
                           <motion.tr 
                             layout
@@ -302,21 +394,21 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                               estimate.status === 'archived' && "opacity-60 bg-gray-50/50"
                             )}
                           >
-                            <td className="py-4 px-6 w-12">
+                            <td className="py-2 px-4 w-12 text-center">
                               <input 
                                 type="checkbox" 
                                 className="rounded border-gray-300 text-american-blue focus:ring-american-blue/20" 
                               />
                             </td>
-                            <td className="py-4 px-4 font-bold text-[#555555] whitespace-nowrap">
+                            <td className="py-2 px-3 font-bold text-[#555555] text-xs whitespace-nowrap">
                               {dateFormatted}
                             </td>
-                            <td className="py-4 px-4 font-bold text-[#111111] font-mono text-xs whitespace-nowrap">
+                            <td className="py-2 px-3 font-bold text-[#111111] font-mono text-xs whitespace-nowrap">
                               {estimate.estimateNumber || 1201}
                             </td>
-                            <td className="py-4 px-6 text-american-blue">
+                            <td className="py-2 px-4 text-american-blue">
                               <div className="font-bold text-sm text-[#111111] flex items-center gap-2">
-                                {estimate.customerName || 'Unnamed Prospect'}
+                                {namePreview}
                                 {estimate.version && estimate.version > 1 && (
                                   <span className="px-1.5 py-0.5 bg-american-blue/5 text-american-blue text-[8px] font-black rounded uppercase">v{estimate.version}</span>
                                 )}
@@ -328,76 +420,97 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                 <span className="font-bold text-gray-500">{estimate.linearFeet} LF</span>
                               </div>
                             </td>
-                            <td className="py-4 px-6 font-bold text-[#111111] font-mono text-sm leading-none whitespace-nowrap">
+                            <td className="py-2 px-4 font-bold text-[#111111] font-mono text-xs leading-none whitespace-nowrap">
                               {formatCurrency(estimate.totalCost || estimate.manualGrandTotal || 0)}
                             </td>
-                            <td className="py-4 px-6 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                {isAcceptedOrCompleted ? (
-                                  <div className="flex items-center justify-center text-emerald-600 rounded-full shrink-0">
-                                    <CheckCircle2 size={16} fill="#10B981" className="text-white" />
+                            <td className="py-2.5 px-4 whitespace-nowrap">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  {estimate.jobStatus === 'Completed' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
+                                      <Check size={10} /> Completed
+                                    </span>
+                                  ) : estimate.jobStatus === 'Accepted' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 animate-pulse">
+                                      <CheckCircle2 size={10} fill="#10B981" className="text-white" /> Accepted
+                                    </span>
+                                  ) : estimate.jobStatus === 'Estimate Sent' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100">
+                                      <Send size={10} /> Sent
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
+                                      <Clock size={10} /> Draft
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Engagement & Portal View Status Logs */}
+                                {(estimate as any).customerViewedAt || (estimate as any).customerOpenedAt ? (
+                                  <div className="flex items-center gap-1 text-[10px] text-[#2563EB] font-bold">
+                                    <Eye size={11} className="text-blue-500 animate-bounce" />
+                                    <span>
+                                      Viewed {new Date((estimate as any).customerViewedAt || (estimate as any).customerOpenedAt).toLocaleDateString('en-US', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}
+                                      {((estimate as any).viewCount || 1) > 1 && ` (${(estimate as any).viewCount}x)`}
+                                    </span>
                                   </div>
-                                ) : (
-                                  <div className="h-4 w-4 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 shrink-0">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                ) : estimate.jobStatus === 'Estimate Sent' ? (
+                                  <div className="text-[10px] text-gray-400 font-bold flex items-center gap-1 pl-1">
+                                    <Clock size={10} /> Unopened
+                                  </div>
+                                ) : null}
+
+                                {estimate.customerDecision === 'accepted' && (
+                                  <div className="text-[10px] text-emerald-600 font-black uppercase tracking-widest pl-1 mt-0.5">
+                                    ✓ Signed by {estimate.customerSignature}
                                   </div>
                                 )}
-                                <div className="leading-tight">
-                                  <div className="text-xs font-bold text-[#222222]">
-                                    {estimate.jobStatus === 'Completed' ? 'Completed' :
-                                     estimate.jobStatus === 'Accepted' ? 'Accepted' :
-                                     estimate.jobStatus === 'Estimate Sent' ? 'Sent' : 'Pending'}
+                                {estimate.customerDecision === 'declined' && (
+                                  <div className="text-[10px] text-red-600 font-black uppercase tracking-widest pl-1 mt-0.5 max-w-[150px] truncate" title={estimate.customerDeclineReason}>
+                                    ✗ Declined: {estimate.customerDeclineReason}
                                   </div>
-                                  <div className="text-[10px] text-gray-400 font-medium">
-                                    {estimate.jobStatus === 'Completed' ? `Finished ${lastModFormatted}` :
-                                     estimate.jobStatus === 'Accepted' ? `Viewed ${lastModFormatted}` :
-                                     estimate.jobStatus === 'Estimate Sent' ? `Sent ${lastModFormatted}` :
-                                     `Viewed ${dateFormatted}`}
-                                  </div>
-                                </div>
+                                )}
                               </div>
                             </td>
-                            <td className="py-4 px-6 text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-2.5 text-xs">
+                            <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2 text-xs">
                                 <button
                                   type="button"
                                   onClick={() => onLoadEstimate(estimate)}
-                                  className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                  className="px-2.5 py-1.5 rounded-lg font-bold bg-[#F5F5F7] text-american-blue hover:bg-slate-200 transition-all cursor-pointer flex items-center gap-1 border border-[#E5E5E5]"
                                 >
-                                  View/Edit
+                                  Edit
                                 </button>
                                 
-                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setSendModalEstimate(estimate);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg font-bold bg-american-blue text-white hover:bg-[#0b3c8a] transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                  {estimate.jobStatus === 'Estimate Sent' ? 'Resend' : 'Send'}
+                                </button>
 
-                                {isPending && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => updateJobStatus(estimate.id, 'Estimate Sent', e)}
-                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
-                                  >
-                                    Send
-                                  </button>
-                                )}
-                                {isSent && (
+                                {estimate.jobStatus === 'Estimate Sent' && (
                                   <button
                                     type="button"
                                     onClick={(e) => updateJobStatus(estimate.id, 'Accepted', e)}
-                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all cursor-pointer"
                                   >
-                                    Mark accepted
+                                    Accept
                                   </button>
                                 )}
                                 {estimate.jobStatus === 'Accepted' && (
                                   <button
                                     type="button"
                                     onClick={(e) => updateJobStatus(estimate.id, 'Completed', e)}
-                                    className="font-bold text-[#1a5fcf] hover:text-[#0b3c8a] hover:underline transition-all cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-all cursor-pointer"
                                   >
-                                    Convert to invoice
+                                    Invoice
                                   </button>
-                                )}
-                                {estimate.jobStatus === 'Completed' && (
-                                  <span className="text-xs font-bold text-gray-400 capitalize">Invoiced</span>
                                 )}
 
                                 <div className="relative inline-block text-left" id={`dropdown-wrapper-${estimate.id}`}>
@@ -407,7 +520,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                       e.stopPropagation();
                                       setOpenDropdownId(openDropdownId === estimate.id ? null : estimate.id);
                                     }}
-                                    className="p-1 hover:bg-slate-100 rounded-md transition-all text-[#444444] inline-flex items-center gap-0.5 justify-center min-h-[28px] min-w-[28px] border border-transparent hover:border-gray-200"
+                                    className="p-1.5 hover:bg-slate-100 rounded-lg transition-all text-[#444444] inline-flex items-center justify-center min-h-[32px] min-w-[32px] border border-[#E5E5E5]"
                                   >
                                     <ChevronDown size={14} className="text-gray-500" />
                                   </button>
@@ -526,6 +639,138 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                 </div>
               </div>
             )}
+
+            {/* Send Estimate Email Modal Popup */}
+            <AnimatePresence>
+              {sendModalEstimate && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
+                  >
+                    <div className="p-6 bg-gradient-to-r from-american-blue to-[#0b2b5a] text-white flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 p-2.5 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                          <Mail size={20} className="text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black uppercase tracking-wider">Send Contract Estimate</h3>
+                          <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">Lone Star Dispatch Center</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSendModalEstimate(null)}
+                        className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center text-sm font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSendEmailSubmit} className="p-6 space-y-4 text-left">
+                      {sendSuccessMessage && (
+                        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold uppercase tracking-wider flex items-center gap-2">
+                          <CheckCircle2 size={16} fill="#10B981" className="text-white shadow" />
+                          <span>{sendSuccessMessage}</span>
+                        </div>
+                      )}
+
+                      {sendErrorMessage && (
+                        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-bold uppercase tracking-wider flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0" />
+                          <span>{sendErrorMessage}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Sender Email */}
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Sender (My Email)</label>
+                          <input
+                            type="email"
+                            required
+                            value={senderEmail}
+                            onChange={(e) => setSenderEmail(e.target.value)}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
+                          />
+                        </div>
+
+                        {/* Customer Email */}
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Recipient (Customer Email)</label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="customer@email.com"
+                            value={customerEmail}
+                            onChange={(e) => setCustomerEmail(e.target.value)}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Email Subject */}
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Email Subject</label>
+                        <input
+                          type="text"
+                          required
+                          value={emailSubject}
+                          onChange={(e) => setEmailSubject(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
+                        />
+                      </div>
+
+                      {/* Email Body Message */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] font-black uppercase tracking-wider text-slate-500">Email Message Payload</label>
+                          <span className="text-[8px] font-bold tracking-widest text-[#9333EA] uppercase bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
+                            Auto-Injected Link
+                          </span>
+                        </div>
+                        <textarea
+                          required
+                          rows={6}
+                          value={emailMessage}
+                          onChange={(e) => setEmailMessage(e.target.value)}
+                          className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-american-blue leading-relaxed resize-none font-sans"
+                        />
+                      </div>
+
+                      <div className="pt-4 flex gap-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setSendModalEstimate(null)}
+                          className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSendingEmail}
+                          className="flex-1 py-2.5 bg-american-blue text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all hover:bg-[#0b2b5a] disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-american-blue/15"
+                        >
+                          {isSendingEmail ? (
+                            <>
+                              <div className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin shrink-0" />
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send size={12} className="text-white" />
+                              <span>Send Package</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
           </motion.div>
         ) : (
           <motion.div

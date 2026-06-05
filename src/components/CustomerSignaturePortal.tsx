@@ -37,6 +37,26 @@ export default function CustomerSignaturePortal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Gracefully clean up case where last name is misplaced in the email field
+  const resolvedClientName = React.useMemo(() => {
+    if (!estimate) return 'Valued Customer';
+    let name = estimate.customerName || 'Valued Customer';
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@') && name && !name.toLowerCase().includes(email.toLowerCase())) {
+      name = `${name} ${email}`.trim();
+    }
+    return name;
+  }, [estimate]);
+
+  const resolvedClientEmail = React.useMemo(() => {
+    if (!estimate) return '';
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@')) {
+      return '';
+    }
+    return email;
+  }, [estimate]);
+  
   // Modals for signing / declining
   const [showSignModal, setShowSignModal] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
@@ -59,7 +79,8 @@ export default function CustomerSignaturePortal({
         }
         const data = await response.json();
         setEstimate(data);
-        setCustomerEmail(data.customerEmail || '');
+        const initialEmail = data.customerEmail || '';
+        setCustomerEmail(initialEmail.includes('@') ? initialEmail : '');
         
         // Notify the server that the estimate was opened/viewed
         fetch(`/api/estimates/${estimateId}/viewed`, { method: 'POST' })
@@ -230,7 +251,7 @@ export default function CustomerSignaturePortal({
                 <span className="text-[10px] font-bold text-slate-300 font-mono">#{estimate.estimateNumber || 'Draft'}</span>
               </div>
               <h1 className="text-sm md:text-base font-black uppercase tracking-tight">
-                Review & Approvals &bull; {estimate.customerName}
+                Review & Approvals &bull; {resolvedClientName}
               </h1>
             </div>
           </div>

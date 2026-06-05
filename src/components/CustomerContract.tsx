@@ -28,6 +28,24 @@ export default function CustomerContract({
   onUpdateEstimate,
   isCustomerView = false
 }: CustomerContractProps) {
+  // Gracefully clean up case where last name is misplaced in the email field
+  const resolvedClientName = React.useMemo(() => {
+    let name = estimate.customerName || 'Valued Customer';
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@') && name && !name.toLowerCase().includes(email.toLowerCase())) {
+      name = `${name} ${email}`.trim();
+    }
+    return name;
+  }, [estimate.customerName, estimate.customerEmail]);
+
+  const resolvedClientEmail = React.useMemo(() => {
+    const email = estimate.customerEmail || '';
+    if (email && !email.includes('@')) {
+      return '';
+    }
+    return email;
+  }, [estimate.customerEmail]);
+
   // Resolve materials based on chosen strategy
   const pricingStrategy = estimate.pricingStrategy || 'best';
   const selectedSupplier = estimate.selectedSupplier || '';
@@ -299,7 +317,7 @@ export default function CustomerContract({
         Your tone is professional, confident, and direct. No fluff. 
         Generate a detailed, contractor-grade Scope of Work that protects the contractor legally.
         
-        Customer: ${estimate.customerName || 'Valued Customer'}
+        Customer: ${resolvedClientName}
         
         Project Sections & Details:
         ${data.runs.map((run, index) => {
@@ -525,14 +543,14 @@ export default function CustomerContract({
               <div className="space-y-4">
                 <div>
                   <label className="block text-[8px] font-black text-american-blue uppercase tracking-widest opacity-40">Client Name</label>
-                  <p className="text-xl font-bold text-american-blue">{estimate.customerName || 'Valued Customer'}</p>
+                  <p className="text-xl font-bold text-american-blue">{resolvedClientName}</p>
                 </div>
                 <div>
                   <label className="block text-[8px] font-black text-american-blue uppercase tracking-widest opacity-40">Installation Address</label>
                   <p className="text-sm font-bold text-[#444444] leading-relaxed">{estimate.customerAddress || 'No address specified'}</p>
                 </div>
-                {(estimate.customerPhone || estimate.customerEmail) && (
-                  <p className="text-xs font-bold text-[#666666]">{estimate.customerPhone} {estimate.customerEmail && `• ${estimate.customerEmail}`}</p>
+                {(estimate.customerPhone || resolvedClientEmail) && (
+                  <p className="text-xs font-bold text-[#666666]">{estimate.customerPhone} {resolvedClientEmail && `• ${resolvedClientEmail}`}</p>
                 )}
               </div>
             </div>
@@ -973,7 +991,7 @@ export default function CustomerContract({
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Date</span>
                 </div>
                 <div className="pt-4">
-                  <p className="text-lg font-bold text-american-blue uppercase">{estimate.customerName || '___________________________'}</p>
+                  <p className="text-lg font-bold text-american-blue uppercase">{resolvedClientName || '___________________________'}</p>
                 </div>
               </div>
               <div className="space-y-6">
