@@ -294,12 +294,23 @@ function JobDetailView({ job, onBack, expenses }: { job: SavedEstimate, onBack: 
 
   const handleStatusChange = async (newStatus: JobStatus) => {
     try {
-      await updateDoc(getEstimateDoc(db, job.id), {
-        jobStatus: newStatus,
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: job.id,
+          jobStatus: newStatus
+        })
       });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
     } catch (error) {
-       handleFirestoreError(error, OperationType.UPDATE, `estimates/${job.id}`);
+       console.error('Failed to update job status via API:', error);
     }
   };
 

@@ -293,11 +293,25 @@ export function useCustomerEstimator(
     }
 
     try {
-      // 1. Save to Firestore (Attempt cloud sync)
+      // 1. Save to Firestore (Attempt cloud sync via API)
       try {
-        await setDoc(getEstimateDoc(db, estId), cleanedCustomerEstimateDoc);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            id: estId,
+            ...cleanedCustomerEstimateDoc
+          })
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
       } catch (writeErr) {
-        console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
+        console.warn('Cloud API save failed, preserved successfully in local offline ledger:', writeErr);
         // We catch this gracefully to prevent offline/permission errors from blocking the client experience
       }
 

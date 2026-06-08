@@ -389,9 +389,23 @@ export default function Estimator({
 
     try {
       try {
-        await setDoc(getEstimateDoc(db, newId), estimateToSave);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            id: newId,
+            ...estimateToSave
+          })
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
       } catch (writeErr) {
-        console.warn('Cloud Firestore save failed, preserved successfully in local offline ledger:', writeErr);
+        console.warn('Cloud API save failed, preserved successfully in local offline ledger:', writeErr);
       }
       setShowSuccess(true);
 

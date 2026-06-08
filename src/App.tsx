@@ -849,7 +849,6 @@ export default function App() {
     // If the estimate has an ID and the user is logged in, sync the specific update to Firestore
     if (estimate.id && user) {
       try {
-        const docRef = getEstimateDoc(db, estimate.id);
         const updateWithTimestamp = {
           ...update,
           lastModified: new Date().toISOString()
@@ -860,9 +859,24 @@ export default function App() {
             delete (updateWithTimestamp as any)[key];
           }
         });
-        await updateDoc(docRef, updateWithTimestamp);
+
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/update', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            id: estimate.id,
+            ...updateWithTimestamp
+          })
+        });
+        if (!response.ok) {
+          throw new Error('REST API estimate update failed');
+        }
       } catch (error) {
-        console.error('Failed to auto-sync estimate update:', error);
+        console.error('Failed to auto-sync estimate update via API:', error);
       }
     }
   };

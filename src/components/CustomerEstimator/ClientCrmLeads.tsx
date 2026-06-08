@@ -169,11 +169,22 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
   // Update status
   const handleUpdateStatus = async (leadId: string, newStatus: string) => {
     try {
-      await updateDoc(getEstimateDoc(db, leadId), {
-        status: newStatus,
-        jobStatus: newStatus === 'New' ? 'Estimate Pending' : newStatus === 'Contacted' ? 'Contacted' : 'Quote Approved',
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: leadId,
+          status: newStatus,
+          jobStatus: newStatus === 'New' ? 'Estimate Pending' : newStatus === 'Contacted' ? 'Contacted' : 'Quote Approved'
+        })
       });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
       
       // Update local state
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
@@ -181,7 +192,7 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
         setSelectedLead((prev: any) => ({ ...prev, status: newStatus }));
       }
     } catch (err) {
-      console.error('Error updating state status:', err);
+      console.error('Error updating state status via API:', err);
     }
   };
 
@@ -191,7 +202,18 @@ export default function ClientCrmLeads({ onLeadsCountChange }: ClientCrmLeadsPro
       return;
     }
     try {
-      await deleteDoc(getEstimateDoc(db, leadId));
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({ id: leadId })
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
       
       // Let's also remove it from localStorage for parity!
       try {

@@ -341,7 +341,21 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
 
     try {
-        await setDoc(getEstimateDoc(db, dossierId), newDossier);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({
+                id: dossierId,
+                ...newDossier
+            })
+        });
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
         await scheduleEstimate(dossierId, selectedDate);
         setNewDossierData({ name: '', phone: '', address: '', email: '' });
         setIsCreatingNewDossier(false);
@@ -368,13 +382,24 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
     try {
-      const docRef = getEstimateDoc(db, estimateId);
-      await updateDoc(docRef, {
-        scheduledStartDate: startDateStr,
-        scheduledEndDate: endDateStr,
-        scheduledDuration: duration,
-        jobStatus: 'In Progress' as JobStatus
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: estimateId,
+          scheduledStartDate: startDateStr,
+          scheduledEndDate: endDateStr,
+          scheduledDuration: duration,
+          jobStatus: 'In Progress' as JobStatus
+        })
       });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
       setShowEventModal(false);
     } catch (error) {
       console.error('Failed to schedule job:', error);
@@ -393,12 +418,23 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           return;
       }
 
-      const docRef = getEstimateDoc(db, estimateId);
-      await updateDoc(docRef, {
-        scheduledStartDate: newDateStr,
-        scheduledEndDate: endStr,
-        scheduledDuration: newDuration
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: estimateId,
+          scheduledStartDate: newDateStr,
+          scheduledEndDate: endStr,
+          scheduledDuration: newDuration
+        })
       });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
       
       setIsRescheduling(false);
       setShowEventModal(false);
@@ -473,12 +509,23 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         await deleteDoc(doc(db, 'schedule_events', id));
     } else {
-        const docRef = getEstimateDoc(db, id);
-        await updateDoc(docRef, {
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/update', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            id,
             scheduledStartDate: null,
             scheduledEndDate: null,
             jobStatus: 'Accepted' as JobStatus
+          })
         });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
     }
     setShowEventModal(false);
   };

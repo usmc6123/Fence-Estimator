@@ -202,14 +202,27 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
 
     try {
-      await updateDoc(getEstimateDoc(db, id), {
-        jobStatus: status,
-        status: 'active',
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id,
+          jobStatus: status,
+          status: 'active'
+        })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to update estimate status');
+      }
       fetchEstimates();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    } catch (error: any) {
+      console.error('Failed to update job status:', error);
+      alert(error.message || 'Failed to update job status');
     }
   };
 
@@ -242,10 +255,22 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       // 3. Delete from firestore if user is logged in
       if (user) {
         try {
-          await deleteDoc(getEstimateDoc(db, id));
+          const token = localStorage.getItem('company_admin_token');
+          const response = await fetch('/api/estimates/delete', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({ id })
+          });
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to delete estimate');
+          }
           fetchEstimates();
-        } catch (error) {
-          console.warn('Firestore server-side delete operation rejected:', error);
+        } catch (error: any) {
+          console.warn('REST API server-side delete operation rejected:', error);
         }
       }
     } else {
@@ -264,13 +289,25 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!estimate) return;
 
     try {
-      await updateDoc(getEstimateDoc(db, id), {
-        status: estimate.status === 'archived' ? 'active' : 'archived',
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id,
+          status: estimate.status === 'archived' ? 'active' : 'archived'
+        })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to toggle archive');
+      }
       fetchEstimates();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    } catch (error: any) {
+      console.error('Failed to toggle archive status:', error);
     }
   };
 
@@ -280,14 +317,26 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
 
     try {
-      await updateDoc(getEstimateDoc(db, id), {
-        jobStatus: 'Accepted',
-        status: 'active', // Ensure it's not archived
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id,
+          jobStatus: 'Accepted',
+          status: 'active'
+        })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to accept job');
+      }
       fetchEstimates();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    } catch (error: any) {
+      console.error('Failed to accept job:', error);
     }
   };
   
@@ -297,14 +346,26 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     if (!user) return;
     
     try {
-      await updateDoc(getEstimateDoc(db, id), {
-        jobStatus: 'Completed',
-        status: 'active',
-        lastModified: new Date().toISOString()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id,
+          jobStatus: 'Completed',
+          status: 'active'
+        })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to complete job');
+      }
       fetchEstimates();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
+    } catch (error: any) {
+      console.error('Failed to complete job:', error);
     }
   };
 
