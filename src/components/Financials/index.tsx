@@ -54,22 +54,35 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
 
   // States for real data
   const [expenses, setExpenses] = React.useState<JobExpense[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchExpenses = React.useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/expenses/list', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setExpenses(data);
+      } else {
+        console.error('Failed to fetch expenses via API:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Network error fetching expenses via API:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   // Fetch data if user is logged in
   React.useEffect(() => {
-    if (!user) return;
-
-    // Fetch all expenses for all jobs (for global reporting/search)
-    const qExp = query(collection(db, 'expenses'), where('companyId', '==', 'lonestarfence'), orderBy('date', 'desc'));
-    const unsubExp = onSnapshot(qExp, 
-      (snapshot) => setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as JobExpense))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'expenses')
-    );
-
-    return () => {
-      unsubExp();
-    };
-  }, [user]);
+    fetchExpenses();
+  }, [fetchExpenses]);
 
   const selectedJob = savedEstimates.find(est => est.id === selectedJobId);
 
@@ -149,7 +162,9 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
               onLink={async (id, eid) => {
                 const docRef = doc(db, 'expenses', id);
                 await updateDoc(docRef, { estimateId: eid });
+                fetchExpenses();
               }}
+              onDeleteSuccess={fetchExpenses}
             />
           )}
           {activeSubTab === 'reports' && <ReportsView transactions={expenses.map(e => ({ ...e, type: 'Expense', status: 'Cleared' } as any))} />}
@@ -162,6 +177,7 @@ export default function Financials({ savedEstimates, user }: FinancialsProps) {
         user={user}
         jobs={savedEstimates.filter(e => e.jobStatus === 'Accepted' || e.jobStatus === 'In Progress')}
         initialJobId={selectedJobId || undefined}
+        onSaveSuccess={fetchExpenses}
       />
     </div>
   );
@@ -424,7 +440,7 @@ function JobDetailView({ job, onBack, expenses }: { job: SavedEstimate, onBack: 
   );
 }
 
-function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen: boolean, onClose: () => void, user: any, jobs: SavedEstimate[], initialJobId?: string }) {
+function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId, onSaveSuccess }: { isOpen: boolean, onClose: () => void, user: any, jobs: SavedEstimate[], initialJobId?: string, onSaveSuccess?: () => void }) {
   const [newExp, setNewExp] = React.useState({
     date: new Date().toISOString().split('T')[0],
     description: '',
@@ -515,6 +531,7 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
         companyId: 'lonestarfence',
         createdAt: serverTimestamp()
       });
+      if (onSaveSuccess) onSaveSuccess();
       onClose();
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'expenses');
@@ -689,7 +706,7 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId }: { isOpen
 }
 
 // Keep TransactionsView and ReportsView but simplify them to work with JobExpenses
-function TransactionsView({ transactions, savedEstimates, onLink }: { transactions: JobExpense[], savedEstimates: SavedEstimate[], onLink: (tid: string, eid: string) => void }) {
+function TransactionsView({ transactions, savedEstimates, onLink, onDeleteSuccess }: { transactions: JobExpense[], savedEstimates: SavedEstimate[], onLink: (tid: string, eid: string) => void, onDeleteSuccess?: () => void }) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [linkingTxnId, setLinkingTxnId] = React.useState<string | null>(null);
 
@@ -792,6 +809,7 @@ function TransactionsView({ transactions, savedEstimates, onLink }: { transactio
                       onClick={async () => {
                         if (window.confirm("Delete this expense record?")) {
                           await deleteDoc(doc(db, 'expenses', txn.id));
+                          if (onDeleteSuccess) onDeleteSuccess();
                         }
                       }}
                       className="p-2 hover:bg-american-blue/5 rounded-lg text-american-red transition-colors" 

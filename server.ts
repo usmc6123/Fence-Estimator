@@ -17,6 +17,7 @@ import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
 import listEstimates from './api/estimates/list';
+import listExpenses from './api/expenses/list';
 
 async function startServer() {
   const app = express();
@@ -575,6 +576,9 @@ async function startServer() {
 
   // GET /api/estimates/list - Get estimate list via JWT authorization
   app.get('/api/estimates/list', listEstimates);
+
+  // GET /api/expenses/list - Get expenses list via JWT authorization
+  app.get('/api/expenses/list', listExpenses);
 
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {
