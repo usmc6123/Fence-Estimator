@@ -70,10 +70,11 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     setSendErrorMessage(null);
 
     try {
-      const response = await fetch(`/api/estimates/${sendModalEstimate.id}/send`, {
+      const response = await fetch(`/api/estimates/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          estimateId: sendModalEstimate.id,
           customerEmail,
           senderEmail,
           subject: emailSubject,
