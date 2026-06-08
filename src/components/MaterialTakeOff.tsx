@@ -220,7 +220,9 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       } as MaterialItem;
       
       if (user) {
-        setDoc(doc(db, 'materials', targetId), newMaterial).catch(err => {
+        setDoc(doc(db, 'materials', targetId), newMaterial).then(() => {
+          window.dispatchEvent(new Event('company_materials_updated'));
+        }).catch(err => {
           handleFirestoreError(err, OperationType.WRITE, `materials/${targetId}`);
         });
       } else {

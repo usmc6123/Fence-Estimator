@@ -19,6 +19,7 @@ import { deleteUser } from './api/admin/users/delete';
 import listEstimates from './api/estimates/list';
 import listExpenses from './api/expenses/list';
 import listQuotes from './api/quotes/list';
+import listMaterials from './api/materials/list';
 
 async function startServer() {
   const app = express();
@@ -583,6 +584,9 @@ async function startServer() {
 
   // GET /api/quotes/list - Get quotes list via JWT authorization
   app.get('/api/quotes/list', listQuotes);
+
+  // GET /api/materials/list - Get materials list via JWT authorization
+  app.get('/api/materials/list', listMaterials);
 
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {

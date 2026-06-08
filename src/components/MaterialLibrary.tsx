@@ -177,6 +177,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
     if (user) {
       try {
         await setDoc(doc(db, 'materials', id), materialData);
+        window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `materials/${id}`);
         return;
@@ -195,6 +196,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
     if (user) {
       try {
         await deleteDoc(doc(db, 'materials', id));
+        window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
       }
@@ -223,6 +225,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                         batch.set(doc(db, 'materials', mat.id), { ...mat, companyId: 'lonestarfence' });
                       });
                       await batch.commit();
+                      window.dispatchEvent(new Event('company_materials_updated'));
                       console.log('Reset complete');
                     } catch (error) {
                       handleFirestoreError(error, OperationType.WRITE, 'materials/reset');

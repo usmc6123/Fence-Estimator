@@ -201,6 +201,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           }
         });
         await batch.commit();
+        window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, 'materials/bulk-sync');
         return;
@@ -336,6 +337,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           cost: newPrice,
           lastPriceUpdate: new Date().toISOString()
         });
+        window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `materials/${materialId}`);
         return;
@@ -387,7 +389,9 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
             }
 
             if (user) {
-              updateDoc(doc(db, 'materials', materialId), updates).catch(err => {
+              updateDoc(doc(db, 'materials', materialId), updates).then(() => {
+                window.dispatchEvent(new Event('company_materials_updated'));
+              }).catch(err => {
                 handleFirestoreError(err, OperationType.UPDATE, `materials/${materialId}`);
               });
             } else {

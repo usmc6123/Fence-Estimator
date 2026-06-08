@@ -536,6 +536,26 @@ export default function App() {
     };
   }, [user, roleChecked, isCompanyUser]);
 
+  const fetchMaterials = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/materials/list', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMaterials(data);
+      } else {
+        console.error('Failed to fetch materials via API:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Network error fetching materials via API:', err);
+    }
+  }, [user]);
+
   // Fetch materials from Firestore if user is logged in OR if unauthenticated customer portal is loaded
   React.useEffect(() => {
     // If not logged in and not customer portal, set initial/offline materials
@@ -568,22 +588,34 @@ export default function App() {
           }
         } catch (error) {
           console.error('Material sync failed:', error);
+        } finally {
+          fetchMaterials();
         }
       };
       checkAndSync();
-    }
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const fetched = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MaterialItem));
-        if (fetched.length > 0) {
-          setMaterials(fetched);
-        }
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
-    );
-    return () => unsubscribe();
-  }, [user, isCustomerPortal]);
+      const handleSync = () => {
+        fetchMaterials();
+      };
+      window.addEventListener('company_materials_updated', handleSync);
+      window.addEventListener('focus', handleSync);
+      return () => {
+        window.removeEventListener('company_materials_updated', handleSync);
+        window.removeEventListener('focus', handleSync);
+      };
+    } else {
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          const fetched = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MaterialItem));
+          if (fetched.length > 0) {
+            setMaterials(fetched);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.LIST, 'materials')
+      );
+      return () => unsubscribe();
+    }
+  }, [user, isCustomerPortal, fetchMaterials]);
 
   // Fetch global company settings on mount/initially (especially for unauthenticated customer portal)
   React.useEffect(() => {
