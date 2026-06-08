@@ -115,13 +115,50 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     }
   };
 
-  const [loading] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchEstimates = React.useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/list', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSavedEstimates(data);
+      } else {
+        console.error('Failed to fetch estimates via API:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Network error fetching estimates via API:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, setSavedEstimates]);
+
+  React.useEffect(() => {
+    fetchEstimates();
+
+    const handleSync = () => {
+      fetchEstimates();
+    };
+    window.addEventListener('customer_estimator_estimate_submitted', handleSync);
+    window.addEventListener('focus', handleSync);
+    return () => {
+      window.removeEventListener('customer_estimator_estimate_submitted', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [fetchEstimates]);
 
   const filteredEstimates = savedEstimates.filter(est => {
     const name = est.customerName || 'Unnamed Prospect';
     const address = est.customerAddress || 'No Address';
     const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         address.toLowerCase().includes(searchTerm.toLowerCase());
+                          address.toLowerCase().includes(searchTerm.toLowerCase());
     
     let matchesFilter = false;
     if (filter === 'all') {
@@ -136,8 +173,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
     return matchesSearch && matchesFilter;
   }).sort((a, b) => {
-    const timeA = new Date(a.createdAt || a.date).getTime() || 0;
-    const timeB = new Date(b.createdAt || b.date).getTime() || 0;
+    const timeA = new Date(a.createdAt || a.date || b.createdAt || b.date).getTime() || 0;
+    const timeB = new Date(b.createdAt || b.date || a.createdAt || a.date).getTime() || 0;
     return timeB - timeA;
   });
 
@@ -170,6 +207,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         status: 'active',
         lastModified: new Date().toISOString()
       });
+      fetchEstimates();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
     }
@@ -205,6 +243,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       if (user) {
         try {
           await deleteDoc(getEstimateDoc(db, id));
+          fetchEstimates();
         } catch (error) {
           console.warn('Firestore server-side delete operation rejected:', error);
         }
@@ -229,6 +268,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         status: estimate.status === 'archived' ? 'active' : 'archived',
         lastModified: new Date().toISOString()
       });
+      fetchEstimates();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
     }
@@ -245,6 +285,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         status: 'active', // Ensure it's not archived
         lastModified: new Date().toISOString()
       });
+      fetchEstimates();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
     }
@@ -261,6 +302,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         status: 'active',
         lastModified: new Date().toISOString()
       });
+      fetchEstimates();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `estimates/${id}`);
     }

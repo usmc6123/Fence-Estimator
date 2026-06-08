@@ -16,6 +16,7 @@ import { listUsers } from './api/admin/users/list';
 import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
+import listEstimates from './api/estimates/list';
 
 async function startServer() {
   const app = express();
@@ -571,6 +572,9 @@ async function startServer() {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // GET /api/estimates/list - Get estimate list via JWT authorization
+  app.get('/api/estimates/list', listEstimates);
 
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {
