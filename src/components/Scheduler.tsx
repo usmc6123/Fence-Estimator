@@ -342,7 +342,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
     try {
         const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/save', {
+        const response = await fetch('/api/estimates/write', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -383,7 +383,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -419,7 +419,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       }
 
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -510,7 +510,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         await deleteDoc(doc(db, 'schedule_events', id));
     } else {
         const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/update', {
+        const response = await fetch('/api/estimates/write', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

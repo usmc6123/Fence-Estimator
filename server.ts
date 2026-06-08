@@ -20,11 +20,8 @@ import listEstimates from './api/estimates/list';
 import listExpenses from './api/expenses/list';
 import listQuotes from './api/quotes/list';
 import listMaterials from './api/materials/list';
-import saveExpense from './api/expenses/save';
-import deleteExpense from './api/expenses/delete';
-import saveEstimate from './api/estimates/save';
-import updateEstimate from './api/estimates/update';
-import deleteEstimate from './api/estimates/delete';
+import writeExpense from './api/expenses/write';
+import writeEstimate from './api/estimates/write';
 
 async function startServer() {
   const app = express();
@@ -584,25 +581,17 @@ async function startServer() {
   // GET /api/estimates/list - Get estimate list via JWT authorization
   app.get('/api/estimates/list', listEstimates);
 
-  // POST /api/estimates/save - Create or full update of an estimate via JWT authentication
-  app.post('/api/estimates/save', saveEstimate);
-
-  // PUT /api/estimates/update - Partial update of an estimate via JWT authentication
-  app.put('/api/estimates/update', updateEstimate);
-
-  // DELETE /api/estimates/delete - Delete an estimate via JWT authentication
-  app.delete('/api/estimates/delete', deleteEstimate);
-  app.post('/api/estimates/delete', deleteEstimate); // Support POST for safety
+  // Consolidated write endpoint for estimates (POST for saves/creates, PUT for updates, DELETE/POST for deletes)
+  app.post('/api/estimates/write', writeEstimate);
+  app.put('/api/estimates/write', writeEstimate);
+  app.delete('/api/estimates/write', writeEstimate);
 
   // GET /api/expenses/list - Get expenses list via JWT authorization
   app.get('/api/expenses/list', listExpenses);
 
-  // POST /api/expenses/save - Save an expense via JWT authentication
-  app.post('/api/expenses/save', saveExpense);
-
-  // DELETE /api/expenses/delete - Delete an expense via JWT verification
-  app.delete('/api/expenses/delete', deleteExpense);
-  app.post('/api/expenses/delete', deleteExpense); // support POST as well for safety
+  // Consolidated write endpoint for expenses (POST for saves/creates, DELETE/POST for deletes)
+  app.post('/api/expenses/write', writeExpense);
+  app.delete('/api/expenses/write', writeExpense);
 
   // GET /api/quotes/list - Get quotes list via JWT authorization
   app.get('/api/quotes/list', listQuotes);

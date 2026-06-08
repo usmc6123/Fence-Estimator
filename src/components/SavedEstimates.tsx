@@ -203,7 +203,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -256,7 +256,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       if (user) {
         try {
           const token = localStorage.getItem('company_admin_token');
-          const response = await fetch('/api/estimates/delete', {
+          const response = await fetch('/api/estimates/write', {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
@@ -290,7 +290,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -318,7 +318,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -347,7 +347,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

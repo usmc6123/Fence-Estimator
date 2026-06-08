@@ -295,7 +295,7 @@ function JobDetailView({ job, onBack, expenses }: { job: SavedEstimate, onBack: 
   const handleStatusChange = async (newStatus: JobStatus) => {
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/estimates/update', {
+      const response = await fetch('/api/estimates/write', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -536,7 +536,7 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId, onSaveSucc
     setIsSaving(true);
     try {
       const token = localStorage.getItem('company_admin_token');
-      const response = await fetch('/api/expenses/save', {
+      const response = await fetch('/api/expenses/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -833,7 +833,7 @@ function TransactionsView({ transactions, savedEstimates, onLink, onDeleteSucces
                         if (window.confirm("Delete this expense record?")) {
                           try {
                             const token = localStorage.getItem('company_admin_token');
-                            const response = await fetch('/api/expenses/delete', {
+                            const response = await fetch('/api/expenses/write', {
                               method: 'DELETE',
                               headers: {
                                 'Content-Type': 'application/json',

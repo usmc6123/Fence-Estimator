@@ -390,7 +390,7 @@ export default function Estimator({
     try {
       try {
         const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/save', {
+        const response = await fetch('/api/estimates/write', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

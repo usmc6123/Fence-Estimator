@@ -296,7 +296,7 @@ export function useCustomerEstimator(
       // 1. Save to Firestore (Attempt cloud sync via API)
       try {
         const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/save', {
+        const response = await fetch('/api/estimates/write', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

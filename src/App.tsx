@@ -861,7 +861,7 @@ export default function App() {
         });
 
         const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/update', {
+        const response = await fetch('/api/estimates/write', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
