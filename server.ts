@@ -816,8 +816,9 @@ async function startServer() {
         console.log(`- SMTP_HOST is present: ${!!smtpHost} (${smtpHost || 'Not Configured'})`);
         console.log(`- SMTP_PORT is present: ${!!process.env.SMTP_PORT} (${smtpPort})`);
         console.log(`- SMTP_USER is present: ${!!smtpUser} (${smtpUser || 'Not Configured'})`);
-        console.log(`- FROM_EMAIL is present: ${!!fromEmail} (${fromEmail})`);
+        console.log(`- FROM_EMAIL is present: ${!!process.env.FROM_EMAIL} (${process.env.FROM_EMAIL || 'Not Configured'})`);
         console.log(`- SMTP_PASS is present: ${!!smtpPass}`); // Security compliance: logs presence, never value.
+        console.log(`- Resolved fromEmail: '${fromEmail}'`);
 
         const missingVars: string[] = [];
         if (!smtpHost) missingVars.push('SMTP_HOST');
@@ -907,7 +908,17 @@ async function startServer() {
       } catch (err: any) {
         const errorMessage = err.message || String(err);
         const errCode = err.code || '';
+        const errSyscall = err.syscall || '';
         
+        // Comprehensive raw error properties logging for high-level debug exposure
+        console.error(`[SMTP RAW ERROR DETAILS FROM REMOTE SERVER]`);
+        console.error(`- message: ${errorMessage}`);
+        console.error(`- code: ${errCode}`);
+        console.error(`- syscall: ${errSyscall}`);
+        console.error(`- responseCode: ${err.responseCode || 'N/A'}`);
+        console.error(`- response: ${err.response || 'N/A'}`);
+        console.error(`- command: ${err.command || 'N/A'}`);
+
         let smtpDetailedMessage = '';
         if (errCode === 'EMISSINGENV') {
           errorType = 'MISSING_ENVIRONMENT_VARIABLE';

@@ -82,8 +82,19 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to transmit email package.');
+        let errMsg = '';
+        try {
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            errMsg = errorData.error || errorData.message || '';
+          } catch {
+            errMsg = text ? text.substring(0, 300) : '';
+          }
+        } catch (e) {
+          errMsg = 'Network transmission error';
+        }
+        throw new Error(errMsg || 'Failed to transmit email package.');
       }
 
       const result = await response.json();
@@ -786,9 +797,12 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                       )}
 
                       {sendErrorMessage && (
-                        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-bold uppercase tracking-wider flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0" />
-                          <span>{sendErrorMessage}</span>
+                        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex items-start gap-2">
+                          <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
+                          <div className="flex-1 space-y-1">
+                            <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
+                            <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-slate-700 font-mono text-[11px] selection:bg-red-200">{sendErrorMessage}</p>
+                          </div>
                         </div>
                       )}
 
