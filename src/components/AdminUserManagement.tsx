@@ -320,9 +320,9 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         )}
       </AnimatePresence>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 xl:grid-cols-3">
         {/* Users registry list card */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-4">
+        <div className="xl:col-span-2 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-[#F0F0F0] pb-3">
             <div>
               <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">
@@ -388,23 +388,23 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
             <div className="p-16 text-center text-xs font-black text-gray-400 uppercase tracking-widest">No matching user profiles found.</div>
           ) : (
             <div className="overflow-x-auto border border-[#E5E5E5] rounded-xl">
-              <table id="client_management_table" className="min-w-full divide-y divide-[#E5E5E5] text-left">
+              <table id="client_management_table" className="min-w-full divide-y divide-[#E5E5E5] text-left table-auto">
                 <thead className="bg-[#FAF9F9]">
                   <tr className="text-[10px] font-black uppercase text-[#666666] tracking-wider">
-                    <th className="px-4 py-3.5 select-none hover:text-american-blue cursor-pointer" onClick={() => handleSort('name')}>
+                    <th className="px-2.5 py-3 first:pl-4 select-none hover:text-american-blue cursor-pointer w-[30%] min-w-[130px]" onClick={() => handleSort('name')}>
                       <div className="flex items-center gap-1">Client Profile <ArrowUpDown size={11} /></div>
                     </th>
-                    <th className="px-4 py-3.5 select-none hover:text-american-blue cursor-pointer" onClick={() => handleSort('subscriptionTier')}>
+                    <th className="px-2.5 py-3 select-none hover:text-american-blue cursor-pointer w-[12%] min-w-[90px]" onClick={() => handleSort('subscriptionTier')}>
                       <div className="flex items-center gap-1">Subscription <ArrowUpDown size={11} /></div>
                     </th>
-                    <th className="px-4 py-3.5 select-none hover:text-american-blue cursor-pointer" onClick={() => handleSort('createdAt')}>
+                    <th className="px-2.5 py-3 select-none hover:text-american-blue cursor-pointer w-[15%] min-w-[85px]" onClick={() => handleSort('createdAt')}>
                       <div className="flex items-center gap-1">Created <ArrowUpDown size={11} /></div>
                     </th>
-                    <th className="px-4 py-3.5 text-center select-none hover:text-american-blue cursor-pointer" onClick={() => handleSort('estimatesCount')}>
+                    <th className="px-2.5 py-3 text-center select-none hover:text-american-blue cursor-pointer w-[12%] min-w-[65px]" onClick={() => handleSort('estimatesCount')}>
                       <div className="flex items-center gap-1 justify-center">Estimates <ArrowUpDown size={11} /></div>
                     </th>
-                    <th className="px-4 py-3.5 text-center">Status</th>
-                    <th className="px-4 py-3.5 text-right">Actions</th>
+                    <th className="px-2.5 py-3 text-center w-[11%] min-w-[65px]">Status</th>
+                    <th className="px-2.5 py-3 text-right last:pr-4 w-[20%] min-w-[165px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F0F0F0] bg-white text-xs text-[#1A1A1A]">
@@ -418,16 +418,16 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                       }}
                     >
                       {/* Name & Email */}
-                      <td className="px-4 py-3.5">
-                        <div className="overflow-hidden max-w-[150px]">
-                          <p className="font-bold text-american-blue truncate">{item.name}</p>
-                          <p className="text-[10px] text-gray-400 font-mono truncate">{item.email}</p>
+                      <td className="px-2.5 py-3 first:pl-4">
+                        <div className="min-w-0 max-w-[125px] sm:max-w-[180px] lg:max-w-none">
+                          <p className="font-bold text-american-blue truncate" title={item.name}>{item.name}</p>
+                          <p className="text-[10px] text-gray-400 font-mono truncate" title={item.email}>{item.email}</p>
                         </div>
                       </td>
 
                       {/* Tier Badge */}
-                      <td className="px-4 py-3.5">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                      <td className="px-2.5 py-3">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                           item.subscriptionTier === 'paid' 
                             ? 'bg-amber-100 text-amber-800 border border-amber-200' 
                             : 'bg-gray-100 text-gray-700 border border-gray-200'
@@ -437,18 +437,18 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                       </td>
 
                       {/* Created Date */}
-                      <td className="px-4 py-3.5 text-gray-500 font-mono text-[11px]">
+                      <td className="px-2.5 py-3 text-gray-500 font-mono text-[11px] whitespace-nowrap">
                         {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
 
                       {/* Estimates Count */}
-                      <td className="px-4 py-3.5 text-center font-black">
+                      <td className="px-2.5 py-3 text-center font-black">
                         {item.estimatesCount}
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                      <td className="px-2.5 py-3 text-center">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase ${
                           item.isDisabled 
                             ? 'bg-[#FFEBEB] text-american-red border border-red-200' 
                             : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
@@ -458,8 +458,8 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5 font-sans leading-none">
+                      <td className="px-2.5 py-3 text-right last:pr-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1 font-sans leading-none">
                           {/* Edit Details */}
                           <button
                             onClick={() => {
@@ -471,7 +471,7 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                               setFormError(null);
                               setIsEditUserOpen(true);
                             }}
-                            className="p-1 px-2 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
+                            className="p-1 px-1.5 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
                             title="Edit User"
                           >
                             Edit
@@ -485,32 +485,32 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
                               setFormError(null);
                               setIsResetPassOpen(true);
                             }}
-                            className="p-1 px-2 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
+                            className="p-1 px-1.5 border border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-100 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-gray-700 transition-[#FAF9F9]"
                             title="Reset User Password"
                           >
-                            Password
+                            Pass
                           </button>
 
                           {/* Quick Toggle Disable status */}
                           <button
                             onClick={() => handleToggleStatus(item)}
-                            className={`p-1.5 rounded-lg border transition-all ${
+                            className={`p-1 rounded-lg border transition-all ${
                               item.isDisabled 
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' 
                                 : 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100'
                             }`}
                             title={item.isDisabled ? 'Enable Profile' : 'Disable Profile'}
                           >
-                            {item.isDisabled ? <UserCheck size={12} /> : <UserX size={12} />}
+                            {item.isDisabled ? <UserCheck size={11} /> : <UserX size={11} />}
                           </button>
 
                           {/* One-click Tier Switcher */}
                           <button
                             onClick={() => handleToggleTier(item)}
-                            className="p-1.5 bg-slate-50 border border-slate-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+                            className="p-1 bg-slate-50 border border-slate-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
                             title="Toggle Subscription Tier"
                           >
-                            <Sparkles size={12} />
+                            <Sparkles size={11} />
                           </button>
                         </div>
                       </td>
@@ -523,7 +523,7 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         </div>
 
         {/* Selected User side drawer info screen */}
-        <div id="inspector_dossier_panel" className="lg:col-span-1 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm flex flex-col justify-between min-h-[400px]">
+        <div id="inspector_dossier_panel" className="xl:col-span-1 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm flex flex-col justify-between min-h-[400px]">
           <div>
             <div className="border-b border-[#F0F0F0] pb-3 mb-4">
               <h3 className="text-sm font-black text-american-blue uppercase tracking-widest flex items-center gap-2">
