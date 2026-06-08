@@ -81,24 +81,37 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         })
       });
 
-      if (!response.ok) {
-        let errMsg = '';
-        try {
-          const text = await response.text();
-          try {
-            const errorData = JSON.parse(text);
-            errMsg = errorData.error || errorData.message || '';
-          } catch {
-            errMsg = text ? text.substring(0, 300) : '';
-          }
-        } catch (e) {
-          errMsg = 'Network transmission error';
-        }
-        throw new Error(errMsg || 'Failed to transmit email package.');
+      const responseText = await response.text();
+      console.log(`[SMTP EMAIL API RESPONSE] Code: ${response.status} (${response.statusText})`);
+      console.log(`[SMTP EMAIL API RESPONSE BODY]:`, responseText);
+
+      let parsedJson: any = null;
+      try {
+        parsedJson = JSON.parse(responseText);
+      } catch (jsonErr) {
+        console.warn('Response was not JSON structure:', responseText);
       }
 
-      const result = await response.json();
-      if (result.success) {
+      if (!response.ok) {
+        let detailedError = `HTTP ${response.status} (${response.statusText || 'Error'}). `;
+        if (parsedJson && parsedJson.error) {
+          detailedError += `${parsedJson.error}`;
+          if (parsedJson.errorType) {
+            detailedError += ` [Type: ${parsedJson.errorType}]`;
+          }
+        } else if (responseText) {
+          detailedError += `Response context: ${responseText.substring(0, 300)}`;
+        } else {
+          detailedError += 'The server returned an empty response body.';
+        }
+        throw new Error(detailedError);
+      }
+
+      if (!parsedJson) {
+        throw new Error(`Server returned success status ${response.status} but body was not valid JSON.`);
+      }
+
+      if (parsedJson.success) {
         setSendSuccessMessage('Fencing contract estimate pack successfully sent!');
         
         // Update local estimate list jobStatus immediately in primary React parent state
@@ -118,7 +131,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           setSendModalEstimate(null);
         }, 1500);
       } else {
-        setSendErrorMessage(result.error || 'Server rejected email relay config.');
+        const errorMsg = parsedJson.error || 'Server rejected email relay config.';
+        const errorDetail = parsedJson.errorType ? `${errorMsg} [Type: ${parsedJson.errorType}]` : errorMsg;
+        setSendErrorMessage(`API Error: ${errorDetail}`);
       }
     } catch (err: any) {
       setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');
