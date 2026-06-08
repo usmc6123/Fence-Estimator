@@ -23,6 +23,9 @@ import listMaterials from './api/materials/list';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
 import sendEstimate from './api/estimates/send';
+import getSettings from './api/settings/get';
+import saveSettings from './api/settings/save';
+import testSettings from './api/settings/test';
 
 async function startServer() {
   const app = express();
@@ -582,6 +585,11 @@ async function startServer() {
   // GET /api/estimates/list - Get estimate list via JWT authorization
   app.get('/api/estimates/list', listEstimates);
 
+  // Settings Endpoints
+  app.get('/api/settings/get', getSettings);
+  app.post('/api/settings/save', saveSettings);
+  app.post('/api/settings/test-email', testSettings);
+
   // Consolidated write endpoint for estimates (POST for saves/creates, PUT for updates, DELETE/POST for deletes)
   app.post('/api/estimates/write', writeEstimate);
   app.put('/api/estimates/write', writeEstimate);
@@ -629,21 +637,55 @@ async function startServer() {
       const docRef = doc(db, 'estimates', estimateId);
       const snap = await getDoc(docRef);
       
+      let estimateData: any = null;
       if (snap.exists()) {
-        return res.json({ id: snap.id, ...snap.data() });
-      }
-
-      // If not found in root, fallback/scan in /users/*/estimates for backward compatibility
-      const usersSnap = await getDocs(collection(db, 'users'));
-      for (const uDoc of usersSnap.docs) {
-        const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
-        const nestedSnap = await getDoc(nestedRef);
-        if (nestedSnap.exists()) {
-          return res.json({ id: nestedSnap.id, ...nestedSnap.data() });
+        estimateData = { id: snap.id, ...snap.data() };
+      } else {
+        // Look up nested
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = doc(db, 'users', uDoc.id, 'estimates', estimateId);
+          const nestedSnap = await getDoc(nestedRef);
+          if (nestedSnap.exists()) {
+            estimateData = { id: nestedSnap.id, ...nestedSnap.data() };
+            break;
+          }
         }
       }
-      
-      return res.status(404).json({ error: 'Estimate not found in database.' });
+
+      if (!estimateData) {
+        return res.status(404).json({ error: 'Estimate not found in database.' });
+      }
+
+      // Attach public company settings/branding for owner tenant
+      const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+      let companyConfig: any = null;
+      if (ownerUid) {
+        try {
+          const settingsSnap = await getDoc(doc(db, 'companySettings', ownerUid));
+          if (settingsSnap.exists()) {
+            const data = settingsSnap.data() || {};
+            // Security: Strip out critical SMTP credentials before returning to public client portal
+            companyConfig = {
+              companyName: data.companyName || '',
+              companyEmail: data.companyEmail || '',
+              companyPhone: data.companyPhone || '',
+              companyWebsite: data.companyWebsite || '',
+              companyLogo: data.companyLogo || '',
+              googleReviewLink: data.googleReviewLink || '',
+              estimateAcceptedMessage: data.estimateAcceptedMessage || '',
+              estimateDeclinedMessage: data.estimateDeclinedMessage || ''
+            };
+          }
+        } catch (settingsErr) {
+          console.warn('Skipped reading company settings for public portal:', settingsErr);
+        }
+      }
+
+      return res.json({
+        ...estimateData,
+        settings: companyConfig
+      });
     } catch (error: any) {
       console.error('Error fetching public estimate:', error);
       res.status(500).json({ error: error.message });
@@ -741,6 +783,65 @@ async function startServer() {
       } else {
         updates.customerDeclineReason = declineReason || 'Not specified';
         updates.jobStatus = 'Declined';
+      }
+
+      const data = snap.data() || {};
+      const ownerUid = data.userId || data.uid || data.ownerId;
+      
+      let customAcceptedMessage = 'Estimate accepted successfully! We will finalize your installation timeframe shortly.';
+      let customDeclinedMessage = 'Estimate declined. We will reach out to understand your feedback. Thank you!';
+      let webhookUrl = '';
+
+      if (ownerUid) {
+        try {
+          const settingsSnap = await getDoc(doc(db, 'companySettings', ownerUid));
+          if (settingsSnap.exists()) {
+            const settingsData = settingsSnap.data() || {};
+            webhookUrl = settingsData.gohighlevelWebhookUrl || settingsData.ghlWebhookUrl || '';
+            if (settingsData.estimateAcceptedMessage) {
+              customAcceptedMessage = settingsData.estimateAcceptedMessage;
+            }
+            if (settingsData.estimateDeclinedMessage) {
+              customDeclinedMessage = settingsData.estimateDeclinedMessage;
+            }
+          }
+        } catch (settingsError) {
+          console.warn('Could not load companySettings for webhooks/templates:', settingsError);
+        }
+      }
+
+      // Embed the custom message inside updates for returning to UI portal
+      updates.customMessage = decision === 'accepted' ? customAcceptedMessage : customDeclinedMessage;
+
+      // Dispatch webhook asynchronously
+      if (webhookUrl) {
+        try {
+          const webhookPayload = {
+            event: `estimate_${decision}`,
+            estimateId,
+            estimateNumber: data.estimateNumber || '',
+            decision,
+            customerName: data.customerName || '',
+            customerEmail: data.customerEmail || '',
+            totalCost: data.totalCost || data.manualGrandTotal || 0,
+            signature: signature || '',
+            declineReason: declineReason || '',
+            timestamp: now
+          };
+          fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(webhookPayload)
+          }).then(response => {
+            console.log(`Outbound SaaS webhook trigger response: status ${response.status}`);
+          }).catch(webhookErr => {
+            console.error(`Dynamic Webhook dispatch failed:`, webhookErr);
+          });
+        } catch (webhookOuterError) {
+          console.error(`Webhook trigger parse error:`, webhookOuterError);
+        }
       }
 
       await updateDoc(targetRef, updates);

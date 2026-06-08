@@ -37,6 +37,14 @@ export default function CustomerSignaturePortal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Dynamic brand identity resolutions from active user settings
+  const settings = (estimate as any)?.settings;
+  const companyLogo = settings?.companyLogo || COMPANY_INFO.logo;
+  const companyName = settings?.companyName || 'Lone Star Fence Works';
+  const companyPhone = settings?.companyPhone || COMPANY_INFO.phone;
+  const companyEmail = settings?.companyEmail || COMPANY_INFO.email;
+  const companyWebsite = settings?.companyWebsite || COMPANY_INFO.website;
+
   // Gracefully clean up case where last name is misplaced in the email field
   const resolvedClientName = React.useMemo(() => {
     if (!estimate) return 'Valued Customer';
@@ -190,17 +198,16 @@ export default function CustomerSignaturePortal({
       <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] px-4 font-sans text-[#1A1A1A]" id="portal-loading">
         <div className="flex flex-col items-center max-w-md text-center">
           <div className="mb-6 flex flex-col items-center">
-            {COMPANY_INFO.logo && (
+            {companyLogo && (
               <img 
-                src={COMPANY_INFO.logo} 
-                alt="Lone Star Fence Works" 
-                className="h-20 w-auto object-contain animate-pulse"
+                src={companyLogo} 
+                alt={companyName} 
+                className="h-20 w-auto object-contain animate-pulse max-h-24 max-w-[200px]"
                 referrerPolicy="no-referrer"
               />
             )}
             <div className="mt-3 flex flex-col items-center">
-              <span className="text-lg font-black uppercase tracking-tighter text-[#0c1a30]">Lone Star</span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#b91c1c] mt-0.5">Fence Works</span>
+              <span className="text-lg font-black uppercase tracking-tight text-[#0c1a30]">{companyName}</span>
             </div>
           </div>
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-t-[#0c1a30] border-r-[#b91c1c] border-b-transparent border-l-transparent my-4"></div>
@@ -219,11 +226,11 @@ export default function CustomerSignaturePortal({
           </div>
           <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight mb-2">Estimate Not Found</h2>
           <p className="text-sm text-slate-600 leading-relaxed mb-6">
-            {error || 'This fencing contract could not be loaded. This link may have expired, or the estimate number is incorrect. Please contact Braden at Lone Star Fence Works.'}
+            {error || `This proposal contract could not be loaded. This link may have expired, or the estimate number is incorrect. Please contact support.`}
           </p>
           <div className="space-y-2 text-xs font-semibold text-slate-500 uppercase tracking-widest font-mono">
-            <p>Phone: {COMPANY_INFO.phone}</p>
-            <p>Email: {COMPANY_INFO.email}</p>
+            <p>Phone: {companyPhone}</p>
+            <p>Email: {companyEmail}</p>
           </div>
         </div>
       </div>
@@ -247,7 +254,7 @@ export default function CustomerSignaturePortal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#ef4444]">Lone Star Contract Portal</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#ef4444]">{companyName} Contract Portal</span>
                 <span className="text-[10px] font-bold text-slate-300 font-mono">#{estimate.estimateNumber || 'Draft'}</span>
               </div>
               <h1 className="text-sm md:text-base font-black uppercase tracking-tight">
@@ -330,12 +337,28 @@ export default function CustomerSignaturePortal({
                   <div className="p-2.5 bg-green-200 text-green-800 rounded-xl mt-0.5">
                     <CheckCircle size={24} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-base font-bold uppercase tracking-tight text-green-800">Contract Signed Successfully!</h3>
-                    <p className="text-sm mt-1 text-green-700 leading-relaxed">
-                      Thank you for digitally signing. Your approval has been saved. 
-                      Braden and the team at Lone Star Fence Works are reviewing your document and will lock in your installation calendar date shortly.
+                    <p className="text-sm mt-1 text-green-700 leading-relaxed font-semibold">
+                      {settings?.estimateAcceptedMessage || `Thank you for digitally signing. Your approval has been saved. Braden and the team at ${companyName} are reviewing your document and will lock in your installation calendar date shortly.`}
                     </p>
+                    
+                    {settings?.googleReviewLink && (
+                      <div className="mt-4 p-4 bg-white/70 rounded-2xl border border-green-200 shadow-sm text-left flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <p className="text-[11px] font-black uppercase text-green-800 tracking-wider">Help Us Grow!</p>
+                          <p className="text-xs text-slate-600 font-medium">Would you mind sharing your feedback with a review? It only takes a second.</p>
+                        </div>
+                        <a
+                          href={settings.googleReviewLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md hover:scale-105 active:scale-95"
+                        >
+                          ★ Leave Google Review
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -346,7 +369,7 @@ export default function CustomerSignaturePortal({
                   <div>
                     <h3 className="text-base font-bold uppercase tracking-tight text-red-800">Estimate Decided: Declined</h3>
                     <p className="text-sm mt-1 text-red-700 leading-relaxed">
-                      You have declined this contract copy. We have logged your comments and will follow up with you shortly to make revision edits to meet your specifications.
+                      {settings?.estimateDeclinedMessage || "You have declined this contract copy. We have logged your comments and will follow up with you shortly to make revision edits to meet your specifications."}
                     </p>
                   </div>
                 </>
@@ -362,7 +385,7 @@ export default function CustomerSignaturePortal({
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Sparkles size={16} className="text-[#ef4444]" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Lone Star Official Portal</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">{companyName} Official Portal</span>
                 </div>
                 <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Review Your Custom Fencing Proposal</h2>
                 <p className="text-sm text-slate-300 max-w-2xl leading-relaxed font-medium">
@@ -468,7 +491,7 @@ export default function CustomerSignaturePortal({
                 <Signature size={28} />
               </div>
               <h4 className="text-lg font-black text-[#0c1a30] uppercase tracking-tight">Sign Contract Agreement</h4>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Lone Star Fence Works &bull; Estimate #{estimate.estimateNumber}</p>
+              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">{companyName} &bull; Estimate #{estimate.estimateNumber}</p>
             </div>
 
             <form onSubmit={handleAccept} className="space-y-5">
@@ -551,7 +574,7 @@ export default function CustomerSignaturePortal({
                 <MessageSquare size={28} />
               </div>
               <h4 className="text-lg font-black text-[#0c1a30] uppercase tracking-tight">Decline Proposal</h4>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Lone Star Fence Works &bull; Review feedback</p>
+              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">{companyName} &bull; Review feedback</p>
             </div>
 
             <form onSubmit={handleDecline} className="space-y-5">

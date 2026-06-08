@@ -29,6 +29,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
+  const [selectedLogEstimate, setSelectedLogEstimate] = React.useState<SavedEstimate | null>(null);
+
+  const [companySettings, setCompanySettings] = React.useState<any>(null);
 
   // Send Estimate Modal States
   const [sendModalEstimate, setSendModalEstimate] = React.useState<SavedEstimate | null>(null);
@@ -40,22 +43,70 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
   const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
 
+  // Fetch Company Settings to populate templates
+  React.useEffect(() => {
+    async function loadCompanySettings() {
+      try {
+        const token = localStorage.getItem('company_admin_token');
+        if (!token) return;
+        const res = await fetch('/api/settings/get', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCompanySettings(data);
+        }
+      } catch (err) {
+        console.warn('Failed to load company settings inside SavedEstimates:', err);
+      }
+    }
+    loadCompanySettings();
+  }, [sendModalEstimate]); // Reload slightly on modal show to pick up fresh updates
+
   React.useEffect(() => {
     if (sendModalEstimate) {
       setCustomerEmail(sendModalEstimate.customerEmail || '');
-      setSenderEmail('BradenS@LoneStarFenceWorks.com');
-      setEmailSubject(`Fence Installation Contract Agreement - Lone Star Fence Works`);
       
       const host = window.location.host;
       const protocol = window.location.protocol;
       const estimateLink = `${protocol}//${host}/?portal=contract&estimateId=${sendModalEstimate.id}`;
-      
       const clientName = sendModalEstimate.customerName || 'Valued Customer';
-      setEmailMessage(`Hello ${clientName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the secure link below:\n\n${estimateLink}\n\nThank you for choosing Lone Star Fence Works!\n\nBest regards,\nLone Star Fence Works Estimations Department`);
+
+      let activeFromEmail = 'BradenS@LoneStarFenceWorks.com';
+      let activeFromName = 'Lone Star Fence Works';
+      let activeSubject = `Fence Installation Contract Agreement - Lone Star Fence Works`;
+      let activeMessage = `Hello ${clientName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the secure link below:\n\n${estimateLink}\n\nThank you for choosing Lone Star Fence Works!\n\nBest regards,\nLone Star Fence Works Estimations Department`;
+
+      if (companySettings) {
+        if (companySettings.fromEmail) activeFromEmail = companySettings.fromEmail;
+        if (companySettings.fromName) activeFromName = companySettings.fromName;
+        
+        if (companySettings.estimateEmailSubject) {
+          activeSubject = companySettings.estimateEmailSubject
+            .replace(/{customerName}/g, clientName)
+            .replace(/{estimateNumber}/g, String(sendModalEstimate.estimateNumber || ''))
+            .replace(/{companyName}/g, companySettings.fromName || 'Lone Star Fence Works');
+        }
+
+        if (companySettings.estimateEmailBody) {
+          activeMessage = companySettings.estimateEmailBody
+            .replace(/{customerName}/g, clientName)
+            .replace(/{customerEmail}/g, sendModalEstimate.customerEmail || '')
+            .replace(/{estimateNumber}/g, String(sendModalEstimate.estimateNumber || ''))
+            .replace(/{estimateLink}/g, estimateLink)
+            .replace(/{companyName}/g, companySettings.fromName || 'Lone Star Fence Works')
+            .replace(/{companyPhone}/g, companySettings.companyPhone || '')
+            .replace(/{companyWebsite}/g, companySettings.companyWebsite || '');
+        }
+      }
+
+      setSenderEmail(activeFromEmail);
+      setEmailSubject(activeSubject);
+      setEmailMessage(activeMessage);
       setSendSuccessMessage(null);
       setSendErrorMessage(null);
     }
-  }, [sendModalEstimate]);
+  }, [sendModalEstimate, companySettings]);
 
   const handleSendEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -699,6 +750,17 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            setSelectedLogEstimate(estimate);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                        >
+                                          <Clock size={14} /> Email Activity Log
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             toggleArchive(estimate.id, e);
                                             setOpenDropdownId(null);
                                           }}
@@ -998,6 +1060,159 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Email Activity Log Modal Popup */}
+      <AnimatePresence>
+        {selectedLogEstimate && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col font-sans"
+            >
+              <div className="p-6 bg-[#0c1a30] text-white flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 p-2.5 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                    <Clock size={20} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider">Email Activity Log</h3>
+                    <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">
+                      Est #{selectedLogEstimate.estimateNumber || '1201'} - {selectedLogEstimate.customerName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogEstimate(null)}
+                  className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6 text-left max-h-[60vh] overflow-y-auto">
+                {/* Summary bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Recipient Email Address</span>
+                    <strong className="text-xs font-bold text-slate-800 break-all">{selectedLogEstimate.customerEmail || 'No recipient configured'}</strong>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Current Job Status</span>
+                    <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[9px] font-black uppercase bg-american-blue/5 text-american-blue">
+                      {selectedLogEstimate.jobStatus || 'Draft'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Timeline display */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-american-blue">Communication Timeline logs</h4>
+                  
+                  <div className="relative border-l-2 border-slate-100 pl-6 ml-3 space-y-6">
+                    {/* Date Created */}
+                    <div className="relative">
+                      <span className="absolute -left-[31px] top-0 h-4 w-4 rounded-full bg-slate-200 border-4 border-white flex items-center justify-center" />
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-slate-400">Estimate Created</span>
+                        <p className="text-[11px] font-medium text-slate-600 mt-0.5">
+                          Estimate record created in digital ledger database on {new Date(selectedLogEstimate.createdAt || '').toLocaleString()}.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Email history log */}
+                    {selectedLogEstimate.customerEmailLog && selectedLogEstimate.customerEmailLog.length > 0 ? (
+                      selectedLogEstimate.customerEmailLog.map((log: any, index: number) => (
+                        <div key={index} className="relative">
+                          <span className={`absolute -left-[31px] top-0 h-4 w-4 rounded-full border-4 border-white flex items-center justify-center ${log.mailSent ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase text-slate-400">Email Dispatched</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${log.mailSent ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                {log.mailSent ? 'SENT' : 'FAILED'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-600 mt-0.5 space-y-1">
+                              <p>Dispatched to: <strong>{log.customerEmail || selectedLogEstimate.customerEmail}</strong></p>
+                              {log.subject && <p className="italic">Subject: "{log.subject}"</p>}
+                              {log.senderEmail && <p>Sender Identity: {log.senderEmail}</p>}
+                              <p className="text-[9px] font-bold text-slate-400">Sent time: {new Date(log.sentAt).toLocaleString()}</p>
+                              
+                              {log.mailError && (
+                                <div className="mt-2 p-2 bg-red-50 border border-red-100 rounded-lg text-[10px] font-mono text-red-800 leading-normal break-words whitespace-pre-wrap">
+                                  <strong>SMTP Failure Trace:</strong> {log.mailError}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      selectedLogEstimate.jobStatus === 'Estimate Sent' ? (
+                        <div className="relative">
+                          <span className="absolute -left-[31px] top-0 h-4 w-4 rounded-full bg-blue-500 border-4 border-white flex items-center justify-center" />
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-slate-400">Email Dispatched (Basic status)</span>
+                            <p className="text-[11px] font-medium text-slate-600 mt-0.5">
+                              Estimate marked as sent on {(selectedLogEstimate as any).customerSentAt ? new Date((selectedLogEstimate as any).customerSentAt).toLocaleString() : 'N/A'}. (Detailed connection log not available for this legacy entry)
+                            </p>
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+
+                    {/* View Logs */}
+                    {((selectedLogEstimate as any).customerViewedAt || (selectedLogEstimate as any).customerOpenedAt) && (
+                      <div className="relative">
+                        <span className="absolute -left-[31px] top-0 h-4 w-4 rounded-full bg-blue-500 border-4 border-white flex items-center justify-center animate-pulse" />
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-slate-400">Customer Opened Portal</span>
+                          <p className="text-[11px] font-medium text-slate-600 mt-0.5">
+                            Customer opened the secure fencing portal link. Last viewed: <strong>{new Date((selectedLogEstimate as any).customerViewedAt || (selectedLogEstimate as any).customerOpenedAt).toLocaleString()}</strong>
+                          </p>
+                          <p className="text-[9px] font-bold text-slate-400">Cumulative Page Hits: {(selectedLogEstimate as any).viewCount || 1} view(s)</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Decisions log */}
+                    {selectedLogEstimate.customerDecision && (
+                      <div className="relative">
+                        <span className={`absolute -left-[31px] top-0 h-4 w-4 rounded-full border-4 border-white flex items-center justify-center ${selectedLogEstimate.customerDecision === 'accepted' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-slate-400">Customer Final Decision</span>
+                          <div className="text-[11px] font-medium text-slate-600 mt-0.5 space-y-1">
+                            <p>Status: <strong className={selectedLogEstimate.customerDecision === 'accepted' ? 'text-emerald-600' : 'text-red-500'}>{selectedLogEstimate.customerDecision.toUpperCase()}</strong></p>
+                            <p>Decision Date: {selectedLogEstimate.customerDecisionDate ? new Date(selectedLogEstimate.customerDecisionDate).toLocaleString() : 'N/A'}</p>
+                            {selectedLogEstimate.customerDecision === 'accepted' ? (
+                              <p>Signature Validation: <strong>{selectedLogEstimate.customerSignature || 'Digitally Signed'}</strong></p>
+                            ) : (
+                              <p>Reason for Declining: <span className="italic">"{selectedLogEstimate.customerDeclineReason || 'Not specified'}"</span></p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogEstimate(null)}
+                  className="py-2 px-5 bg-[#0c1a30] hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
+                >
+                  Close Activity Log
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

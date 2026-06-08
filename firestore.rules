@@ -146,9 +146,9 @@ service cloud.firestore {
     }
 
     match /companySettings/{settingId} {
-      allow get: if isCompanyMember() || settingId == 'main';
+      allow get: if isCompanyMember() || settingId == 'main' || (isSignedIn() && request.auth.uid == settingId);
       allow list: if isCompanyMember();
-      allow create, update: if canWriteData() && isValidSettings(incoming());
+      allow create, update: if (canWriteData() || (isSignedIn() && request.auth.uid == settingId)) && isValidSettings(incoming());
       allow delete: if isAdmin();
     }
 
