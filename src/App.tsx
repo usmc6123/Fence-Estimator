@@ -657,6 +657,29 @@ export default function App() {
     user
   ]);
 
+  const fetchQuotes = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/list', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setQuotes(data.map((q: any) => ({
+          ...q,
+          supplierName: getCanonicalSupplierName(q.supplierName || '')
+        })));
+      } else {
+        console.error('Failed to fetch quotes via API:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Network error fetching quotes via API:', err);
+    }
+  }, [user]);
+
   // Fetch quotes from Firestore if user is logged in
   React.useEffect(() => {
     if (!user) {
@@ -668,22 +691,18 @@ export default function App() {
       return;
     }
 
-    const q = query(collection(db, 'quotes'), where('companyId', '==', 'lonestarfence'));
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        setQuotes(snapshot.docs.map(d => {
-          const data = d.data();
-          return {
-            ...data,
-            id: d.id,
-            supplierName: getCanonicalSupplierName(data.supplierName || '')
-          } as SupplierQuote;
-        }));
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'quotes')
-    );
-    return () => unsubscribe();
-  }, [user]);
+    fetchQuotes();
+
+    const handleSync = () => {
+      fetchQuotes();
+    };
+    window.addEventListener('company_quotes_updated', handleSync);
+    window.addEventListener('focus', handleSync);
+    return () => {
+      window.removeEventListener('company_quotes_updated', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [user, fetchQuotes]);
 
   const handleLogin = async () => {
     setActiveTab('pricing');

@@ -153,6 +153,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           });
         });
         await batch.commit();
+        window.dispatchEvent(new Event('company_quotes_updated'));
       }
 
       setQuotes(prev => prev.map(q => 
@@ -304,6 +305,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       
       const sanitizedQuote = sanitize(newQuote);
       await setDoc(doc(db, 'quotes', newQuoteId), sanitizedQuote);
+      window.dispatchEvent(new Event('company_quotes_updated'));
       setSelectedQuoteId(newQuoteId);
       showToast("Quote processed and saved to cloud");
     } catch (err) {
@@ -318,6 +320,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     if (!user) return;
     try {
       await deleteDoc(doc(db, 'quotes', id));
+      window.dispatchEvent(new Event('company_quotes_updated'));
       if (selectedQuoteId === id) setSelectedQuoteId(null);
       showToast("Quote deleted from cloud");
     } catch (error) {
