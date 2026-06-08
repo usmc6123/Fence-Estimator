@@ -803,6 +803,7 @@ async function startServer() {
       // 1. Send the email using Nodemailer
       let mailSent = false;
       let mailError = null;
+      let errorType = 'UNKNOWN';
 
       try {
         const smtpHost = process.env.SMTP_HOST;
@@ -810,86 +811,138 @@ async function startServer() {
         const smtpUser = process.env.SMTP_USER;
         const smtpPass = process.env.SMTP_PASS;
 
-        if (smtpHost && smtpUser && smtpPass) {
-          const transporter = nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465,
-            auth: {
-              user: smtpUser,
-              pass: smtpPass
-            }
-          });
+        const missingVars: string[] = [];
+        if (!smtpHost) missingVars.push('SMTP_HOST');
+        if (!smtpUser) missingVars.push('SMTP_USER');
+        if (!smtpPass) missingVars.push('SMTP_PASS');
 
-          await transporter.sendMail({
-            from: `"${senderEmail ? 'Lone Star Estimator' : 'Lone Star Fence Works'}" <${fromEmail}>`,
-            to: customerEmail,
-            subject: mailSubject,
-            text: mailMessage,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">LONE STAR FENCE WORKS</h1>
-                  <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
-                </div>
-                <div style="padding: 32px 24px; background-color: #ffffff;">
-                  <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Fencing Estimate Prepared for ${customerName}</h2>
-                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
-                    Dear ${customerName},
-                  </p>
-                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
-                    We have compiled and drafted your structural fence installation contract. To review your customized line-by-line pricing and sign off on the workmanship warranty agreement, please click the secure button below:
-                  </p>
-                  <div style="text-align: center; margin: 32px 0;">
-                    <a href="${estimateLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
-                      Review & Sign Contract Agreement
-                    </a>
-                  </div>
-                  <p style="color: #718096; font-size: 12px; line-height: 1.5;">
-                    If the button doesn't work, copy and paste the following URL into your browser's address bar:<br/>
-                    <a href="${estimateLink}" style="color: #3182ce;">${estimateLink}</a>
-                  </p>
-                  <p style="color: #4a5568; line-height: 1.6; font-size: 14px; margin-top: 24px;">
-                    Our office is checking daily for signed contracts to finalize schedule options. Let us know if you need any adjustments.
-                  </p>
-                  <p style="color: #4a5568; margin-bottom: 0; font-size: 14px;">
-                    Best regards,<br/>
-                    <strong>Braden</strong><br/>
-                    Lone Star Fence Works
-                  </p>
-                </div>
-                <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
-                  <p style="color: #a0aec0; font-size: 11px; margin: 0;">
-                    Lone Star Fence Works &bull; Texas Premium Estimating System &bull; Confidential
-                  </p>
-                </div>
-              </div>
-            `
-          });
-          mailSent = true;
-          console.log(`Email successfully dispatched via SMTP to ${customerEmail}`);
-        } else {
-          console.log(`SMTP credentials are not configured. Falling back to backend logs for local preview delivery.`);
-          console.log("================= SIMULATED OUTBOX MESSAGE =================");
-          console.log(`From: ${fromEmail}`);
-          console.log(`To: ${customerEmail}`);
-          console.log(`Subject: ${mailSubject}`);
-          console.log(`Direct Link: ${estimateLink}`);
-          console.log(`Body:\n${mailMessage}`);
-          console.log("============================================================");
-          mailSent = true;
+        if (missingVars.length > 0) {
+          const detail = `Missing SMTP Environment Variables: [${missingVars.join(', ')}]`;
+          throw { code: 'EMISSINGENV', message: detail };
         }
+
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 12000
+        });
+
+        await transporter.sendMail({
+          from: `"${senderEmail ? 'Lone Star Estimator' : 'Lone Star Fence Works'}" <${fromEmail}>`,
+          to: customerEmail,
+          subject: mailSubject,
+          text: mailMessage,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+              <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">LONE STAR FENCE WORKS</h1>
+                <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
+              </div>
+              <div style="padding: 32px 24px; background-color: #ffffff;">
+                <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Fencing Estimate Prepared for ${customerName}</h2>
+                <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
+                  Dear ${customerName},
+                </p>
+                <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
+                  We have compiled and drafted your structural fence installation contract. To review your customized line-by-line pricing and sign off on the workmanship warranty agreement, please click the secure button below:
+                </p>
+                <div style="text-align: center; margin: 32px 0;">
+                  <a href="${estimateLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
+                    Review & Sign Contract Agreement
+                  </a>
+                </div>
+                <p style="color: #718096; font-size: 12px; line-height: 1.5;">
+                  If the button doesn't work, copy and paste the following URL into your browser's address bar:<br/>
+                  <a href="${estimateLink}" style="color: #3182ce;">${estimateLink}</a>
+                </p>
+                <p style="color: #4a5568; line-height: 1.6; font-size: 14px; margin-top: 24px;">
+                  Our office is checking daily for signed contracts to finalize schedule options. Let us know if you need any adjustments.
+                </p>
+                <p style="color: #4a5568; margin-bottom: 0; font-size: 14px;">
+                  Best regards,<br/>
+                  <strong>Braden</strong><br/>
+                  Lone Star Fence Works
+                </p>
+              </div>
+              <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
+                <p style="color: #a0aec0; font-size: 11px; margin: 0;">
+                  Lone Star Fence Works &bull; Texas Premium Estimating System &bull; Confidential
+                </p>
+              </div>
+            </div>
+          `
+        });
+        mailSent = true;
+        console.log(`Email successfully dispatched via SMTP to ${customerEmail}`);
       } catch (err: any) {
-        console.error('Nodemailer SMTP dispatch failed:', err);
-        mailError = err.message || err;
+        const errorMessage = err.message || String(err);
+        const errCode = err.code || '';
+        
+        let smtpDetailedMessage = '';
+        if (errCode === 'EMISSINGENV') {
+          errorType = 'MISSING_ENVIRONMENT_VARIABLE';
+          smtpDetailedMessage = `SMTP Failure [MISSING_ENVIRONMENT_VARIABLE]: ${errorMessage}. Ensure SMTP_HOST, SMTP_USER, and SMTP_PASS are defined in your environment configs.`;
+        } else if (
+          errCode === 'EAUTH' || 
+          errorMessage.toLowerCase().includes('auth') || 
+          errorMessage.toLowerCase().includes('password') || 
+          errorMessage.toLowerCase().includes('username') ||
+          err.responseCode === 535
+        ) {
+          errorType = 'AUTHENTICATION_ERROR';
+          smtpDetailedMessage = `SMTP Failure [AUTHENTICATION_ERROR]: Authentication rejected by the server. Verify your SMTP_USER and SMTP_PASS credentials. Details: ${errorMessage}`;
+        } else if (
+          errCode === 'ECONNREFUSED' || 
+          errCode === 'ETIMEOUT' || 
+          errCode === 'ENOTFOUND' || 
+          errorMessage.toLowerCase().includes('connect') || 
+          errorMessage.toLowerCase().includes('timeout') ||
+          errorMessage.toLowerCase().includes('unreachable')
+        ) {
+          errorType = 'CONNECTION_ERROR';
+          smtpDetailedMessage = `SMTP Failure [CONNECTION_ERROR]: Could not establish connection to SMTP host. Check host '${process.env.SMTP_HOST || ''}' and port '${process.env.SMTP_PORT || '587'}'. Details: ${errorMessage}`;
+        } else if (
+          errorMessage.toLowerCase().includes('tls') || 
+          errorMessage.toLowerCase().includes('ssl') || 
+          errorMessage.toLowerCase().includes('secure') || 
+          errorMessage.toLowerCase().includes('certificate') ||
+          errCode === 'ESOCKET'
+        ) {
+          errorType = 'TLS_SSL_ERROR';
+          smtpDetailedMessage = `SMTP Failure [TLS_SSL_ERROR]: TLS/SSL handshake or security protocol verification failed. Verify port/secure configuration. Details: ${errorMessage}`;
+        } else if (
+          errorMessage.toLowerCase().includes('sender') || 
+          errorMessage.toLowerCase().includes('from') || 
+          err.responseCode === 501 || 
+          err.responseCode === 550 || 
+          errorMessage.toLowerCase().includes('from address')
+        ) {
+          errorType = 'INVALID_FROM_ADDRESS';
+          smtpDetailedMessage = `SMTP Failure [INVALID_FROM_ADDRESS]: The sender address '${fromEmail}' was rejected by the mail server. Ensure this address has sending permissions. Details: ${errorMessage}`;
+        } else {
+          errorType = 'SMTP_TRANSMISSION_ERROR';
+          smtpDetailedMessage = `SMTP Failure [SMTP_TRANSMISSION_ERROR]: Error occurred during standard transmission. Details: ${errorMessage}`;
+        }
+
+        console.error(`[SMTP ERROR - ${errorType}] ${smtpDetailedMessage}`);
+        console.error(`SMTP Transport Config Context -> Host: '${process.env.SMTP_HOST || ''}', Port: '${process.env.SMTP_PORT || ''}', SSL: ${Number(process.env.SMTP_PORT) === 465}, User: '${process.env.SMTP_USER || ''}'`);
+        
+        mailError = smtpDetailedMessage;
       }
 
       // 2. Update the Estimate document to record the send status
       const now = new Date().toISOString();
       const existingLogs = estimateData.customerEmailLog || [];
       const updates: any = {
-        customerEmailSent: true,
-        customerSentAt: now,
+        customerEmailSent: mailSent,
+        customerSentAt: mailSent ? now : (estimateData.customerSentAt || null),
         customerEmailLog: [...existingLogs, {
           sentAt: now,
           customerEmail,
@@ -903,6 +956,14 @@ async function startServer() {
       };
 
       await updateDoc(targetRef, updates);
+
+      if (!mailSent) {
+        return res.status(500).json({
+          success: false,
+          error: mailError || 'Failed to send email via SMTP.',
+          errorType
+        });
+      }
 
       res.json({
         success: true,

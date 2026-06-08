@@ -82,7 +82,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       });
 
       if (!response.ok) {
-        throw new Error('Failed to transmit email package.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to transmit email package.');
       }
 
       const result = await response.json();
