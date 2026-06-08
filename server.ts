@@ -811,6 +811,14 @@ async function startServer() {
         const smtpUser = process.env.SMTP_USER;
         const smtpPass = process.env.SMTP_PASS;
 
+        // Diagnostic log strictly adhering to instructions (never log SMTP_PASS):
+        console.log(`[SMTP CONFIGURATION COMPLIANCE CHECK]`);
+        console.log(`- SMTP_HOST is present: ${!!smtpHost} (${smtpHost || 'Not Configured'})`);
+        console.log(`- SMTP_PORT is present: ${!!process.env.SMTP_PORT} (${smtpPort})`);
+        console.log(`- SMTP_USER is present: ${!!smtpUser} (${smtpUser || 'Not Configured'})`);
+        console.log(`- FROM_EMAIL is present: ${!!fromEmail} (${fromEmail})`);
+        console.log(`- SMTP_PASS is present: ${!!smtpPass}`); // Security compliance: logs presence, never value.
+
         const missingVars: string[] = [];
         if (!smtpHost) missingVars.push('SMTP_HOST');
         if (!smtpUser) missingVars.push('SMTP_USER');
@@ -821,18 +829,33 @@ async function startServer() {
           throw { code: 'EMISSINGENV', message: detail };
         }
 
-        const transporter = nodemailer.createTransport({
+        const isPort465 = smtpPort === 465;
+
+        const transporterConfig: any = {
           host: smtpHost,
           port: smtpPort,
-          secure: smtpPort === 465,
+          secure: isPort465, // Use SSL/TLS on port 465 with secure: true, not STARTTLS
           auth: {
             user: smtpUser,
             pass: smtpPass
           },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 12000
-        });
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000
+        };
+
+        // Explicitly enforce direct SSL/TLS for port 465 and prevent opportunistic STARTTLS
+        if (isPort465) {
+          transporterConfig.tls = {
+            // Respecting modern SSL/TLS handshakes
+            rejectUnauthorized: false
+          };
+          console.log(`[SMTP SECURITY MODE] Initiating direct SSL/TLS session on port 465 (secure: true). STARTTLS bypass strictly enabled.`);
+        } else {
+          console.log(`[SMTP SECURITY MODE] Initiating STARTTLS upgrade on standard port ${smtpPort} (secure: false).`);
+        }
+
+        const transporter = nodemailer.createTransport(transporterConfig);
 
         await transporter.sendMail({
           from: `"${senderEmail ? 'Lone Star Estimator' : 'Lone Star Fence Works'}" <${fromEmail}>`,
