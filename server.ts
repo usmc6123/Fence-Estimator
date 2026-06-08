@@ -20,6 +20,8 @@ import listEstimates from './api/estimates/list';
 import listExpenses from './api/expenses/list';
 import listQuotes from './api/quotes/list';
 import listMaterials from './api/materials/list';
+import saveExpense from './api/expenses/save';
+import deleteExpense from './api/expenses/delete';
 
 async function startServer() {
   const app = express();
@@ -581,6 +583,13 @@ async function startServer() {
 
   // GET /api/expenses/list - Get expenses list via JWT authorization
   app.get('/api/expenses/list', listExpenses);
+
+  // POST /api/expenses/save - Save an expense via JWT authentication
+  app.post('/api/expenses/save', saveExpense);
+
+  // DELETE /api/expenses/delete - Delete an expense via JWT verification
+  app.delete('/api/expenses/delete', deleteExpense);
+  app.post('/api/expenses/delete', deleteExpense); // support POST as well for safety
 
   // GET /api/quotes/list - Get quotes list via JWT authorization
   app.get('/api/quotes/list', listQuotes);

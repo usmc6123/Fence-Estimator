@@ -524,17 +524,29 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId, onSaveSucc
 
     setIsSaving(true);
     try {
-      await addDoc(collection(db, 'expenses'), {
-        ...newExp,
-        amount: Number(newExp.amount),
-        userId: user.uid,
-        companyId: 'lonestarfence',
-        createdAt: serverTimestamp()
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/expenses/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          ...newExp,
+          amount: Number(newExp.amount)
+        })
       });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to save expense via server API');
+      }
+
       if (onSaveSuccess) onSaveSuccess();
       onClose();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'expenses');
+    } catch (error: any) {
+      console.error('Failed to save expense record:', error);
+      alert(error.message || 'Failed to save the expense record via server API.');
     } finally {
       setIsSaving(false);
     }
@@ -808,8 +820,27 @@ function TransactionsView({ transactions, savedEstimates, onLink, onDeleteSucces
                     <button 
                       onClick={async () => {
                         if (window.confirm("Delete this expense record?")) {
-                          await deleteDoc(doc(db, 'expenses', txn.id));
-                          if (onDeleteSuccess) onDeleteSuccess();
+                          try {
+                            const token = localStorage.getItem('company_admin_token');
+                            const response = await fetch('/api/expenses/delete', {
+                              method: 'DELETE',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token || ''}`
+                              },
+                              body: JSON.stringify({ id: txn.id })
+                            });
+
+                            if (!response.ok) {
+                              const errData = await response.json();
+                              throw new Error(errData.error || 'Failed to delete expense record via server API');
+                            }
+
+                            if (onDeleteSuccess) onDeleteSuccess();
+                          } catch (err: any) {
+                            console.error('Delete expense error:', err);
+                            alert(err.message || 'Error occurred while deleting the expense record.');
+                          }
                         }
                       }}
                       className="p-2 hover:bg-american-blue/5 rounded-lg text-american-red transition-colors" 
