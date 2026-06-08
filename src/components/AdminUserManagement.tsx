@@ -205,26 +205,25 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         return;
       }
 
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(formPassword, salt);
+      const response = await fetch('/api/admin/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formName.trim(),
+          email: formEmail.toLowerCase().trim(),
+          password: formPassword.trim(),
+          tier: formTier || 'free',
+          subscriptionTier: formTier || 'free'
+        }),
+      });
 
-      const userId = `usr-${Math.random().toString(36).substring(2, 11)}`;
-      const uRef = doc(db, 'users', userId);
+      const data = await response.json();
 
-      const newUser = {
-        uid: userId,
-        email: formEmail,
-        name: formName,
-        displayName: formName,
-        tier: formTier || 'free',
-        subscriptionTier: formTier || 'free',
-        passwordHash: passwordHash,
-        createdAt: new Date().toISOString(),
-        isDisabled: false,
-        isAdmin: false
-      };
-
-      await setDoc(uRef, newUser);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user');
+      }
 
       setSuccessToast("New User created successfully!");
       setIsAddUserOpen(false);
