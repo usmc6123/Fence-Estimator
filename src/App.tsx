@@ -1150,7 +1150,7 @@ export default function App() {
               user={user}
             />
           )}
-          {activeTab === 'settings' && <Settings />}
+          {activeTab === 'settings' && <Settings user={user} adminToken={adminToken} />}
           {activeTab === 'employees' && <ManageEmployees />}
           {activeTab === 'admin-console' && (
             <AdminConsole 

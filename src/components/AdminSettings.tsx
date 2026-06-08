@@ -1,8 +1,7 @@
 import React from 'react';
 import { 
-  Key, Shield, HardDrive, Mail, Phone, Globe, Image as ImageIcon, 
-  Server, Settings2, CheckCircle2, AlertCircle, RefreshCw, Send, 
-  HelpCircle, Sparkles, Building2, Terminal
+  Key, Shield, HardDrive, Phone, Globe, Image as ImageIcon, 
+  CheckCircle2, AlertCircle, RefreshCw, Building2, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -16,7 +15,7 @@ interface AdminSettingsProps {
   onNavigate: (path: string) => void;
 }
 
-type TabType = 'general' | 'smtp' | 'templates' | 'security';
+type TabType = 'general' | 'security';
 
 export default function AdminSettings({ adminEmail, adminToken, setAdminToken, onNavigate }: AdminSettingsProps) {
   const [activeTab, setActiveTab] = React.useState<TabType>('general');
@@ -31,32 +30,8 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
   const [companyWebsite, setCompanyWebsite] = React.useState('');
   const [companyLogo, setCompanyLogo] = React.useState('');
 
-  // SMTP Settings
-  const [selectedPreset, setSelectedPreset] = React.useState('custom');
-  const [smtpHost, setSmtpHost] = React.useState('');
-  const [smtpPort, setSmtpPort] = React.useState('465');
-  const [smtpSecureType, setSmtpSecureType] = React.useState<'SSL/TLS' | 'STARTTLS' | 'None'>('SSL/TLS');
-  const [smtpUsername, setSmtpUsername] = React.useState('');
-  const [smtpPassword, setSmtpPassword] = React.useState('');
-  const [fromEmail, setFromEmail] = React.useState('');
-  const [fromName, setFromName] = React.useState('');
-  const [replyToEmail, setReplyToEmail] = React.useState('');
-
-  // Webhooks & template links
-  const [gohighlevelWebhookUrl, setGohighlevelWebhookUrl] = React.useState('');
-  const [googleReviewLink, setGoogleReviewLink] = React.useState('');
-
-  // Templates
-  const [estimateEmailSubject, setEstimateEmailSubject] = React.useState('');
-  const [estimateEmailBody, setEstimateEmailBody] = React.useState('');
-  const [estimateAcceptedMessage, setEstimateAcceptedMessage] = React.useState('');
-  const [estimateDeclinedMessage, setEstimateDeclinedMessage] = React.useState('');
-
-  // Test Email dispatcher state
-  const [testRecipient, setTestRecipient] = React.useState('');
-  const [isSendingTest, setIsSendingTest] = React.useState(false);
-  const [testSuccess, setTestSuccess] = React.useState<string | null>(null);
-  const [testError, setTestError] = React.useState<string | null>(null);
+  // Retained full settings to prevent overwriting smtp & templates
+  const [fullSettings, setFullSettings] = React.useState<any>({});
 
   // Security Credentials state
   const [currentPassword, setCurrentPassword] = React.useState('');
@@ -73,15 +48,6 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
   const [backingUp, setBackingUp] = React.useState(false);
   const [backupSuccess, setBackupSuccess] = React.useState(false);
 
-  // Presets mapping
-  const smtpPresets: Record<string, { host: string; port: string; secure: 'SSL/TLS' | 'STARTTLS' | 'None' }> = {
-    zenbusiness: { host: 'mail.b.hostedemail.com', port: '465', secure: 'SSL/TLS' },
-    gmail: { host: 'smtp.gmail.com', port: '587', secure: 'STARTTLS' },
-    outlook: { host: 'smtp.office365.com', port: '587', secure: 'STARTTLS' },
-    godaddy: { host: 'smtpout.secureserver.net', port: '465', secure: 'SSL/TLS' },
-    custom: { host: '', port: '465', secure: 'SSL/TLS' }
-  };
-
   // On Mount, load existing settings securely from endpoints
   React.useEffect(() => {
     async function loadSettings() {
@@ -97,39 +63,12 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         }
         const data = await response.json();
         
-        // Map fields safely
+        setFullSettings(data);
         setCompanyName(data.companyName || '');
         setCompanyEmail(data.companyEmail || '');
         setCompanyPhone(data.companyPhone || '');
         setCompanyWebsite(data.companyWebsite || '');
         setCompanyLogo(data.companyLogo || '');
-
-        setSmtpHost(data.smtpHost || '');
-        setSmtpPort(String(data.smtpPort || '465'));
-        setSmtpSecureType(data.smtpSecureType || 'SSL/TLS');
-        setSmtpUsername(data.smtpUsername || '');
-        setSmtpPassword(data.smtpPassword || '');
-        setFromEmail(data.fromEmail || '');
-        setFromName(data.fromName || '');
-        setReplyToEmail(data.replyToEmail || '');
-
-        setGohighlevelWebhookUrl(data.gohighlevelWebhookUrl || data.ghlWebhookUrl || '');
-        setGoogleReviewLink(data.googleReviewLink || '');
-
-        setEstimateEmailSubject(data.estimateEmailSubject || '');
-        setEstimateEmailBody(data.estimateEmailBody || '');
-        setEstimateAcceptedMessage(data.estimateAcceptedMessage || '');
-        setEstimateDeclinedMessage(data.estimateDeclinedMessage || '');
-
-        // Auto detect preset if values match
-        const matchingPreset = Object.entries(smtpPresets).find(([_, config]) => {
-          return config.host === data.smtpHost && Number(config.port) === Number(data.smtpPort) && config.secure === data.smtpSecureType;
-        });
-        if (matchingPreset) {
-          setSelectedPreset(matchingPreset[0]);
-        } else {
-          setSelectedPreset('custom');
-        }
       } catch (err: any) {
         setSaveError(err.message || 'Error occurred while loading config profile.');
       } finally {
@@ -142,73 +81,26 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
     }
   }, [adminToken]);
 
-  // Handle SMTP preset change
-  const handlePresetSelect = (presetKey: string) => {
-    setSelectedPreset(presetKey);
-    const config = smtpPresets[presetKey];
-    if (config) {
-      setSmtpHost(config.host);
-      setSmtpPort(config.port);
-      setSmtpSecureType(config.secure);
-    }
-  };
-
   // Client Side validation before save
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveError(null);
     setSaveSuccess(null);
 
-    // Email format checks
     const mailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (fromEmail && !mailRegex.test(fromEmail)) {
-      setSaveError('From Email must be a valid email format.');
-      return;
-    }
     if (companyEmail && !mailRegex.test(companyEmail)) {
       setSaveError('Company Email must be a valid email format.');
-      return;
-    }
-    if (replyToEmail && !mailRegex.test(replyToEmail)) {
-      setSaveError('Reply-To email must be a valid email format.');
-      return;
-    }
-
-    // SMTP presence checks
-    if (!smtpHost) {
-      setSaveError('SMTP Server Host is required.');
-      return;
-    }
-    if (!smtpPort || isNaN(Number(smtpPort))) {
-      setSaveError('SMTP Port is required and must be numeric.');
-      return;
-    }
-    if (!smtpUsername) {
-      setSaveError('SMTP Username is required.');
       return;
     }
 
     try {
       const payload = {
+        ...fullSettings,
         companyName,
         companyEmail,
         companyPhone,
         companyWebsite,
         companyLogo,
-        smtpHost,
-        smtpPort: Number(smtpPort),
-        smtpSecureType,
-        smtpUsername,
-        smtpPassword,
-        fromEmail,
-        fromName,
-        replyToEmail,
-        gohighlevelWebhookUrl,
-        googleReviewLink,
-        estimateEmailSubject,
-        estimateEmailBody,
-        estimateAcceptedMessage,
-        estimateDeclinedMessage
       };
 
       const response = await fetch('/api/settings/save', {
@@ -225,55 +117,11 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         throw new Error(resData.error || 'Failed to persist company configurations.');
       }
 
-      setSaveSuccess('Global settings & multi-user rules saved successfully!');
+      setSaveSuccess('Admin general settings saved successfully!');
       // Update local storage representation slightly to have it cached
       localStorage.setItem('company_settings_saved', new Date().toISOString());
     } catch (err: any) {
       setSaveError(err.message || 'Error occurred while saving configurations.');
-    }
-  };
-
-  // Send SMTP Test Email
-  const handleSendTestEmail = async () => {
-    setTestError(null);
-    setTestSuccess(null);
-    if (!testRecipient) {
-      setTestError('A valid test recipient email address is required.');
-      return;
-    }
-
-    setIsSendingTest(true);
-    try {
-      const payload = {
-        smtpHost,
-        smtpPort: Number(smtpPort),
-        smtpSecureType,
-        smtpUsername,
-        smtpPassword,
-        fromEmail,
-        fromName,
-        recipientEmail: testRecipient
-      };
-
-      const response = await fetch('/api/settings/test-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.error || 'SMTP Connection Test failed.');
-      }
-
-      setTestSuccess('Connected & verified! Validation email dispatched successfully.');
-    } catch (err: any) {
-      setTestError(err.message || 'Fatal communication error with verification server.');
-    } finally {
-      setIsSendingTest(false);
     }
   };
 
@@ -373,28 +221,6 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         >
           <Building2 className="inline-block mr-2" size={14} />
           Company Profile
-        </button>
-        <button
-          onClick={() => { setActiveTab('smtp'); }}
-          className={`px-4 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'smtp' 
-              ? 'border-american-blue text-american-blue pb-3' 
-              : 'border-transparent text-[#666666] hover:text-[#1A1A1A]'
-          }`}
-        >
-          <Mail className="inline-block mr-2" size={14} />
-          SMTP Mail Server
-        </button>
-        <button
-          onClick={() => { setActiveTab('templates'); }}
-          className={`px-4 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'templates' 
-              ? 'border-american-blue text-american-blue pb-3' 
-              : 'border-transparent text-[#666666] hover:text-[#1A1A1A]'
-          }`}
-        >
-          <Settings2 className="inline-block mr-2" size={14} />
-          Templates & Webhooks
         </button>
         <button
           onClick={() => { setActiveTab('security'); }}
@@ -553,356 +379,6 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
           </div>
         )}
 
-        {activeTab === 'smtp' && (
-          <div className="space-y-6">
-            
-            {/* Primary Configuration */}
-            <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-6 transition-all">
-              <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                <Server className="text-american-blue" size={18} />
-                <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">
-                  Secure SMTP Dispatch Server Configuration
-                </h3>
-              </div>
-
-              {/* Presets selectors */}
-              <div>
-                <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-2.5">
-                  Network Email Provider Presets
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  {Object.keys(smtpPresets).map((pKey) => (
-                    <button
-                      key={pKey}
-                      type="button"
-                      onClick={() => handlePresetSelect(pKey)}
-                      className={`px-3 py-2 border text-2xs font-extrabold uppercase tracking-widest rounded-xl transition-all ${
-                        selectedPreset === pKey 
-                          ? 'border-american-blue bg-american-blue text-white shadow-sm' 
-                          : 'border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-50 text-[#1A1A1A] hover:border-slate-400'
-                      }`}
-                    >
-                      {pKey === 'zenbusiness' ? 'ZenBusiness' : 
-                       pKey === 'gmail' ? 'Google / Workspace' : 
-                       pKey === 'outlook' ? 'O365 / Outlook' : 
-                       pKey === 'godaddy' ? 'GoDaddy' : 'Custom SMTP'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* SMTP parameters */}
-              <div className="grid gap-6 md:grid-cols-3">
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    SMTP Host Address
-                  </label>
-                  <input 
-                    type="text" 
-                    value={smtpHost}
-                    required
-                    onChange={(e) => {
-                      setSmtpHost(e.target.value);
-                      setSelectedPreset('custom');
-                    }}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="mail.b.hostedemail.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    SMTP Port
-                  </label>
-                  <input 
-                    type="text" 
-                    value={smtpPort}
-                    required
-                    onChange={(e) => {
-                      setSmtpPort(e.target.value);
-                      setSelectedPreset('custom');
-                    }}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="465"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    SMTP Secure Type
-                  </label>
-                  <select
-                    value={smtpSecureType}
-                    onChange={(e) => {
-                      setSmtpSecureType(e.target.value as any);
-                      setSelectedPreset('custom');
-                    }}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                  >
-                    <option value="SSL/TLS">SSL/TLS (Port 465 - secure: true)</option>
-                    <option value="STARTTLS">STARTTLS (Port 587 - secure: false)</option>
-                    <option value="None">None (Unsecured Connection)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    SMTP Username / Login
-                  </label>
-                  <input 
-                    type="text" 
-                    value={smtpUsername}
-                    required
-                    onChange={(e) => setSmtpUsername(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="Smtp@MyBrand.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    SMTP Password
-                  </label>
-                  <input 
-                    type="password" 
-                    value={smtpPassword}
-                    onChange={(e) => setSmtpPassword(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="••••••••"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 selection:text-white leading-normal font-bold">
-                    * If already configured, we mask values for top security. Leave unchanged to retain existing credentials.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    Sender Name (Friendly From)
-                  </label>
-                  <input 
-                    type="text" 
-                    value={fromName}
-                    onChange={(e) => setFromName(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="e.g. Braden - Lone Star Fence"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    From Email Address
-                  </label>
-                  <input 
-                    type="text" 
-                    value={fromEmail}
-                    onChange={(e) => setFromEmail(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="e.g. support@mysuperiorfencecompany.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    Reply-To Address
-                  </label>
-                  <input 
-                    type="text" 
-                    value={replyToEmail}
-                    onChange={(e) => setReplyToEmail(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="e.g. office@mysuperiorfencecompany.com"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Test Email Card */}
-            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-                <Send className="text-gray-600" size={16} />
-                <h4 className="text-xs font-black text-gray-700 uppercase tracking-widest">
-                  Diagnostic SMTP Server Connection Dispatcher
-                </h4>
-              </div>
-
-              <p className="text-2xs text-[#666666] font-bold leading-relaxed max-w-3xl">
-                Evaluate SMTP routing pathways directly. Enter a valid recipient. Dispatched payloads will establish secure connection handshakes on host nodes and report diagnostic failure traces in real-time.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <input 
-                  type="email" 
-                  value={testRecipient}
-                  onChange={(e) => setTestRecipient(e.target.value)}
-                  className="block sm:max-w-sm w-full rounded-xl border border-[#D5D5D5] bg-white px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                  placeholder="Enter verification email address"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendTestEmail}
-                  disabled={isSendingTest}
-                  className="py-2.5 px-5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider inline-flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                >
-                  {isSendingTest ? (
-                    <>
-                      <RefreshCw size={12} className="animate-spin" />
-                      Testing Pipeline...
-                    </>
-                  ) : (
-                    <>
-                      <Send size={12} />
-                      Verify Connection & Send Test
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {testSuccess && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold leading-tight flex items-start gap-2.5 shadow-sm"
-                  >
-                    <CheckCircle2 size={16} className="text-emerald-600 mt-px" />
-                    <span>{testSuccess}</span>
-                  </motion.div>
-                )}
-
-                {testError && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-bold leading-tight flex items-start gap-2.5 shadow-sm"
-                  >
-                    <AlertCircle size={16} className="text-red-600 mt-px flex-shrink-0" />
-                    <span>{testError}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'templates' && (
-          <div className="bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-6 transition-all">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-              <Settings2 className="text-american-blue" size={18} />
-              <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">
-                Custom Communication & Webhook Integration Templates
-              </h3>
-            </div>
-
-            <div className="space-y-6">
-              
-              {/* GoHighLevel Webhook & Feedback */}
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    GoHighLevel Webhook URL
-                  </label>
-                  <input 
-                    type="text" 
-                    value={gohighlevelWebhookUrl}
-                    onChange={(e) => setGohighlevelWebhookUrl(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="https://services.leadconnectorhq.com/hooks/..."
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 font-bold">
-                    Triggers outbound notifications automatically on client decisions (Accepted or Declined).
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                    Google Review Link
-                  </label>
-                  <input 
-                    type="text" 
-                    value={googleReviewLink}
-                    onChange={(e) => setGoogleReviewLink(e.target.value)}
-                    className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    placeholder="https://g.page/r/some-unique-profile-id/review"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1 font-bold">
-                    Provides review shortcuts on portals after signature completions!
-                  </p>
-                </div>
-              </div>
-
-              {/* Estimate Templates */}
-              <div className="border-t border-slate-100 pt-6 space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-wider text-american-blue">
-                  Customer Email Templates
-                </h4>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                      Estimate Outbound Subject Line
-                    </label>
-                    <input 
-                      type="text" 
-                      value={estimateEmailSubject}
-                      onChange={(e) => setEstimateEmailSubject(e.target.value)}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="Fence Installation Contract Agreement - {companyName}"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <label className="block text-xs font-black uppercase text-[#666666] tracking-widest">
-                        Estimate Email Plain-Text Body
-                      </label>
-                      <span className="text-[9px] font-bold text-gray-400 bg-slate-100 px-2 py-0.5 rounded-md">
-                        Supported: &#123;customerName&#125;, &#123;estimateNumber&#125;, &#123;estimateLink&#125;, &#123;companyName&#125;
-                      </span>
-                    </div>
-                    <textarea 
-                      rows={5}
-                      value={estimateEmailBody}
-                      onChange={(e) => setEstimateEmailBody(e.target.value)}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all font-mono"
-                      placeholder="Hello {customerName},&#10;&#10;We have compiled and drafted your fencing contract agreement. Please review pricing and sign the warranty agreement directly using this link: {estimateLink}&#10;&#10;Best regards,&#10;{companyName}"
-                    />
-                  </div>
-
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                        Estimate Accepted Success Screen Alert Message
-                      </label>
-                      <textarea 
-                        rows={3}
-                        value={estimateAcceptedMessage}
-                        onChange={(e) => setEstimateAcceptedMessage(e.target.value)}
-                        className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                        placeholder="Estimate accepted successfully! We will finalize your installation timeframe shortly."
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-black uppercase text-[#666666] tracking-widest mb-1.5">
-                        Estimate Declined Success Screen Alert Message
-                      </label>
-                      <textarea 
-                        rows={3}
-                        value={estimateDeclinedMessage}
-                        onChange={(e) => setEstimateDeclinedMessage(e.target.value)}
-                        className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                        placeholder="Estimate declined. We will reach out shortly to understand how we can make adjustments. Thank you!"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Action Panel for save tabs */}
         {activeTab !== 'security' && (
           <div className="flex justify-end pt-2">
@@ -1049,24 +525,9 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
                     disabled={backingUp}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D5D5D5] hover:bg-slate-50 text-xs font-black uppercase tracking-wider rounded-xl hover:text-american-blue transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw size={12} className={backingUp ? 'animate-spin' : ''} />
-                    Backup Now
+                    Backup Data Now
                   </button>
                 </div>
-
-                <AnimatePresence>
-                  {backupSuccess && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="p-3 bg-emerald-50 border border-emerald-25 border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold leading-tight flex items-center gap-2"
-                    >
-                      <CheckCircle2 size={14} className="text-emerald-600" />
-                      Database snapshots cataloged successfully on node server.
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             </div>
           </div>
