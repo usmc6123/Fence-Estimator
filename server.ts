@@ -362,7 +362,7 @@ async function startServer() {
   });
 
   // GET /api/admin/users - Get all users (admin only)
-  app.get('/api/admin/users', authenticateAdmin, (req, res) => listUsers(req, res, db));
+  app.get('/api/admin/users', listUsers);
 
   // GET /api/admin/users/:userId - Get specific user details
   app.get('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {

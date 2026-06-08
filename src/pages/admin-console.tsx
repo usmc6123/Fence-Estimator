@@ -58,28 +58,20 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
     setLoading(true);
     setError(null);
     try {
-      const usersRef = collection(db, 'users');
-      const snap = await getDocs(usersRef);
-      const usersList: UserProfile[] = [];
-
-      for (const d of snap.docs) {
-        const u = d.data();
-        // Count user's estimates
-        const estRef = collection(db, 'users', d.id, 'estimates');
-        const estSnap = await getDocs(estRef);
-        usersList.push({
-          uid: d.id,
-          email: u.email || '',
-          name: u.name || u.displayName || u.email?.split('@')[0] || 'No Name',
-          subscriptionTier: u.tier || u.subscriptionTier || 'free',
-          createdAt: u.createdAt || '',
-          isDisabled: u.isDisabled || false,
-          estimatesCount: estSnap.size
-        });
+      const token = localStorage.getItem('company_admin_token') || currentUser?.token || '';
+      const response = await fetch('/api/admin/users', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned error ${response.status}: ${response.statusText}`);
       }
+      const usersList: UserProfile[] = await response.json();
       setUsers(usersList);
     } catch (err: any) {
-      console.error('[AdminConsole] Failed to load users via Firestore Client SDK:', err);
+      console.error('[AdminConsole] Failed to load users via API:', err);
       setError(err.message || 'Identity verification failed. Please authenticate.');
     } finally {
       setLoading(false);
