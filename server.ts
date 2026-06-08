@@ -12,7 +12,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
 // Modular Admin APIs
-import { listUsers } from './api/admin/users/list';
+import { listUsers } from './api/admin/users';
 import { createUser } from './api/admin/users/create';
 import { updateUser } from './api/admin/users/update';
 import { deleteUser } from './api/admin/users/delete';
