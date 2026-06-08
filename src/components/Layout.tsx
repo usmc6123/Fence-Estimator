@@ -46,8 +46,8 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-[#1A1A1A]">
       {/* Sidebar - Desktop */}
-      <aside className="fixed left-0 top-0 hidden h-full w-64 border-r border-[#E5E5E5] bg-white lg:block print:hidden">
-        <div className="flex h-24 items-center border-b border-[#E5E5E5] px-6">
+      <aside className="fixed left-0 top-0 hidden h-full w-64 border-r border-[#E5E5E5] bg-white lg:flex lg:flex-col print:hidden">
+        <div className="flex h-24 items-center border-b border-[#E5E5E5] px-6 shrink-0">
           <div className="flex items-center gap-3">
             {COMPANY_INFO.logo && (
               <img 
@@ -64,7 +64,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
           </div>
         </div>
         
-        <nav className="p-4">
+        <nav className="p-4 overflow-y-auto flex-1 min-h-0 scrollbar-thin">
           <ul className="space-y-1">
             {displayItems.map((item) => (
               <li key={item.id}>
@@ -85,7 +85,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
           </ul>
         </nav>
         
-        <div className="absolute bottom-0 w-full border-t border-[#E5E5E5] p-5">
+        <div className="border-t border-[#E5E5E5] p-5 shrink-0 bg-white">
           {user ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-3">
