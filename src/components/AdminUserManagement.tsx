@@ -320,9 +320,9 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         )}
       </AnimatePresence>
 
-      <div className="grid gap-6 grid-cols-1 xl:grid-cols-3">
+      <div className="flex flex-col gap-6">
         {/* Users registry list card */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-4">
+        <div className="w-full bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-[#F0F0F0] pb-3">
             <div>
               <h3 className="text-sm font-black text-american-blue uppercase tracking-widest">
@@ -523,7 +523,7 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         </div>
 
         {/* Selected User side drawer info screen */}
-        <div id="inspector_dossier_panel" className="xl:col-span-1 bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm flex flex-col justify-between min-h-[400px]">
+        <div id="inspector_dossier_panel" className="w-full bg-white rounded-2xl border border-[#E5E5E5] p-6 shadow-sm flex flex-col justify-between min-h-[400px]">
           <div>
             <div className="border-b border-[#F0F0F0] pb-3 mb-4">
               <h3 className="text-sm font-black text-american-blue uppercase tracking-widest flex items-center gap-2">
