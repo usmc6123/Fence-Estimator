@@ -1,7 +1,7 @@
 import React from 'react';
 import { Shield, Trees, Box, Grid } from 'lucide-react';
 import privacyFenceImg from '../../assets/images/actual_privacy_fence.jpg';
-import metalFenceImg from '../../assets/images/user_metal_fence_faithful_new_1779474753459.png';
+import metalFenceImg from '../../assets/images/3 rail wrought iron fence.jpg';
 import chainLinkImg from '../../assets/images/user_chain_link_fence_faithful_new_1779474771303.png';
 import pipeFenceImg from '../../assets/images/user_pipe_fence_faithful_1779472956023.png';
 import { getCustomPhotos } from './photoStorage';
