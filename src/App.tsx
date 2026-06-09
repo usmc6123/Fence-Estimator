@@ -902,6 +902,31 @@ export default function App() {
     }
   }, [isAuthLoading, isRoleVerifying, isAdminVerifying]);
 
+  if (isCustomerPortal) {
+    return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
+  }
+
+  if (isContractPortal) {
+    const params = new URLSearchParams(window.location.search);
+    let estimateId = params.get('estimateId') || params.get('id') || '';
+    if (!estimateId) {
+      const hash = window.location.hash;
+      if (hash.includes('estimateId=')) {
+        estimateId = hash.substring(hash.indexOf('estimateId=') + 11).split('&')[0];
+      } else if (hash.includes('id=')) {
+        estimateId = hash.substring(hash.indexOf('id=') + 3).split('&')[0];
+      }
+    }
+    return (
+      <CustomerSignaturePortal 
+        estimateId={estimateId} 
+        materials={materials} 
+        laborRates={laborRates} 
+        quotes={quotes} 
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] px-4 font-sans text-[#1A1A1A]" id="app-loading-screen">
@@ -954,31 +979,6 @@ export default function App() {
 
   if (isEmployeeView) {
     return <EmployeePortal />;
-  }
-
-  if (isCustomerPortal) {
-    return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
-  }
-
-  if (isContractPortal) {
-    const params = new URLSearchParams(window.location.search);
-    let estimateId = params.get('estimateId') || params.get('id') || '';
-    if (!estimateId) {
-      const hash = window.location.hash;
-      if (hash.includes('estimateId=')) {
-        estimateId = hash.substring(hash.indexOf('estimateId=') + 11).split('&')[0];
-      } else if (hash.includes('id=')) {
-        estimateId = hash.substring(hash.indexOf('id=') + 3).split('&')[0];
-      }
-    }
-    return (
-      <CustomerSignaturePortal 
-        estimateId={estimateId} 
-        materials={materials} 
-        laborRates={laborRates} 
-        quotes={quotes} 
-      />
-    );
   }
 
   if (!user) {
