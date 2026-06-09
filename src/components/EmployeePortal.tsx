@@ -3,7 +3,7 @@ import {
   Lock, Mail, LogOut, KeyRound, Eye, EyeOff, RefreshCw, 
   Calendar, CheckCircle2, ShieldCheck, ShieldAlert 
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, assignEstimateNumbers } from '../lib/utils';
 import { 
   doc, getDoc, onSnapshot, query, collection, where 
 } from 'firebase/firestore';
@@ -84,7 +84,8 @@ export default function EmployeePortal() {
     const q = query(getEstimatesCollection(db));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        setSavedEstimates(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate)));
+        const rawList = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as SavedEstimate));
+        setSavedEstimates(assignEstimateNumbers(rawList));
       },
       (error) => handleFirestoreError(error, OperationType.LIST, 'estimates')
     );

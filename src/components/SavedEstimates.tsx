@@ -7,7 +7,7 @@ import {
   FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, assignEstimateNumbers } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { updateDoc, deleteDoc } from 'firebase/firestore';
@@ -208,7 +208,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       });
       if (response.ok) {
         const data = await response.json();
-        setSavedEstimates(data);
+        setSavedEstimates(assignEstimateNumbers(data));
       } else {
         console.error('Failed to fetch estimates via API:', response.statusText);
       }
@@ -607,7 +607,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                               </div>
                             </td>
                             <td className="py-2 px-4 font-bold text-[#111111] font-mono text-xs leading-none whitespace-nowrap">
-                              {formatCurrency(estimate.totalCost || estimate.manualGrandTotal || 0)}
+                              {formatCurrency(estimate.totalCost || estimate.total || estimate.manualGrandTotal || 0)}
                             </td>
                             <td className="py-2.5 px-4 whitespace-nowrap">
                               <div className="flex flex-col gap-1">
