@@ -49,7 +49,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       try {
         const token = localStorage.getItem('company_admin_token');
         if (!token) return;
-        const res = await fetch('/api/settings/get', {
+        const res = await fetch('/api/settings', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {

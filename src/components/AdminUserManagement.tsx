@@ -205,12 +205,13 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         return;
       }
 
-      const response = await fetch('/api/admin/register', {
+      const response = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'register',
           name: formName.trim(),
           email: formEmail.toLowerCase().trim(),
           password: formPassword.trim(),

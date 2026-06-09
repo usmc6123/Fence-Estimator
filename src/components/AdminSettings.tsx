@@ -53,7 +53,7 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
     async function loadSettings() {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/settings/get', {
+        const response = await fetch('/api/settings', {
           headers: {
             'Authorization': `Bearer ${adminToken}`
           }
@@ -96,6 +96,7 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
     try {
       const payload = {
         ...fullSettings,
+        action: 'save',
         companyName,
         companyEmail,
         companyPhone,
@@ -103,7 +104,7 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         companyLogo,
       };
 
-      const response = await fetch('/api/settings/save', {
+      const response = await fetch('/api/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

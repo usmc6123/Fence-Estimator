@@ -12,10 +12,8 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
 // Modular Admin APIs
-import { listUsers } from './api/admin/users';
-import { createUser } from './api/admin/users/create';
-import { updateUser } from './api/admin/users/update';
-import { deleteUser } from './api/admin/users/delete';
+import { listUsers, createUser, updateUser, deleteUser } from './api/admin/users';
+import adminHandler from './api/admin';
 import listEstimates from './api/estimates/list';
 import listExpenses from './api/expenses/list';
 import listQuotes from './api/quotes/list';
@@ -23,9 +21,7 @@ import listMaterials from './api/materials/list';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
 import sendEstimate from './api/estimates/send';
-import getSettings from './api/settings/get';
-import saveSettings from './api/settings/save';
-import testSettings from './api/settings/test';
+import settingsHandler from './api/settings';
 
 async function startServer() {
   const app = express();
@@ -208,65 +204,9 @@ async function startServer() {
   });
 
   // POST /api/admin/login - Admin email/password login
-  app.post('/api/admin/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-      }
-
-      const emailLower = email.toLowerCase().trim();
-      const pwd = password.trim();
-
-      if (emailLower !== 'bradens@lonestarfenceworks.com' && emailLower !== 'usmc6123@gmail.com') {
-        return res.status(403).json({ error: 'Access denied. Unauthorized admin email.' });
-      }
-
-      if (!db) {
-        return res.status(503).json({ error: 'Database service is temporarily unavailable.' });
-      }
-
-      // Query /admins collection by email
-      const adminsSnap = await getDocs(collection(db, 'admins'));
-      const adminDoc = adminsSnap.docs.find(d => d.data().email?.toLowerCase() === emailLower);
-
-      if (!adminDoc) {
-        return res.status(404).json({ error: 'Admin record not found in database.' });
-      }
-
-      const adminData = adminDoc.data();
-      let adminUid = adminDoc.id;
-      if (emailLower === 'bradens@lonestarfenceworks.com') {
-        adminUid = 'braden-lonestar-uid';
-      }
-
-      // Verify password with bcryptjs
-      const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
-      if (!isMatch) {
-         return res.status(401).json({ error: 'Invalid admin credentials.' });
-      }
-
-      // Create JWT
-      const token = jwt.sign(
-        { email: adminData.email, isAdmin: true, uid: adminUid },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
-      res.json({
-        success: true,
-        token,
-        admin: {
-          email: adminData.email,
-          uid: adminUid,
-          canAccessAllData: adminData.canAccessAllData || true,
-          isAdmin: true
-        }
-      });
-    } catch (error: any) {
-      console.error('Admin login error:', error);
-      res.status(500).json({ error: error.message || 'Internal Server Error' });
-    }
+  app.post('/api/admin/login', (req, res) => {
+    req.body.action = 'login';
+    adminHandler(req, res);
   });
 
   // POST /api/user/login - Custom client login
@@ -525,41 +465,12 @@ async function startServer() {
   });
 
   // POST /api/admin/verify-credentials - Verification and automatic 24-hour token refresh
-  app.post('/api/admin/verify-credentials', async (req, res) => {
-    try {
-      const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
-      if (!authHeader) {
-        return res.status(401).json({ error: 'Admin authentication is required. Token is missing.' });
-      }
-      const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.substring(7)
-        : authHeader;
-      
-      const decoded = jwt.verify(token as string, JWT_SECRET) as any;
-      if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
-        // Generate a new refreshed 24-hour token to keep session active
-        const refreshedToken = jwt.sign(
-          { email: decoded.email, isAdmin: true, uid: decoded.uid },
-          JWT_SECRET,
-          { expiresIn: '24h' }
-        );
-        return res.json({
-          success: true,
-          valid: true,
-          token: refreshedToken,
-          admin: {
-            email: decoded.email,
-            uid: decoded.uid,
-            isAdmin: true
-          }
-        });
-      }
-      return res.status(401).json({ success: false, valid: false, error: 'Access denied. Invalid token.' });
-    } catch (err: any) {
-      // Suppress noisy verification warnings in standard output to keep integration logs clean
-      return res.status(401).json({ success: false, valid: false, error: 'Access denied. Invalid or expired admin token.' });
-    }
+  app.post('/api/admin/verify-credentials', (req, res) => {
+    req.body.action = 'verify-credentials';
+    adminHandler(req, res);
   });
+
+  app.post('/api/admin', adminHandler);
 
   // GET /api/user/profile - Get own profile
   app.get('/api/user/profile', async (req, res) => {
@@ -586,9 +497,23 @@ async function startServer() {
   app.get('/api/estimates/list', listEstimates);
 
   // Settings Endpoints
-  app.get('/api/settings/get', getSettings);
-  app.post('/api/settings/save', saveSettings);
-  app.post('/api/settings/test-email', testSettings);
+  app.get('/api/settings/get', (req, res) => {
+    settingsHandler(req, res);
+  });
+  app.post('/api/settings/save', (req, res) => {
+    req.body.action = 'save';
+    settingsHandler(req, res);
+  });
+  app.post('/api/settings/test-email', (req, res) => {
+    req.body.action = 'test-email';
+    settingsHandler(req, res);
+  });
+  app.get('/api/settings', (req, res) => {
+    settingsHandler(req, res);
+  });
+  app.post('/api/settings', (req, res) => {
+    settingsHandler(req, res);
+  });
 
   // Consolidated write endpoint for estimates (POST for saves/creates, PUT for updates, DELETE/POST for deletes)
   app.post('/api/estimates/write', writeEstimate);

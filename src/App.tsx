@@ -111,12 +111,13 @@ export default function App() {
         return;
       }
       try {
-        const response = await fetch('/api/admin/verify-credentials', {
+        const response = await fetch('/api/admin', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${storedToken}`
-          }
+          },
+          body: JSON.stringify({ action: 'verify-credentials' })
         });
         if (response.ok) {
           const data = await response.json();

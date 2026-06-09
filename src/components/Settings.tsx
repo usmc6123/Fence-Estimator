@@ -89,7 +89,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         const token = adminToken || localStorage.getItem('company_admin_token');
         if (token) {
           try {
-            const response = await fetch('/api/settings/get', {
+            const response = await fetch('/api/settings', {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -190,6 +190,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       const token = adminToken || localStorage.getItem('company_admin_token');
       if (token) {
         const apiPayload = {
+          action: 'save',
           companyName: formData.companyName,
           companyEmail: formData.businessEmail,
           companyPhone: formData.phoneNumber,
@@ -213,7 +214,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           estimateDeclinedMessage: formData.estimateDeclinedMessage
         };
 
-        const response = await fetch('/api/settings/save', {
+        const response = await fetch('/api/settings', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -256,6 +257,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       }
 
       const payload = {
+        action: 'test-email',
         smtpHost: formData.smtpHost,
         smtpPort: Number(formData.smtpPort),
         smtpSecureType: formData.smtpSecureType,
@@ -266,7 +268,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         recipientEmail: testRecipient
       };
 
-      const response = await fetch('/api/settings/test-email', {
+      const response = await fetch('/api/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

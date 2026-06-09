@@ -96,12 +96,13 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
     const refreshAdminToken = async () => {
       console.log('[AdminConsole] Initiating credentials verification/token refresh sequence...');
       try {
-        const response = await fetch('/api/admin/verify-credentials', {
+        const response = await fetch('/api/admin', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${tokenToUse}`
-          }
+          },
+          body: JSON.stringify({ action: 'verify-credentials' })
         });
         if (response.ok) {
           const data = await response.json();
