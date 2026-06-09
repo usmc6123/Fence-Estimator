@@ -455,8 +455,6 @@ export default function App() {
     // before subscribing to any collection path to avoid race conditions
     if (user && !roleChecked) return;
 
-    let unsubCloud: () => void = () => {};
-
     const syncEstimates = () => {
       let localEstimates: SavedEstimate[] = [];
       try {
@@ -469,56 +467,41 @@ export default function App() {
       }
 
       if (!user) {
-        setSavedEstimates(localEstimates);
-        return () => {};
+        setSavedEstimates(assignEstimateNumbers(localEstimates));
+        return;
       }
 
-      // Explicitly pass user.uid and isCompanyUser to guarantee correct reactive path building
-      const q = query(getEstimatesCollection(db, user.uid, isCompanyUser));
-      const unsubscribe = onSnapshot(q, 
-        (snapshot) => {
-          const cloudEstimates = snapshot.docs.map(d => {
-            const data = d.data();
-            const createdAt = data.createdAt?.seconds 
-              ? new Date(data.createdAt.seconds * 1000).toISOString() 
-              : (typeof data.createdAt === 'string' ? data.createdAt : (data.createdAt || new Date().toISOString()));
-              
-            const lastModified = data.lastModified?.seconds 
-              ? new Date(data.lastModified.seconds * 1000).toISOString() 
-              : (typeof data.lastModified === 'string' ? data.lastModified : (data.lastModified || createdAt || new Date().toISOString()));
-
-            return {
-              ...data,
-              id: d.id,
-              createdAt,
-              lastModified
-            } as SavedEstimate;
-          });
-
-          // Merge cloud with unique local estimates
-          const cloudIds = new Set(cloudEstimates.map(e => e.id));
-          const uniqueLocal = localEstimates.filter(e => !cloudIds.has(e.id));
-          const combined = [...cloudEstimates, ...uniqueLocal];
-          setSavedEstimates(assignEstimateNumbers(combined));
-        },
-        (error) => {
-          console.error('Error listening to cloud estimates, falling back to local registry:', error);
-          setSavedEstimates(assignEstimateNumbers(localEstimates));
+      // Load via the secure /api/estimates/list endpoint
+      const token = localStorage.getItem('company_admin_token');
+      fetch('/api/estimates/list', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
         }
-      );
-      return unsubscribe;
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            const cloudEstimates = await res.json();
+            // Merge cloud with unique local estimates
+            const cloudIds = new Set(cloudEstimates.map((e: any) => e.id));
+            const uniqueLocal = localEstimates.filter(e => !cloudIds.has(e.id));
+            const combined = [...cloudEstimates, ...uniqueLocal];
+            setSavedEstimates(assignEstimateNumbers(combined));
+          } else {
+            console.error('Cloud Sync API fetch failed, showing local estimates as fallback:', res.statusText);
+            setSavedEstimates(assignEstimateNumbers(localEstimates));
+          }
+        })
+        .catch((err) => {
+          console.error('Network error during cloud sync fetch, falling back to local registry:', err);
+          setSavedEstimates(assignEstimateNumbers(localEstimates));
+        });
     };
 
-    unsubCloud = syncEstimates();
+    syncEstimates();
 
-    // Re-check anytime a new customer estimate is submitted
+    // Re-check anytime a new customer estimate is submitted or created
     const handleLocalSubmitted = () => {
-      // Unsubscribe from the old listener first to avoid leaking listeners/streams!
-      if (unsubCloud) {
-        unsubCloud();
-      }
-      // Re-run syncing to grab latest items from localStorage
-      unsubCloud = syncEstimates();
+      syncEstimates();
     };
     window.addEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
 
@@ -531,7 +514,6 @@ export default function App() {
     window.addEventListener('message', handleMessageReceived);
 
     return () => {
-      if (unsubCloud) unsubCloud();
       window.removeEventListener('customer_estimator_estimate_submitted', handleLocalSubmitted);
       window.removeEventListener('message', handleMessageReceived);
     };

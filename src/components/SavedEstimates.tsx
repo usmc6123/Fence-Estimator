@@ -240,14 +240,15 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           address.toLowerCase().includes(searchTerm.toLowerCase());
     
     let matchesFilter = false;
+    const currentStatus = est.status || 'active';
     if (filter === 'all') {
       matchesFilter = true;
     } else if (filter === 'active') {
-      matchesFilter = est.status === 'active' && est.jobStatus !== 'Completed';
+      matchesFilter = currentStatus === 'active' && est.jobStatus !== 'Completed';
     } else if (filter === 'completed') {
-      matchesFilter = est.status === 'active' && est.jobStatus === 'Completed';
+      matchesFilter = currentStatus === 'active' && est.jobStatus === 'Completed';
     } else if (filter === 'archived') {
-      matchesFilter = est.status === 'archived';
+      matchesFilter = currentStatus === 'archived';
     }
 
     return matchesSearch && matchesFilter;

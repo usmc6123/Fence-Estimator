@@ -520,6 +520,87 @@ async function startServer() {
   app.put('/api/estimates/write', writeEstimate);
   app.delete('/api/estimates/write', writeEstimate);
 
+  // POST /api/webhooks/ghl - Proxy to GoHighLevel webhook to keep GHL_WEBHOOK_URL secure and handle CORS.
+  app.post('/api/webhooks/ghl', async (req, res) => {
+    try {
+      console.log('Incoming GHL Webhook post payload:', req.body);
+      const {
+        firstName,
+        lastName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        zip,
+        fenceType,
+        linearFeet,
+        gateCount,
+        estimatedPrice
+      } = req.body;
+
+      // Validate all required fields before submission
+      if (!firstName || !lastName || !email || !phone || !address || !city || !state || !zip) {
+        return res.status(400).json({ error: 'All contact and address fields (firstName, lastName, email, phone, address, city, state, zip) are required.' });
+      }
+
+      const ghlWebhookUrl = process.env.GHL_WEBHOOK_URL;
+      if (!ghlWebhookUrl) {
+        console.error('GHL_WEBHOOK_URL environment variable is not configured');
+        return res.status(500).json({ error: 'GoHighLevel Webhook URL is not configured on the server. Please define GHL_WEBHOOK_URL in environment configuration.' });
+      }
+
+      // Format phone number correctly for GoHighLevel (e.g. +1XXXXXXXXXX)
+      const formatPhoneForGHL = (p: string): string => {
+        const cleaned = p.replace(/\D/g, '');
+        if (cleaned.length === 10) {
+          return `+1${cleaned}`;
+        } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+          return `+${cleaned}`;
+        }
+        return p; 
+      };
+
+      const ghlPayload = {
+        firstName,
+        lastName,
+        email,
+        phone: formatPhoneForGHL(phone),
+        address,
+        city,
+        state,
+        zip,
+        fenceType: fenceType || '',
+        linearFeet: String(linearFeet || '0'),
+        gateCount: String(gateCount || '0'),
+        estimatedPrice: String(estimatedPrice || '0.00'),
+        leadSource: "Fence Estimator App"
+      };
+
+      console.log('Dispatching request to GHL webhook:', ghlWebhookUrl, 'Payload:', ghlPayload);
+
+      const response = await fetch(ghlWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(ghlPayload)
+      });
+
+      const responseText = await response.text();
+      console.log(`GHL Webhook response stats - Status: ${response.status}, Response:`, responseText);
+
+      if (!response.ok) {
+        throw new Error(`GHL Webhook returned status ${response.status}: ${responseText}`);
+      }
+
+      res.status(200).json({ success: true, message: 'Lead successfully dispatched to CRM webhook.', status: response.status, data: responseText });
+    } catch (err: any) {
+      console.error('Failed to submit lead to GHL:', err);
+      res.status(500).json({ error: err.message || 'Transmission to CRM webhook failed.' });
+    }
+  });
+
   // GET /api/expenses/list - Get expenses list via JWT authorization
   app.get('/api/expenses/list', listExpenses);
 

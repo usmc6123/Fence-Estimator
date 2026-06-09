@@ -145,6 +145,8 @@ export function useCustomerEstimator(
       return;
     }
 
+    if (isSubmitting) return;
+
     setIsSubmitting(true);
     setError(null);
 
@@ -315,64 +317,59 @@ export function useCustomerEstimator(
         // We catch this gracefully to prevent offline/permission errors from blocking the client experience
       }
 
-      // 2. Fetch GHL Webhook info from companySettings
-      let ghlWebhookUrl = '';
+      // 2. Submit to our backend GHL proxy endpoint which forwards to GO HIGH LEVEL
       try {
-        const settingsDoc = await getDoc(doc(db, 'companySettings', 'main'));
-        if (settingsDoc.exists()) {
-          const settings = settingsDoc.data();
-          if (settings.ghlWebhookUrl) {
-            ghlWebhookUrl = settings.ghlWebhookUrl;
-          }
+        const payload = {
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          email: data.email.trim(),
+          phone: data.phone.trim(),
+          address: (data.street || '').trim(),
+          city: (data.city || '').trim(),
+          state: (data.state || '').trim(),
+          zip: (data.zip || '').trim(),
+          fenceType: data.fenceType || 'Wood Fence',
+          linearFeet: data.linearFeet,
+          gateCount: data.needGates ? data.gateCount : 0,
+          estimatedPrice: Math.round(breakdown.total * 100) / 100
+        };
+
+        console.info('Invoking local server CRM proxy to dispatch lead to GoHighLevel CRM...');
+        const response = await fetch('/api/webhooks/ghl', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const responseText = await response.text();
+        console.log('CRM Webhook Proxy Response status:', response.status, 'Response:', responseText);
+
+        if (!response.ok) {
+          let errorMsg = 'Failed to transmit lead to GoHighLevel CRM.';
+          try {
+            const parsed = JSON.parse(responseText);
+            if (parsed.error) errorMsg = parsed.error;
+          } catch (_) {}
+          throw new Error(errorMsg);
         }
-      } catch (settingsError) {
-        console.warn('Could not read GHL settings, will skip GHL fetch or use env:', settingsError);
-      }
 
-      // 3. Post to GHL if we have a URL
-      if (ghlWebhookUrl) {
-        try {
-          const webhookPayload = {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            email: data.email,
-            phone: data.phone,
-            projectAddress: data.address,
-            fenceType: data.fenceType,
-            estimateTotal: Math.round(breakdown.total * 100) / 100,
-            estimateDetails: JSON.stringify({
-              data,
-              breakdown
-            }),
-            source: 'website-estimator-tool',
-            tags: ['Customer Estimate', 'New Lead']
-          };
-
-          const response = await fetch(ghlWebhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(webhookPayload)
-          });
-
-          if (response.ok) {
-            setGhlSynced(true);
-          } else {
-            console.warn('GHL CRM webhook returned an error:', response.status);
-          }
-        } catch (ghlError) {
-          console.warn('GHL CRM transmission failed, estimate saved securely in app ledger:', ghlError);
-        }
+        setGhlSynced(true);
+      } catch (ghlErr: any) {
+        console.error('Core GHL CRM submission task failed:', ghlErr);
+        throw new Error(ghlErr.message || 'CRM Webhook submission failed. Please try again.');
       }
 
       setSubmitSuccess(true);
       setStep(6);
-    } catch (saveError) {
+    } catch (saveError: any) {
       console.error('Failed to submit estimate', saveError);
-      setError('Failed to submit your estimate. Please check your network and try again.');
+      setError(saveError.message || 'Failed to submit your estimate. Please check your network and try again.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [data, breakdown]);
+  }, [data, breakdown, isSubmitting]);
 
   return {
     step,
