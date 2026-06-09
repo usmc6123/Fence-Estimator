@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Key, Shield, HardDrive, Phone, Globe, Image as ImageIcon, 
-  CheckCircle2, AlertCircle, RefreshCw, Building2, Mail
+  CheckCircle2, AlertCircle, RefreshCw, Building2, Mail 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
