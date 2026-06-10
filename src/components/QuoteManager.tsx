@@ -146,13 +146,23 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       const quotesToMerge = quotes.filter(q => q.supplierName === sourceSupplier);
       
       if (user) {
-        const batch = writeBatch(db);
-        quotesToMerge.forEach(quote => {
-          batch.update(doc(db, 'quotes', quote.id), {
-            supplierName: finalDest
+        const token = localStorage.getItem('company_admin_token');
+        for (const quote of quotesToMerge) {
+          const res = await fetch('/api/quotes/write', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              id: quote.id,
+              supplierName: finalDest
+            })
           });
-        });
-        await batch.commit();
+          if (!res.ok) {
+            throw new Error(`Failed to update quote ${quote.id}`);
+          }
+        }
         window.dispatchEvent(new Event('company_quotes_updated'));
       }
 
@@ -305,7 +315,22 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       };
       
       const sanitizedQuote = sanitize(newQuote);
-      await setDoc(doc(db, 'quotes', newQuoteId), sanitizedQuote);
+      
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(sanitizedQuote)
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${response.status}`);
+      }
+
       window.dispatchEvent(new Event('company_quotes_updated'));
       setSelectedQuoteId(newQuoteId);
       showToast("Quote processed and saved to cloud");
@@ -320,12 +345,27 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const deleteQuote = async (id: string) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'quotes', id));
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/write', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ id })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${response.status}`);
+      }
+
       window.dispatchEvent(new Event('company_quotes_updated'));
       if (selectedQuoteId === id) setSelectedQuoteId(null);
       showToast("Quote deleted from cloud");
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `quotes/${id}`);
+    } catch (error: any) {
+      console.error(error);
+      showToast(error.message || "Failed to delete quote");
     }
   };
 
@@ -416,11 +456,26 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         item.id === itemId ? { ...item, mappedMaterialId: materialId } : item
       );
 
-      await updateDoc(doc(db, 'quotes', quoteId), {
-        items: updatedItems
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/write', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          id: quoteId,
+          items: updatedItems
+        })
       });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${response.status}`);
+      }
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `quotes/${quoteId}`);
+      console.error(error);
+      showToast("Failed to lock material link on server");
     }
   };
 

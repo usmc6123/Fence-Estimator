@@ -20,6 +20,7 @@ import listQuotes from './api/quotes/list';
 import listMaterials from './api/materials/list';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
+import writeQuote from './api/quotes/write';
 import sendEstimate from './api/estimates/send';
 import settingsHandler from './api/settings';
 
@@ -610,6 +611,11 @@ async function startServer() {
 
   // GET /api/quotes/list - Get quotes list via JWT authorization
   app.get('/api/quotes/list', listQuotes);
+
+  // Consolidated write endpoint for quotes (POST, PUT, DELETE)
+  app.post('/api/quotes/write', writeQuote);
+  app.put('/api/quotes/write', writeQuote);
+  app.delete('/api/quotes/write', writeQuote);
 
   // GET /api/materials/list - Get materials list via JWT authorization
   app.get('/api/materials/list', listMaterials);
