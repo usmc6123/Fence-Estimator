@@ -98,7 +98,9 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
                     </div>
                   )}
                   <div className="overflow-hidden">
-                    <p className="text-sm font-black text-american-blue truncate">{user.displayName || user.email?.split('@')[0] || 'User'}</p>
+                    <p className="text-sm font-black text-american-blue truncate">
+                      {user.isAdmin ? "Admin" : (user.displayName || user.email?.split('@')[0] || 'User')}
+                    </p>
                     <p className="text-[10px] text-[#999999] truncate font-mono">{user.email}</p>
                   </div>
                 </div>
@@ -111,12 +113,18 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
                 </button>
               </div>
               <div className="inline-flex mt-1">
-                <span className={cn(
-                  "rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-widest",
-                  userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
-                )}>
-                  {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
-                </span>
+                {user.isAdmin ? (
+                  <span className="rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-widest bg-blue-100 text-blue-800 border border-blue-200">
+                    Lone Star Fence Works
+                  </span>
+                ) : (
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-widest",
+                    userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
+                  )}>
+                    {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
+                  </span>
+                )}
               </div>
             </div>
           ) : (
@@ -197,7 +205,9 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
                         </div>
                       )}
                       <div className="overflow-hidden">
-                        <p className="text-sm font-black text-american-blue truncate">{user.displayName || user.email?.split('@')[0] || 'User'}</p>
+                        <p className="text-sm font-black text-american-blue truncate">
+                          {user.isAdmin ? "Admin" : (user.displayName || user.email?.split('@')[0] || 'User')}
+                        </p>
                         <p className="text-[10px] text-[#999999] truncate font-mono">{user.email}</p>
                       </div>
                     </div>
@@ -212,14 +222,22 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
                       Exit
                     </button>
                   </div>
-                  <div className="inline-flex">
-                    <span className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest",
-                      userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
-                    )}>
-                      {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
-                    </span>
-                  </div>
+                  {user.isAdmin ? (
+                    <div className="inline-flex">
+                      <span className="rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest bg-blue-100 text-blue-800 border border-blue-200">
+                        Lone Star Fence Works
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex">
+                      <span className={cn(
+                        "rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase tracking-widest",
+                        userTier === 'paid' ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-gray-100 text-gray-600 border border-gray-200"
+                      )}>
+                        {userTier === 'paid' ? '★ Premium Paid' : 'Standard Free'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button 
