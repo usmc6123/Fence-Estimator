@@ -220,10 +220,22 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       } as MaterialItem;
       
       if (user) {
-        setDoc(doc(db, 'materials', targetId), newMaterial).then(() => {
+        const token = localStorage.getItem('company_admin_token');
+        fetch('/api/materials/list', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(newMaterial)
+        }).then(async (response) => {
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP error ${response.status}`);
+          }
           window.dispatchEvent(new Event('company_materials_updated'));
         }).catch(err => {
-          handleFirestoreError(err, OperationType.WRITE, `materials/${targetId}`);
+          console.error('Failed to save manual material on backend:', err);
         });
       } else {
         setMaterials(prev => [...prev, newMaterial]);

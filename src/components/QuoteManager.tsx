@@ -200,20 +200,31 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
 
     if (user) {
       try {
-        const batch = writeBatch(db);
-        itemsToUpdate.forEach(item => {
-          const mat = materials.find(m => m.id === item.mappedMaterialId);
-          if (mat) {
-            batch.update(doc(db, 'materials', mat.id), { 
-              cost: item.unitPrice,
-              lastPriceUpdate: new Date().toISOString()
-            });
-          }
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/materials/list', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action: 'bulk-sync',
+            updates: itemsToUpdate.map(item => ({
+              materialId: item.mappedMaterialId,
+              cost: item.unitPrice
+            }))
+          })
         });
-        await batch.commit();
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${response.status}`);
+        }
+
         window.dispatchEvent(new Event('company_materials_updated'));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, 'materials/bulk-sync');
+      } catch (error: any) {
+        console.error(error);
+        showToast(error.message || "Failed to sync prices to server");
         return;
       }
     } else {
@@ -373,13 +384,29 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     const mat = materials.find(m => m.id === materialId);
     if (user) {
       try {
-        await updateDoc(doc(db, 'materials', materialId), { 
-          cost: newPrice,
-          lastPriceUpdate: new Date().toISOString()
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/materials/list', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            id: materialId,
+            cost: newPrice,
+            lastPriceUpdate: new Date().toISOString()
+          })
         });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${response.status}`);
+        }
+
         window.dispatchEvent(new Event('company_materials_updated'));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `materials/${materialId}`);
+      } catch (error: any) {
+        console.error(error);
+        showToast(error.message || "Failed to update material price on server");
         return;
       }
     } else {
@@ -429,10 +456,25 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
             }
 
             if (user) {
-              updateDoc(doc(db, 'materials', materialId), updates).then(() => {
+              const token = localStorage.getItem('company_admin_token');
+              fetch('/api/materials/list', {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({
+                  id: materialId,
+                  ...updates
+                })
+              }).then(async (response) => {
+                if (!response.ok) {
+                  const errData = await response.json().catch(() => ({}));
+                  throw new Error(errData.error || `HTTP error ${response.status}`);
+                }
                 window.dispatchEvent(new Event('company_materials_updated'));
               }).catch(err => {
-                handleFirestoreError(err, OperationType.UPDATE, `materials/${materialId}`);
+                console.error('Failed to map material mapping to server', err);
               });
             } else {
               setMaterials(prev => prev.map(m => {

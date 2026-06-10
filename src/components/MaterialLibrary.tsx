@@ -176,10 +176,23 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
 
     if (user) {
       try {
-        await setDoc(doc(db, 'materials', id), materialData);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/materials/list', {
+          method: editingMaterial ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(materialData)
+        });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${response.status}`);
+        }
         window.dispatchEvent(new Event('company_materials_updated'));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `materials/${id}`);
+      } catch (error: any) {
+        console.error(error);
+        alert(error.message || "Failed to save material to server");
         return;
       }
     } else {
@@ -195,10 +208,23 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
   const handleDelete = async (id: string) => {
     if (user) {
       try {
-        await deleteDoc(doc(db, 'materials', id));
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/materials/list', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ id })
+        });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${response.status}`);
+        }
         window.dispatchEvent(new Event('company_materials_updated'));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
+      } catch (error: any) {
+        console.error(error);
+        alert(error.message || "Failed to delete material from server");
       }
     } else {
       setMaterials(materials.filter(m => m.id !== id));

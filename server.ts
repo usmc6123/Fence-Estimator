@@ -618,6 +618,9 @@ async function startServer() {
 
   // GET /api/materials/list - Get materials list via JWT authorization
   app.get('/api/materials/list', listMaterials);
+  app.post('/api/materials/list', listMaterials);
+  app.put('/api/materials/list', listMaterials);
+  app.delete('/api/materials/list', listMaterials);
 
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {
