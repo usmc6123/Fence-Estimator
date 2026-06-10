@@ -163,6 +163,26 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     }
   }, [showEventModal, selectedEvent]);
 
+  const fetchEvents = async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write?action=list-schedule-events', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEvents(data);
+      } else {
+        console.error('Failed to fetch events', response.statusText);
+      }
+    } catch (err) {
+      console.error('Failed to load schedule events:', err);
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
 
@@ -179,14 +199,20 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
     loadConfig();
 
-    const q = query(collection(db, 'schedule_events'));
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        setEvents(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ScheduleEvent)));
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'schedule_events')
-    );
-    return () => unsubscribe();
+    fetchEvents();
+    // Refresh schedule events periodically (every 10 seconds)
+    const interval = setInterval(fetchEvents, 10000);
+
+    // Support trigger via custom events for local responsiveness
+    const handleEventsUpdated = () => fetchEvents();
+    window.addEventListener('company_materials_updated', handleEventsUpdated);
+    window.addEventListener('schedule_events_updated', handleEventsUpdated);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('company_materials_updated', handleEventsUpdated);
+      window.removeEventListener('schedule_events_updated', handleEventsUpdated);
+    };
   }, [user]);
 
   const saveConfig = async (newConfig: SchedulerConfig) => {
@@ -260,7 +286,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
 
     try {
-        await setDoc(doc(db, 'schedule_events', id), newEvent);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action: 'schedule-event',
+            ...newEvent
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        await fetchEvents();
         setIsAddingEstimate(false);
         setShowEventModal(false);
     } catch (error) {
@@ -445,11 +486,24 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
   const handleRescheduleEstimate = async (eventId: string, newDateStr: string, newTimeStr: string) => {
     try {
-      const docRef = doc(db, 'schedule_events', eventId);
-      await updateDoc(docRef, {
-        startDate: newDateStr,
-        startTime: newTimeStr
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'update-schedule-event',
+          id: eventId,
+          startDate: newDateStr,
+          startTime: newTimeStr
+        })
       });
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      await fetchEvents();
       
       setIsRescheduling(false);
       setShowEventModal(false);
@@ -472,7 +526,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
 
     try {
-        await setDoc(doc(db, 'schedule_events', id), newEvent);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action: 'schedule-event',
+            ...newEvent
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        await fetchEvents();
         setIsAddingBlackout(false);
         setShowEventModal(false);
     } catch (error) {
@@ -497,7 +566,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
 
     try {
-        await setDoc(doc(db, 'schedule_events', id), newEvent);
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action: 'schedule-event',
+            ...newEvent
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        await fetchEvents();
         setIsAddingBusy(false);
         setShowEventModal(false);
     } catch (error) {
@@ -507,7 +591,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
   const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout' | 'Busy') => {
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
-        await deleteDoc(doc(db, 'schedule_events', id));
+        const token = localStorage.getItem('company_admin_token');
+        const response = await fetch('/api/estimates/write', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action: 'delete-schedule-event',
+            id
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
+        }
+        await fetchEvents();
     } else {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {

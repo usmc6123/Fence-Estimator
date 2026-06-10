@@ -40,12 +40,12 @@ const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const allowedMethods = ['POST', 'PUT', 'DELETE'];
+  const allowedMethods = ['GET', 'POST', 'PUT', 'DELETE'];
   if (!allowedMethods.includes(req.method)) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -77,8 +77,37 @@ export default async function handler(req: any, res: any) {
     // Determine the actual action (using standard method or a simulated one such as action params)
     const method = req.method;
 
+    // GET Handler
+    if (method === 'GET') {
+      const action = req.query.action || (req.body && req.body.action);
+      if (action === 'list-schedule-events') {
+        const eventsList: any[] = [];
+        const snap = await db.collection('schedule_events').get();
+        snap.forEach(doc => {
+          eventsList.push({ id: doc.id, ...doc.data() });
+        });
+        
+        const filtered = eventsList.filter(e => 
+          e.userId === decoded.uid || 
+          decoded.uid === 'braden-lonestar-uid'
+        );
+        return res.status(200).json(filtered);
+      }
+      return res.status(400).json({ error: 'Unsupported action for GET method' });
+    }
+
     // Standard Routing
     if (method === 'POST') {
+      if (req.body && req.body.action === 'schedule-event') {
+        const { action, ...eventData } = req.body;
+        const id = eventData.id;
+        if (!id) {
+          return res.status(400).json({ error: 'Event ID is required.' });
+        }
+        eventData.userId = eventData.userId || decoded.uid;
+        await db.collection('schedule_events').doc(String(id)).set(eventData);
+        return res.status(200).json(eventData);
+      }
       if (req.body && req.body.action === 'send') {
         const estimateId = req.body.estimateId || req.query.estimateId;
         const { customerEmail, senderEmail, subject, message } = req.body;
@@ -394,6 +423,15 @@ export default async function handler(req: any, res: any) {
       });
 
     } else if (method === 'PUT') {
+      if (req.body && req.body.action === 'update-schedule-event') {
+        const { action, id, ...updates } = req.body;
+        if (!id) {
+          return res.status(400).json({ error: 'Event ID is required.' });
+        }
+        await db.collection('schedule_events').doc(String(id)).update(updates);
+        return res.status(200).json({ id, ...updates });
+      }
+
       // PUT logic matches old api/estimates/update.ts
       const { id, ...updates } = req.body;
 
@@ -435,6 +473,16 @@ export default async function handler(req: any, res: any) {
       });
 
     } else if (method === 'DELETE') {
+      const action = req.body?.action || req.query?.action;
+      if (action === 'delete-schedule-event') {
+        const id = req.body?.id || req.query?.id;
+        if (!id) {
+          return res.status(400).json({ error: 'Event ID is required.' });
+        }
+        await db.collection('schedule_events').doc(String(id)).delete();
+        return res.status(200).json({ success: true });
+      }
+
       // DELETE logic matches old api/estimates/delete.ts
       const estimateId = req.query.id || req.body.id;
 

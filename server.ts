@@ -516,6 +516,7 @@ async function startServer() {
   });
 
   // Consolidated write endpoint for estimates (POST for saves/creates, PUT for updates, DELETE/POST for deletes)
+  app.get('/api/estimates/write', writeEstimate);
   app.post('/api/estimates/write', writeEstimate);
   app.put('/api/estimates/write', writeEstimate);
   app.delete('/api/estimates/write', writeEstimate);
