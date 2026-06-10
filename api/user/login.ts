@@ -105,6 +105,11 @@ export default async function handler(req: any, res: any) {
       userUid = 'braden-lonestar-uid';
     }
 
+    // Hardcode admin role assertion for primary company administrators
+    if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {
+      isAdminUser = true;
+    }
+
     // Sign the JWT
     const token = jwt.sign(
       { email: targetUser.email, isAdmin: isAdminUser, uid: userUid },

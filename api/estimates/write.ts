@@ -51,22 +51,27 @@ export default async function handler(req: any, res: any) {
 
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: Missing or invalid token format' });
+    let decoded: any = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        decoded = jwt.verify(token, JWT_SECRET);
+      } catch (err: any) {
+        console.warn('JWT verification failed in estimates write:', err.message);
+      }
     }
 
-    const token = authHeader.split(' ')[1];
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (err: any) {
-      console.error('JWT verification error in estimates write:', err.message);
-      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-    }
-
+    // Public customer submissions have no token — scope them to Braden's UID automatically
     if (!decoded || !decoded.uid) {
-      return res.status(401).json({ error: 'Unauthorized: Missing user UID in token' });
+      decoded = { uid: 'braden-lonestar-uid', isAdmin: false };
     }
+
+    const decodedEmail = decoded.email?.toLowerCase();
+    const isWriteAdmin = decoded.isAdmin || 
+                         decoded.uid === 'braden-lonestar-uid' || 
+                         decodedEmail === 'bradens@lonestarfenceworks.com' || 
+                         decodedEmail === 'usmc6123@gmail.com';
 
     // Determine the actual action (using standard method or a simulated one such as action params)
     const method = req.method;
@@ -104,8 +109,7 @@ export default async function handler(req: any, res: any) {
           if (
             existingData.uid !== decoded.uid &&
             existingData.userId !== decoded.uid &&
-            !decoded.isAdmin &&
-            decoded.uid !== 'braden-lonestar-uid'
+            !isWriteAdmin
           ) {
             return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
           }
@@ -142,8 +146,7 @@ export default async function handler(req: any, res: any) {
       if (
         existingData.uid !== decoded.uid &&
         existingData.userId !== decoded.uid &&
-        !decoded.isAdmin &&
-        decoded.uid !== 'braden-lonestar-uid'
+        !isWriteAdmin
       ) {
         return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
       }
@@ -184,8 +187,7 @@ export default async function handler(req: any, res: any) {
       if (
         existingData.uid !== decoded.uid &&
         existingData.userId !== decoded.uid &&
-        !decoded.isAdmin &&
-        decoded.uid !== 'braden-lonestar-uid'
+        !isWriteAdmin
       ) {
         return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
       }

@@ -78,7 +78,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const uid = decoded.uid;
-    const isAdmin = decoded.isAdmin || uid === 'braden-lonestar-uid';
+    const decodedEmail = decoded.email?.toLowerCase();
+    const isAdmin = decoded.isAdmin || 
+                    uid === 'braden-lonestar-uid' || 
+                    decodedEmail === 'bradens@lonestarfenceworks.com' || 
+                    decodedEmail === 'usmc6123@gmail.com';
 
     const list: any[] = [];
 
