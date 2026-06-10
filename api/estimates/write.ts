@@ -93,6 +93,86 @@ export default async function handler(req: any, res: any) {
         );
         return res.status(200).json(filtered);
       }
+      if (action === 'debug-smtp-logs') {
+        const settingsList: any[] = [];
+        try {
+          const settingsSnap = await db.collection('companySettings').get();
+          settingsSnap.forEach(doc => {
+            const data = doc.data();
+            settingsList.push({
+              id: doc.id,
+              smtpHost: data.smtpHost,
+              smtpPort: data.smtpPort,
+              smtpSecureType: data.smtpSecureType,
+              smtpUsername: data.smtpUsername,
+              fromEmail: data.fromEmail,
+              fromName: data.fromName,
+              hasPassword: !!data.smtpPassword,
+              passwordLength: data.smtpPassword ? data.smtpPassword.length : 0,
+              passwordPreview: data.smtpPassword ? `${data.smtpPassword.substring(0, 2)}...${data.smtpPassword.substring(Math.max(0, data.smtpPassword.length - 2))}` : ''
+            });
+          });
+        } catch (err: any) {
+          console.error('Failed to load companySettings in debug:', err);
+        }
+
+        const estimateLogsList: any[] = [];
+        let allEstimatesCount = 0;
+        let allUsersCount = 0;
+        let allSettingsCount = 0;
+        try {
+          const estimatesSnap = await db.collection('estimates').get();
+          allEstimatesCount = estimatesSnap.size;
+          estimatesSnap.forEach(doc => {
+            const data = doc.data();
+            estimateLogsList.push({
+              id: doc.id,
+              customerName: data.customerName,
+              customerEmail: data.customerEmail,
+              customerEmailSent: data.customerEmailSent || null,
+              customerSentAt: data.customerSentAt || null,
+              customerEmailLog: data.customerEmailLog || null,
+              keys: Object.keys(data)
+            });
+          });
+
+          const usersSnap = await db.collection('users').get();
+          allUsersCount = usersSnap.size;
+          for (const userDoc of usersSnap.docs) {
+            const nestedSnap = await db.collection('users').doc(userDoc.id).collection('estimates').get();
+            nestedSnap.forEach(doc => {
+              const data = doc.data();
+              estimateLogsList.push({
+                id: doc.id,
+                userId: userDoc.id,
+                customerName: data.customerName,
+                customerEmail: data.customerEmail,
+                customerEmailSent: data.customerEmailSent || null,
+                customerSentAt: data.customerSentAt || null,
+                customerEmailLog: data.customerEmailLog || null,
+                keys: Object.keys(data)
+              });
+            });
+          }
+        } catch (err: any) {
+          console.error('Failed to load estimates inside debug:', err);
+        }
+
+        return res.status(200).json({
+          success: true,
+          settingsList,
+          estimateLogsList,
+          allEstimatesCount,
+          allUsersCount,
+          envVariables: {
+            SMTP_HOST: process.env.SMTP_HOST || 'not set',
+            SMTP_PORT: process.env.SMTP_PORT || 'not set',
+            SMTP_USER: process.env.SMTP_USER || 'not set',
+            FROM_EMAIL: process.env.FROM_EMAIL || 'not set',
+            hasSmtpPass: !!process.env.SMTP_PASS
+          }
+        });
+      }
       return res.status(400).json({ error: 'Unsupported action for GET method' });
     }
 
@@ -168,18 +248,28 @@ export default async function handler(req: any, res: any) {
         let mailSubject = subject || `Fence Installation Contract Agreement - Lone Star Fence Works`;
         let mailMessage = message || `Hello {customerName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the link below:\n\n{estimateLink}\n\nThank you for choosing {companyName}!\n\nBest regards,\n{companyName} Estimations Department`;
 
-        // Try finding settings matching owner ID of the estimate
+        // Try finding settings matching owner ID or dynamic candidate sequence:
         const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+        const candidateUids = [];
+        if (decoded && decoded.uid) candidateUids.push(decoded.uid);
+        if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
+        candidateUids.push('main');
+
         let settingsData: any = null;
-        if (ownerUid) {
+        for (const uidToTry of candidateUids) {
           try {
-            const settingsSnap = await db.collection('companySettings').doc(ownerUid).get();
+            const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
             if (settingsSnap.exists) {
-              settingsData = settingsSnap.data();
-              console.log(`[SMTP TENANT LOG] Loaded SMTP settings for tenant user '${ownerUid}'`);
+              const possibleSettings = settingsSnap.data() || {};
+              // Verify they actually configured custom SMTP credentials here
+              if (possibleSettings.smtpHost && possibleSettings.smtpUsername) {
+                settingsData = possibleSettings;
+                console.log(`[SMTP TENANT LOG] Loaded active SMTP settings from candidate '${uidToTry}'`);
+                break;
+              }
             }
           } catch (err) {
-            console.warn('Failed to fetch companySettings for ownerUid in email send handler:', err);
+            console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in email send handler:`, err);
           }
         }
 
@@ -254,13 +344,13 @@ export default async function handler(req: any, res: any) {
           },
           connectionTimeout: 15000,
           greetingTimeout: 15000,
-          socketTimeout: 15000
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: false
+          }
         };
 
         if (isPort465) {
-          transporterConfig.tls = {
-            rejectUnauthorized: false
-          };
           console.log(`[SMTP SERVERLESS SECURITY] Direct SSL/TLS session configured on port ${resolvedSmtpPort} (secure: true).`);
         } else {
           console.log(`[SMTP SERVERLESS SECURITY] Standard STARTTLS session configured on port ${resolvedSmtpPort}.`);
