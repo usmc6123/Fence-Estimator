@@ -77,6 +77,61 @@ export default async function handler(req: any, res: any) {
     const method = req.method;
 
     if (method === 'POST') {
+      if (req.body && req.body.action === 'upload') {
+        const { fileData, fileName, fileType, pathPrefix } = req.body;
+        if (!fileData || !fileName) {
+          return res.status(400).json({ error: 'Missing fileData or fileName in body' });
+        }
+
+        const cleanPrefix = pathPrefix || 'quotes/';
+        const timestamp = Date.now();
+        const filePath = `${cleanPrefix}${decoded.uid}/${timestamp}-${fileName}`;
+
+        try {
+          const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+          const file = bucket.file(filePath);
+
+          let cleanBase64 = fileData;
+          if (cleanBase64.includes(';base64,')) {
+            cleanBase64 = cleanBase64.split(';base64,')[1];
+          }
+          const buffer = Buffer.from(cleanBase64, 'base64');
+
+          await file.save(buffer, {
+            metadata: {
+              contentType: fileType || 'application/octet-stream',
+            }
+          });
+
+          let downloadUrl = '';
+          try {
+            await file.makePublic();
+            downloadUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+          } catch (pubErr: any) {
+            console.warn('makePublic failed, using signed url:', pubErr?.message || pubErr);
+          }
+
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: expires
+          });
+
+          if (!downloadUrl) {
+            downloadUrl = signedUrl;
+          }
+
+          return res.status(200).json({
+            downloadUrl,
+            fileUrl: downloadUrl,
+            signedUrl
+          });
+        } catch (uploadErr: any) {
+          console.error('Failed upload to storage:', uploadErr);
+          return res.status(500).json({ error: 'Failed to upload file to storage: ' + uploadErr.message });
+        }
+      }
+
       const quoteData = { ...req.body };
       quoteData.userId = decoded.uid;
       quoteData.companyId = 'lonestarfence';

@@ -252,12 +252,7 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     setError(null);
 
     try {
-      // 1. Upload to Firebase Storage
-      const storageRef = ref(storage, `quotes/${user.uid}/${Date.now()}-${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
-
-      // 2. Convert file to base64 for Gemini
+      // 1. Convert file to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onload = () => {
@@ -268,7 +263,32 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       reader.readAsDataURL(file);
       const base64Data = await base64Promise;
 
-      // 3. Extract data with Gemini
+      // 2. Upload to Firebase Storage via Server API
+      const token = localStorage.getItem('company_admin_token');
+      const responseUpload = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'upload',
+          fileData: base64Data,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          pathPrefix: 'quotes/'
+        })
+      });
+
+      if (!responseUpload.ok) {
+        const errData = await responseUpload.json().catch(() => ({}));
+        throw new Error(errData.error || `Upload HTTP error ${responseUpload.status}`);
+      }
+
+      const uploadResult = await responseUpload.json();
+      const downloadUrl = uploadResult.downloadUrl || uploadResult.fileUrl;
+
+      // 3. Extract data with Gemini using base64Data
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
       
       let supplierName = getCanonicalSupplierName(extractedData.supplierName || 'Unknown Supplier');
@@ -327,12 +347,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
       
       const sanitizedQuote = sanitize(newQuote);
       
-      const token = localStorage.getItem('company_admin_token');
+      const adminToken = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/quotes/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
         },
         body: JSON.stringify(sanitizedQuote)
       });

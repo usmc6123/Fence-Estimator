@@ -506,10 +506,30 @@ function AddExpenseModal({ isOpen, onClose, user, jobs, initialJobId, onSaveSucc
         setIsAnalyzing(false);
       }
 
-      // 3. Upload file
-      const storageRef = ref(storage, `receipts/${user.uid}/${Date.now()}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
+      // 3. Upload file via Server API
+      const token = localStorage.getItem('company_admin_token');
+      const responseUpload = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'upload',
+          fileData: base64Data,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          pathPrefix: 'receipts/'
+        })
+      });
+
+      if (!responseUpload.ok) {
+        const errData = await responseUpload.json().catch(() => ({}));
+        throw new Error(errData.error || `Upload HTTP error ${responseUpload.status}`);
+      }
+
+      const uploadResult = await responseUpload.json();
+      const downloadUrl = uploadResult.downloadUrl || uploadResult.fileUrl;
       setNewExp(prev => ({ ...prev, receiptUrl: downloadUrl, receiptName: file.name }));
 
     } catch (err) {
