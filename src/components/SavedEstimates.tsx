@@ -121,10 +121,15 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     setSendErrorMessage(null);
 
     try {
-      const response = await fetch(`/api/estimates/send`, {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
+          action: 'send',
           estimateId: sendModalEstimate.id,
           customerEmail,
           senderEmail,

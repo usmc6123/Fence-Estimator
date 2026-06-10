@@ -21,7 +21,6 @@ import listMaterials from './api/materials/list';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
 import writeQuote from './api/quotes/write';
-import sendEstimate from './api/estimates/send';
 import settingsHandler from './api/settings';
 
 async function startServer() {
@@ -864,12 +863,6 @@ async function startServer() {
       res.status(500).json({ error: error.message });
     }
   });
-
-  // POST /api/estimates/send - Unified endpoint supporting body parameters
-  app.post('/api/estimates/send', sendEstimate);
-
-  // POST /api/estimates/:estimateId/send - Compatibility path forwarding to modular sendEstimate handler
-  app.post('/api/estimates/:estimateId/send', sendEstimate);
 
   // GET User Tier
   app.get('/api/user-tier', async (req, res) => {
