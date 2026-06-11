@@ -223,6 +223,7 @@ export interface Estimate {
   finalCustomerPrice?: number;
   baseFencePrice?: number | null;
   addOnTotal?: number | null;
+  addOnSitePrepPrice?: number | null;
   pricePerFoot?: number;
   subtotalBeforeDiscount?: number;
   demoRemovalPrice?: number | null;
@@ -232,6 +233,7 @@ export interface Estimate {
   discountAmount?: number;
   discountReason?: string;
   pricingUpdatedAt?: string;
+  originalCalculatedTotal?: number;
   manualSectionTotals?: (number | null)[],
   manualGateTotals?: (number | null)[];
   manualDemoTotals?: (number | null)[];

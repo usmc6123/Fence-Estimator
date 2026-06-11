@@ -28,7 +28,7 @@ import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
-import { getCanonicalSupplierName, assignEstimateNumbers } from './lib/utils';
+import { getCanonicalSupplierName, assignEstimateNumbers, calculateEstimatePricing } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 
@@ -822,46 +822,70 @@ export default function App() {
   }, []);
 
   const handleLoadEstimate = (est: SavedEstimate) => {
-    setEstimate(est);
+    const normalized = calculateEstimatePricing(est);
+    setEstimate(normalized);
     setActiveTab('estimator');
   };
 
   const handleUpdateEstimate = async (update: Partial<Estimate>) => {
-    setEstimate(prev => ({ ...prev, ...update }));
-    
-    // If the estimate has an ID and the user is logged in, sync the specific update to Firestore
-    if (estimate.id && user) {
-      try {
-        const updateWithTimestamp = {
-          ...update,
-          lastModified: new Date().toISOString()
-        };
-        // Clean undefined values
-        Object.keys(updateWithTimestamp).forEach(key => {
-          if ((updateWithTimestamp as any)[key] === undefined) {
-            delete (updateWithTimestamp as any)[key];
-          }
-        });
+    let recalculated: any = null;
+    setEstimate(prev => {
+      const merged = { ...prev, ...update };
+      recalculated = calculateEstimatePricing(merged);
+      return recalculated;
+    });
 
-        const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/write', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify({
-            id: estimate.id,
-            ...updateWithTimestamp
-          })
-        });
-        if (!response.ok) {
-          throw new Error('REST API estimate update failed');
+    // We preserve the async save flow but include all recalculated fields so Firestore is always fully synced!
+    setTimeout(async () => {
+      if (!recalculated) return;
+      if (recalculated.id && user) {
+        try {
+          const dbUpdates = {
+            ...update,
+            baseFencePrice: recalculated.baseFencePrice,
+            addOnSitePrepPrice: recalculated.addOnSitePrepPrice,
+            addOnTotal: recalculated.addOnTotal,
+            demoRemovalPrice: recalculated.demoRemovalPrice,
+            discountAmount: recalculated.discountAmount,
+            discountType: recalculated.discountType,
+            discountLabel: recalculated.discountLabel,
+            discountReason: recalculated.discountReason,
+            subtotalBeforeDiscount: recalculated.subtotalBeforeDiscount,
+            finalCustomerPrice: recalculated.finalCustomerPrice,
+            manualGrandTotal: recalculated.manualGrandTotal,
+            pricePerFoot: recalculated.pricePerFoot,
+            originalCalculatedTotal: recalculated.originalCalculatedTotal,
+            pricingUpdatedAt: recalculated.pricingUpdatedAt,
+            lastModified: new Date().toISOString()
+          };
+
+          // Clean undefined values
+          Object.keys(dbUpdates).forEach(key => {
+            if ((dbUpdates as any)[key] === undefined) {
+              delete (dbUpdates as any)[key];
+            }
+          });
+
+          const token = localStorage.getItem('company_admin_token');
+          const response = await fetch('/api/estimates/write', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({
+              id: recalculated.id,
+              ...dbUpdates
+            })
+          });
+          if (!response.ok) {
+            throw new Error('REST API estimate update failed');
+          }
+        } catch (error) {
+          console.error('Failed to auto-sync estimate update via API:', error);
         }
-      } catch (error) {
-        console.error('Failed to auto-sync estimate update via API:', error);
       }
-    }
+    }, 0);
   };
 
   // No redirection for console path is needed since Estimator renders AdminConsole inline at the bottom of the page now.

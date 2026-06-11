@@ -1307,6 +1307,7 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setBaseFencePrice(v);
+                          if (onUpdateEstimate) onUpdateEstimate({ baseFencePrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1326,6 +1327,7 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setAddOnTotal(v);
+                          if (onUpdateEstimate) onUpdateEstimate({ addOnTotal: v, addOnSitePrepPrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1345,6 +1347,7 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setDemoRemovalPrice(v);
+                          if (onUpdateEstimate) onUpdateEstimate({ demoRemovalPrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1360,7 +1363,11 @@ export default function CustomerContract({
                     <textarea
                       rows={2}
                       value={demoRemovalDescription}
-                      onChange={(e) => setDemoRemovalDescription(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDemoRemovalDescription(val);
+                        if (onUpdateEstimate) onUpdateEstimate({ demoRemovalDescription: val });
+                      }}
                       className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 focus:border-american-blue outline-none transition-all"
                     />
                   </div>
@@ -1378,18 +1385,37 @@ export default function CustomerContract({
                           onChange={(e) => {
                             const newType = e.target.value as any;
                             setDiscountType(newType);
+                            let amt = discountAmount;
+                            let label = discountLabel;
+                            let reason = discountReason;
+                            let gateId = selectedGateId;
+
                             if (newType === 'none') {
-                              setDiscountAmount(0);
-                              setDiscountLabel('');
-                              setDiscountReason('');
-                              setSelectedGateId('');
+                              amt = 0;
+                              label = '';
+                              reason = '';
+                              gateId = '';
                             } else if (newType === 'free_gate') {
-                              setDiscountLabel('Discount - Free Walk Gate');
-                              setDiscountReason('');
-                              setSelectedGateId('');
+                              label = 'Discount - Free Walk Gate';
+                              reason = '';
+                              gateId = '';
+                              amt = 0;
                             } else if (newType === 'fixed_amount' || newType === 'custom') {
-                              setDiscountLabel('Contract discount');
-                              setDiscountReason('');
+                              label = 'Contract discount';
+                              reason = '';
+                            }
+                            setDiscountAmount(amt);
+                            setDiscountLabel(label);
+                            setDiscountReason(reason);
+                            setSelectedGateId(gateId);
+
+                            if (onUpdateEstimate) {
+                              onUpdateEstimate({
+                                discountType: newType,
+                                discountAmount: amt,
+                                discountLabel: label,
+                                discountReason: reason
+                              });
                             }
                           }}
                           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
@@ -1412,16 +1438,27 @@ export default function CustomerContract({
                             onChange={(e) => {
                               const sId = e.target.value;
                               const selectedGate = allGatesList.find(g => g.gateId === sId);
+                              let amt = 0;
+                              let label = 'Discount - Free Walk Gate';
+                              let reason = '';
                               if (selectedGate) {
                                 setSelectedGateId(sId);
-                                setDiscountAmount(selectedGate.price);
-                                setDiscountLabel(`Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`);
-                                setDiscountReason(sId);
+                                amt = selectedGate.price;
+                                label = `Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`;
+                                reason = sId;
                               } else {
                                 setSelectedGateId('');
-                                setDiscountAmount(0);
-                                setDiscountLabel('Discount - Free Walk Gate');
-                                setDiscountReason('');
+                              }
+                              setDiscountAmount(amt);
+                              setDiscountLabel(label);
+                              setDiscountReason(reason);
+
+                              if (onUpdateEstimate) {
+                                onUpdateEstimate({
+                                  discountAmount: amt,
+                                  discountLabel: label,
+                                  discountReason: reason
+                                });
                               }
                             }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
@@ -1445,7 +1482,11 @@ export default function CustomerContract({
                           <input
                             type="text"
                             value={discountLabel}
-                            onChange={(e) => setDiscountLabel(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDiscountLabel(val);
+                              if (onUpdateEstimate) onUpdateEstimate({ discountLabel: val });
+                            }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
                         </div>
@@ -1466,6 +1507,7 @@ export default function CustomerContract({
                             onChange={(e) => {
                               const amt = e.target.value === '' ? 0 : parseFloat(e.target.value);
                               setDiscountAmount(amt);
+                              if (onUpdateEstimate) onUpdateEstimate({ discountAmount: amt });
                             }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
@@ -1481,7 +1523,11 @@ export default function CustomerContract({
                             type="text"
                             placeholder="e.g. Autumn Special, Military Discount, Bundle deal"
                             value={discountReason}
-                            onChange={(e) => setDiscountReason(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDiscountReason(val);
+                              if (onUpdateEstimate) onUpdateEstimate({ discountReason: val });
+                            }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
                         </div>

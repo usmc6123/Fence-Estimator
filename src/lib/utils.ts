@@ -104,3 +104,84 @@ export function assignEstimateNumbers<T extends { id: string; createdAt?: string
   }));
 }
 
+export function calculateEstimatePricing(estimate: any): any {
+  if (!estimate) return estimate;
+
+  // Safe helper to convert any potential input value to a valid number
+  const toNum = (val: any, fallback = 0): number => {
+    if (val === null || val === undefined || val === '') return fallback;
+    const parsed = typeof val === 'number' ? val : parseFloat(val);
+    return isNaN(parsed) ? fallback : parsed;
+  };
+
+  // Legacy fallback and inference
+  let finalPrice = 0;
+  if (estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null) {
+    finalPrice = toNum(estimate.finalCustomerPrice);
+  } else if (estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null) {
+    finalPrice = toNum(estimate.manualGrandTotal);
+  } else if (estimate.estimatedPrice !== undefined && estimate.estimatedPrice !== null) {
+    finalPrice = toNum(estimate.estimatedPrice);
+  } else if (estimate.totalCost !== undefined && estimate.totalCost !== null) {
+    finalPrice = toNum(estimate.totalCost);
+  } else if (estimate.total !== undefined && estimate.total !== null) {
+    finalPrice = toNum(estimate.total);
+  } else if (estimate.grandTotal !== undefined && estimate.grandTotal !== null) {
+    finalPrice = toNum(estimate.grandTotal);
+  }
+
+  // If baseFencePrice is missing, infer it from existing calculated price.
+  let baseFencePrice = estimate.baseFencePrice;
+  if (baseFencePrice === undefined || baseFencePrice === null) {
+    // Infer the baseFencePrice if possible: finalPrice + discountAmount - demoRemovalPrice - addOnTotal
+    const inferredDemo = toNum(estimate.demoRemovalPrice, 0);
+    const inferredAddOn = toNum(estimate.addOnSitePrepPrice !== undefined ? estimate.addOnSitePrepPrice : estimate.addOnTotal, 0);
+    const inferredDiscount = toNum(estimate.discountAmount, 0);
+    baseFencePrice = Math.max(0, finalPrice + inferredDiscount - inferredDemo - inferredAddOn);
+  } else {
+    baseFencePrice = toNum(baseFencePrice, 0);
+  }
+
+  const addOnSitePrepPrice = toNum(estimate.addOnSitePrepPrice !== undefined ? estimate.addOnSitePrepPrice : estimate.addOnTotal, 0);
+  const demoRemovalPrice = toNum(estimate.demoRemovalPrice, 0);
+  const discountAmount = toNum(estimate.discountAmount, 0);
+
+  const subtotalBeforeDiscount = baseFencePrice + addOnSitePrepPrice + demoRemovalPrice;
+
+  let manualGrandTotal = estimate.manualGrandTotal !== undefined ? estimate.manualGrandTotal : null;
+  if (manualGrandTotal !== null && manualGrandTotal !== undefined && manualGrandTotal !== '') {
+    manualGrandTotal = toNum(manualGrandTotal, 0);
+  } else {
+    manualGrandTotal = null;
+  }
+
+  let finalCustomerPrice = 0;
+  if (manualGrandTotal !== null && manualGrandTotal !== 0) {
+    finalCustomerPrice = Math.max(0, manualGrandTotal);
+  } else {
+    finalCustomerPrice = Math.max(0, subtotalBeforeDiscount - discountAmount);
+  }
+
+  const linearFeet = toNum(estimate.linearFeet, 0);
+  const pricePerFoot = linearFeet > 0 ? (finalCustomerPrice / linearFeet) : 0;
+
+  const originalCalculatedTotal = toNum(estimate.originalCalculatedTotal || estimate.totalCost || estimate.total || finalCustomerPrice, 0);
+
+  return {
+    ...estimate,
+    baseFencePrice,
+    addOnSitePrepPrice,
+    addOnTotal: addOnSitePrepPrice, // Keep both in sync for security
+    demoRemovalPrice,
+    discountAmount,
+    discountType: estimate.discountType || 'none',
+    discountLabel: estimate.discountLabel || '',
+    subtotalBeforeDiscount,
+    finalCustomerPrice,
+    manualGrandTotal,
+    pricePerFoot,
+    originalCalculatedTotal,
+    pricingUpdatedAt: estimate.pricingUpdatedAt || new Date().toISOString()
+  };
+}
+
