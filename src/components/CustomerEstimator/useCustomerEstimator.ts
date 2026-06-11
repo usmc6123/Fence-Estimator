@@ -295,73 +295,65 @@ export function useCustomerEstimator(
     }
 
     try {
-      // 1. Save to Firestore (Attempt cloud sync via API)
-      try {
-        const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/write', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({
-            id: estId,
-            ...cleanedCustomerEstimateDoc
-          })
-        });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-      } catch (writeErr) {
-        console.warn('Cloud API save failed, preserved successfully in local offline ledger:', writeErr);
-        // We catch this gracefully to prevent offline/permission errors from blocking the client experience
+      const gateSummary = data.needGates ? `${data.gateCount} x ${data.gateType}` : 'None';
+      const selectedOptions: string[] = [];
+      if (data.isPreStained) selectedOptions.push('Pre-stained Wood');
+      if (data.reusePosts) selectedOptions.push('Reuse Existing Posts');
+      if (data.removeOldFence) selectedOptions.push('Remove Existing Fence');
+      if (data.hasTopCap) selectedOptions.push('Top Cap');
+      if (data.hasCapAndTrim) selectedOptions.push('Cap and Trim');
+
+      const payload = {
+        action: 'submit-instant-estimator',
+        id: estId,
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        customerName: `${data.firstName.trim()} ${data.lastName.trim()}`.trim(),
+        email: data.email.trim(),
+        phone: data.phone.trim(),
+        address: (data.street || '').trim(),
+        city: (data.city || '').trim(),
+        state: (data.state || '').trim(),
+        zip: (data.zip || '').trim(),
+        fenceType: data.fenceType || 'Wood Fence',
+        fenceHeight: data.height,
+        linearFeet: data.linearFeet,
+        gateCount: data.needGates ? data.gateCount : 0,
+        gateSummary: gateSummary,
+        selectedOptions: selectedOptions,
+        estimatedPrice: Math.round(breakdown.total * 100) / 100,
+        createdAt: now,
+        ...cleanedCustomerEstimateDoc
+      };
+
+      console.info('Submitting instant estimate to unified backend pipeline...');
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseText = await response.text();
+      console.log('Instant Estimator Submit Response status:', response.status, 'Response:', responseText);
+
+      if (!response.ok) {
+        let errorMsg = 'Failed to submit estimate.';
+        try {
+          const parsed = JSON.parse(responseText);
+          if (parsed.error) errorMsg = parsed.error;
+        } catch (_) {}
+        throw new Error(errorMsg);
       }
 
-      // 2. Submit to our backend GHL proxy endpoint which forwards to GO HIGH LEVEL
+      let parsedSuccess: any = {};
       try {
-        const payload = {
-          eventType: 'instant_estimate_submitted',
-          estimateId: estId || 'instant-estimator-lead',
-          firstName: data.firstName.trim(),
-          lastName: data.lastName.trim(),
-          email: data.email.trim(),
-          phone: data.phone.trim(),
-          address: (data.street || '').trim(),
-          city: (data.city || '').trim(),
-          state: (data.state || '').trim(),
-          zip: (data.zip || '').trim(),
-          fenceType: data.fenceType || 'Wood Fence',
-          linearFeet: data.linearFeet,
-          gateCount: data.needGates ? data.gateCount : 0,
-          estimatedPrice: Math.round(breakdown.total * 100) / 100,
-          createdAt: new Date().toISOString()
-        };
+        parsedSuccess = JSON.parse(responseText);
+      } catch (_) {}
 
-        console.info('Invoking local server CRM proxy to dispatch lead to GoHighLevel CRM...');
-        const response = await fetch('/api/webhooks/ghl', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const responseText = await response.text();
-        console.log('CRM Webhook Proxy Response status:', response.status, 'Response:', responseText);
-
-        if (!response.ok) {
-          let errorMsg = 'Failed to transmit lead to GoHighLevel CRM.';
-          try {
-            const parsed = JSON.parse(responseText);
-            if (parsed.error) errorMsg = parsed.error;
-          } catch (_) {}
-          throw new Error(errorMsg);
-        }
-
+      if (parsedSuccess.ghlWebhookTriggered) {
         setGhlSynced(true);
-      } catch (ghlErr: any) {
-        console.error('Core GHL CRM submission task failed:', ghlErr);
-        throw new Error(ghlErr.message || 'CRM Webhook submission failed. Please try again.');
       }
 
       setSubmitSuccess(true);

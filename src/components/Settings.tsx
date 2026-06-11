@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Save, Globe, Mail, Building2, Phone, MapPin, 
   Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2,
-  ImageIcon, Server, Settings2, Send, AlertCircle
+  ImageIcon, Server, Settings2, Send, AlertCircle, Calendar
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -30,6 +30,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     website: COMPANY_INFO.website,
     address: COMPANY_INFO.address,
     companyLogo: COMPANY_INFO.logo || '',
+    scheduleLink: '',
     ghlWebhookUrl: '',
     ghlWebhookInstantEstimateSubmitted: '',
     ghlWebhookManualEstimateSent: '',
@@ -116,6 +117,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           website: apiData.companyWebsite || apiData.website || firebaseData.website || firebaseData.companyWebsite || COMPANY_INFO.website,
           address: apiData.address || firebaseData.address || COMPANY_INFO.address,
           companyLogo: apiData.companyLogo || firebaseData.companyLogo || COMPANY_INFO.logo || '',
+          scheduleLink: apiData.scheduleLink || firebaseData.scheduleLink || '',
           ghlWebhookUrl: apiData.gohighlevelWebhookUrl || apiData.ghlWebhookUrl || firebaseData.ghlWebhookUrl || firebaseData.gohighlevelWebhookUrl || '',
           ghlWebhookInstantEstimateSubmitted: apiData.ghlWebhookInstantEstimateSubmitted || firebaseData.ghlWebhookInstantEstimateSubmitted || '',
           ghlWebhookManualEstimateSent: apiData.ghlWebhookManualEstimateSent || firebaseData.ghlWebhookManualEstimateSent || '',
@@ -176,6 +178,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         website: formData.website,
         address: formData.address,
         companyLogo: formData.companyLogo,
+        scheduleLink: formData.scheduleLink,
         ghlWebhookUrl: formData.ghlWebhookUrl,
         gohighlevelWebhookUrl: formData.ghlWebhookUrl,
         ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
@@ -211,6 +214,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           companyPhone: formData.phoneNumber,
           companyWebsite: formData.website,
           companyLogo: formData.companyLogo,
+          scheduleLink: formData.scheduleLink,
           
           smtpHost: formData.smtpHost,
           smtpPort: Number(formData.smtpPort),
@@ -460,6 +464,19 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         placeholder="https://mysite.com/logo.png"
                         value={formData.companyLogo} 
                         onChange={(e) => setFormData({...formData, companyLogo: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-sans focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">On-site Estimator Calendar Booking Link</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
+                      <input 
+                        type="url" 
+                        placeholder="https://calendly.com/... or similar"
+                        value={formData.scheduleLink || ''} 
+                        onChange={(e) => setFormData({...formData, scheduleLink: e.target.value})}
                         className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-sans focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
                       />
                     </div>
