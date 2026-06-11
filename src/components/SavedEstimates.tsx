@@ -705,6 +705,21 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                   </button>
                                 )}
 
+                                {(estimate.customerDecision === 'accepted' || !!estimate.customerSignature) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      onLoadEstimate(estimate);
+                                      setActiveTab('customer-contract');
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer flex items-center gap-1"
+                                  >
+                                    <FileText size={14} /> View Signed Contract
+                                  </button>
+                                )}
+
                                 <div className="relative inline-block text-left" id={`dropdown-wrapper-${estimate.id}`}>
                                   <button
                                     type="button"
@@ -729,6 +744,20 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                         }}
                                       />
                                       <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-100 py-1.5 z-50 text-left origin-top-right">
+                                        {(estimate.customerDecision === 'accepted' || !!estimate.customerSignature) && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onLoadEstimate(estimate);
+                                              setActiveTab('customer-contract');
+                                              setOpenDropdownId(null);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 border-b border-slate-50 mb-1"
+                                          >
+                                            <FileText size={14} className="text-emerald-600" /> View Signed Contract
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={(e) => {

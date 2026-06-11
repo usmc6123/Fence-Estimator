@@ -193,6 +193,8 @@ export default async function handler(req: any, res: any) {
       if (decision === 'accepted') {
         updates.customerSignature = signature || 'Digitally Signed';
         updates.customerEmailSigned = customerEmail || '';
+        updates.customerSignedDate = now;
+        updates.acceptedAt = now;
         updates.jobStatus = 'Approved';
       } else {
         updates.customerDeclineReason = declineReason || 'Not specified';
@@ -656,6 +658,13 @@ export default async function handler(req: any, res: any) {
           }],
           updatedAt: now
         };
+
+        if (mailSent) {
+          updates.representativeSignatureName = "Braden Scott Smith";
+          updates.representativeCompanyName = "Lone Star Fence Works";
+          updates.representativeSignedDate = now;
+          updates.customerEmailSentAt = now;
+        }
 
         await targetRef.set(updates, { merge: true });
 

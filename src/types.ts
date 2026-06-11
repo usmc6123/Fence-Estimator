@@ -133,7 +133,7 @@ export interface SupplierQuote {
   fileType?: string;
 }
 
-export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled';
+export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Approved' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled';
 
 export interface JobExpense {
   id: string;
@@ -249,6 +249,12 @@ export interface Estimate {
   customerDecisionDate?: string;
   customerOpenedIp?: string;
   customerEmailLog?: any[];
+  customerSignedDate?: string;
+  acceptedAt?: string;
+  customerEmailSigned?: string;
+  representativeSignatureName?: string;
+  representativeCompanyName?: string;
+  representativeSignedDate?: string;
 }
 
 export interface ScheduleEvent {

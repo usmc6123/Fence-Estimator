@@ -164,7 +164,9 @@ export default function CustomerSignaturePortal({
           customerDecision: 'accepted',
           customerSignature: signatureName,
           customerDecisionDate: new Date().toISOString(),
-          jobStatus: 'Accepted'
+          customerSignedDate: new Date().toISOString(),
+          acceptedAt: new Date().toISOString(),
+          jobStatus: 'Approved'
         } : null);
       }
     } catch (err: any) {

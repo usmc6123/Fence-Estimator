@@ -28,6 +28,19 @@ export default function CustomerContract({
   onUpdateEstimate,
   isCustomerView = false
 }: CustomerContractProps) {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const y = date.getFullYear();
+      return `${m}/${d}/${y}`;
+    } catch {
+      return '';
+    }
+  };
+
   // Gracefully clean up case where last name is misplaced in the email field
   const resolvedClientName = React.useMemo(() => {
     let name = estimate.customerName || 'Valued Customer';
@@ -535,6 +548,23 @@ export default function CustomerContract({
           </div>
         </div>
 
+        {estimate.customerSignature && (
+          <div className="bg-emerald-50 border-y border-emerald-200 px-10 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                <CheckCircle2 size={16} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-emerald-950 uppercase tracking-widest leading-none">Digitally Executed Contract</p>
+                <p className="text-[10px] text-emerald-700 font-medium mt-1">This agreement is legally bound and signed via electronic transaction.</p>
+              </div>
+            </div>
+            <div className="text-right text-xs font-mono font-bold text-emerald-800 uppercase tracking-wider bg-emerald-100/60 px-4 py-2 rounded-xl">
+              Signed: {formatDate(estimate.customerSignedDate || estimate.customerDecisionDate)}
+            </div>
+          </div>
+        )}
+
         <div className="p-12 space-y-12">
           {/* Customer & Project Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 border-b border-dashed border-[#E5E5E5] pb-12">
@@ -984,24 +1014,64 @@ export default function CustomerContract({
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-              <div className="space-y-6">
-                <div className="h-20 border-b-2 border-american-blue/20" />
+              {/* Customer Column */}
+              <div className="space-y-6 relative">
+                {/* Visual signature overlay if accepted */}
+                <div className="h-20 border-b-2 border-american-blue/20 relative flex items-end justify-between pb-2">
+                  {estimate.customerSignature ? (
+                    <div className="font-['Brush_Script_MT',_cursive,_sans-serif] text-3xl text-[#1d4ed8] tracking-wide h-12 flex items-center pl-2 italic">
+                      {estimate.customerSignature}
+                    </div>
+                  ) : (
+                    <div className="h-12" />
+                  )}
+                  {estimate.customerSignedDate && (
+                    <div className="font-mono text-sm text-[#333333] font-semibold pr-2">
+                      {formatDate(estimate.customerSignedDate)}
+                    </div>
+                  )}
+                </div>
+                
                 <div className="flex justify-between">
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Customer Signature</span>
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Date</span>
                 </div>
                 <div className="pt-4">
-                  <p className="text-lg font-bold text-american-blue uppercase">{resolvedClientName || '___________________________'}</p>
+                  <p className="text-lg font-bold text-american-blue uppercase">{resolvedClientName}</p>
+                  {estimate.customerEmailSigned && (
+                    <p className="text-xs text-gray-500 font-mono mt-1">{estimate.customerEmailSigned}</p>
+                  )}
                 </div>
               </div>
-              <div className="space-y-6">
-                <div className="h-20 border-b-2 border-american-blue/20" />
+
+              {/* Representative Column */}
+              <div className="space-y-6 relative">
+                <div className="h-20 border-b-2 border-american-blue/20 relative flex items-end justify-between pb-2">
+                  {estimate.representativeSignatureName ? (
+                    <div className="font-['Brush_Script_MT',_cursive,_sans-serif] text-3xl text-[#b91c1c] tracking-wide h-12 flex items-center pl-2 italic">
+                      {estimate.representativeSignatureName}
+                    </div>
+                  ) : (
+                    <div className="h-12" />
+                  )}
+                  {estimate.representativeSignedDate && (
+                    <div className="font-mono text-sm text-[#333333] font-semibold pr-2">
+                      {formatDate(estimate.representativeSignedDate)}
+                    </div>
+                  )}
+                </div>
+                
                 <div className="flex justify-between">
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Authorized Representative</span>
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">Date</span>
                 </div>
                 <div className="pt-4">
-                  <p className="text-lg font-bold text-american-blue uppercase">{COMPANY_INFO.name}</p>
+                  <p className="text-lg font-bold text-american-blue uppercase">
+                    {estimate.representativeSignatureName || COMPANY_INFO.name}
+                  </p>
+                  {estimate.representativeCompanyName && (
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-1">{estimate.representativeCompanyName}</p>
+                  )}
                 </div>
               </div>
             </div>
