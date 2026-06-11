@@ -4,7 +4,7 @@ import {
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
-  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle
+  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle, Paperclip
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
 import { formatCurrency, cn, assignEstimateNumbers } from '../lib/utils';
@@ -42,6 +42,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [isSendingEmail, setIsSendingEmail] = React.useState(false);
   const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
   const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
+  const [attachedFiles, setAttachedFiles] = React.useState<{ filename: string; mimeType: string; size: number; base64Data: string }[]>([]);
+  const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
 
   // Fetch Company Settings to populate templates
   React.useEffect(() => {
@@ -105,8 +107,75 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
       setEmailMessage(activeMessage);
       setSendSuccessMessage(null);
       setSendErrorMessage(null);
+      setAttachedFiles([]);
+      setAttachmentError(null);
     }
   }, [sendModalEstimate, companySettings]);
+
+  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAttachmentError(null);
+    const files = e.target.files;
+    if (!files) return;
+
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
+    const allowedMimes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+
+    const currentAttachments = [...attachedFiles];
+    let currentTotalSize = currentAttachments.reduce((sum, f) => sum + f.size, 0);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = file.name.split('.').pop()?.toLowerCase();
+
+      if (!ext || !allowedExtensions.includes(ext)) {
+        setAttachmentError(`File "${file.name}" is unsupported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX are allowed.`);
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        setAttachmentError(`File "${file.name}" exceeds the 10MB limit.`);
+        return;
+      }
+
+      if (currentTotalSize + file.size > 20 * 1024 * 1024) {
+        setAttachmentError('Total combined attachment size exceeds the 20MB limit.');
+        return;
+      }
+
+      currentTotalSize += file.size;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Data = event.target?.result as string;
+        setAttachedFiles(prev => {
+          const exists = prev.some(f => f.filename === file.name);
+          if (!exists) {
+            return [...prev, {
+              filename: file.name,
+              mimeType: file.type || 'application/octet-stream',
+              size: file.size,
+              base64Data
+            }];
+          }
+          return prev;
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeAttachment = (filename: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.filename !== filename));
+    setAttachmentError(null);
+  };
 
   const handleSendEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,7 +203,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           customerEmail,
           senderEmail,
           subject: emailSubject,
-          message: emailMessage
+          message: emailMessage,
+          attachments: attachedFiles
         })
       });
 
@@ -973,6 +1043,60 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           onChange={(e) => setEmailMessage(e.target.value)}
                           className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-american-blue leading-relaxed resize-none font-sans"
                         />
+                      </div>
+
+                      {/* Attach Files Section */}
+                      <div className="space-y-2">
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          Attach Files (Optional)
+                        </label>
+                        
+                        <div className="flex flex-col gap-2">
+                          <label className="flex items-center justify-center gap-2 w-full p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-slate-100 cursor-pointer transition-all">
+                            <Paperclip size={14} className="text-slate-600" />
+                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Choose Files to Attach</span>
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                              onChange={handleAttachmentChange}
+                              className="hidden"
+                            />
+                          </label>
+                          <span className="text-[9px] text-slate-400 font-medium">
+                            Supported: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Max 10MB per file, 20MB total)
+                          </span>
+                        </div>
+
+                        {attachmentError && (
+                          <div className="p-2 border border-red-200 bg-red-50 text-red-700 text-[10px] uppercase tracking-wider font-bold rounded-lg leading-relaxed">
+                            ⚠️ {attachmentError}
+                          </div>
+                        )}
+
+                        {attachedFiles.length > 0 && (
+                          <div className="max-h-28 overflow-y-auto border border-slate-100 rounded-xl p-2 bg-slate-50 space-y-1.5 scrollbar-thin">
+                            {attachedFiles.map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-[11px] font-medium text-slate-700 bg-white border border-slate-150 rounded-lg px-2.5 py-1.5 shadow-sm">
+                                <span className="truncate max-w-[200px]" title={file.filename}>
+                                  📎 {file.filename}
+                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[9px] font-mono text-slate-400 font-medium">
+                                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeAttachment(file.filename)}
+                                    className="text-red-500 hover:text-red-700 font-bold transition-all text-xs px-1 hover:bg-red-50 rounded"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="pt-4 flex gap-3 border-t border-slate-100">

@@ -94,7 +94,12 @@ export default async function handler(req: any, res: any) {
           estimateEmailSubject: '',
           estimateEmailBody: '',
           estimateAcceptedMessage: '',
-          estimateDeclinedMessage: ''
+          estimateDeclinedMessage: '',
+          ghlWebhookInstantEstimateSubmitted: '',
+          ghlWebhookManualEstimateSent: '',
+          ghlWebhookEstimateAccepted: '',
+          ghlWebhookEstimateCompleted: '',
+          ghlWebhookEstimateDeclined: ''
         });
       }
 
@@ -131,7 +136,12 @@ export default async function handler(req: any, res: any) {
           estimateEmailSubject,
           estimateEmailBody,
           estimateAcceptedMessage,
-          estimateDeclinedMessage
+          estimateDeclinedMessage,
+          ghlWebhookInstantEstimateSubmitted,
+          ghlWebhookManualEstimateSent,
+          ghlWebhookEstimateAccepted,
+          ghlWebhookEstimateCompleted,
+          ghlWebhookEstimateDeclined
         } = incomingFields;
 
         // Validate email format
@@ -195,6 +205,11 @@ export default async function handler(req: any, res: any) {
           estimateEmailBody: estimateEmailBody || '',
           estimateAcceptedMessage: estimateAcceptedMessage || '',
           estimateDeclinedMessage: estimateDeclinedMessage || '',
+          ghlWebhookInstantEstimateSubmitted: ghlWebhookInstantEstimateSubmitted || '',
+          ghlWebhookManualEstimateSent: ghlWebhookManualEstimateSent || '',
+          ghlWebhookEstimateAccepted: ghlWebhookEstimateAccepted || '',
+          ghlWebhookEstimateCompleted: ghlWebhookEstimateCompleted || '',
+          ghlWebhookEstimateDeclined: ghlWebhookEstimateDeclined || '',
           updatedAt: new Date().toISOString()
         };
 

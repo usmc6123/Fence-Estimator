@@ -225,6 +225,9 @@ export interface Estimate {
   manualDemoTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
   contractProjectDate?: string;
+  customerEmailSent?: boolean;
+  customerEmailSentAt?: string | null;
+  customerSentAt?: string | null;
   contractScope?: string;
   laborScope?: string;
   createdAt: string;

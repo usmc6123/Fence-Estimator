@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { sendGhlWebhook } from '../webhooks/ghl';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
@@ -260,6 +261,28 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      // Dispatch new custom event-based GHL webhooks asynchronously
+      const eventType = decision === 'accepted' ? 'estimate_accepted' : 'estimate_declined';
+      const eventPayload = {
+        customerName: data.customerName || '',
+        email: data.customerEmail || customerEmail || data.email || '',
+        phone: data.customerPhone || data.phone || '',
+        address: data.customerAddress || data.address || '',
+        fenceType: data.fenceType || (data.materials?.[0]?.fenceStyle) || 'Wood Fence',
+        linearFeet: Number(data.linearFeet || (data.materials?.[0]?.linearFeet) || data.manualLinearFeet || 0),
+        estimatedPrice: Number(data.totalCost || data.manualGrandTotal || 0),
+        estimateNumber: data.estimateNumber || '',
+        customerSignature: signature || 'Digitally Signed',
+        customerSignedDate: now,
+        acceptedAt: now,
+        declinedAt: now,
+        declineReason: declineReason || 'Not specified'
+      };
+
+      sendGhlWebhook(eventType, String(estimateId), eventPayload, db, ownerUid).catch(err => {
+        console.error(`Triggering ${eventType} webhook failed:`, err);
+      });
+
       await targetRef.update(updates);
       console.log(`Estimate ${estimateId} public decision recorded:`, updates);
       return res.status(200).json({ success: true, decision: updates });
@@ -276,6 +299,16 @@ export default async function handler(req: any, res: any) {
         console.warn('JWT verification failed in estimates write:', err.message);
       }
     }
+
+    const hasValidAdminToken = !!(
+      authHeader &&
+      authHeader.startsWith('Bearer ') &&
+      decoded &&
+      (decoded.isAdmin ||
+       decoded.uid === 'braden-lonestar-uid' ||
+       decoded.email?.toLowerCase() === 'bradens@lonestarfenceworks.com' ||
+       decoded.email?.toLowerCase() === 'usmc6123@gmail.com')
+    );
 
     // Public customer submissions have no token — scope them to Braden's UID automatically
     if (!decoded || !decoded.uid) {
@@ -404,7 +437,7 @@ export default async function handler(req: any, res: any) {
       }
       if (req.body && req.body.action === 'send') {
         const estimateId = req.body.estimateId || req.query.estimateId;
-        const { customerEmail, senderEmail, subject, message } = req.body;
+        const { customerEmail, senderEmail, subject, message, attachments } = req.body;
 
         if (!estimateId) {
           return res.status(400).json({ error: 'Estimate ID is required.' });
@@ -412,6 +445,61 @@ export default async function handler(req: any, res: any) {
 
         if (!customerEmail) {
           return res.status(400).json({ error: 'Customer email is required.' });
+        }
+
+        // Helper to sanitize filenames
+        const sanitizeFilename = (name: string): string => {
+          return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        };
+
+        // Validate attachments if present
+        if (attachments && attachments.length > 0) {
+          if (!hasValidAdminToken) {
+            return res.status(403).json({ error: 'Unauthorized: Only authenticated admin/employee users can send attachments.' });
+          }
+
+          const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
+          const allowedMimes = [
+            'application/pdf',
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          ];
+
+          let totalSize = 0;
+          for (const att of attachments) {
+            if (!att.filename || !att.mimeType || !att.base64Data) {
+              return res.status(400).json({ error: 'Invalid attachment structure. Required fields: filename, mimeType, base64Data.' });
+            }
+
+            const ext = att.filename.split('.').pop()?.toLowerCase();
+            if (!ext || !allowedExtensions.includes(ext)) {
+              return res.status(400).json({ error: `File type "${att.filename}" is not supported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX files are allowed.` });
+            }
+
+            if (!allowedMimes.includes(att.mimeType)) {
+              return res.status(400).json({ error: `Unsupported MIME type "${att.mimeType}" for file "${att.filename}".` });
+            }
+
+            let base64Chunk = att.base64Data;
+            if (base64Chunk.includes(';base64,')) {
+              base64Chunk = base64Chunk.split(';base64,')[1];
+            }
+            const buffer = Buffer.from(base64Chunk, 'base64');
+
+            if (buffer.length > 10 * 1024 * 1024) {
+              return res.status(400).json({ error: `File "${att.filename}" exceeds the 10MB individual limit.` });
+            }
+            totalSize += buffer.length;
+          }
+
+          if (totalSize > 20 * 1024 * 1024) {
+            return res.status(400).json({ error: 'Total attachment size exceeds the 20MB limit.' });
+          }
         }
 
         // 1. Fetch estimate from firestore using Admin SDK
@@ -574,6 +662,21 @@ export default async function handler(req: any, res: any) {
         let mailError = null;
         let errorType = 'UNKNOWN';
 
+        // Prepare email attachments for nodemailer
+        const emailAttachments = attachments && attachments.length > 0
+          ? attachments.map((att: any) => {
+              let base64Chunk = att.base64Data;
+              if (base64Chunk.includes(';base64,')) {
+                base64Chunk = base64Chunk.split(';base64,')[1];
+              }
+              return {
+                filename: sanitizeFilename(att.filename),
+                content: Buffer.from(base64Chunk, 'base64'),
+                contentType: att.mimeType
+              };
+            })
+          : [];
+
         try {
           const transporter = nodemailer.createTransport(transporterConfig);
           await transporter.sendMail({
@@ -582,6 +685,7 @@ export default async function handler(req: any, res: any) {
             replyTo: resolvedReplyToEmail,
             subject: mailSubject,
             text: mailMessage,
+            attachments: emailAttachments,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
@@ -654,7 +758,10 @@ export default async function handler(req: any, res: any) {
             senderEmail: resolvedFromEmail,
             mailSent,
             mailError,
-            portalUrl: estimateLink
+            portalUrl: estimateLink,
+            attachmentFilenames: attachments ? attachments.map((a: any) => sanitizeFilename(a.filename)) : [],
+            attachmentCount: attachments ? attachments.length : 0,
+            sendStatus: mailSent ? 'success' : 'failed'
           }],
           updatedAt: now
         };
@@ -665,6 +772,28 @@ export default async function handler(req: any, res: any) {
           updates.representativeSignedDate = now;
           updates.customerEmailSentAt = now;
           updates.jobStatus = 'Estimate Sent';
+
+          // Trigger manual_estimate_sent GHL webhook asynchronously
+          const manualPayload = {
+            customerName: estimateData.customerName || '',
+            firstName: estimateData.customerFirstName || '',
+            lastName: estimateData.customerLastName || '',
+            email: customerEmail || estimateData.customerEmail || '',
+            phone: estimateData.customerPhone || '',
+            address: estimateData.customerAddress || estimateData.customerStreet || '',
+            city: estimateData.customerCity || '',
+            state: estimateData.customerState || '',
+            zip: estimateData.customerZip || '',
+            fenceType: estimateData.fenceType || (estimateData.materials?.[0]?.fenceStyle) || 'Wood Fence',
+            linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
+            estimatedPrice: Number(estimateData.totalCost || estimateData.manualGrandTotal || 0),
+            estimateNumber: estimateData.estimateNumber || '',
+            estimateLink: estimateLink,
+            sentAt: now
+          };
+          sendGhlWebhook('manual_estimate_sent', String(estimateId), manualPayload, db, ownerUid).catch(err => {
+            console.error('Triggering manual_estimate_sent webhook failed:', err);
+          });
         }
 
         await targetRef.set(updates, { merge: true });
@@ -776,7 +905,46 @@ export default async function handler(req: any, res: any) {
       delete updates.userId;
       delete updates.companyId;
 
+      const previousStatus = existingData.jobStatus;
+      const newStatus = updates.jobStatus;
+
       await docRef.update(updates);
+
+      // Trigger webhooks for job status transitions handled by PUT
+      if (newStatus && newStatus !== previousStatus) {
+        const eventPayload = {
+          customerName: existingData.customerName || '',
+          email: existingData.customerEmail || '',
+          phone: existingData.customerPhone || '',
+          address: existingData.customerAddress || '',
+          fenceType: existingData.fenceType || (existingData.materials?.[0]?.fenceStyle) || 'Wood Fence',
+          linearFeet: Number(existingData.linearFeet || (existingData.materials?.[0]?.linearFeet) || existingData.manualLinearFeet || 0),
+          estimatedPrice: Number(existingData.totalCost || existingData.manualGrandTotal || 0),
+          finalPrice: Number(updates.finalPrice || existingData.totalCost || existingData.manualGrandTotal || 0),
+          estimateNumber: existingData.estimateNumber || '',
+          customerSignature: existingData.customerSignature || 'Digitally Signed',
+          customerSignedDate: existingData.customerDecisionDate || nowIso,
+          acceptedAt: existingData.customerDecisionDate || nowIso,
+          declinedAt: existingData.customerDecisionDate || nowIso,
+          declineReason: existingData.customerDeclineReason || 'Not specified'
+        };
+
+        const ownerUid = existingData.userId || existingData.uid || existingData.ownerId || (decoded && decoded.uid);
+
+        if (newStatus === 'Completed') {
+          sendGhlWebhook('estimate_completed', String(id), eventPayload, db, ownerUid).catch(err => {
+            console.error('Triggering estimate_completed webhook failed:', err);
+          });
+        } else if (newStatus === 'Accepted') {
+          sendGhlWebhook('estimate_accepted', String(id), eventPayload, db, ownerUid).catch(err => {
+            console.error('Triggering estimate_accepted webhook failed:', err);
+          });
+        } else if (newStatus === 'Declined') {
+          sendGhlWebhook('estimate_declined', String(id), eventPayload, db, ownerUid).catch(err => {
+            console.error('Triggering estimate_declined webhook failed:', err);
+          });
+        }
+      }
 
       return res.status(200).json({
         id,

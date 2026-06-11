@@ -320,6 +320,8 @@ export function useCustomerEstimator(
       // 2. Submit to our backend GHL proxy endpoint which forwards to GO HIGH LEVEL
       try {
         const payload = {
+          eventType: 'instant_estimate_submitted',
+          estimateId: estId || 'instant-estimator-lead',
           firstName: data.firstName.trim(),
           lastName: data.lastName.trim(),
           email: data.email.trim(),
@@ -331,7 +333,8 @@ export function useCustomerEstimator(
           fenceType: data.fenceType || 'Wood Fence',
           linearFeet: data.linearFeet,
           gateCount: data.needGates ? data.gateCount : 0,
-          estimatedPrice: Math.round(breakdown.total * 100) / 100
+          estimatedPrice: Math.round(breakdown.total * 100) / 100,
+          createdAt: new Date().toISOString()
         };
 
         console.info('Invoking local server CRM proxy to dispatch lead to GoHighLevel CRM...');

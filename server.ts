@@ -22,6 +22,7 @@ import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
 import writeQuote from './api/quotes/write';
 import settingsHandler from './api/settings';
+import { sendGhlWebhook } from './api/webhooks/ghl';
 
 async function startServer() {
   const app = express();
@@ -525,80 +526,32 @@ async function startServer() {
   app.post('/api/webhooks/ghl', async (req, res) => {
     try {
       console.log('Incoming GHL Webhook post payload:', req.body);
-      const {
-        firstName,
-        lastName,
-        email,
-        phone,
-        address,
-        city,
-        state,
-        zip,
-        fenceType,
-        linearFeet,
-        gateCount,
-        estimatedPrice
-      } = req.body;
+      const body = req.body || {};
+      const eventType = body.eventType || 'instant_estimate_submitted';
+      const estimateId = body.estimateId || 'braden-lonestar-uid';
+      const ownerUid = body.ownerUid || 'braden-lonestar-uid';
 
-      // Validate all required fields before submission
-      if (!firstName || !lastName || !email || !phone || !address || !city || !state || !zip) {
-        return res.status(400).json({ error: 'All contact and address fields (firstName, lastName, email, phone, address, city, state, zip) are required.' });
+      // We use our unified helper function to execute the webhook
+      const result = await sendGhlWebhook(
+        eventType as any,
+        estimateId,
+        body,
+        db,
+        ownerUid
+      );
+
+      if (!result.success) {
+        return res.status(200).json({
+          success: false,
+          message: 'Lead action was handled, but Go High Level webhook dispatch logged a warning.',
+          detail: result.error
+        });
       }
 
-      const ghlWebhookUrl = process.env.GHL_WEBHOOK_URL;
-      if (!ghlWebhookUrl) {
-        console.error('GHL_WEBHOOK_URL environment variable is not configured');
-        return res.status(500).json({ error: 'GoHighLevel Webhook URL is not configured on the server. Please define GHL_WEBHOOK_URL in environment configuration.' });
-      }
-
-      // Format phone number correctly for GoHighLevel (e.g. +1XXXXXXXXXX)
-      const formatPhoneForGHL = (p: string): string => {
-        const cleaned = p.replace(/\D/g, '');
-        if (cleaned.length === 10) {
-          return `+1${cleaned}`;
-        } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
-          return `+${cleaned}`;
-        }
-        return p; 
-      };
-
-      const ghlPayload = {
-        firstName,
-        lastName,
-        email,
-        phone: formatPhoneForGHL(phone),
-        address,
-        city,
-        state,
-        zip,
-        fenceType: fenceType || '',
-        linearFeet: String(linearFeet || '0'),
-        gateCount: String(gateCount || '0'),
-        estimatedPrice: String(estimatedPrice || '0.00'),
-        leadSource: "Fence Estimator App"
-      };
-
-      console.log('Dispatching request to GHL webhook:', ghlWebhookUrl, 'Payload:', ghlPayload);
-
-      const response = await fetch(ghlWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(ghlPayload)
-      });
-
-      const responseText = await response.text();
-      console.log(`GHL Webhook response stats - Status: ${response.status}, Response:`, responseText);
-
-      if (!response.ok) {
-        throw new Error(`GHL Webhook returned status ${response.status}: ${responseText}`);
-      }
-
-      res.status(200).json({ success: true, message: 'Lead successfully dispatched to CRM webhook.', status: response.status, data: responseText });
+      return res.status(200).json({ success: true, message: 'Lead successfully dispatched to CRM webhook.' });
     } catch (err: any) {
       console.error('Failed to submit lead to GHL:', err);
-      res.status(500).json({ error: err.message || 'Transmission to CRM webhook failed.' });
+      return res.status(200).json({ success: false, error: err.message || 'Transmission to CRM webhook failed.' });
     }
   });
 
@@ -858,6 +811,28 @@ async function startServer() {
           console.error(`Webhook trigger parse error:`, webhookOuterError);
         }
       }
+
+      // Dispatch new custom event-based GHL webhooks asynchronously
+      const eventType = decision === 'accepted' ? 'estimate_accepted' : 'estimate_declined';
+      const eventPayload = {
+        customerName: data.customerName || '',
+        email: data.customerEmail || '',
+        phone: data.customerPhone || '',
+        address: data.customerAddress || '',
+        fenceType: data.fenceType || (data.materials?.[0]?.fenceStyle) || 'Wood Fence',
+        linearFeet: Number(data.linearFeet || (data.materials?.[0]?.linearFeet) || data.manualLinearFeet || 0),
+        estimatedPrice: Number(data.totalCost || data.manualGrandTotal || 0),
+        estimateNumber: data.estimateNumber || '',
+        customerSignature: signature || 'Digitally Signed',
+        customerSignedDate: now,
+        acceptedAt: now,
+        declinedAt: now,
+        declineReason: declineReason || 'Not specified'
+      };
+
+      sendGhlWebhook(eventType, String(estimateId), eventPayload, db, ownerUid).catch(err => {
+        console.error(`Triggering ${eventType} webhook failed:`, err);
+      });
 
       await updateDoc(targetRef, updates);
       console.log(`Estimate ${estimateId} decision recorded:`, updates);

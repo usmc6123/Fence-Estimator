@@ -31,6 +31,11 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     address: COMPANY_INFO.address,
     companyLogo: COMPANY_INFO.logo || '',
     ghlWebhookUrl: '',
+    ghlWebhookInstantEstimateSubmitted: '',
+    ghlWebhookManualEstimateSent: '',
+    ghlWebhookEstimateAccepted: '',
+    ghlWebhookEstimateCompleted: '',
+    ghlWebhookEstimateDeclined: '',
     autoSyncEstimates: true,
     
     // SMTP Configurations
@@ -112,6 +117,11 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           address: apiData.address || firebaseData.address || COMPANY_INFO.address,
           companyLogo: apiData.companyLogo || firebaseData.companyLogo || COMPANY_INFO.logo || '',
           ghlWebhookUrl: apiData.gohighlevelWebhookUrl || apiData.ghlWebhookUrl || firebaseData.ghlWebhookUrl || firebaseData.gohighlevelWebhookUrl || '',
+          ghlWebhookInstantEstimateSubmitted: apiData.ghlWebhookInstantEstimateSubmitted || firebaseData.ghlWebhookInstantEstimateSubmitted || '',
+          ghlWebhookManualEstimateSent: apiData.ghlWebhookManualEstimateSent || firebaseData.ghlWebhookManualEstimateSent || '',
+          ghlWebhookEstimateAccepted: apiData.ghlWebhookEstimateAccepted || firebaseData.ghlWebhookEstimateAccepted || '',
+          ghlWebhookEstimateCompleted: apiData.ghlWebhookEstimateCompleted || firebaseData.ghlWebhookEstimateCompleted || '',
+          ghlWebhookEstimateDeclined: apiData.ghlWebhookEstimateDeclined || firebaseData.ghlWebhookEstimateDeclined || '',
           smtpPort: String(apiData.smtpPort || firebaseData.smtpPort || '465'),
         };
 
@@ -168,6 +178,11 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         companyLogo: formData.companyLogo,
         ghlWebhookUrl: formData.ghlWebhookUrl,
         gohighlevelWebhookUrl: formData.ghlWebhookUrl,
+        ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
+        ghlWebhookManualEstimateSent: formData.ghlWebhookManualEstimateSent,
+        ghlWebhookEstimateAccepted: formData.ghlWebhookEstimateAccepted,
+        ghlWebhookEstimateCompleted: formData.ghlWebhookEstimateCompleted,
+        ghlWebhookEstimateDeclined: formData.ghlWebhookEstimateDeclined,
         googleReviewLink: formData.googleReviewLink,
         autoSyncEstimates: formData.autoSyncEstimates,
         
@@ -207,6 +222,11 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           replyToEmail: formData.replyToEmail,
           
           gohighlevelWebhookUrl: formData.ghlWebhookUrl,
+          ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
+          ghlWebhookManualEstimateSent: formData.ghlWebhookManualEstimateSent,
+          ghlWebhookEstimateAccepted: formData.ghlWebhookEstimateAccepted,
+          ghlWebhookEstimateCompleted: formData.ghlWebhookEstimateCompleted,
+          ghlWebhookEstimateDeclined: formData.ghlWebhookEstimateDeclined,
           googleReviewLink: formData.googleReviewLink,
           estimateEmailSubject: formData.estimateEmailSubject,
           estimateEmailBody: formData.estimateEmailBody,
@@ -484,6 +504,83 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         onChange={(e) => setFormData({...formData, ghlWebhookUrl: e.target.value})}
                         className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
                       />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#E5E5E5] pt-6 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#333333]">Go High Level Workflow Webhooks</h4>
+                    <p className="text-[10px] text-[#666666] -mt-2">Enable surgical triggering into different automation campaigns based on pipeline milestones.</p>
+
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-[#666666]">Instant Estimator Submitted Webhook</label>
+                        <div className="relative">
+                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                          <input 
+                            type="url" 
+                            placeholder="https://services.gohighlevel.com/webhook/..."
+                            value={formData.ghlWebhookInstantEstimateSubmitted}
+                            onChange={(e) => setFormData({...formData, ghlWebhookInstantEstimateSubmitted: e.target.value})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-[#666666]">Manual Estimate Sent Webhook</label>
+                        <div className="relative">
+                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                          <input 
+                            type="url" 
+                            placeholder="https://services.gohighlevel.com/webhook/..."
+                            value={formData.ghlWebhookManualEstimateSent}
+                            onChange={(e) => setFormData({...formData, ghlWebhookManualEstimateSent: e.target.value})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-[#666666]">Estimate Accepted Webhook</label>
+                        <div className="relative">
+                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                          <input 
+                            type="url" 
+                            placeholder="https://services.gohighlevel.com/webhook/..."
+                            value={formData.ghlWebhookEstimateAccepted}
+                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateAccepted: e.target.value})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-[#666666]">Estimate Completed Webhook</label>
+                        <div className="relative">
+                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                          <input 
+                            type="url" 
+                            placeholder="https://services.gohighlevel.com/webhook/..."
+                            value={formData.ghlWebhookEstimateCompleted}
+                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateCompleted: e.target.value})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-[#666666]">Estimate Declined Webhook</label>
+                        <div className="relative">
+                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                          <input 
+                            type="url" 
+                            placeholder="https://services.gohighlevel.com/webhook/..."
+                            value={formData.ghlWebhookEstimateDeclined}
+                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateDeclined: e.target.value})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
