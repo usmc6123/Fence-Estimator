@@ -225,7 +225,7 @@ export interface Estimate {
   addOnTotal?: number | null;
   pricePerFoot?: number;
   subtotalBeforeDiscount?: number;
-  demoRemovalPrice?: number;
+  demoRemovalPrice?: number | null;
   demoRemovalDescription?: string;
   discountType?: 'none' | 'fixed_amount' | 'free_gate' | 'custom';
   discountLabel?: string;

@@ -323,7 +323,7 @@ export default function CustomerContract({
   // Pricing synchronization and adjustment states
   const [baseFencePrice, setBaseFencePrice] = useState<number | null>(estimate.baseFencePrice ?? null);
   const [addOnTotal, setAddOnTotal] = useState<number | null>(estimate.addOnTotal ?? null);
-  const [demoRemovalPrice, setDemoRemovalPrice] = useState<number>(estimate.demoRemovalPrice ?? 0);
+  const [demoRemovalPrice, setDemoRemovalPrice] = useState<number | null>(estimate.demoRemovalPrice ?? null);
   const [demoRemovalDescription, setDemoRemovalDescription] = useState<string>(
     estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate."
   );
@@ -384,7 +384,7 @@ export default function CustomerContract({
 
     setBaseFencePrice(estimate.baseFencePrice ?? null);
     setAddOnTotal(estimate.addOnTotal ?? null);
-    setDemoRemovalPrice(estimate.demoRemovalPrice ?? 0);
+    setDemoRemovalPrice(estimate.demoRemovalPrice ?? null);
     setDemoRemovalDescription(estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate.");
     setDiscountType(estimate.discountType ?? 'none');
     setDiscountLabel(estimate.discountLabel ?? '');
@@ -416,7 +416,7 @@ export default function CustomerContract({
 
       setBaseFencePrice(null);
       setAddOnTotal(null);
-      setDemoRemovalPrice(0);
+      setDemoRemovalPrice(null);
       setDemoRemovalDescription("Removal and disposal of existing fence material, if included in this estimate.");
       setDiscountType('none');
       setDiscountLabel('');
@@ -433,7 +433,7 @@ export default function CustomerContract({
           manualGatePrices: {},
           baseFencePrice: null,
           addOnTotal: null,
-          demoRemovalPrice: 0,
+          demoRemovalPrice: null,
           demoRemovalDescription: "Removal and disposal of existing fence material, if included in this estimate.",
           discountType: 'none',
           discountLabel: '',
@@ -568,8 +568,10 @@ export default function CustomerContract({
   const resolvedBaseFencePrice = baseFencePrice ?? totalFenceCharge;
   const resolvedGateTotal = projectBreakdown.reduce((sum, r, i) => sum + (gateTotals[i] ?? r.totalGateCharge), 0);
   const resolvedAddOnTotal = addOnTotal ?? (data?.totals?.prep * markupFactor || 0);
+  const calculatedDemoPrice = projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0);
+  const resolvedDemoRemovalPrice = demoRemovalPrice !== null ? demoRemovalPrice : calculatedDemoPrice;
   
-  const subtotalBeforeDiscount = resolvedBaseFencePrice + resolvedGateTotal + resolvedAddOnTotal + demoRemovalPrice;
+  const subtotalBeforeDiscount = resolvedBaseFencePrice + resolvedGateTotal + resolvedAddOnTotal + resolvedDemoRemovalPrice;
   const finalCustomerPrice = manualGrandTotal !== null ? manualGrandTotal : Math.max(0, subtotalBeforeDiscount - discountAmount);
   
   const resolvedLinearFeet = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
@@ -1338,15 +1340,15 @@ export default function CustomerContract({
                       <input
                         type="number"
                         step="0.01"
-                        placeholder={projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0).toFixed(2)}
-                        value={demoRemovalPrice || ''}
+                        placeholder={calculatedDemoPrice.toFixed(2)}
+                        value={demoRemovalPrice !== null ? demoRemovalPrice : ''}
                         onChange={(e) => {
-                          const v = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setDemoRemovalPrice(v);
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
-                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0))}</span>
+                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(calculatedDemoPrice)}</span>
                     </div>
                   </div>
 
@@ -1516,7 +1518,7 @@ export default function CustomerContract({
                     </div>
                   )}
 
-                  {demoRemovalPrice > 0 && (
+                  {resolvedDemoRemovalPrice > 0 && (
                     <div className="flex justify-between items-center text-xs pt-1">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-500 uppercase tracking-wider">Demo & Removal Services</span>
@@ -1524,7 +1526,7 @@ export default function CustomerContract({
                           {demoRemovalDescription}
                         </span>
                       </div>
-                      <span className="font-semibold text-slate-850 font-mono text-xs self-start">{formatCurrency(demoRemovalPrice)}</span>
+                      <span className="font-semibold text-slate-850 font-mono text-xs self-start">{formatCurrency(resolvedDemoRemovalPrice)}</span>
                     </div>
                   )}
 
