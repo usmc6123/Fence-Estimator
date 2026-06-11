@@ -224,8 +224,9 @@ export default function CustomerContract({
           });
         }
       } else {
-        const errorDetail = parsedJson?.error || responseText || 'Unknown server fail.';
-        setSendErrorMessage(`API Error: ${errorDetail}`);
+        const errorDetailMsg = parsedJson?.error || responseText || 'Unknown server fail.';
+        const detailedMsg = parsedJson?.details ? ` - Details: ${parsedJson.details}` : '';
+        setSendErrorMessage(`API Error: ${errorDetailMsg}${detailedMsg}`);
       }
     } catch (err: any) {
       setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');

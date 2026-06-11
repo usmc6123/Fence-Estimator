@@ -226,6 +226,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           if (parsedJson.errorType) {
             detailedError += ` [Type: ${parsedJson.errorType}]`;
           }
+          if (parsedJson.details) {
+            detailedError += ` - Details: ${parsedJson.details}`;
+          }
         } else if (responseText) {
           detailedError += `Response context: ${responseText.substring(0, 300)}`;
         } else {
@@ -259,7 +262,10 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         }, 1500);
       } else {
         const errorMsg = parsedJson.error || 'Server rejected email relay config.';
-        const errorDetail = parsedJson.errorType ? `${errorMsg} [Type: ${parsedJson.errorType}]` : errorMsg;
+        let errorDetail = parsedJson.errorType ? `${errorMsg} [Type: ${parsedJson.errorType}]` : errorMsg;
+        if (parsedJson.details) {
+          errorDetail += ` - Details: ${parsedJson.details}`;
+        }
         setSendErrorMessage(`API Error: ${errorDetail}`);
       }
     } catch (err: any) {
