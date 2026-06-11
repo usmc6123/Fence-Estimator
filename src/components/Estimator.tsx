@@ -353,7 +353,7 @@ export default function Estimator({
     const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
     const parentId = isExisting ? (estimate.parentId || estimate.id || null) : null;
 
-    const wasAccepted = estimate.customerDecision === 'accepted' || !!estimate.customerSignature;
+    const wasDecisionMade = estimate.customerDecision === 'accepted' || estimate.customerDecision === 'declined' || !!estimate.customerSignature;
 
     const estimateToSave = {
       ...estimate,
@@ -364,16 +364,17 @@ export default function Estimator({
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
-      jobStatus: wasAccepted ? 'Draft' : (estimate.jobStatus || 'Estimate Pending'),
+      jobStatus: wasDecisionMade ? 'Draft' : (estimate.jobStatus || 'Estimate Pending'),
       userId: user.uid,
       companyId: 'lonestarfence'
     };
 
-    if (wasAccepted) {
+    if (wasDecisionMade) {
       (estimateToSave as any).customerDecision = null;
       (estimateToSave as any).customerSignature = null;
       (estimateToSave as any).customerSignedDate = null;
       (estimateToSave as any).customerDecisionDate = null;
+      (estimateToSave as any).customerDeclineReason = null;
       (estimateToSave as any).acceptedAt = null;
       (estimateToSave as any).customerEmailSigned = null;
       (estimateToSave as any).customerEmailSent = false;

@@ -305,7 +305,7 @@ export default function CustomerContract({
 
   const handleSaveContract = () => {
     if (onUpdateEstimate) {
-      const wasAccepted = estimate.customerDecision === 'accepted' || !!estimate.customerSignature;
+      const wasDecisionMade = estimate.customerDecision === 'accepted' || estimate.customerDecision === 'declined' || !!estimate.customerSignature;
       const updates: any = {
         manualSectionTotals: sectionTotals,
         manualGateTotals: gateTotals,
@@ -316,11 +316,12 @@ export default function CustomerContract({
         manualGatePrices: manualGatePrices
       };
 
-      if (wasAccepted) {
+      if (wasDecisionMade) {
         updates.customerDecision = null;
         updates.customerSignature = null;
         updates.customerSignedDate = null;
         updates.customerDecisionDate = null;
+        updates.customerDeclineReason = null;
         updates.acceptedAt = null;
         updates.customerEmailSigned = null;
         updates.customerEmailSent = false;
