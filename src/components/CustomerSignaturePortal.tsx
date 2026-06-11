@@ -85,7 +85,7 @@ export default function CustomerSignaturePortal({
         }
 
         // Fetch the estimate through secure guest endpoint
-        const response = await fetch(`/api/estimates/${estimateId}/public`);
+        const response = await fetch(`/api/estimates/write?action=get-public-estimate&estimateId=${estimateId}`);
         
         if (!response.ok) {
           if (response.status === 404) {
@@ -105,7 +105,11 @@ export default function CustomerSignaturePortal({
         setCustomerEmail(initialEmail.includes('@') ? initialEmail : '');
         
         // Notify the server that the estimate was opened/viewed
-        fetch(`/api/estimates/${estimateId}/viewed`, { method: 'POST' })
+        fetch(`/api/estimates/write`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'view-public-estimate', estimateId })
+        })
           .then(res => res.json())
           .then(track => console.log('View event recorded:', track))
           .catch(e => console.warn('Failed to record view event:', e));
@@ -134,10 +138,12 @@ export default function CustomerSignaturePortal({
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/estimates/${estimateId}/decision`, {
+      const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'decision-public-estimate',
+          estimateId,
           decision: 'accepted',
           signature: signatureName,
           customerEmail
@@ -177,10 +183,12 @@ export default function CustomerSignaturePortal({
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/estimates/${estimateId}/decision`, {
+      const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'decision-public-estimate',
+          estimateId,
           decision: 'declined',
           declineReason
         })

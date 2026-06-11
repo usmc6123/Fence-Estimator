@@ -51,6 +51,218 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    const action = req.query?.action || req.body?.action;
+
+    // PUBLIC CUSTOMER PORTAL GUEST ENDPOINTS: Bypass authentication completely!
+    if (action === 'get-public-estimate') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+
+      const docRef = db.collection('estimates').doc(String(estimateId));
+      let snap = await docRef.get();
+
+      let estimateData: any = null;
+      if (snap.exists) {
+        estimateData = { id: snap.id, ...snap.data() };
+      } else {
+        // Look up nested
+        const usersSnap = await db.collection('users').get();
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+          const nestedSnap = await nestedRef.get();
+          if (nestedSnap.exists) {
+            estimateData = { id: nestedSnap.id, ...nestedSnap.data() };
+            break;
+          }
+        }
+      }
+
+      if (!estimateData) {
+        return res.status(404).json({ error: 'Estimate not found in database.' });
+      }
+
+      const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+      let companyConfig: any = null;
+      if (ownerUid) {
+        try {
+          const settingsSnap = await db.collection('companySettings').doc(ownerUid).get();
+          if (settingsSnap.exists) {
+            const data = settingsSnap.data() || {};
+            // Security: Strip out critical SMTP credentials before returning to public client portal
+            companyConfig = {
+              companyName: data.companyName || '',
+              companyEmail: data.companyEmail || '',
+              companyPhone: data.companyPhone || '',
+              companyWebsite: data.companyWebsite || '',
+              companyLogo: data.companyLogo || '',
+              googleReviewLink: data.googleReviewLink || '',
+              estimateAcceptedMessage: data.estimateAcceptedMessage || '',
+              estimateDeclinedMessage: data.estimateDeclinedMessage || ''
+            };
+          }
+        } catch (settingsErr) {
+          console.warn('Skipped reading company settings for public portal:', settingsErr);
+        }
+      }
+
+      return res.status(200).json({
+        ...estimateData,
+        settings: companyConfig
+      });
+    }
+
+    if (action === 'view-public-estimate') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+
+      let targetRef = db.collection('estimates').doc(String(estimateId));
+      let snap = await targetRef.get();
+
+      if (!snap.exists) {
+        const usersSnap = await db.collection('users').get();
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+          const nestedSnap = await nestedRef.get();
+          if (nestedSnap.exists) {
+            targetRef = nestedRef;
+            snap = nestedSnap;
+            break;
+          }
+        }
+      }
+
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const docData = snap.data() || {};
+      const now = new Date().toISOString();
+      const updates: any = {
+        customerOpenedAt: docData.customerOpenedAt || now,
+        customerViewedAt: now,
+        customerOpenedIp: (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').toString().split(',')[0].trim(),
+        viewCount: (docData.viewCount || 0) + 1
+      };
+
+      await targetRef.update(updates);
+      return res.status(200).json({ success: true, tracking: updates });
+    }
+
+    if (action === 'decision-public-estimate') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const { decision, signature, declineReason, customerEmail } = req.body || {};
+
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+      if (!decision || !['accepted', 'declined'].includes(decision)) {
+        return res.status(400).json({ error: 'Invalid decision parameter. Must be "accepted" or "declined".' });
+      }
+
+      let targetRef = db.collection('estimates').doc(String(estimateId));
+      let snap = await targetRef.get();
+
+      if (!snap.exists) {
+        const usersSnap = await db.collection('users').get();
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+          const nestedSnap = await nestedRef.get();
+          if (nestedSnap.exists) {
+            targetRef = nestedRef;
+            snap = nestedSnap;
+            break;
+          }
+        }
+      }
+
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const now = new Date().toISOString();
+      const updates: any = {
+        customerDecision: decision,
+        customerDecisionDate: now,
+        updatedAt: now
+      };
+
+      if (decision === 'accepted') {
+        updates.customerSignature = signature || 'Digitally Signed';
+        updates.customerEmailSigned = customerEmail || '';
+        updates.jobStatus = 'Approved';
+      } else {
+        updates.customerDeclineReason = declineReason || 'Not specified';
+        updates.customerEmailSigned = customerEmail || '';
+        updates.jobStatus = 'Declined';
+      }
+
+      const data = snap.data() || {};
+      const ownerUid = data.userId || data.uid || data.ownerId;
+
+      let customAcceptedMessage = 'Estimate accepted successfully! We will finalize your installation timeframe shortly.';
+      let customDeclinedMessage = 'Estimate declined. We will reach out to understand your feedback. Thank you!';
+      let webhookUrl = '';
+
+      if (ownerUid) {
+        try {
+          const settingsSnap = await db.collection('companySettings').doc(ownerUid).get();
+          if (settingsSnap.exists) {
+            const settingsData = settingsSnap.data() || {};
+            webhookUrl = settingsData.gohighlevelWebhookUrl || settingsData.ghlWebhookUrl || '';
+            if (settingsData.estimateAcceptedMessage) {
+              customAcceptedMessage = settingsData.estimateAcceptedMessage;
+            }
+            if (settingsData.estimateDeclinedMessage) {
+              customDeclinedMessage = settingsData.estimateDeclinedMessage;
+            }
+          }
+        } catch (settingsError) {
+          console.warn('Could not load companySettings for webhooks/templates:', settingsError);
+        }
+      }
+
+      updates.customMessage = decision === 'accepted' ? customAcceptedMessage : customDeclinedMessage;
+
+      // Dispatch webhook asynchronously
+      if (webhookUrl) {
+        try {
+          const webhookPayload = {
+            event: `estimate_${decision}`,
+            estimateId,
+            estimateNumber: data.estimateNumber || '',
+            decision,
+            customerName: data.customerName || '',
+            customerEmail: data.customerEmail || customerEmail || '',
+            totalCost: data.totalCost || data.manualGrandTotal || 0,
+            signature: signature || '',
+            declineReason: declineReason || '',
+            timestamp: now
+          };
+          fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(webhookPayload)
+          }).then(response => {
+            console.log(`Outbound SaaS webhook trigger response: status ${response.status}`);
+          }).catch(webhookErr => {
+            console.error(`Dynamic Webhook dispatch failed:`, webhookErr);
+          });
+        } catch (webhookOuterError) {
+          console.error(`Webhook trigger parse error:`, webhookOuterError);
+        }
+      }
+
+      await targetRef.update(updates);
+      console.log(`Estimate ${estimateId} public decision recorded:`, updates);
+      return res.status(200).json({ success: true, decision: updates });
+    }
+
     const authHeader = req.headers.authorization;
     let decoded: any = null;
 
