@@ -305,7 +305,8 @@ export default function CustomerContract({
 
   const handleSaveContract = () => {
     if (onUpdateEstimate) {
-      onUpdateEstimate({
+      const wasAccepted = estimate.customerDecision === 'accepted' || !!estimate.customerSignature;
+      const updates: any = {
         manualSectionTotals: sectionTotals,
         manualGateTotals: gateTotals,
         manualDemoTotals: demoTotals,
@@ -313,7 +314,21 @@ export default function CustomerContract({
         contractProjectDate: projectDate,
         contractScope: localAiScope,
         manualGatePrices: manualGatePrices
-      });
+      };
+
+      if (wasAccepted) {
+        updates.customerDecision = null;
+        updates.customerSignature = null;
+        updates.customerSignedDate = null;
+        updates.customerDecisionDate = null;
+        updates.acceptedAt = null;
+        updates.customerEmailSigned = null;
+        updates.customerEmailSent = false;
+        updates.customerSentAt = null;
+        updates.jobStatus = 'Draft';
+      }
+
+      onUpdateEstimate(updates);
       // Sync the session buffer to match the persisted state
       setAiContractScope(localAiScope);
       setHasUnsavedChanges(false);
@@ -508,21 +523,21 @@ export default function CustomerContract({
       {/* Contract Preview Area */}
       <div id="contract-view" className="bg-white rounded-[40px] shadow-2xl border border-[#E5E5E5] overflow-hidden print:border-0 print:shadow-none print:rounded-none">
         {/* Company Header */}
-        <div className="bg-american-blue p-10 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+        <div className="bg-american-blue p-6 md:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-12 opacity-10">
             <div className="american-star w-48 h-48 bg-white" />
           </div>
           
-          <div className="flex items-center gap-6 relative z-10">
+          <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-6 relative z-10 w-full md:w-auto">
             {COMPANY_INFO.logo && (
-              <img src={COMPANY_INFO.logo} alt="Logo" className="h-24 w-auto object-contain bg-white/10 p-4 rounded-3xl" referrerPolicy="no-referrer" />
+              <img src={COMPANY_INFO.logo} alt="Logo" className="h-16 sm:h-24 w-auto max-w-[150px] sm:max-w-none object-contain bg-white/10 p-4 rounded-3xl" referrerPolicy="no-referrer" />
             )}
             <div>
-              <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">{COMPANY_INFO.name}</h2>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tighter uppercase leading-none">{COMPANY_INFO.name}</h2>
               <div className="mt-4 space-y-1 opacity-70">
-                <p className="text-sm font-bold">{COMPANY_INFO.address}</p>
-                <p className="text-sm font-bold">{COMPANY_INFO.phone} | {COMPANY_INFO.email}</p>
-                <p className="text-xs font-black uppercase tracking-widest">{COMPANY_INFO.website}</p>
+                <p className="text-xs sm:text-sm font-bold">{COMPANY_INFO.address}</p>
+                <p className="text-xs sm:text-sm font-bold">{COMPANY_INFO.phone} | {COMPANY_INFO.email}</p>
+                <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest">{COMPANY_INFO.website}</p>
               </div>
             </div>
           </div>
@@ -565,7 +580,7 @@ export default function CustomerContract({
           </div>
         )}
 
-        <div className="p-12 space-y-12">
+        <div className="p-5 sm:p-8 md:p-12 space-y-8 md:space-y-12">
           {/* Customer & Project Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 border-b border-dashed border-[#E5E5E5] pb-12">
             <div>
@@ -614,13 +629,13 @@ export default function CustomerContract({
             </h3>
             
             { isCustomerView ? (
-              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-semibold bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-8 print:border-0 print:bg-transparent transition-all">
+              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-semibold bg-white p-5 sm:p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-8 print:border-0 print:bg-transparent transition-all">
                 <div className="whitespace-pre-wrap text-base font-semibold text-slate-800 leading-relaxed font-sans">
                   {localAiScope || estimate.contractScope || "Detailed Scope of Work is being finalized."}
                 </div>
               </div>
             ) : (aiContractScope || estimate.contractScope) ? (
-              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
+              <div className="prose prose-sm max-w-none text-american-blue leading-relaxed font-medium bg-white p-5 sm:p-10 rounded-3xl border border-[#E5E5E5] ai-content-area shadow-inner print:shadow-none print:p-0 print:border-0 print:bg-transparent transition-all">
                 <textarea
                     value={localAiScope}
                     onChange={(e) => handleScopeChange(e.target.value)}
@@ -926,7 +941,7 @@ export default function CustomerContract({
               )}
 
               {/* Grand Total */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-6 sm:p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                    <CheckCircle2 size={100} />
                 </div>

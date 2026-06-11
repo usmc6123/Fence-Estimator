@@ -244,14 +244,14 @@ export interface Estimate {
 
   // Customer Signature / Portal Engagement Logs
   customerDecision?: 'accepted' | 'declined' | null;
-  customerSignature?: string;
-  customerDeclineReason?: string;
-  customerDecisionDate?: string;
-  customerOpenedIp?: string;
-  customerEmailLog?: any[];
-  customerSignedDate?: string;
-  acceptedAt?: string;
-  customerEmailSigned?: string;
+  customerSignature?: string | null;
+  customerDeclineReason?: string | null;
+  customerDecisionDate?: string | null;
+  customerOpenedIp?: string | null;
+  customerEmailLog?: any[] | null;
+  customerSignedDate?: string | null;
+  acceptedAt?: string | null;
+  customerEmailSigned?: string | null;
   representativeSignatureName?: string;
   representativeCompanyName?: string;
   representativeSignedDate?: string;

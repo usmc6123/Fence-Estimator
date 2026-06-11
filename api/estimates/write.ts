@@ -585,7 +585,7 @@ export default async function handler(req: any, res: any) {
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-                  ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName} Logo" style="max-height: 50px; display: block; margin: 0 auto 10px auto;" />` : ''}
+                  ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName} Logo" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />` : ''}
                   <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
                   <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
                 </div>
@@ -664,6 +664,7 @@ export default async function handler(req: any, res: any) {
           updates.representativeCompanyName = "Lone Star Fence Works";
           updates.representativeSignedDate = now;
           updates.customerEmailSentAt = now;
+          updates.jobStatus = 'Estimate Sent';
         }
 
         await targetRef.set(updates, { merge: true });

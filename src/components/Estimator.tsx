@@ -353,6 +353,8 @@ export default function Estimator({
     const newVersion = (estimate.version || 1) + (isExisting ? 1 : 0);
     const parentId = isExisting ? (estimate.parentId || estimate.id || null) : null;
 
+    const wasAccepted = estimate.customerDecision === 'accepted' || !!estimate.customerSignature;
+
     const estimateToSave = {
       ...estimate,
       linearFeet: actualLF,
@@ -362,10 +364,21 @@ export default function Estimator({
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
-      jobStatus: estimate.jobStatus || 'Estimate Pending',
+      jobStatus: wasAccepted ? 'Draft' : (estimate.jobStatus || 'Estimate Pending'),
       userId: user.uid,
       companyId: 'lonestarfence'
     };
+
+    if (wasAccepted) {
+      (estimateToSave as any).customerDecision = null;
+      (estimateToSave as any).customerSignature = null;
+      (estimateToSave as any).customerSignedDate = null;
+      (estimateToSave as any).customerDecisionDate = null;
+      (estimateToSave as any).acceptedAt = null;
+      (estimateToSave as any).customerEmailSigned = null;
+      (estimateToSave as any).customerEmailSent = false;
+      (estimateToSave as any).customerSentAt = null;
+    }
 
     // Remove any undefined fields that cause Firestore to crash
     Object.keys(estimateToSave).forEach(key => {

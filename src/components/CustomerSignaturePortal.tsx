@@ -293,24 +293,24 @@ export default function CustomerSignaturePortal({
           <div className="flex items-center gap-3">
             {/* Real-time status display */}
             {!currentDecision ? (
-              <div className="flex items-center gap-2">
-                <span className="flex h-3 w-3 relative">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="hidden xs:flex h-3 w-3 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
                 </span>
-                <span className="text-xs font-black uppercase tracking-widest text-yellow-500 mr-2">Pending Decision</span>
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-yellow-500 mr-1 sm:mr-2">Pending</span>
 
                 <button
                   onClick={() => setShowDeclineModal(true)}
-                  className="px-4 py-2 border border-slate-600 hover:border-red-500 text-slate-300 hover:text-red-400 font-bold text-xs uppercase tracking-widest rounded-xl transition-all"
+                  className="px-2.5 py-1.5 sm:px-4 sm:py-2 border border-slate-600 hover:border-red-500 text-slate-300 hover:text-red-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest rounded-xl transition-all"
                 >
                   Decline
                 </button>
                 <button
                   onClick={() => setShowSignModal(true)}
-                  className="px-5 py-2.5 bg-green-600 hover:bg-green-500 hover:scale-[1.03] active:scale-[0.98] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                  className="px-3 py-2 sm:px-5 sm:py-2.5 bg-green-600 hover:bg-green-500 hover:scale-[1.03] active:scale-[0.98] text-white font-black text-[10px] sm:text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-1 sm:gap-1.5"
                 >
-                  <Signature size={14} />
+                  <Signature size={12} />
                   Accept & Sign
                 </button>
               </div>
@@ -450,16 +450,16 @@ export default function CustomerSignaturePortal({
             <p className="text-sm text-slate-600 mt-2 leading-relaxed max-w-md mx-auto">
               Ready to locked in this estimate? Tap below to provide your digital signature and approve construction.
             </p>
-            <div className="mt-6 flex justify-center gap-4">
+            <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-3 w-full max-w-sm mx-auto sm:max-w-none">
               <button
                 onClick={() => setShowDeclineModal(true)}
-                className="px-6 py-3.5 border-2 border-slate-200 hover:border-red-400 text-slate-600 hover:text-red-500 font-bold text-xs uppercase tracking-widest rounded-2xl transition-all"
+                className="w-full sm:w-auto px-6 py-3.5 border-2 border-slate-200 hover:border-red-400 text-slate-600 hover:text-red-500 font-bold text-xs uppercase tracking-widest rounded-2xl transition-all"
               >
                 No, Request Revisions
               </button>
               <button
                 onClick={() => setShowSignModal(true)}
-                className="px-8 py-3.5 bg-[#0c1a30] hover:bg-[#1a3052] text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all shadow-md flex items-center gap-2"
+                className="w-full sm:w-auto px-8 py-3.5 bg-[#0c1a30] hover:bg-[#1a3052] text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all shadow-md flex items-center justify-center gap-2"
               >
                 <Signature size={16} />
                 Sign Now
