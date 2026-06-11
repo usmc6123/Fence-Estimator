@@ -170,7 +170,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, userTi
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-0 top-16 z-40 border-b border-[#E5E5E5] bg-white p-4 lg:hidden"
+            className="fixed inset-x-0 top-20 bottom-0 z-40 bg-white p-6 lg:hidden overflow-y-auto pb-16 shadow-2xl"
           >
             <ul className="space-y-2">
               {displayItems.map((item) => (
