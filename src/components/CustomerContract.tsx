@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, Mail, Paperclip } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, Mail, Paperclip, Settings } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -319,6 +319,20 @@ export default function CustomerContract({
   const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(estimate.manualGatePrices || {});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+
+  // Pricing synchronization and adjustment states
+  const [baseFencePrice, setBaseFencePrice] = useState<number | null>(estimate.baseFencePrice ?? null);
+  const [addOnTotal, setAddOnTotal] = useState<number | null>(estimate.addOnTotal ?? null);
+  const [demoRemovalPrice, setDemoRemovalPrice] = useState<number>(estimate.demoRemovalPrice ?? 0);
+  const [demoRemovalDescription, setDemoRemovalDescription] = useState<string>(
+    estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate."
+  );
+  const [discountType, setDiscountType] = useState<'none' | 'fixed_amount' | 'free_gate' | 'custom'>(estimate.discountType ?? 'none');
+  const [discountLabel, setDiscountLabel] = useState<string>(estimate.discountLabel ?? '');
+  const [discountAmount, setDiscountAmount] = useState<number>(estimate.discountAmount ?? 0);
+  const [discountReason, setDiscountReason] = useState<string>(estimate.discountReason ?? '');
+  const [selectedGateId, setSelectedGateId] = useState<string>(estimate.discountType === 'free_gate' && estimate.discountReason ? estimate.discountReason : '');
+
   const isInitialMount = React.useRef(true);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
@@ -367,7 +381,30 @@ export default function CustomerContract({
     if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
     if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
     if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
-  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal]);
+
+    setBaseFencePrice(estimate.baseFencePrice ?? null);
+    setAddOnTotal(estimate.addOnTotal ?? null);
+    setDemoRemovalPrice(estimate.demoRemovalPrice ?? 0);
+    setDemoRemovalDescription(estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate.");
+    setDiscountType(estimate.discountType ?? 'none');
+    setDiscountLabel(estimate.discountLabel ?? '');
+    setDiscountAmount(estimate.discountAmount ?? 0);
+    setDiscountReason(estimate.discountReason ?? '');
+    setSelectedGateId(estimate.discountType === 'free_gate' && estimate.discountReason ? estimate.discountReason : '');
+  }, [
+    estimate.manualSectionTotals, 
+    estimate.manualGateTotals, 
+    estimate.manualDemoTotals, 
+    estimate.manualGrandTotal,
+    estimate.baseFencePrice,
+    estimate.addOnTotal,
+    estimate.demoRemovalPrice,
+    estimate.demoRemovalDescription,
+    estimate.discountType,
+    estimate.discountLabel,
+    estimate.discountAmount,
+    estimate.discountReason
+  ]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
@@ -376,13 +413,35 @@ export default function CustomerContract({
       setDemoTotals([]);
       setManualGrandTotal(null);
       setManualGatePrices({});
+
+      setBaseFencePrice(null);
+      setAddOnTotal(null);
+      setDemoRemovalPrice(0);
+      setDemoRemovalDescription("Removal and disposal of existing fence material, if included in this estimate.");
+      setDiscountType('none');
+      setDiscountLabel('');
+      setDiscountAmount(0);
+      setDiscountReason('');
+      setSelectedGateId('');
+
       if (onUpdateEstimate) {
         onUpdateEstimate({
           manualSectionTotals: [],
           manualGateTotals: [],
           manualDemoTotals: [],
           manualGrandTotal: null,
-          manualGatePrices: {}
+          manualGatePrices: {},
+          baseFencePrice: null,
+          addOnTotal: null,
+          demoRemovalPrice: 0,
+          demoRemovalDescription: "Removal and disposal of existing fence material, if included in this estimate.",
+          discountType: 'none',
+          discountLabel: '',
+          discountAmount: 0,
+          discountReason: '',
+          finalCustomerPrice: undefined,
+          subtotalBeforeDiscount: undefined,
+          pricePerFoot: undefined
         });
       }
     }
@@ -424,7 +483,24 @@ export default function CustomerContract({
       return;
     }
     setHasUnsavedChanges(true);
-  }, [localAiScope, sectionTotals, gateTotals, demoTotals, manualGrandTotal, projectDate, manualGatePrices]);
+  }, [
+    localAiScope, 
+    sectionTotals, 
+    gateTotals, 
+    demoTotals, 
+    manualGrandTotal, 
+    projectDate, 
+    manualGatePrices,
+    baseFencePrice,
+    addOnTotal,
+    demoRemovalPrice,
+    demoRemovalDescription,
+    discountType,
+    discountLabel,
+    discountAmount,
+    discountReason,
+    selectedGateId
+  ]);
 
   useEffect(() => {
     // Initial load from estimate shouldn't trigger unsaved changes
@@ -488,6 +564,37 @@ export default function CustomerContract({
   const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
+  // Pricing calculations
+  const resolvedBaseFencePrice = baseFencePrice ?? totalFenceCharge;
+  const resolvedGateTotal = projectBreakdown.reduce((sum, r, i) => sum + (gateTotals[i] ?? r.totalGateCharge), 0);
+  const resolvedAddOnTotal = addOnTotal ?? (data?.totals?.prep * markupFactor || 0);
+  
+  const subtotalBeforeDiscount = resolvedBaseFencePrice + resolvedGateTotal + resolvedAddOnTotal + demoRemovalPrice;
+  const finalCustomerPrice = manualGrandTotal !== null ? manualGrandTotal : Math.max(0, subtotalBeforeDiscount - discountAmount);
+  
+  const resolvedLinearFeet = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
+  const pricePerFootValue = resolvedLinearFeet > 0 ? finalCustomerPrice / resolvedLinearFeet : 0;
+
+  // List of all gates in this estimate for selection
+  const allGatesList = React.useMemo(() => {
+    const list: { gateId: string; runName: string; width: number; type: string; price: number }[] = [];
+    projectBreakdown.forEach((run, runIdx) => {
+      run.gates.forEach((gate, gIdx) => {
+        const calculatedPrice = (gate.items.reduce((acc, item) => acc + item.total, 0) * markupFactor) + 
+                             (gate.items.filter(i => i.category !== 'Labor').reduce((acc, item) => acc + item.total, 0) * taxFactor);
+        const price = manualGatePrices[gate.gateId] ?? calculatedPrice;
+        list.push({
+          gateId: gate.gateId,
+          runName: run.name,
+          width: gate.width || 4,
+          type: gate.type || 'Single',
+          price
+        });
+      });
+    });
+    return list;
+  }, [projectBreakdown, manualGatePrices, markupFactor, taxFactor]);
+
   const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
     const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
     setManualGatePrices(updatedPrices);
@@ -519,7 +626,19 @@ export default function CustomerContract({
         manualGrandTotal: manualGrandTotal,
         contractProjectDate: projectDate,
         contractScope: localAiScope,
-        manualGatePrices: manualGatePrices
+        manualGatePrices: manualGatePrices,
+        baseFencePrice,
+        addOnTotal,
+        demoRemovalPrice,
+        demoRemovalDescription,
+        discountType,
+        discountLabel,
+        discountAmount,
+        discountReason,
+        finalCustomerPrice,
+        subtotalBeforeDiscount,
+        pricePerFoot: pricePerFootValue,
+        pricingUpdatedAt: new Date().toISOString()
       };
 
       if (wasDecisionMade) {
@@ -1074,7 +1193,7 @@ export default function CustomerContract({
                   <div className="mt-2 flex items-center justify-center gap-1">
                     {isCustomerView ? (
                       <span className="text-xl font-black text-american-blue">
-                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                        {formatCurrency(finalCustomerPrice)}
                       </span>
                     ) : (
                       <>
@@ -1082,8 +1201,21 @@ export default function CustomerContract({
                         <input 
                           type="number"
                           step="0.01"
-                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
-                          onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
+                          value={finalCustomerPrice.toFixed(2)}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                            setManualGrandTotal(val);
+                            if (onUpdateEstimate) {
+                              const resFinal = val !== null ? val : Math.max(0, subtotalBeforeDiscount - discountAmount);
+                              const resLF = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
+                              const resPPerFoot = resLF > 0 ? resFinal / resLF : 0;
+                              onUpdateEstimate({
+                                manualGrandTotal: val,
+                                finalCustomerPrice: resFinal,
+                                pricePerFoot: resPPerFoot
+                              });
+                            }
+                          }}
                           className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
                         />
                       </>
@@ -1146,6 +1278,283 @@ export default function CustomerContract({
                 </div>
               )}
 
+              {/* Pricing Customizations and Summary */}
+              {!isCustomerView && (
+                <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 border-2 border-dashed border-slate-200 space-y-6 mt-8 print:hidden">
+                  <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                    <div className="h-8 w-8 rounded-lg bg-american-blue flex items-center justify-center text-white">
+                      <Settings size={18} />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-american-blue text-sm uppercase tracking-wider">Contract Pricing Administration</h4>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">Modify base sections, add demo/removal, or apply custom discounts</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Base Fence Price Override */}
+                    <div>
+                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                        Base Fence Price ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder={totalFenceCharge.toFixed(2)}
+                        value={baseFencePrice !== null ? baseFencePrice : ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
+                          setBaseFencePrice(v);
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                      />
+                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(totalFenceCharge)}</span>
+                    </div>
+
+                    {/* Site Prep & Add-ons */}
+                    <div>
+                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                        Add-ons / Site Prep ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder={(data?.totals?.prep * markupFactor || 0).toFixed(2)}
+                        value={addOnTotal !== null ? addOnTotal : ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
+                          setAddOnTotal(v);
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                      />
+                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(data?.totals?.prep * markupFactor || 0)}</span>
+                    </div>
+
+                    {/* Demo Removal Price */}
+                    <div>
+                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                        Demo & Removal Price ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder={projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0).toFixed(2)}
+                        value={demoRemovalPrice || ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                          setDemoRemovalPrice(v);
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                      />
+                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0))}</span>
+                    </div>
+                  </div>
+
+                  {/* Demo/Removal Description */}
+                  <div>
+                    <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                      Demo & Removal Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={demoRemovalDescription}
+                      onChange={(e) => setDemoRemovalDescription(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 focus:border-american-blue outline-none transition-all"
+                    />
+                  </div>
+
+                  {/* Discount Options */}
+                  <div className="border-t border-slate-200 pt-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Discount Type */}
+                      <div>
+                        <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                          Discount Type
+                        </label>
+                        <select
+                          value={discountType}
+                          onChange={(e) => {
+                            const newType = e.target.value as any;
+                            setDiscountType(newType);
+                            if (newType === 'none') {
+                              setDiscountAmount(0);
+                              setDiscountLabel('');
+                              setDiscountReason('');
+                              setSelectedGateId('');
+                            } else if (newType === 'free_gate') {
+                              setDiscountLabel('Discount - Free Walk Gate');
+                              setDiscountReason('');
+                              setSelectedGateId('');
+                            } else if (newType === 'fixed_amount' || newType === 'custom') {
+                              setDiscountLabel('Contract discount');
+                              setDiscountReason('');
+                            }
+                          }}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                        >
+                          <option value="none">No Discount</option>
+                          <option value="fixed_amount">Fixed Amount Discount</option>
+                          <option value="free_gate">Free Gate Option</option>
+                          <option value="custom">Custom Deal/Promotion</option>
+                        </select>
+                      </div>
+
+                      {/* Dynamic Free Gate Selection Dropdown */}
+                      {discountType === 'free_gate' && (
+                        <div>
+                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                            Select Free Gate
+                          </label>
+                          <select
+                            value={selectedGateId}
+                            onChange={(e) => {
+                              const sId = e.target.value;
+                              const selectedGate = allGatesList.find(g => g.gateId === sId);
+                              if (selectedGate) {
+                                setSelectedGateId(sId);
+                                setDiscountAmount(selectedGate.price);
+                                setDiscountLabel(`Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`);
+                                setDiscountReason(sId);
+                              } else {
+                                setSelectedGateId('');
+                                setDiscountAmount(0);
+                                setDiscountLabel('Discount - Free Walk Gate');
+                                setDiscountReason('');
+                              }
+                            }}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                          >
+                            <option value="">-- Choose Gate --</option>
+                            {allGatesList.map(g => (
+                              <option key={g.gateId} value={g.gateId}>
+                                {g.width}' {g.type} inside {g.runName} ({formatCurrency(g.price)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Discount Label */}
+                      {discountType !== 'none' && (
+                        <div className={discountType === 'free_gate' ? "" : "md:col-span-2"}>
+                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                            Discount Label (Customer-Facing)
+                          </label>
+                          <input
+                            type="text"
+                            value={discountLabel}
+                            onChange={(e) => setDiscountLabel(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {discountType !== 'none' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Discount Amount */}
+                        <div>
+                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                            Discount Amount ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={discountAmount || ''}
+                            onChange={(e) => {
+                              const amt = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                              setDiscountAmount(amt);
+                            }}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                          />
+                          <span className="text-[9px] text-slate-400 block mt-1">Subtracts immediately from Customer Total</span>
+                        </div>
+
+                        {/* Discount Reason */}
+                        <div>
+                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
+                            Discount Reason / Deal Details
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Autumn Special, Military Discount, Bundle deal"
+                            value={discountReason}
+                            onChange={(e) => setDiscountReason(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Itemized Pricing Summary Section (Visible to both Custom View and Admin view) */}
+              <div className="bg-[#F8F9FA] rounded-3xl p-6 sm:p-8 border border-[#E5E5E5] mt-8 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3 border-b border-[#F0F0F0] pb-4 mb-4">
+                  <span className="h-5 w-1 bg-american-blue rounded-full" />
+                  <h4 className="font-black text-american-blue uppercase tracking-wider text-xs">Agreement Summary Breakdown</h4>
+                </div>
+                
+                <div className="space-y-3.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-500 uppercase tracking-wider">Base Fencing Structure</span>
+                    <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedBaseFencePrice)}</span>
+                  </div>
+
+                  {resolvedGateTotal > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider">Access Systems & Gateways</span>
+                      <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedGateTotal)}</span>
+                    </div>
+                  )}
+
+                  {resolvedAddOnTotal > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider">Site Clears & Custom Addons</span>
+                      <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedAddOnTotal)}</span>
+                    </div>
+                  )}
+
+                  {demoRemovalPrice > 0 && (
+                    <div className="flex justify-between items-center text-xs pt-1">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-500 uppercase tracking-wider">Demo & Removal Services</span>
+                        <span className="text-[9px] text-slate-400 italic max-w-sm mt-0.5 leading-relaxed font-semibold">
+                          {demoRemovalDescription}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-slate-850 font-mono text-xs self-start">{formatCurrency(demoRemovalPrice)}</span>
+                    </div>
+                  )}
+
+                  <div className="border-t border-[#F0F0F0] pt-3.5 flex justify-between items-center text-xs">
+                    <span className="font-black text-american-blue uppercase tracking-wider">Subtotal Before Discounts</span>
+                    <span className="font-black text-american-blue font-mono text-xs">{formatCurrency(subtotalBeforeDiscount)}</span>
+                  </div>
+
+                  {discountType !== 'none' && discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-xs bg-red-50/50 p-2 rounded-xl border border-red-100/50 font-bold">
+                      <div className="flex flex-col col-span-2">
+                        <span className="font-black text-american-red uppercase tracking-wider">{discountLabel || 'Deal Discount'}</span>
+                        {discountReason && <span className="text-[9px] text-slate-500 font-medium uppercase mt-0.5">{discountReason}</span>}
+                      </div>
+                      <span className="font-black text-american-red font-mono text-xs">-{formatCurrency(discountAmount)}</span>
+                    </div>
+                  )}
+
+                  <div className="border-t-2 border-american-blue/10 pt-3.5 flex justify-between items-center text-sm bg-american-blue/[0.02] -mx-6 -mb-6 px-6 py-4 rounded-b-3xl mt-4">
+                    <div className="flex flex-col">
+                      <span className="font-black text-american-blue uppercase tracking-wider">Guaranteed Final Total</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                        Price Per Foot: {resolvedLinearFeet > 0 ? `${formatCurrency(pricePerFootValue)}/LF` : 'N/A'} • {resolvedLinearFeet.toFixed(1)} LF
+                      </span>
+                    </div>
+                    <span className="font-black text-american-blue text-lg font-mono">{formatCurrency(finalCustomerPrice)}</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Grand Total */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-6 sm:p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -1159,7 +1568,7 @@ export default function CustomerContract({
                   <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
                     {isCustomerView ? (
                       <span className="text-5xl md:text-7xl font-black tabular-nums tracking-tighter leading-none text-white">
-                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                        {formatCurrency(finalCustomerPrice)}
                       </span>
                     ) : (
                       <>
@@ -1167,11 +1576,20 @@ export default function CustomerContract({
                         <input 
                           type="number"
                           step="0.01"
-                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          value={finalCustomerPrice.toFixed(2)}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseFloat(e.target.value);
                             setManualGrandTotal(val);
-                            if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
+                            if (onUpdateEstimate) {
+                              const resFinal = val !== null ? val : Math.max(0, subtotalBeforeDiscount - discountAmount);
+                              const resLF = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
+                              const resPPerFoot = resLF > 0 ? resFinal / resLF : 0;
+                              onUpdateEstimate({
+                                manualGrandTotal: val,
+                                finalCustomerPrice: resFinal,
+                                pricePerFoot: resPPerFoot
+                              });
+                            }
                           }}
                           className={cn(
                             "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
