@@ -35,6 +35,20 @@ export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Prop
       {/* Confirmation Block */}
       <div className="bg-white p-6 rounded-2xl border border-[#E5E5E5] text-left space-y-6 shadow-sm print:border-none print:shadow-none">
         
+        {/* Success Notification Banner */}
+        <div className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-xl text-left shadow-sm">
+          <div className="flex gap-2">
+            <div className="text-emerald-500 shrink-0 mt-0.5">
+              <CheckCircle size={16} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-950 leading-relaxed">
+                Your instant estimate has been submitted. We sent a copy of your estimate results to your email. Lone Star Fence Works will follow up soon.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Intro greetings */}
         <div className="border-b border-[#E5E5E5] pb-4 space-y-1">
           <h3 className="font-bold text-[#111111] text-base">

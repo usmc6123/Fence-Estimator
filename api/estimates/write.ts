@@ -75,7 +75,7 @@ async function saveLocalWebhookLog(firestoreDb: any, estimateId: string, logEntr
 }
 
 async function sendGhlWorkflowWebhook(
-  eventType: 'instant_estimate_submitted' | 'manual_estimate_sent' | 'estimate_accepted' | 'estimate_completed' | 'estimate_declined',
+  eventType: 'instant_estimate_submitted' | 'customer_estimator_submitted' | 'manual_estimate_sent' | 'estimate_accepted' | 'estimate_completed' | 'estimate_declined',
   payloadData: any,
   companySettings: any,
   firestoreDb?: any,
@@ -112,7 +112,7 @@ async function sendGhlWorkflowWebhook(
     }
 
     let webhookUrl = '';
-    if (eventType === 'instant_estimate_submitted') {
+    if (eventType === 'instant_estimate_submitted' || eventType === 'customer_estimator_submitted') {
       webhookUrl = settings.ghlWebhookInstantEstimateSubmitted || settings.gohighlevelWebhookUrl || settings.ghlWebhookUrl;
     } else if (eventType === 'manual_estimate_sent') {
       webhookUrl = settings.ghlWebhookManualEstimateSent;
@@ -131,10 +131,11 @@ async function sendGhlWorkflowWebhook(
 
     let finalPayload: any = { eventType };
 
-    if (eventType === 'instant_estimate_submitted') {
+    if (eventType === 'instant_estimate_submitted' || eventType === 'customer_estimator_submitted') {
       finalPayload = {
         ...finalPayload,
-        leadSource: 'Instant Estimator',
+        leadSource: payloadData.leadSource || 'Customer Estimator',
+        customerName: payloadData.customerName || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
         firstName: payloadData.firstName || '',
         lastName: payloadData.lastName || '',
         email: payloadData.email || '',
@@ -144,11 +145,16 @@ async function sendGhlWorkflowWebhook(
         state: payloadData.state || '',
         zip: payloadData.zip || '',
         fenceType: payloadData.fenceType || '',
-        height: payloadData.height || '',
+        fenceHeight: payloadData.fenceHeight || payloadData.height || '',
+        height: payloadData.fenceHeight || payloadData.height || '',
         linearFeet: Number(payloadData.linearFeet || 0),
+        measuredLinearFeet: payloadData.measuredLinearFeet !== undefined ? payloadData.measuredLinearFeet : null,
+        measurementMethod: payloadData.measurementMethod || 'manual',
         gateCount: Number(payloadData.gateCount || 0),
+        gateSummary: payloadData.gateSummary || '',
+        selectedOptions: payloadData.selectedOptions || '',
         estimatedPrice: Number(payloadData.estimatedPrice || 0),
-        jobStatus: 'Interested',
+        jobStatus: payloadData.jobStatus || 'Interested',
         estimateId: estimateId || payloadData.estimateId || '',
         createdAt: payloadData.createdAt || new Date().toISOString()
       };
@@ -537,6 +543,333 @@ export default async function handler(req: any, res: any) {
       await targetRef.update(updates);
       console.log(`Estimate ${estimateId} public decision recorded:`, updates);
       return res.status(200).json({ success: true, decision: updates, debugBuild: "local-ghl-helper-no-import-v1" });
+    }
+
+    if (action === 'customer-estimator-submit') {
+      const payload = req.body || {};
+      const {
+        id,
+        firstName,
+        lastName,
+        customerName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        zip,
+        fenceType,
+        fenceHeight,
+        linearFeet,
+        measuredLinearFeet,
+        measurementMethod,
+        gateCount,
+        gateSummary,
+        selectedOptions,
+        estimatedPrice,
+        createdAt,
+        rawEstimateDoc
+      } = payload;
+
+      if (!email || !firstName || !lastName) {
+        return res.status(400).json({ error: 'Missing required customer details (email, firstName, lastName)' });
+      }
+
+      const estId = id || `est-cust-${Math.random().toString(36).substring(2, 11)}`;
+
+      // Construct a standardized estimate lead document for Firestore
+      const nowIso = new Date().toISOString();
+      const estimateDocToSave = {
+        ...(rawEstimateDoc || {}),
+        id: estId,
+        firstName: firstName,
+        lastName: lastName,
+        customerName: customerName || `${firstName} ${lastName}`.trim(),
+        customerEmail: email,
+        email: email,
+        customerPhone: phone,
+        phone: phone,
+        customerAddress: address,
+        address: address,
+        customerCity: city || '',
+        city: city || '',
+        customerState: state || '',
+        state: state || '',
+        customerZip: zip || '',
+        zip: zip || '',
+        fenceType: fenceType || '',
+        height: fenceHeight || rawEstimateDoc?.height || '',
+        fenceHeight: fenceHeight || rawEstimateDoc?.height || '',
+        linearFeet: Number(linearFeet || 0),
+        measuredLinearFeet: measuredLinearFeet !== undefined && measuredLinearFeet !== null ? Number(measuredLinearFeet) : null,
+        measurementMethod: measurementMethod || 'manual',
+        gateCount: Number(gateCount || 0),
+        gateSummary: gateSummary || '',
+        selectedOptions: selectedOptions || '',
+        total: Number(estimatedPrice || 0),
+        estimatedPrice: Number(estimatedPrice || 0),
+        isCustomerEstimate: true,
+        leadSource: "Customer Estimator",
+        jobStatus: "Interested",
+        status: "active",
+        companyId: "lonestarfence",
+        uid: "braden-lonestar-uid",
+        userId: "braden-lonestar-uid",
+        createdAt: createdAt || nowIso,
+        lastModified: nowIso
+      };
+
+      // 1. SAVE TO FIRESTORE (Required: If this fails, block email and webhook)
+      let docRef = db.collection('estimates').doc(String(estId));
+      try {
+        await docRef.set(estimateDocToSave);
+      } catch (dbError: any) {
+        console.error('Failed to save customer estimator lead in firestore:', dbError);
+        return res.status(500).json({ error: `Save failed: ${dbError.message}` });
+      }
+
+      // 2. RESOLVE SMTP & WEBHOOK SETTINGS
+      let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
+      let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
+      let resolvedSmtpSecureType = 'SSL/TLS';
+      let resolvedSmtpUser = process.env.SMTP_USER;
+      let resolvedSmtpPass = process.env.SMTP_PASS;
+      let resolvedFromName = 'Lone Star Fence Works';
+      let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
+      let resolvedReplyToEmail = resolvedFromEmail;
+      let resolvedCompanyLogo = '';
+      let resolvedCompanyPhone = '';
+      let resolvedCompanyWebsite = '';
+      let ghlWebhookUrl = '';
+
+      try {
+        const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+        if (settingsSnap.exists) {
+          const s = settingsSnap.data() || {};
+          if (s.smtpHost) resolvedSmtpHost = s.smtpHost;
+          if (s.smtpPort) resolvedSmtpPort = Number(s.smtpPort);
+          if (s.smtpSecureType) resolvedSmtpSecureType = s.smtpSecureType;
+          if (s.smtpUsername) resolvedSmtpUser = s.smtpUsername;
+          if (s.smtpPassword) resolvedSmtpPass = s.smtpPassword;
+          if (s.fromName) resolvedFromName = s.fromName;
+          if (s.fromEmail) resolvedFromEmail = s.fromEmail;
+          resolvedReplyToEmail = s.replyToEmail || resolvedFromEmail;
+          resolvedCompanyLogo = s.companyLogo || '';
+          resolvedCompanyPhone = s.companyPhone || '';
+          resolvedCompanyWebsite = s.companyWebsite || '';
+
+          // Resolve webhook config
+          ghlWebhookUrl = s.ghlWebhookInstantEstimateSubmitted || s.gohighlevelWebhookUrl || s.ghlWebhookUrl || '';
+        }
+      } catch (settingsErr) {
+        console.warn('Could not load companySettings for customer-submit action:', settingsErr);
+      }
+
+      // 3. SEND EMAIL
+      let emailSent = false;
+      let emailSentAt: string | null = null;
+      let emailLog = 'Ready to send';
+
+      if (resolvedSmtpHost && resolvedSmtpUser && resolvedSmtpPass) {
+        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+        const transporterConfig = {
+          host: resolvedSmtpHost,
+          port: resolvedSmtpPort,
+          secure: isPort465,
+          auth: {
+            user: resolvedSmtpUser,
+            pass: resolvedSmtpPass
+          },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        };
+
+        try {
+          const transporter = nodemailer.createTransport(transporterConfig);
+          
+          const bookingUrl = resolvedCompanyWebsite ? `${resolvedCompanyWebsite}/schedule` : "https://lonestarfenceworks.com/contact";
+          const formattedTotal = Number(estimatedPrice || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+          
+          await transporter.sendMail({
+            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+            to: email,
+            replyTo: resolvedReplyToEmail,
+            subject: 'Your Lone Star Fence Works Instant Fence Estimate',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
+                  \${resolvedCompanyLogo ? \`<img src="\${resolvedCompanyLogo}" alt="\${resolvedFromName}" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />\` : ''}
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">Your Instant Fence Estimate</h1>
+                </div>
+                <div style="padding: 32px 24px; background-color: #ffffff;">
+                  <p style="color: #4a5568; line-height: 1.6; font-size: 15px;">
+                    Hello <strong>\${firstName} \${lastName}</strong>,
+                  </p>
+                  <p style="color: #4a5568; line-height: 1.6; font-size: 15px;">
+                    Thank you for requesting an instant estimate from <strong>\${resolvedFromName}</strong>. Below is a summary of your estimated layout and budget parameters based on the options you selected:
+                  </p>
+                  
+                  <div style="background-color: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #edf2f7; margin: 24px 0;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #4a5568;">
+                      <tr>
+                        <td style="padding: 8px 0; font-weight: bold; border-bottom: 1px solid #edf2f7;">Estimated Total:</td>
+                        <td style="padding: 8px 0; font-weight: bold; color: #10b981; text-align: right; border-bottom: 1px solid #edf2f7; font-size: 18px;">\${formattedTotal}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Type:</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${fenceType}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Height:</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${fenceHeight || rawEstimateDoc?.height || ''} ft</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Length:</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${linearFeet} LF</td>
+                      </tr>
+                      \${gateCount > 0 ? \`
+                      <tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Gates / Options:</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\u0024{gateSummary || \`\u0024{gateCount} Gate(s)\`}</td>
+                      </tr>
+                      \` : ''}
+                      \${selectedOptions && selectedOptions !== 'None' ? \`
+                      <tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Selected Options:</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${selectedOptions}</td>
+                      </tr>
+                      \` : ''}
+                      <tr>
+                        <td style="padding: 8px 0;">Project Address:</td>
+                        <td style="padding: 8px 0; text-align: right; color: #718096; max-width: 250px; white-space: normal; word-break: break-all;">\${address}</td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <p style="color: #4a5568; font-size: 13px; line-height: 1.6; background-color: #fffbeb; border-left: 4px solid #ef4444; padding: 12px; margin: 24px 0 32px 0;">
+                    <strong>Please Note:</strong> This is a dynamic automated budget estimate for reference purposes. The final contract pricing may vary following an in-person site inspection to confirm soil status, topology, property stakes, and exact final layout measurements.
+                  </p>
+
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="\${bookingUrl}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
+                      Schedule On-Site Consultation
+                    </a>
+                  </div>
+
+                  <p style="color: #4a5568; margin-top: 32px; font-size: 14px; border-top: 1px solid #edf2f7; padding-top: 16px;">
+                    Best regards,<br/>
+                    <strong>\${resolvedFromName}</strong><br/>
+                    \${resolvedCompanyPhone ? \`Phone: \${resolvedCompanyPhone}<br/>\` : ''}
+                    \${resolvedReplyToEmail ? \`Email: \${resolvedReplyToEmail}<br/>\` : ''}
+                    \${resolvedCompanyWebsite ? \`<a href="\${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">\${resolvedCompanyWebsite}</a>\` : ''}
+                  </p>
+                </div>
+                <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
+                  <p style="color: #a0aec0; font-size: 11px; margin: 0;">
+                    Lone Star Fence Works &copy; \${new Date().getFullYear()}. All rights reserved.
+                  </p>
+                </div>
+              </div>
+            `
+          });
+
+          emailSent = true;
+          emailSentAt = new Date().toISOString();
+          emailLog = 'Email sent successfully via NodeMailer SMTP';
+        } catch (mErr: any) {
+          console.error('Customer Estimator mail send failed:', mErr);
+          emailLog = `Nodemailer SMTP failed: ${mErr.message || mErr}`;
+        }
+      } else {
+        emailLog = 'Skipped: SMTP settings not configured or missing username/password in database.';
+      }
+
+      // 4. TRIGGER GHL WEBHOOK
+      let webhookTriggered = false;
+      let webhookTriggeredAt: string | null = null;
+      let webhookLog = 'Ready to trigger';
+
+      if (ghlWebhookUrl) {
+        try {
+          const ghlPayload = {
+            userId: 'braden-lonestar-uid',
+            leadSource: 'Customer Estimator',
+            customerName: customerName || `${firstName} ${lastName}`.trim(),
+            firstName: firstName || '',
+            lastName: lastName || '',
+            email: email || '',
+            phone: phone || '',
+            address: address || '',
+            city: city || '',
+            state: state || '',
+            zip: zip || '',
+            fenceType: fenceType || '',
+            fenceHeight: fenceHeight || '',
+            linearFeet: Number(linearFeet || 0),
+            measuredLinearFeet: measuredLinearFeet !== undefined && measuredLinearFeet !== null ? Number(measuredLinearFeet) : null,
+            measurementMethod: measurementMethod || 'manual',
+            gateCount: Number(gateCount || 0),
+            gateSummary: gateSummary || '',
+            selectedOptions: selectedOptions || '',
+            estimatedPrice: Number(estimatedPrice || 0),
+            jobStatus: 'Interested',
+            estimateId: estId,
+            createdAt: createdAt || nowIso
+          };
+
+          const result = await sendGhlWorkflowWebhook('customer_estimator_submitted', ghlPayload, null, db, estId);
+          if (result.success) {
+            webhookTriggered = true;
+            webhookTriggeredAt = new Date().toISOString();
+            webhookLog = `Successfully triggered webhook url: ${result.url || 'Configured Webhook'}`;
+          } else {
+            webhookLog = `GHL Webhook failed: ${result.error || 'Unknown error'}`;
+          }
+        } catch (gErr: any) {
+          console.error('Customer Estimator GHL Webhook trigger failed:', gErr);
+          webhookLog = `Webhook trigger failed: \${gErr.message || gErr}`;
+        }
+      } else {
+        webhookLog = 'Skipped: GHL webhook URL not configured in settings.';
+      }
+
+      // 5. UPDATE FIRESTORE WITH METADATA / LOG ENTRY (email/webhook success or failure)
+      try {
+        const snapToRead = await docRef.get();
+        const currentData = snapToRead.data() || {};
+        const logs = currentData.ghlWebhookLog || [];
+        const logEntry = {
+          eventType: "customer_estimator_submitted",
+          timestamp: new Date().toISOString(),
+          webhookUrl: ghlWebhookUrl ? ghlWebhookUrl.replace(/^(https?:\/\/[^\/]+).*$/, '$1/... ') : 'None',
+          success: webhookTriggered,
+          error: webhookTriggered ? null : webhookLog
+        };
+        await docRef.update({
+          customerEstimatorEmailSent: emailSent,
+          customerEstimatorEmailSentAt: emailSentAt,
+          customerEstimatorEmailLog: emailLog,
+          ghlWebhookTriggered: webhookTriggered,
+          ghlWebhookTriggeredAt: webhookTriggeredAt,
+          ghlWebhookLog: [...logs, logEntry]
+        });
+      } catch (logErr) {
+        console.warn('Failed to update logs inside the output estimate document:', logErr);
+      }
+
+      return res.status(200).json({
+        success: true,
+        id: estId,
+        emailSent,
+        emailLog,
+        webhookTriggered,
+        webhookLog,
+        message: 'Your instant estimate has been submitted. We sent a copy of your estimate results to your email. Lone Star Fence Works will follow up soon.'
+      });
     }
 
     const authHeader = req.headers.authorization;

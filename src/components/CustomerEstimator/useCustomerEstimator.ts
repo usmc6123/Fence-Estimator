@@ -293,7 +293,7 @@ export function useCustomerEstimator(
     };
 
     const cleanedCustomerEstimateDoc = deepClean(customerEstimateDoc);
-
+    
     // Always append to local ledger first as a guaranteed offline-first backup record
     try {
       const localLedgerStr = localStorage.getItem('customer_estimator_local_ledger') || '[]';
@@ -307,75 +307,54 @@ export function useCustomerEstimator(
     }
 
     try {
-      // 1. Save to Firestore (Attempt cloud sync via API)
-      try {
-        const token = localStorage.getItem('company_admin_token');
-        const response = await fetch('/api/estimates/write', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({
-            id: estId,
-            ...cleanedCustomerEstimateDoc
-          })
-        });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-      } catch (writeErr) {
-        console.warn('Cloud API save failed, preserved successfully in local offline ledger:', writeErr);
-        // We catch this gracefully to prevent offline/permission errors from blocking the client experience
+      const options: string[] = [];
+      if (data.removeOldFence) options.push("Remove old fence");
+      if (data.isPreStained) options.push("Pre-stained material");
+      if (data.reusePosts) options.push("Reuse existing posts");
+      if (data.hasTopCap) options.push("Top Cap");
+      if (data.hasCapAndTrim) options.push("Cap and Trim");
+      const selectedOptions = options.join(', ') || 'None';
+
+      const submissionPayload = {
+        id: estId,
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        customerName: `${data.firstName.trim()} ${data.lastName.trim()}`,
+        email: data.email.trim(),
+        phone: data.phone.trim(),
+        address: (data.address || `${data.street || ''}, ${data.city || ''}, ${data.state || ''} ${data.zip || ''}`).trim(),
+        city: (data.city || '').trim(),
+        state: (data.state || '').trim(),
+        zip: (data.zip || '').trim(),
+        fenceType: data.fenceType || 'Wood Fence',
+        fenceHeight: data.height,
+        linearFeet: data.linearFeet,
+        measuredLinearFeet: data.measuredLinearFeet !== undefined ? data.measuredLinearFeet : null,
+        measurementMethod: data.measurementMethod || 'manual',
+        gateCount: data.needGates ? data.gateCount : 0,
+        gateSummary: data.needGates ? `${data.gateCount}x ${data.gateType}` : 'None',
+        selectedOptions,
+        estimatedPrice: Math.round(breakdown.total * 100) / 100,
+        createdAt: new Date().toISOString(),
+        rawEstimateDoc: cleanedCustomerEstimateDoc
+      };
+
+      const response = await fetch('/api/estimates/write?action=customer-estimator-submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(submissionPayload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to submit estimate lead to servers.');
       }
 
-      // 2. Submit to our backend GHL proxy endpoint which forwards to GO HIGH LEVEL
-      try {
-        const payload = {
-          eventType: 'instant_estimate_submitted',
-          estimateId: estId || 'instant-estimator-lead',
-          firstName: data.firstName.trim(),
-          lastName: data.lastName.trim(),
-          email: data.email.trim(),
-          phone: data.phone.trim(),
-          address: (data.street || '').trim(),
-          city: (data.city || '').trim(),
-          state: (data.state || '').trim(),
-          zip: (data.zip || '').trim(),
-          fenceType: data.fenceType || 'Wood Fence',
-          linearFeet: data.linearFeet,
-          measuredLinearFeet: data.measuredLinearFeet !== undefined ? data.measuredLinearFeet : null,
-          measurementMethod: data.measurementMethod || 'manual',
-          gateCount: data.needGates ? data.gateCount : 0,
-          estimatedPrice: Math.round(breakdown.total * 100) / 100,
-          createdAt: new Date().toISOString()
-        };
-
-        console.info('Invoking local server CRM proxy to dispatch lead to GoHighLevel CRM...');
-        const response = await fetch('/api/webhooks/ghl', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const responseText = await response.text();
-        console.log('CRM Webhook Proxy Response status:', response.status, 'Response:', responseText);
-
-        if (!response.ok) {
-          let errorMsg = 'Failed to transmit lead to GoHighLevel CRM.';
-          try {
-            const parsed = JSON.parse(responseText);
-            if (parsed.error) errorMsg = parsed.error;
-          } catch (_) {}
-          throw new Error(errorMsg);
-        }
-
+      const result = await response.json();
+      if (result.webhookTriggered) {
         setGhlSynced(true);
-      } catch (ghlErr: any) {
-        console.error('Core GHL CRM submission task failed:', ghlErr);
-        throw new Error(ghlErr.message || 'CRM Webhook submission failed. Please try again.');
       }
 
       setSubmitSuccess(true);
