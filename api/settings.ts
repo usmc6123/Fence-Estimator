@@ -260,9 +260,9 @@ export default async function handler(req: any, res: any) {
             user: smtpUsername,
             pass: finalPassword
           },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 10000
+          connectionTimeout: 6000,
+          greetingTimeout: 6000,
+          socketTimeout: 6000
         };
 
         if (isPort465) {

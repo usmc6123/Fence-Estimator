@@ -721,9 +721,9 @@ https://www.lonestarfenceworks.com`;
               user: resolvedSmtpUser,
               pass: resolvedSmtpPass
             },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 15000,
+            connectionTimeout: 6000,
+            greetingTimeout: 6000,
+            socketTimeout: 6000,
             tls: {
               rejectUnauthorized: false
             }
@@ -1019,7 +1019,7 @@ https://www.lonestarfenceworks.com`;
           const discountAmount = Number(estimateData.discountAmount ?? 0);
           const demoRemovalPrice = Number(estimateData.demoRemovalPrice ?? 0);
           const addOnSitePrepPrice = Number(estimateData.addOnSitePrepPrice ?? 0);
-          const customerEmailLog = estimateData.customerEmailLog || [];
+          const customerEmailLog = Array.isArray(estimateData.customerEmailLog) ? estimateData.customerEmailLog : [];
           const repSigName = estimateData.representativeSignatureName || "Braden Scott Smith";
           const repCompName = estimateData.representativeCompanyName || "Lone Star Fence Works";
 
@@ -1071,9 +1071,9 @@ https://www.lonestarfenceworks.com`;
               user: resolvedSmtpUser,
               pass: resolvedSmtpPass
             },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 15000,
+            connectionTimeout: 6000,
+            greetingTimeout: 6000,
+            socketTimeout: 6000,
             tls: {
               rejectUnauthorized: false
             }
