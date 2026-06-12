@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -89,10 +89,6 @@ export default function CustomerContract({
     return resolved;
   }, [materials, pricingStrategy, selectedSupplier, quotes]);
 
-  const data: DetailedTakeOff = React.useMemo(() => {
-    return calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
-  }, [estimate, resolvedMaterials, laborRates]);
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.contractScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
@@ -114,6 +110,18 @@ export default function CustomerContract({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const isInitialMount = React.useRef(true);
+
+  const data: DetailedTakeOff = React.useMemo(() => {
+    const mergedEstimate = {
+      ...estimate,
+      manualSectionTotals: sectionTotals,
+      manualGateTotals: gateTotals,
+      manualDemoTotals: demoTotals,
+      manualGrandTotal: manualGrandTotal,
+      manualGatePrices: manualGatePrices
+    };
+    return calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
+  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices]);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
@@ -256,31 +264,11 @@ export default function CustomerContract({
       ));
   });
 
-  const totalFenceCharge = projectBreakdown.reduce((sum, r, i) => sum + (sectionTotals[i] ?? r.totalFenceCharge), 0);
-  const totalNetLF = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0);
-  
-  // Calculate a dynamic grand total based on edited section totals
-  const editedGrandTotal = React.useMemo(() => {
-    // Start with the correctly calculated grand total from the library
-    let total = data.totals.grandTotal;
-
-    // Apply deltas ONLY for sections that actually have an override
-    const overrideDelta = projectBreakdown.reduce((sum, r, i) => {
-      // Check if user explicitly set a value that differs from the calculated one
-      const fenceDelta = (sectionTotals[i] !== undefined && sectionTotals[i] !== null) ? (sectionTotals[i]! - r.totalFenceCharge) : 0;
-      const gateDelta = (gateTotals[i] !== undefined && gateTotals[i] !== null) ? (gateTotals[i]! - r.totalGateCharge) : 0;
-      const demoDelta = (demoTotals[i] !== undefined && demoTotals[i] !== null) ? (demoTotals[i]! - r.demoCharge) : 0;
-      
-      return sum + fenceDelta + gateDelta + demoDelta;
-    }, 0);
-    
-    return total + overrideDelta;
-  }, [data.totals.grandTotal, projectBreakdown, sectionTotals, gateTotals, demoTotals]);
-
-  const grandTotal = manualGrandTotal ?? editedGrandTotal;
+  const editedGrandTotal = data.pricing.calculatedTotal;
+  const grandTotal = data.pricing.finalCustomerPrice;
   const isGrandTotalOverridden = manualGrandTotal !== null;
   const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
-  const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
+  const globalPricePerFoot = data.pricing.pricePerFoot;
 
   const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
     const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
@@ -306,6 +294,19 @@ export default function CustomerContract({
   const handleSaveContract = () => {
     if (onUpdateEstimate) {
       const wasDecisionMade = estimate.customerDecision === 'accepted' || estimate.customerDecision === 'declined' || !!estimate.customerSignature;
+      const pricingUpdates = {
+        finalCustomerPrice: data.pricing.finalCustomerPrice,
+        estimatedPrice: data.pricing.estimatedPrice,
+        grandTotal: data.pricing.grandTotal,
+        totalCost: data.pricing.grandTotal,
+        total: data.pricing.grandTotal,
+        subtotalBeforeDiscount: data.pricing.subtotalBeforeDiscount,
+        addOnSitePrepPrice: data.pricing.addOnSitePrepPrice,
+        demoRemovalPrice: data.pricing.demoRemovalPrice,
+        discountAmount: data.pricing.discountAmount,
+        pricePerFoot: data.pricing.pricePerFoot
+      };
+
       const updates: any = {
         manualSectionTotals: sectionTotals,
         manualGateTotals: gateTotals,
@@ -313,7 +314,8 @@ export default function CustomerContract({
         manualGrandTotal: manualGrandTotal,
         contractProjectDate: projectDate,
         contractScope: localAiScope,
-        manualGatePrices: manualGatePrices
+        manualGatePrices: manualGatePrices,
+        ...pricingUpdates
       };
 
       if (wasDecisionMade) {
@@ -972,6 +974,56 @@ export default function CustomerContract({
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Valid for 30 days from date of issue</p>
                 </div>
               </div>
+
+              {/* Debug Pricing Breakdown (Visible on dev/admin view only) */}
+              {!isCustomerView && (
+                <div id="debug-pricing-breakdown" className="mt-6 p-6 bg-slate-900 border border-slate-700 rounded-3xl text-slate-300 font-mono text-xs space-y-4 shadow-inner">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider border-b border-slate-700 pb-2">
+                    <AlertCircle size={16} />
+                    <span>Debug Admin Pricing Source of Truth</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Sum of Run Section Totals:</span>
+                      <span className="text-white font-bold">{formatCurrency(data.pricing.totalSectionsSum)}</span>
+                    </div>
+                    {data.pricing.runsPricing.map((run, i) => (
+                      <div key={i} className="pl-4 flex justify-between text-slate-500 text-[11px]">
+                        <span>- Run {i + 1} ({run.runName || `Section ${i + 1}`}):</span>
+                        <span>Fence: {formatCurrency(run.finalFence)} | Gates: {formatCurrency(run.finalGate)} | Demo: {formatCurrency(run.finalDemo)} &rarr; Sub: {formatCurrency(run.totalSection)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between mt-2 pt-2 border-t border-slate-800/80">
+                      <span className="text-slate-400">Site Prep Add-on (addOnSitePrepPrice):</span>
+                      <span className="text-white">{formatCurrency(data.pricing.addOnSitePrepPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Demolition (demoRemovalPrice):</span>
+                      <span className="text-white">{formatCurrency(data.pricing.demoRemovalPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Discount Amount:</span>
+                      <span className="text-white">-{formatCurrency(data.pricing.discountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-slate-700/60 pt-2 text-amber-300">
+                      <span>Calculated Grand Total:</span>
+                      <span>{formatCurrency(data.pricing.calculatedTotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Manual Grand Total:</span>
+                      <span className="text-white">{data.pricing.manualGrandTotal !== null ? formatCurrency(data.pricing.manualGrandTotal) : "None (Using Calculated)"}</span>
+                    </div>
+                    <div className="flex justify-between font-extrabold border-t-2 border-slate-700/80 pt-2 text-green-400">
+                      <span>Final Customer Price:</span>
+                      <span>{formatCurrency(data.pricing.finalCustomerPrice)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-500">
+                      <span>Overall Price Per Foot:</span>
+                      <span>{formatCurrency(data.pricing.pricePerFoot)} / FT</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

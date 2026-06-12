@@ -613,7 +613,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                               </div>
                             </td>
                             <td className="py-2 px-4 font-bold text-[#111111] font-mono text-xs leading-none whitespace-nowrap">
-                              {formatCurrency(estimate.totalCost || estimate.total || estimate.manualGrandTotal || 0)}
+                              {formatCurrency(estimate.finalCustomerPrice || estimate.totalCost || estimate.total || estimate.manualGrandTotal || 0)}
                             </td>
                             <td className="py-2.5 px-4 whitespace-nowrap">
                               <div className="flex flex-col gap-1">

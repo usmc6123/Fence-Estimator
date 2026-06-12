@@ -77,6 +77,30 @@ export interface DetailedTakeOff {
     tax: number;
     grandTotal: number;
   };
+  pricing: {
+    runsPricing: {
+      runName: string;
+      totalFenceCharge: number;
+      totalGateCharge: number;
+      demoCharge: number;
+      finalFence: number;
+      finalGate: number;
+      finalDemo: number;
+      totalSection: number;
+      netLF: number;
+    }[];
+    totalSectionsSum: number;
+    addOnSitePrepPrice: number;
+    demoRemovalPrice: number;
+    discountAmount: number;
+    manualGrandTotal: number | null;
+    calculatedTotal: number;
+    finalCustomerPrice: number;
+    estimatedPrice: number;
+    grandTotal: number;
+    subtotalBeforeDiscount: number;
+    pricePerFoot: number;
+  };
 }
 
 function calculateStickOptimization(requiredLengths: number[], stickLength: number): PipeCuttingGuide {
@@ -1937,6 +1961,99 @@ export function calculateDetailedTakeOff(
   // Append extraLaborTakeoffItems to the returned summary so they show up in the Subcontractor Labor Manifest
   const finalSummary = [...calculatedSummary, ...extraLaborTakeoffItems];
 
+  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+  const taxFactor = (estimate.taxPercentage || 0) / 100;
+
+  const runsPricing = detailedRuns.map((run, i) => {
+    // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
+    const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
+    const fenceTax = run.fenceMaterialCost * taxFactor;
+    const totalFenceCharge = baseFenceCharge + fenceTax;
+
+    // Gate Charge
+    const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
+    const gateTax = run.gateMaterialCost * taxFactor;
+    const totalGateCharge = baseGateCharge + gateTax;
+
+    // Demo Charge
+    const demoCharge = run.demoCharge * markupFactor;
+
+    // Apply Overrides
+    const finalFence = (estimate.manualSectionTotals?.[i] !== undefined && estimate.manualSectionTotals?.[i] !== null)
+      ? estimate.manualSectionTotals[i]!
+      : totalFenceCharge;
+
+    const finalGate = (estimate.manualGateTotals?.[i] !== undefined && estimate.manualGateTotals?.[i] !== null)
+      ? estimate.manualGateTotals[i]!
+      : totalGateCharge;
+
+    const finalDemo = (estimate.manualDemoTotals?.[i] !== undefined && estimate.manualDemoTotals?.[i] !== null)
+      ? estimate.manualDemoTotals[i]!
+      : demoCharge;
+
+    const totalSection = finalFence + finalGate + finalDemo;
+
+    return {
+      runName: run.runName,
+      totalFenceCharge,
+      totalGateCharge,
+      demoCharge,
+      finalFence,
+      finalGate,
+      finalDemo,
+      totalSection,
+      netLF: run.netLF
+    };
+  });
+
+  // Sum up section totals
+  const totalSectionsSum = runsPricing.reduce((sum, r) => sum + r.totalSection, 0);
+
+  // Prep cost charge
+  const addOnSitePrepPrice = totalPrep * markupFactor;
+
+  // Demo removal charge
+  const demoRemovalPrice = runsPricing.reduce((sum, r) => sum + r.finalDemo, 0);
+
+  // Discount
+  const discountAmount = estimate.discountAmount || 0;
+
+  // Calculated overall grand total
+  let calculatedTotal = totalSectionsSum;
+  if (addOnSitePrepPrice > 0) {
+    calculatedTotal += addOnSitePrepPrice;
+  }
+  if (discountAmount > 0) {
+    calculatedTotal -= discountAmount;
+  }
+
+  // Override or Calculated
+  const manualGrandTotal = estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? estimate.manualGrandTotal : null;
+  const finalCustomerPrice = manualGrandTotal !== null ? manualGrandTotal : calculatedTotal;
+
+  // Subtotal before discount is totalSectionsSum + addOnSitePrepPrice
+  const subtotalBeforeDiscount = totalSectionsSum + addOnSitePrepPrice;
+
+  // Global price per foot
+  const totalNetLF = runsPricing.reduce((sum, r) => sum + r.netLF, 0);
+  const totalFenceChargeSum = runsPricing.reduce((sum, r) => sum + r.finalFence, 0);
+  const pricePerFoot = totalNetLF > 0 ? totalFenceChargeSum / totalNetLF : 0;
+
+  const pricing = {
+    runsPricing,
+    totalSectionsSum,
+    addOnSitePrepPrice,
+    demoRemovalPrice,
+    discountAmount,
+    manualGrandTotal,
+    calculatedTotal,
+    finalCustomerPrice,
+    estimatedPrice: finalCustomerPrice,
+    grandTotal: finalCustomerPrice,
+    subtotalBeforeDiscount,
+    pricePerFoot
+  };
+
   return {
     summary: finalSummary,
     manualSummary: manualSummary,
@@ -1951,6 +2068,7 @@ export function calculateDetailedTakeOff(
       markup,
       tax,
       grandTotal
-    }
+    },
+    pricing
   };
 }

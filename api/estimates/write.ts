@@ -833,17 +833,43 @@ export default async function handler(req: any, res: any) {
 
           // Requirement 6: Verify the final email body contains no instances of ${...}, {{...}}, undefined, null.
           let sanitizedHtml = emailHtml;
+
+          // Replace literal dynamic variables with actual customer or estimate details
+          const replacements: Record<string, string | number> = {
+            firstName: emailFirstName,
+            lastName: emailLastName,
+            customerName: (emailFirstName !== 'Not Provided' || emailLastName !== 'Not Provided') ? `${emailFirstName} ${emailLastName}`.trim() : 'Not Provided',
+            formattedTotal: formattedTotal,
+            estimatedPrice: formattedTotal,
+            total: formattedTotal,
+            fenceType: emailFenceType,
+            linearFeet: emailLinearFeet,
+            address: emailAddress,
+            city: emailCity,
+            state: emailState,
+            zip: emailZip,
+            selectedOptions: emailSelectedOptions,
+            fenceHeight: emailFenceHeight,
+            height: emailFenceHeight,
+            gateSummary: emailGates,
+            gates: emailGates
+          };
+
+          for (const [key, val] of Object.entries(replacements)) {
+            const resolvedVal = (val === undefined || val === null || val === 'undefined' || val === 'null' || val === '') ? 'Not Provided' : String(val);
+            const regexDollar = new RegExp(`\\$\\{${key}\\}`, 'gi');
+            const regexCurly = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+            sanitizedHtml = sanitizedHtml.replace(regexDollar, resolvedVal);
+            sanitizedHtml = sanitizedHtml.replace(regexCurly, resolvedVal);
+          }
+
+          // Fallback purging to wipe any remaining unresolved templates
           sanitizedHtml = sanitizedHtml.replace(/\$\{.*?\}/g, 'Not Provided');
           sanitizedHtml = sanitizedHtml.replace(/\{\{.*?\}\}/g, 'Not Provided');
 
           // Guarantee absolutely no undefined/null literal text slip-ups
-          if (sanitizedHtml.includes('undefined') || sanitizedHtml.includes('null')) {
-            console.warn('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] Warning: Detected literal "undefined" or "null" in generated HTML. Sanitizing...');
-            sanitizedHtml = sanitizedHtml.replace(/>undefined</g, '>Not Provided<');
-            sanitizedHtml = sanitizedHtml.replace(/>null</g, '>Not Provided<');
-            sanitizedHtml = sanitizedHtml.replace(/undefined/g, 'Not Provided');
-            sanitizedHtml = sanitizedHtml.replace(/null/g, 'Not Provided');
-          }
+          sanitizedHtml = sanitizedHtml.replaceAll('undefined', 'Not Provided');
+          sanitizedHtml = sanitizedHtml.replaceAll('null', 'Not Provided');
 
           await transporter.sendMail({
             from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
