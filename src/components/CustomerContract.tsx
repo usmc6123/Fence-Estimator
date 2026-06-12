@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, Mail, Paperclip, Settings } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -28,212 +28,6 @@ export default function CustomerContract({
   onUpdateEstimate,
   isCustomerView = false
 }: CustomerContractProps) {
-  // Send Email Modal States
-  const [openSendModal, setOpenSendModal] = React.useState(false);
-  const [senderEmail, setSenderEmail] = React.useState('BradenS@LoneStarFenceWorks.com');
-  const [customerEmail, setCustomerEmail] = React.useState(estimate.customerEmail || '');
-  const [emailSubject, setEmailSubject] = React.useState('');
-  const [emailMessage, setEmailMessage] = React.useState('');
-  const [isSendingEmail, setIsSendingEmail] = React.useState(false);
-  const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
-  const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
-  const [companySettings, setCompanySettings] = React.useState<any>(null);
-  const [attachedFiles, setAttachedFiles] = React.useState<{ filename: string; mimeType: string; size: number; base64Data: string }[]>([]);
-  const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
-
-  // Load Settings Effect
-  React.useEffect(() => {
-    async function loadCompanySettings() {
-      try {
-        const token = localStorage.getItem('company_admin_token');
-        if (!token) return;
-        const res = await fetch('/api/settings', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setCompanySettings(data);
-        }
-      } catch (err) {
-        console.warn('Failed to load company settings:', err);
-      }
-    }
-    loadCompanySettings();
-  }, [openSendModal]);
-
-  // Email Config Setup Effect
-  React.useEffect(() => {
-    if (openSendModal) {
-      setCustomerEmail(estimate.customerEmail || '');
-      
-      const host = window.location.host;
-      const protocol = window.location.protocol;
-      const estimateLink = `${protocol}//${host}/?portal=contract&estimateId=${estimate.id}`;
-      const clientName = estimate.customerName || 'Valued Customer';
-
-      let activeFromEmail = 'BradenS@LoneStarFenceWorks.com';
-      let activeFromName = 'Lone Star Fence Works';
-      let activeSubject = `Fence Installation Contract Agreement - Lone Star Fence Works`;
-      let activeMessage = `Hello ${clientName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the secure link below:\n\n${estimateLink}\n\nThank you for choosing Lone Star Fence Works!\n\nBest regards,\nLone Star Fence Works Estimations Department`;
-
-      if (companySettings) {
-        if (companySettings.fromEmail) activeFromEmail = companySettings.fromEmail;
-        if (companySettings.fromName) activeFromName = companySettings.fromName;
-        
-        if (companySettings.estimateEmailSubject) {
-          activeSubject = companySettings.estimateEmailSubject
-            .replace(/{customerName}/g, clientName)
-            .replace(/{estimateNumber}/g, String(estimate.estimateNumber || ''))
-            .replace(/{companyName}/g, companySettings.fromName || 'Lone Star Fence Works');
-        }
-
-        if (companySettings.estimateEmailBody) {
-          activeMessage = companySettings.estimateEmailBody
-            .replace(/{customerName}/g, clientName)
-            .replace(/{customerEmail}/g, estimate.customerEmail || '')
-            .replace(/{estimateNumber}/g, String(estimate.estimateNumber || ''))
-            .replace(/{estimateLink}/g, estimateLink)
-            .replace(/{companyName}/g, companySettings.fromName || 'Lone Star Fence Works')
-            .replace(/{companyPhone}/g, companySettings.companyPhone || '')
-            .replace(/{companyWebsite}/g, companySettings.companyWebsite || '');
-        }
-      }
-
-      setSenderEmail(activeFromEmail);
-      setEmailSubject(activeSubject);
-      setEmailMessage(activeMessage);
-      setSendSuccessMessage(null);
-      setSendErrorMessage(null);
-      setAttachedFiles([]);
-      setAttachmentError(null);
-    }
-  }, [openSendModal, companySettings, estimate]);
-
-  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAttachmentError(null);
-    const files = e.target.files;
-    if (!files) return;
-
-    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
-    const allowedMimes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
-
-    const currentAttachments = [...attachedFiles];
-    let currentTotalSize = currentAttachments.reduce((sum, f) => sum + f.size, 0);
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const ext = file.name.split('.').pop()?.toLowerCase();
-
-      if (!ext || !allowedExtensions.includes(ext)) {
-        setAttachmentError(`File "${file.name}" is unsupported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX are allowed.`);
-        return;
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        setAttachmentError(`File "${file.name}" exceeds the 10MB limit.`);
-        return;
-      }
-
-      if (currentTotalSize + file.size > 20 * 1024 * 1024) {
-        setAttachmentError('Total combined attachment size exceeds the 20MB limit.');
-        return;
-      }
-
-      currentTotalSize += file.size;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64Data = event.target?.result as string;
-        setAttachedFiles(prev => {
-          const exists = prev.some(f => f.filename === file.name);
-          if (!exists) {
-            return [...prev, {
-              filename: file.name,
-              mimeType: file.type || 'application/octet-stream',
-              size: file.size,
-              base64Data
-            }];
-          }
-          return prev;
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeAttachment = (filename: string) => {
-    setAttachedFiles(prev => prev.filter(f => f.filename !== filename));
-    setAttachmentError(null);
-  };
-
-  const handleSendEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerEmail) {
-      setSendErrorMessage('Customer email is required.');
-      return;
-    }
-
-    setIsSendingEmail(true);
-    setSendSuccessMessage(null);
-    setSendErrorMessage(null);
-
-    try {
-      const token = localStorage.getItem('company_admin_token');
-      const response = await fetch(`/api/estimates/write`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          action: 'send',
-          estimateId: estimate.id,
-          customerEmail,
-          senderEmail,
-          subject: emailSubject,
-          message: emailMessage,
-          attachments: attachedFiles
-        })
-      });
-
-      const responseText = await response.text();
-      console.log(`[SMTP EMAIL API RESPONSE] Code: ${response.status} (${response.statusText})`);
-
-      let parsedJson: any = null;
-      try {
-        parsedJson = JSON.parse(responseText);
-      } catch (jsonErr) {}
-
-      if (response.ok) {
-        setSendSuccessMessage('Fencing contract estimate pack successfully sent!');
-        setTimeout(() => {
-          setOpenSendModal(false);
-        }, 1500);
-        if (onUpdateEstimate) {
-          onUpdateEstimate({
-            customerEmailSent: true,
-            customerEmailSentAt: new Date().toISOString()
-          });
-        }
-      } else {
-        const errorDetail = parsedJson?.error || responseText || 'Unknown server fail.';
-        setSendErrorMessage(`API Error: ${errorDetail}`);
-      }
-    } catch (err: any) {
-      setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
-
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     try {
@@ -319,20 +113,6 @@ export default function CustomerContract({
   const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(estimate.manualGatePrices || {});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
-
-  // Pricing synchronization and adjustment states
-  const [baseFencePrice, setBaseFencePrice] = useState<number | null>(estimate.baseFencePrice ?? null);
-  const [addOnTotal, setAddOnTotal] = useState<number | null>(estimate.addOnTotal ?? null);
-  const [demoRemovalPrice, setDemoRemovalPrice] = useState<number | null>(estimate.demoRemovalPrice ?? null);
-  const [demoRemovalDescription, setDemoRemovalDescription] = useState<string>(
-    estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate."
-  );
-  const [discountType, setDiscountType] = useState<'none' | 'fixed_amount' | 'free_gate' | 'custom'>(estimate.discountType ?? 'none');
-  const [discountLabel, setDiscountLabel] = useState<string>(estimate.discountLabel ?? '');
-  const [discountAmount, setDiscountAmount] = useState<number>(estimate.discountAmount ?? 0);
-  const [discountReason, setDiscountReason] = useState<string>(estimate.discountReason ?? '');
-  const [selectedGateId, setSelectedGateId] = useState<string>(estimate.discountType === 'free_gate' && estimate.discountReason ? estimate.discountReason : '');
-
   const isInitialMount = React.useRef(true);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
@@ -381,30 +161,7 @@ export default function CustomerContract({
     if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
     if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
     if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
-
-    setBaseFencePrice(estimate.baseFencePrice ?? null);
-    setAddOnTotal(estimate.addOnTotal ?? null);
-    setDemoRemovalPrice(estimate.demoRemovalPrice ?? null);
-    setDemoRemovalDescription(estimate.demoRemovalDescription ?? "Removal and disposal of existing fence material, if included in this estimate.");
-    setDiscountType(estimate.discountType ?? 'none');
-    setDiscountLabel(estimate.discountLabel ?? '');
-    setDiscountAmount(estimate.discountAmount ?? 0);
-    setDiscountReason(estimate.discountReason ?? '');
-    setSelectedGateId(estimate.discountType === 'free_gate' && estimate.discountReason ? estimate.discountReason : '');
-  }, [
-    estimate.manualSectionTotals, 
-    estimate.manualGateTotals, 
-    estimate.manualDemoTotals, 
-    estimate.manualGrandTotal,
-    estimate.baseFencePrice,
-    estimate.addOnTotal,
-    estimate.demoRemovalPrice,
-    estimate.demoRemovalDescription,
-    estimate.discountType,
-    estimate.discountLabel,
-    estimate.discountAmount,
-    estimate.discountReason
-  ]);
+  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
@@ -413,35 +170,13 @@ export default function CustomerContract({
       setDemoTotals([]);
       setManualGrandTotal(null);
       setManualGatePrices({});
-
-      setBaseFencePrice(null);
-      setAddOnTotal(null);
-      setDemoRemovalPrice(null);
-      setDemoRemovalDescription("Removal and disposal of existing fence material, if included in this estimate.");
-      setDiscountType('none');
-      setDiscountLabel('');
-      setDiscountAmount(0);
-      setDiscountReason('');
-      setSelectedGateId('');
-
       if (onUpdateEstimate) {
         onUpdateEstimate({
           manualSectionTotals: [],
           manualGateTotals: [],
           manualDemoTotals: [],
           manualGrandTotal: null,
-          manualGatePrices: {},
-          baseFencePrice: null,
-          addOnTotal: null,
-          demoRemovalPrice: null,
-          demoRemovalDescription: "Removal and disposal of existing fence material, if included in this estimate.",
-          discountType: 'none',
-          discountLabel: '',
-          discountAmount: 0,
-          discountReason: '',
-          finalCustomerPrice: undefined,
-          subtotalBeforeDiscount: undefined,
-          pricePerFoot: undefined
+          manualGatePrices: {}
         });
       }
     }
@@ -483,24 +218,7 @@ export default function CustomerContract({
       return;
     }
     setHasUnsavedChanges(true);
-  }, [
-    localAiScope, 
-    sectionTotals, 
-    gateTotals, 
-    demoTotals, 
-    manualGrandTotal, 
-    projectDate, 
-    manualGatePrices,
-    baseFencePrice,
-    addOnTotal,
-    demoRemovalPrice,
-    demoRemovalDescription,
-    discountType,
-    discountLabel,
-    discountAmount,
-    discountReason,
-    selectedGateId
-  ]);
+  }, [localAiScope, sectionTotals, gateTotals, demoTotals, manualGrandTotal, projectDate, manualGatePrices]);
 
   useEffect(() => {
     // Initial load from estimate shouldn't trigger unsaved changes
@@ -564,39 +282,6 @@ export default function CustomerContract({
   const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
   const globalPricePerFoot = totalNetLF > 0 ? totalFenceCharge / totalNetLF : 0;
 
-  // Pricing calculations
-  const resolvedBaseFencePrice = baseFencePrice ?? totalFenceCharge;
-  const resolvedGateTotal = projectBreakdown.reduce((sum, r, i) => sum + (gateTotals[i] ?? r.totalGateCharge), 0);
-  const resolvedAddOnTotal = addOnTotal ?? (data?.totals?.prep * markupFactor || 0);
-  const calculatedDemoPrice = projectBreakdown.reduce((sum, r, i) => sum + (demoTotals[i] ?? r.demoCharge), 0);
-  const resolvedDemoRemovalPrice = demoRemovalPrice !== null ? demoRemovalPrice : calculatedDemoPrice;
-  
-  const subtotalBeforeDiscount = resolvedBaseFencePrice + resolvedGateTotal + resolvedAddOnTotal + resolvedDemoRemovalPrice;
-  const finalCustomerPrice = manualGrandTotal !== null ? manualGrandTotal : Math.max(0, subtotalBeforeDiscount - discountAmount);
-  
-  const resolvedLinearFeet = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
-  const pricePerFootValue = resolvedLinearFeet > 0 ? finalCustomerPrice / resolvedLinearFeet : 0;
-
-  // List of all gates in this estimate for selection
-  const allGatesList = React.useMemo(() => {
-    const list: { gateId: string; runName: string; width: number; type: string; price: number }[] = [];
-    projectBreakdown.forEach((run, runIdx) => {
-      run.gates.forEach((gate, gIdx) => {
-        const calculatedPrice = (gate.items.reduce((acc, item) => acc + item.total, 0) * markupFactor) + 
-                             (gate.items.filter(i => i.category !== 'Labor').reduce((acc, item) => acc + item.total, 0) * taxFactor);
-        const price = manualGatePrices[gate.gateId] ?? calculatedPrice;
-        list.push({
-          gateId: gate.gateId,
-          runName: run.name,
-          width: gate.width || 4,
-          type: gate.type || 'Single',
-          price
-        });
-      });
-    });
-    return list;
-  }, [projectBreakdown, manualGatePrices, markupFactor, taxFactor]);
-
   const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
     const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
     setManualGatePrices(updatedPrices);
@@ -628,19 +313,7 @@ export default function CustomerContract({
         manualGrandTotal: manualGrandTotal,
         contractProjectDate: projectDate,
         contractScope: localAiScope,
-        manualGatePrices: manualGatePrices,
-        baseFencePrice,
-        addOnTotal,
-        demoRemovalPrice,
-        demoRemovalDescription,
-        discountType,
-        discountLabel,
-        discountAmount,
-        discountReason,
-        finalCustomerPrice,
-        subtotalBeforeDiscount,
-        pricePerFoot: pricePerFootValue,
-        pricingUpdatedAt: new Date().toISOString()
+        manualGatePrices: manualGatePrices
       };
 
       if (wasDecisionMade) {
@@ -769,15 +442,6 @@ export default function CustomerContract({
               >
                 <Printer size={18} />
                 Print
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => setOpenSendModal(true)}
-                className="flex items-center justify-center gap-2 px-8 py-5 rounded-2xl bg-[#0b2b5a] hover:bg-american-blue text-white font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl min-w-[180px]"
-              >
-                <Send size={18} />
-                Send Estimate
               </button>
               
               <button 
@@ -1195,7 +859,7 @@ export default function CustomerContract({
                   <div className="mt-2 flex items-center justify-center gap-1">
                     {isCustomerView ? (
                       <span className="text-xl font-black text-american-blue">
-                        {formatCurrency(finalCustomerPrice)}
+                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
                       </span>
                     ) : (
                       <>
@@ -1203,21 +867,8 @@ export default function CustomerContract({
                         <input 
                           type="number"
                           step="0.01"
-                          value={finalCustomerPrice.toFixed(2)}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                            setManualGrandTotal(val);
-                            if (onUpdateEstimate) {
-                              const resFinal = val !== null ? val : Math.max(0, subtotalBeforeDiscount - discountAmount);
-                              const resLF = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
-                              const resPPerFoot = resLF > 0 ? resFinal / resLF : 0;
-                              onUpdateEstimate({
-                                manualGrandTotal: val,
-                                finalCustomerPrice: resFinal,
-                                pricePerFoot: resPPerFoot
-                              });
-                            }
-                          }}
+                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
                           className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
                         />
                       </>
@@ -1280,283 +931,6 @@ export default function CustomerContract({
                 </div>
               )}
 
-              {/* Pricing Customizations and Summary */}
-              {!isCustomerView && (
-                <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 border-2 border-dashed border-slate-200 space-y-6 mt-8 print:hidden">
-                  <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                    <div className="h-8 w-8 rounded-lg bg-american-blue flex items-center justify-center text-white">
-                      <Settings size={18} />
-                    </div>
-                    <div>
-                      <h4 className="font-black text-american-blue text-sm uppercase tracking-wider">Contract Pricing Administration</h4>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">Modify base sections, add demo/removal, or apply custom discounts</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Base Fence Price Override */}
-                    <div>
-                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                        Base Fence Price ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder={totalFenceCharge.toFixed(2)}
-                        value={baseFencePrice !== null ? baseFencePrice : ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
-                          setBaseFencePrice(v);
-                        }}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                      />
-                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(totalFenceCharge)}</span>
-                    </div>
-
-                    {/* Site Prep & Add-ons */}
-                    <div>
-                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                        Add-ons / Site Prep ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder={(data?.totals?.prep * markupFactor || 0).toFixed(2)}
-                        value={addOnTotal !== null ? addOnTotal : ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
-                          setAddOnTotal(v);
-                        }}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                      />
-                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(data?.totals?.prep * markupFactor || 0)}</span>
-                    </div>
-
-                    {/* Demo Removal Price */}
-                    <div>
-                      <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                        Demo & Removal Price ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder={calculatedDemoPrice.toFixed(2)}
-                        value={demoRemovalPrice !== null ? demoRemovalPrice : ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? null : parseFloat(e.target.value);
-                          setDemoRemovalPrice(v);
-                        }}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                      />
-                      <span className="text-[9px] text-slate-400 block mt-1">Calculated: {formatCurrency(calculatedDemoPrice)}</span>
-                    </div>
-                  </div>
-
-                  {/* Demo/Removal Description */}
-                  <div>
-                    <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                      Demo & Removal Description
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={demoRemovalDescription}
-                      onChange={(e) => setDemoRemovalDescription(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 focus:border-american-blue outline-none transition-all"
-                    />
-                  </div>
-
-                  {/* Discount Options */}
-                  <div className="border-t border-slate-200 pt-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Discount Type */}
-                      <div>
-                        <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                          Discount Type
-                        </label>
-                        <select
-                          value={discountType}
-                          onChange={(e) => {
-                            const newType = e.target.value as any;
-                            setDiscountType(newType);
-                            if (newType === 'none') {
-                              setDiscountAmount(0);
-                              setDiscountLabel('');
-                              setDiscountReason('');
-                              setSelectedGateId('');
-                            } else if (newType === 'free_gate') {
-                              setDiscountLabel('Discount - Free Walk Gate');
-                              setDiscountReason('');
-                              setSelectedGateId('');
-                            } else if (newType === 'fixed_amount' || newType === 'custom') {
-                              setDiscountLabel('Contract discount');
-                              setDiscountReason('');
-                            }
-                          }}
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                        >
-                          <option value="none">No Discount</option>
-                          <option value="fixed_amount">Fixed Amount Discount</option>
-                          <option value="free_gate">Free Gate Option</option>
-                          <option value="custom">Custom Deal/Promotion</option>
-                        </select>
-                      </div>
-
-                      {/* Dynamic Free Gate Selection Dropdown */}
-                      {discountType === 'free_gate' && (
-                        <div>
-                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                            Select Free Gate
-                          </label>
-                          <select
-                            value={selectedGateId}
-                            onChange={(e) => {
-                              const sId = e.target.value;
-                              const selectedGate = allGatesList.find(g => g.gateId === sId);
-                              if (selectedGate) {
-                                setSelectedGateId(sId);
-                                setDiscountAmount(selectedGate.price);
-                                setDiscountLabel(`Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`);
-                                setDiscountReason(sId);
-                              } else {
-                                setSelectedGateId('');
-                                setDiscountAmount(0);
-                                setDiscountLabel('Discount - Free Walk Gate');
-                                setDiscountReason('');
-                              }
-                            }}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                          >
-                            <option value="">-- Choose Gate --</option>
-                            {allGatesList.map(g => (
-                              <option key={g.gateId} value={g.gateId}>
-                                {g.width}' {g.type} inside {g.runName} ({formatCurrency(g.price)})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Discount Label */}
-                      {discountType !== 'none' && (
-                        <div className={discountType === 'free_gate' ? "" : "md:col-span-2"}>
-                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                            Discount Label (Customer-Facing)
-                          </label>
-                          <input
-                            type="text"
-                            value={discountLabel}
-                            onChange={(e) => setDiscountLabel(e.target.value)}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {discountType !== 'none' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Discount Amount */}
-                        <div>
-                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                            Discount Amount ($)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={discountAmount || ''}
-                            onChange={(e) => {
-                              const amt = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                              setDiscountAmount(amt);
-                            }}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                          />
-                          <span className="text-[9px] text-slate-400 block mt-1">Subtracts immediately from Customer Total</span>
-                        </div>
-
-                        {/* Discount Reason */}
-                        <div>
-                          <label className="block text-[10px] font-black text-american-blue uppercase tracking-widest mb-1.5">
-                            Discount Reason / Deal Details
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Autumn Special, Military Discount, Bundle deal"
-                            value={discountReason}
-                            onChange={(e) => setDiscountReason(e.target.value)}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Itemized Pricing Summary Section (Visible to both Custom View and Admin view) */}
-              <div className="bg-[#F8F9FA] rounded-3xl p-6 sm:p-8 border border-[#E5E5E5] mt-8 hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-3 border-b border-[#F0F0F0] pb-4 mb-4">
-                  <span className="h-5 w-1 bg-american-blue rounded-full" />
-                  <h4 className="font-black text-american-blue uppercase tracking-wider text-xs">Agreement Summary Breakdown</h4>
-                </div>
-                
-                <div className="space-y-3.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-500 uppercase tracking-wider">Base Fencing Structure</span>
-                    <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedBaseFencePrice)}</span>
-                  </div>
-
-                  {resolvedGateTotal > 0 && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider">Access Systems & Gateways</span>
-                      <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedGateTotal)}</span>
-                    </div>
-                  )}
-
-                  {resolvedAddOnTotal > 0 && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider">Site Clears & Custom Addons</span>
-                      <span className="font-semibold text-slate-800 font-mono text-xs">{formatCurrency(resolvedAddOnTotal)}</span>
-                    </div>
-                  )}
-
-                  {resolvedDemoRemovalPrice > 0 && (
-                    <div className="flex justify-between items-center text-xs pt-1">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-500 uppercase tracking-wider">Demo & Removal Services</span>
-                        <span className="text-[9px] text-slate-400 italic max-w-sm mt-0.5 leading-relaxed font-semibold">
-                          {demoRemovalDescription}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-slate-850 font-mono text-xs self-start">{formatCurrency(resolvedDemoRemovalPrice)}</span>
-                    </div>
-                  )}
-
-                  <div className="border-t border-[#F0F0F0] pt-3.5 flex justify-between items-center text-xs">
-                    <span className="font-black text-american-blue uppercase tracking-wider">Subtotal Before Discounts</span>
-                    <span className="font-black text-american-blue font-mono text-xs">{formatCurrency(subtotalBeforeDiscount)}</span>
-                  </div>
-
-                  {discountType !== 'none' && discountAmount > 0 && (
-                    <div className="flex justify-between items-center text-xs bg-red-50/50 p-2 rounded-xl border border-red-100/50 font-bold">
-                      <div className="flex flex-col col-span-2">
-                        <span className="font-black text-american-red uppercase tracking-wider">{discountLabel || 'Deal Discount'}</span>
-                        {discountReason && <span className="text-[9px] text-slate-500 font-medium uppercase mt-0.5">{discountReason}</span>}
-                      </div>
-                      <span className="font-black text-american-red font-mono text-xs">-{formatCurrency(discountAmount)}</span>
-                    </div>
-                  )}
-
-                  <div className="border-t-2 border-american-blue/10 pt-3.5 flex justify-between items-center text-sm bg-american-blue/[0.02] -mx-6 -mb-6 px-6 py-4 rounded-b-3xl mt-4">
-                    <div className="flex flex-col">
-                      <span className="font-black text-american-blue uppercase tracking-wider">Guaranteed Final Total</span>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                        Price Per Foot: {resolvedLinearFeet > 0 ? `${formatCurrency(pricePerFootValue)}/LF` : 'N/A'} • {resolvedLinearFeet.toFixed(1)} LF
-                      </span>
-                    </div>
-                    <span className="font-black text-american-blue text-lg font-mono">{formatCurrency(finalCustomerPrice)}</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Grand Total */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-6 sm:p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -1570,7 +944,7 @@ export default function CustomerContract({
                   <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
                     {isCustomerView ? (
                       <span className="text-5xl md:text-7xl font-black tabular-nums tracking-tighter leading-none text-white">
-                        {formatCurrency(finalCustomerPrice)}
+                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
                       </span>
                     ) : (
                       <>
@@ -1578,20 +952,11 @@ export default function CustomerContract({
                         <input 
                           type="number"
                           step="0.01"
-                          value={finalCustomerPrice.toFixed(2)}
+                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseFloat(e.target.value);
                             setManualGrandTotal(val);
-                            if (onUpdateEstimate) {
-                              const resFinal = val !== null ? val : Math.max(0, subtotalBeforeDiscount - discountAmount);
-                              const resLF = totalNetLF > 0 ? totalNetLF : (estimate.linearFeet || 0);
-                              const resPPerFoot = resLF > 0 ? resFinal / resLF : 0;
-                              onUpdateEstimate({
-                                manualGrandTotal: val,
-                                finalCustomerPrice: resFinal,
-                                pricePerFoot: resPPerFoot
-                              });
-                            }
+                            if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
                           }}
                           className={cn(
                             "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
@@ -1720,200 +1085,10 @@ export default function CustomerContract({
         </div>
 
         {/* Contract Footer */}
-        {/* Contract Footer */}
         <div className="p-8 bg-[#F9F9F9] border-t border-[#F0F0F0] text-center">
           <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#BBBBBB]">Lone Star Fence Works • Official Customer Contract • Fences With Character</p>
         </div>
       </div>
-
-      {/* Send Estimate Email Modal Popup */}
-      <AnimatePresence>
-        {openSendModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-lg overflow-hidden flex flex-col text-slate-800"
-            >
-              <div className="p-6 bg-gradient-to-r from-american-blue to-[#0b2b5a] text-white flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 p-2.5 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-                    <Mail size={20} className="text-white" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-sm font-black uppercase tracking-wider">Send Contract Estimate</h3>
-                    <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">Lone Star Dispatch Center</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpenSendModal(false)}
-                  className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleSendEmailSubmit} className="p-6 space-y-4 text-left overflow-y-auto max-h-[75vh]">
-                {sendSuccessMessage && (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-bold uppercase tracking-wider flex items-center gap-2">
-                    <CheckCircle2 size={16} fill="#10B981" className="text-white shadow" />
-                    <span>{sendSuccessMessage}</span>
-                  </div>
-                )}
-
-                {sendErrorMessage && (
-                  <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
-                    <div className="flex-1 space-y-1 text-left">
-                      <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
-                      <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-[#c2410c] font-mono text-[11px] select-all">{sendErrorMessage}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Sender Email */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Sender (My Email)</label>
-                    <input
-                      type="email"
-                      required
-                      value={senderEmail}
-                      onChange={(e) => setSenderEmail(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
-                    />
-                  </div>
-
-                  {/* Customer Email */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Recipient (Customer Email)</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="customer@email.com"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
-                    />
-                  </div>
-                </div>
-
-                {/* Email Subject */}
-                <div className="space-y-1">
-                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">Email Subject</label>
-                  <input
-                    type="text"
-                    required
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-american-blue"
-                  />
-                </div>
-
-                {/* Email Body Message */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500">Email Message Payload</label>
-                    <span className="text-[8px] font-bold tracking-widest text-[#9333EA] uppercase bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
-                      Auto-Injected Link
-                    </span>
-                  </div>
-                  <textarea
-                    required
-                    rows={6}
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:border-american-blue leading-relaxed resize-none font-sans"
-                  />
-                </div>
-
-                {/* Attach Files Section */}
-                <div className="space-y-2">
-                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
-                    Attach Files (Optional)
-                  </label>
-                  
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-center justify-center gap-2 w-full p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-slate-100 cursor-pointer transition-all">
-                      <Paperclip size={14} className="text-slate-600" />
-                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Choose Files to Attach</span>
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                        onChange={handleAttachmentChange}
-                        className="hidden"
-                      />
-                    </label>
-                    <span className="text-[9px] text-slate-400 font-medium">
-                      Supported: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Max 10MB per file, 20MB total)
-                    </span>
-                  </div>
-
-                  {attachmentError && (
-                    <div className="p-2 border border-red-200 bg-red-50 text-red-700 text-[10px] uppercase tracking-wider font-bold rounded-lg leading-relaxed">
-                      ⚠️ {attachmentError}
-                    </div>
-                  )}
-
-                  {attachedFiles.length > 0 && (
-                    <div className="max-h-28 overflow-y-auto border border-slate-100 rounded-xl p-2 bg-slate-50 space-y-1.5 scrollbar-thin">
-                      {attachedFiles.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-[11px] font-medium text-slate-700 bg-white border border-slate-150 rounded-lg px-2.5 py-1.5 shadow-sm">
-                          <span className="truncate max-w-[200px]" title={file.filename}>
-                            📎 {file.filename}
-                          </span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[9px] font-mono text-slate-400 font-medium">
-                              {(file.size / 1024 / 1024).toFixed(2)} MB
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeAttachment(file.filename)}
-                              className="text-red-500 hover:text-red-700 font-bold transition-all text-xs px-1 hover:bg-red-50 rounded"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                      </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-4 flex gap-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setOpenSendModal(false)}
-                    className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSendingEmail}
-                    className="flex-1 py-2.5 bg-[#0b2b5a] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all hover:bg-american-blue disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-american-blue/15"
-                  >
-                    {isSendingEmail ? (
-                      <>
-                        <Loader2 className="animate-spin" size={14} />
-                        <span>Sending...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send size={12} className="text-white" />
-                        <span>Send Package</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {

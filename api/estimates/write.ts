@@ -300,16 +300,6 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const hasValidAdminToken = !!(
-      authHeader &&
-      authHeader.startsWith('Bearer ') &&
-      decoded &&
-      (decoded.isAdmin ||
-       decoded.uid === 'braden-lonestar-uid' ||
-       decoded.email?.toLowerCase() === 'bradens@lonestarfenceworks.com' ||
-       decoded.email?.toLowerCase() === 'usmc6123@gmail.com')
-    );
-
     // Public customer submissions have no token — scope them to Braden's UID automatically
     if (!decoded || !decoded.uid) {
       decoded = { uid: 'braden-lonestar-uid', isAdmin: false };
@@ -425,366 +415,6 @@ export default async function handler(req: any, res: any) {
 
     // Standard Routing
     if (method === 'POST') {
-      if (req.body && req.body.action === 'submit-instant-estimator') {
-        const {
-          id,
-          firstName,
-          lastName,
-          customerName,
-          email,
-          phone,
-          address,
-          city,
-          state,
-          zip,
-          fenceType,
-          fenceHeight,
-          height,
-          linearFeet,
-          gateCount,
-          gateSummary,
-          selectedOptions,
-          estimatedPrice,
-          createdAt,
-          ...restBody
-        } = req.body;
-
-        const estimateId = id || `est-cust-${Math.random().toString(36).substr(2, 9)}`;
-        const now = new Date().toISOString();
-
-        // 1. Resolve Sequential Estimate Number starting from 1201
-        let estimateNumber = 1201;
-        try {
-          const maxEstSnap = await db.collection('estimates')
-            .orderBy('estimateNumber', 'desc')
-            .limit(1)
-            .get();
-          if (!maxEstSnap.empty) {
-            const topDoc = maxEstSnap.docs[0].data();
-            if (typeof topDoc.estimateNumber === 'number' && topDoc.estimateNumber >= 1201) {
-              estimateNumber = topDoc.estimateNumber + 1;
-            }
-          }
-        } catch (numErr) {
-          console.warn('Failed resolving max estimateNumber, defaulting matching baseline of 1201:', numErr);
-        }
-
-        const resolvedFirstName = (firstName || '').trim();
-        const resolvedLastName = (lastName || '').trim();
-        const resolvedCustomerName = (customerName || `${resolvedFirstName} ${resolvedLastName}`).trim();
-        const resolvedEmail = (email || '').trim();
-        const resolvedPhone = (phone || '').trim();
-        const resolvedAddress = (address || '').trim();
-        const resolvedCity = (city || '').trim();
-        const resolvedState = (state || '').trim();
-        const resolvedZip = (zip || '').trim();
-        const resolvedFenceType = (fenceType || 'Wood Fence').trim();
-        const resolvedHeight = fenceHeight || height || 6;
-        const resolvedLinearFeet = Number(linearFeet || 0);
-        const resolvedGateCount = Number(gateCount || 0);
-        const resolvedGateSummary = (gateSummary || '').trim();
-        const resolvedSelectedOptions = selectedOptions || [];
-        const resolvedPrice = Number(estimatedPrice || 0);
-
-        const docPayload: any = {
-          ...restBody,
-          id: estimateId,
-          firstName: resolvedFirstName,
-          lastName: resolvedLastName,
-          customerName: resolvedCustomerName,
-          customerEmail: resolvedEmail,
-          customerPhone: resolvedPhone,
-          customerAddress: resolvedAddress,
-          customerStreet: restBody.street || resolvedAddress || '',
-          customerCity: resolvedCity,
-          customerState: resolvedState,
-          customerZip: resolvedZip,
-          fenceType: resolvedFenceType,
-          height: resolvedHeight,
-          fenceHeight: resolvedHeight,
-          linearFeet: resolvedLinearFeet,
-          gateCount: resolvedGateCount,
-          gateSummary: resolvedGateSummary,
-          selectedOptions: resolvedSelectedOptions,
-          subtotal: resolvedPrice,
-          total: resolvedPrice,
-          totalCost: resolvedPrice,
-          manualGrandTotal: resolvedPrice,
-          isCustomerEstimate: true,
-          leadSource: 'Instant Estimator',
-          jobStatus: 'Interested',
-          status: 'active',
-          companyId: 'lonestarfence',
-          uid: 'braden-lonestar-uid',
-          userId: 'braden-lonestar-uid',
-          createdAt: createdAt || now,
-          lastModified: now,
-          updatedAt: now,
-          estimateNumber
-        };
-
-        // Strict Requirement: Save to Firestore first. If it fails, return error immediately
-        const estimateDocRef = db.collection('estimates').doc(estimateId);
-        try {
-          await estimateDocRef.set(docPayload);
-          console.log(`Instant lead document ${estimateId} successfully synchronized to Firestore. Number: ${estimateNumber}`);
-        } catch (dbErr: any) {
-          console.error('Core Firestore Synchronization of Instant Lead failed:', dbErr);
-          return res.status(500).json({
-            success: false,
-            error: `Failed to save estimate to database: ${dbErr.message || dbErr}`
-          });
-        }
-
-        // 2. Trigger CRM Webhook (Asynchronously / non-blocking for client, but logged)
-        let ghlWebhookTriggered = false;
-        let ghlWebhookTriggeredAt: any = null;
-        try {
-          const ghlResult = await sendGhlWebhook(
-            'instant_estimate_submitted',
-            estimateId,
-            docPayload,
-            db,
-            'braden-lonestar-uid'
-          );
-          ghlWebhookTriggered = ghlResult.success;
-          if (ghlWebhookTriggered) {
-            ghlWebhookTriggeredAt = new Date().toISOString();
-          }
-        } catch (crmErr: any) {
-          console.error('CRM Webhook Dispatch failed:', crmErr);
-        }
-
-        // 3. Resolve SMTP Settings and Trigger Branded Customer Email
-        let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
-        let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
-        let resolvedSmtpSecureType = 'SSL/TLS';
-        let resolvedSmtpUser = process.env.SMTP_USER;
-        let resolvedSmtpPass = process.env.SMTP_PASS;
-        let resolvedFromName = 'Lone Star Fence Works';
-        let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
-        let resolvedReplyToEmail = resolvedFromEmail;
-        let resolvedCompanyLogo = '';
-        let resolvedCompanyPhone = '(469) 560-6269';
-        let resolvedCompanyWebsite = 'https://www.lonestarfenceworks.com';
-        let resolvedScheduleLink = 'https://www.lonestarfenceworks.com';
-
-        let settingsData: any = null;
-        for (const uidToTry of ['braden-lonestar-uid', 'main']) {
-          try {
-            const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
-            if (settingsSnap.exists) {
-              const poss = settingsSnap.data() || {};
-              if (poss.smtpHost && poss.smtpUsername) {
-                settingsData = poss;
-                break;
-              }
-            }
-          } catch (err) {
-            console.warn(`Failed settings resolve for ${uidToTry}:`, err);
-          }
-        }
-
-        if (settingsData) {
-          if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
-          if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
-          if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
-          if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
-          if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
-          if (settingsData.fromName) resolvedFromName = settingsData.fromName;
-          if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
-          resolvedReplyToEmail = settingsData.replyToEmail || resolvedFromEmail;
-          resolvedCompanyLogo = settingsData.companyLogo || '';
-          resolvedCompanyPhone = settingsData.companyPhone || settingsData.phoneNumber || '(469) 560-6269';
-          resolvedCompanyWebsite = settingsData.companyWebsite || settingsData.website || 'https://www.lonestarfenceworks.com';
-          resolvedScheduleLink = settingsData.scheduleLink || resolvedCompanyWebsite;
-        }
-
-        const formatCurrency = (amount: number) => {
-          return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            maximumFractionDigits: 0
-          }).format(amount);
-        };
-
-        const formattedPrice = formatCurrency(resolvedPrice);
-
-        const emailPlainText = `Hi ${resolvedCustomerName},
-
-Thank you for using the Lone Star Fence Works Instant Fence Estimator.
-
-Based on the information you provided, your estimated fence project total is:
-
-Estimated Total: ${formattedPrice}
-
-Project Details:
-Fence Type: ${resolvedFenceType}
-Fence Height: ${resolvedHeight}
-Linear Feet: ${resolvedLinearFeet}
-Gates/Options: ${resolvedGateSummary}
-Project Address: ${resolvedAddress}, ${resolvedCity}, ${resolvedState} ${resolvedZip}
-
-This instant estimate is designed to give you a helpful budget number before an on-site review. Final pricing may change after exact measurements, utility concerns, access conditions, grade changes, material selections, HOA requirements, and final project scope.
-
-If you are ready to move forward, you can schedule an on-site estimate here:
-${resolvedScheduleLink}
-
-Thank you,
-Lone Star Fence Works
-(469) 560-6269
-bradens@lonestarfenceworks.com
-https://www.lonestarfenceworks.com`;
-
-        const emailHtml = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-            <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-              ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName} Logo" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />` : ''}
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
-              <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">INSTANT ESTIMATE RESULTS</p>
-            </div>
-            <div style="padding: 32px 24px; background-color: #ffffff;">
-              <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Hello ${resolvedCustomerName},</h2>
-              <p style="color: #4a5568; line-height: 1.6; font-size: 14px;">
-                Thank you for using the Lone Star Fence Works Instant Fence Estimator.
-              </p>
-              
-              <div style="background-color: #f7fafc; border: 1px solid #edf2f7; border-radius: 8px; padding: 20px; margin: 24px 0; text-align: center;">
-                <p style="color: #718096; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Estimated Project Total</p>
-                <h3 style="color: #b91c1c; margin: 8px 0 0 0; font-size: 32px; font-weight: 800;">${formattedPrice}</h3>
-              </div>
-
-              <h4 style="color: #0c1a30; font-size: 14px; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Project Details</h4>
-              <table style="width: 100%; font-size: 14px; color: #4a5568; line-height: 1.6; border-collapse: collapse;">
-                <tr>
-                  <td style="padding: 6px 0; font-weight: bold; width: 140px;">Fence Type:</td>
-                  <td style="padding: 6px 0;">${resolvedFenceType}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-weight: bold;">Fence Height:</td>
-                  <td style="padding: 6px 0;">${resolvedHeight} Ft</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-weight: bold;">Linear Feet:</td>
-                  <td style="padding: 6px 0;">${resolvedLinearFeet} LF</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-weight: bold;">Gates/Options:</td>
-                  <td style="padding: 6px 0;">${resolvedGateSummary}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-weight: bold; vertical-align: top;">Project Location:</td>
-                  <td style="padding: 6px 0;">${resolvedAddress}, ${resolvedCity}, ${resolvedState} ${resolvedZip}</td>
-                </tr>
-              </table>
-
-              <p style="color: #718096; font-size: 12px; line-height: 1.5; margin-top: 24px; background-color: #fffaf0; border-left: 4px solid #dd6b20; padding: 12px; border-radius: 4px;">
-                <strong>Please Note:</strong> This instant estimate is designed to give you a helpful budget number before an on-site review. Final pricing may change after exact measurements, utility concerns, access conditions, grade changes, material selections, HOA requirements, and final project scope.
-              </p>
-
-              <div style="text-align: center; margin: 36px 0 24px 0;">
-                <a href="${resolvedScheduleLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
-                  Schedule On-Site Review
-                </a>
-              </div>
-
-              <p style="color: #4a5568; margin-top: 32px; font-size: 14px; border-top: 1px solid #edf2f7; padding-top: 16px;">
-                Thank you,<br/>
-                <strong>${resolvedFromName}</strong><br/>
-                Office: ${resolvedCompanyPhone}<br/>
-                Email: <a href="mailto:bradens@lonestarfenceworks.com" style="color: #3182ce;">bradens@lonestarfenceworks.com</a><br/>
-                Site: <a href="${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">${resolvedCompanyWebsite}</a>
-              </p>
-            </div>
-            <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
-              <p style="color: #a0aec0; font-size: 11px; margin: 0;">
-                ${resolvedFromName} &bull; Instant Fence Estimation
-              </p>
-            </div>
-          </div>
-        `;
-
-        let customerEmailSent = false;
-        let customerEmailSentAt: any = null;
-        let mailError = null;
-
-        if (resolvedSmtpHost && resolvedSmtpUser && resolvedSmtpPass) {
-          const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
-          const transporterConfig: any = {
-            host: resolvedSmtpHost,
-            port: resolvedSmtpPort,
-            secure: isPort465,
-            auth: {
-              user: resolvedSmtpUser,
-              pass: resolvedSmtpPass
-            },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 15000,
-            tls: {
-              rejectUnauthorized: false
-            }
-          };
-
-          try {
-            const transporter = nodemailer.createTransport(transporterConfig);
-            await transporter.sendMail({
-              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-              to: resolvedEmail,
-              replyTo: resolvedReplyToEmail,
-              subject: "Your Lone Star Fence Works Instant Fence Estimate",
-              text: emailPlainText,
-              html: emailHtml
-            });
-            customerEmailSent = true;
-            customerEmailSentAt = now;
-            console.log(`Instant lead confirmation email transmitted successfully to ${resolvedEmail}`);
-          } catch (mErr: any) {
-            console.error('Failed sending instant confirmation email to customer:', mErr);
-            mailError = mErr.message || String(mErr);
-          }
-        } else {
-          console.warn('Skipping instant estimate email dispatch: SMTP credentials are not configured.');
-          mailError = 'SMTP not configured';
-        }
-
-        // 4. Update the saved document with tracking fields
-        const finalTrackingUpdates = {
-          ghlWebhookTriggered,
-          ghlWebhookTriggeredAt,
-          customerEmailSent,
-          customerEmailSentAt,
-          instantEstimatorSubmittedAt: now,
-          customerEmailLog: [
-            {
-              sentAt: now,
-              customerEmail: resolvedEmail,
-              subject: "Your Lone Star Fence Works Instant Fence Estimate",
-              senderEmail: resolvedFromEmail,
-              mailSent: customerEmailSent,
-              mailError: mailError,
-              sendStatus: customerEmailSent ? 'success' : 'failed'
-            }
-          ]
-        };
-
-        try {
-          await estimateDocRef.set(finalTrackingUpdates, { merge: true });
-        } catch (trkErr) {
-          console.warn('Failed to merge tracking updates in Firestore:', trkErr);
-        }
-
-        return res.status(200).json({
-          success: true,
-          id: estimateId,
-          estimateNumber,
-          ghlWebhookTriggered,
-          customerEmailSent,
-          error: mailError,
-          message: 'Saved lead, dispatched GHL and sent results copy.'
-        });
-      }
-
       if (req.body && req.body.action === 'schedule-event') {
         const { action, ...eventData } = req.body;
         const id = eventData.id;
@@ -797,7 +427,7 @@ https://www.lonestarfenceworks.com`;
       }
       if (req.body && req.body.action === 'send') {
         const estimateId = req.body.estimateId || req.query.estimateId;
-        const { customerEmail, senderEmail, subject, message, attachments } = req.body;
+        const { customerEmail, senderEmail, subject, message } = req.body;
 
         if (!estimateId) {
           return res.status(400).json({ error: 'Estimate ID is required.' });
@@ -805,61 +435,6 @@ https://www.lonestarfenceworks.com`;
 
         if (!customerEmail) {
           return res.status(400).json({ error: 'Customer email is required.' });
-        }
-
-        // Helper to sanitize filenames
-        const sanitizeFilename = (name: string): string => {
-          return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        };
-
-        // Validate attachments if present
-        if (attachments && attachments.length > 0) {
-          if (!hasValidAdminToken) {
-            return res.status(403).json({ error: 'Unauthorized: Only authenticated admin/employee users can send attachments.' });
-          }
-
-          const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
-          const allowedMimes = [
-            'application/pdf',
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          ];
-
-          let totalSize = 0;
-          for (const att of attachments) {
-            if (!att.filename || !att.mimeType || !att.base64Data) {
-              return res.status(400).json({ error: 'Invalid attachment structure. Required fields: filename, mimeType, base64Data.' });
-            }
-
-            const ext = att.filename.split('.').pop()?.toLowerCase();
-            if (!ext || !allowedExtensions.includes(ext)) {
-              return res.status(400).json({ error: `File type "${att.filename}" is not supported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX files are allowed.` });
-            }
-
-            if (!allowedMimes.includes(att.mimeType)) {
-              return res.status(400).json({ error: `Unsupported MIME type "${att.mimeType}" for file "${att.filename}".` });
-            }
-
-            let base64Chunk = att.base64Data;
-            if (base64Chunk.includes(';base64,')) {
-              base64Chunk = base64Chunk.split(';base64,')[1];
-            }
-            const buffer = Buffer.from(base64Chunk, 'base64');
-
-            if (buffer.length > 10 * 1024 * 1024) {
-              return res.status(400).json({ error: `File "${att.filename}" exceeds the 10MB individual limit.` });
-            }
-            totalSize += buffer.length;
-          }
-
-          if (totalSize > 20 * 1024 * 1024) {
-            return res.status(400).json({ error: 'Total attachment size exceeds the 20MB limit.' });
-          }
         }
 
         // 1. Fetch estimate from firestore using Admin SDK
@@ -1022,21 +597,6 @@ https://www.lonestarfenceworks.com`;
         let mailError = null;
         let errorType = 'UNKNOWN';
 
-        // Prepare email attachments for nodemailer
-        const emailAttachments = attachments && attachments.length > 0
-          ? attachments.map((att: any) => {
-              let base64Chunk = att.base64Data;
-              if (base64Chunk.includes(';base64,')) {
-                base64Chunk = base64Chunk.split(';base64,')[1];
-              }
-              return {
-                filename: sanitizeFilename(att.filename),
-                content: Buffer.from(base64Chunk, 'base64'),
-                contentType: att.mimeType
-              };
-            })
-          : [];
-
         try {
           const transporter = nodemailer.createTransport(transporterConfig);
           await transporter.sendMail({
@@ -1045,7 +605,6 @@ https://www.lonestarfenceworks.com`;
             replyTo: resolvedReplyToEmail,
             subject: mailSubject,
             text: mailMessage,
-            attachments: emailAttachments,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
@@ -1118,10 +677,7 @@ https://www.lonestarfenceworks.com`;
             senderEmail: resolvedFromEmail,
             mailSent,
             mailError,
-            portalUrl: estimateLink,
-            attachmentFilenames: attachments ? attachments.map((a: any) => sanitizeFilename(a.filename)) : [],
-            attachmentCount: attachments ? attachments.length : 0,
-            sendStatus: mailSent ? 'success' : 'failed'
+            portalUrl: estimateLink
           }],
           updatedAt: now
         };

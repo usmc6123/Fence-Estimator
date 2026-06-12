@@ -220,24 +220,11 @@ export interface Estimate {
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
   manualGrandTotal?: number | null;
-  finalCustomerPrice?: number;
-  baseFencePrice?: number | null;
-  addOnTotal?: number | null;
-  pricePerFoot?: number;
-  subtotalBeforeDiscount?: number;
-  demoRemovalPrice?: number | null;
-  demoRemovalDescription?: string;
-  discountType?: 'none' | 'fixed_amount' | 'free_gate' | 'custom';
-  discountLabel?: string;
-  discountAmount?: number;
-  discountReason?: string;
-  pricingUpdatedAt?: string;
-  manualSectionTotals?: (number | null)[],
+  manualSectionTotals?: (number | null)[];
   manualGateTotals?: (number | null)[];
   manualDemoTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
   contractProjectDate?: string;
-  customerEmailSent?: boolean;
   customerEmailSentAt?: string | null;
   customerSentAt?: string | null;
   contractScope?: string;

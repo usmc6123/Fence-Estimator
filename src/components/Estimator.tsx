@@ -294,14 +294,8 @@ export default function Estimator({
       subtotal: detailedData.totals.subtotal,
       markup: detailedData.totals.markup,
       tax: detailedData.totals.tax,
-      total: estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null
-        ? estimate.finalCustomerPrice
-        : (estimate.manualGrandTotal !== null && estimate.manualGrandTotal !== undefined
-          ? estimate.manualGrandTotal
-          : detailedData.totals.grandTotal),
-      overallPricePerFoot: estimate.pricePerFoot !== undefined && estimate.pricePerFoot !== null
-        ? estimate.pricePerFoot
-        : (netLF > 0 ? totalFenceCharge / netLF : 0),
+      total: detailedData.totals.grandTotal,
+      overallPricePerFoot: netLF > 0 ? totalFenceCharge / netLF : 0,
       runBreakdown,
       lf,
       netLF,
