@@ -1921,7 +1921,7 @@ export function calculateDetailedTakeOff(
   const grandTotal = subtotal + markup + tax;
 
   return {
-    summary: allItems.filter(i => !manualSummary.find(m => m.id === i.id)), // filter back to calculated
+    summary: calculatedSummary,
     manualSummary: manualSummary,
     runs: detailedRuns,
     pipeCuttingSummary,

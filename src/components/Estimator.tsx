@@ -419,7 +419,7 @@ export default function Estimator({
     const postCount = detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
 
     return {
-      items: detailedData.summary,
+      items: [...detailedData.summary, ...detailedData.manualSummary],
       materialSubtotal: detailedData.totals.material,
       laborCost: detailedData.totals.labor,
       demoCost: detailedData.totals.demo,

@@ -45,8 +45,11 @@ export default function LaborTakeOff({
     }
   }, [estimate.laborScope]);
 
-  // Filter for ONLY labor items for the internal manifest
-  const laborSummary = data.summary.filter(item => item.category === 'Labor' || item.category === 'Demolition');
+  // Filter for ONLY labor items for the internal manifest (calculated + manual)
+  const laborSummary = [
+    ...data.summary.filter(item => item.category === 'Labor' || item.category === 'Demolition'),
+    ...data.manualSummary.filter(item => item.category === 'Labor' || item.category === 'Demolition')
+  ];
   const totalLaborRaw = laborSummary.reduce((sum, item) => sum + item.total, 0);
 
   const handleScopeChange = (val: string) => {
