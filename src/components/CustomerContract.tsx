@@ -37,7 +37,6 @@ export default function CustomerContract({
   const [isSendingEmail, setIsSendingEmail] = React.useState(false);
   const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
   const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
-  const [smtpDiagnostics, setSmtpDiagnostics] = React.useState<any | null>(null);
   const [companySettings, setCompanySettings] = React.useState<any>(null);
   const [attachedFiles, setAttachedFiles] = React.useState<{ filename: string; mimeType: string; size: number; base64Data: string }[]>([]);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
@@ -152,12 +151,7 @@ export default function CustomerContract({
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        let base64Str = (event.target?.result as string) || '';
-        if (base64Str.includes(';base64,')) {
-          base64Str = base64Str.split(';base64,')[1];
-        } else if (base64Str.includes(',')) {
-          base64Str = base64Str.split(',')[1];
-        }
+        const base64Data = event.target?.result as string;
         setAttachedFiles(prev => {
           const exists = prev.some(f => f.filename === file.name);
           if (!exists) {
@@ -165,7 +159,7 @@ export default function CustomerContract({
               filename: file.name,
               mimeType: file.type || 'application/octet-stream',
               size: file.size,
-              base64Data: base64Str
+              base64Data
             }];
           }
           return prev;
@@ -190,15 +184,6 @@ export default function CustomerContract({
     setIsSendingEmail(true);
     setSendSuccessMessage(null);
     setSendErrorMessage(null);
-    setSmtpDiagnostics(null);
-
-    // Rule 8: Vercel payload size check
-    const totalFilesSize = (attachedFiles || []).reduce((sum, f) => sum + (f.size || 0), 0);
-    if (totalFilesSize > 3.2 * 1024 * 1024) {
-      setSendErrorMessage("Attachment upload is too large. Please send fewer or smaller files.");
-      setIsSendingEmail(false);
-      return;
-    }
 
     try {
       const token = localStorage.getItem('company_admin_token');
@@ -214,7 +199,8 @@ export default function CustomerContract({
           customerEmail,
           senderEmail,
           subject: emailSubject,
-          message: emailMessage
+          message: emailMessage,
+          attachments: attachedFiles
         })
       });
 
@@ -225,10 +211,6 @@ export default function CustomerContract({
       try {
         parsedJson = JSON.parse(responseText);
       } catch (jsonErr) {}
-
-      if (parsedJson && parsedJson.diagnostic) {
-        setSmtpDiagnostics(parsedJson.diagnostic);
-      }
 
       if (response.ok) {
         setSendSuccessMessage('Fencing contract estimate pack successfully sent!');
@@ -242,28 +224,8 @@ export default function CustomerContract({
           });
         }
       } else {
-        let friendlyMessage = 'Email dispatch failed.';
-        if (parsedJson) {
-          const detail = (parsedJson.details || '').toLowerCase();
-          const errText = (parsedJson.error || '').toLowerCase();
-          const diagMsg = (parsedJson.diagnostic?.message || '').toLowerCase();
-          const diagCode = parsedJson.diagnostic?.code || '';
-
-          if (parsedJson.errorType === 'AUTHENTICATION_ERROR' || detail.includes('auth') || errText.includes('auth') || diagMsg.includes('auth')) {
-            friendlyMessage = 'SMTP authentication failed. Please verify your SMTP settings and confirm your password is correct.';
-          } else if (detail.includes('timeout') || errText.includes('timeout') || diagMsg.includes('timeout') || diagCode === 'ETIMEOUT') {
-            friendlyMessage = 'SMTP connection timed out. The server could not establish a connection within the timeout limit. Please verify port and firewall configs.';
-          } else if (detail.includes('recipient') || errText.includes('recipient') || diagMsg.includes('rcpt') || detail.includes('rcpt')) {
-            friendlyMessage = 'Recipient was rejected. The recipient email address might be invalid or blocked by the server.';
-          } else if (detail.includes('sender') || errText.includes('sender') || detail.includes('from') || errText.includes('from') || diagMsg.includes('sender') || diagMsg.includes('from') || diagCode === 'EENVELOPE') {
-            friendlyMessage = 'From email/sender was rejected. The SMTP relay server rejected the sender from address. Verify that your sender email matches authorized SMTP profiles.';
-          } else {
-            friendlyMessage = `${parsedJson.error || 'Server error occurred.'} ${parsedJson.details ? '- ' + parsedJson.details : ''}`;
-          }
-        } else {
-          friendlyMessage = `HTTP ${response.status} - failed to send. response context: ${responseText ? responseText.substring(0, 150) : 'Empty text reply.'}`;
-        }
-        setSendErrorMessage(friendlyMessage);
+        const errorDetail = parsedJson?.error || responseText || 'Unknown server fail.';
+        setSendErrorMessage(`API Error: ${errorDetail}`);
       }
     } catch (err: any) {
       setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');
@@ -1345,7 +1307,6 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setBaseFencePrice(v);
-                          if (onUpdateEstimate) onUpdateEstimate({ baseFencePrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1365,7 +1326,6 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setAddOnTotal(v);
-                          if (onUpdateEstimate) onUpdateEstimate({ addOnTotal: v, addOnSitePrepPrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1385,7 +1345,6 @@ export default function CustomerContract({
                         onChange={(e) => {
                           const v = e.target.value === '' ? null : parseFloat(e.target.value);
                           setDemoRemovalPrice(v);
-                          if (onUpdateEstimate) onUpdateEstimate({ demoRemovalPrice: v });
                         }}
                         className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                       />
@@ -1401,11 +1360,7 @@ export default function CustomerContract({
                     <textarea
                       rows={2}
                       value={demoRemovalDescription}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setDemoRemovalDescription(val);
-                        if (onUpdateEstimate) onUpdateEstimate({ demoRemovalDescription: val });
-                      }}
+                      onChange={(e) => setDemoRemovalDescription(e.target.value)}
                       className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 focus:border-american-blue outline-none transition-all"
                     />
                   </div>
@@ -1423,37 +1378,18 @@ export default function CustomerContract({
                           onChange={(e) => {
                             const newType = e.target.value as any;
                             setDiscountType(newType);
-                            let amt = discountAmount;
-                            let label = discountLabel;
-                            let reason = discountReason;
-                            let gateId = selectedGateId;
-
                             if (newType === 'none') {
-                              amt = 0;
-                              label = '';
-                              reason = '';
-                              gateId = '';
+                              setDiscountAmount(0);
+                              setDiscountLabel('');
+                              setDiscountReason('');
+                              setSelectedGateId('');
                             } else if (newType === 'free_gate') {
-                              label = 'Discount - Free Walk Gate';
-                              reason = '';
-                              gateId = '';
-                              amt = 0;
+                              setDiscountLabel('Discount - Free Walk Gate');
+                              setDiscountReason('');
+                              setSelectedGateId('');
                             } else if (newType === 'fixed_amount' || newType === 'custom') {
-                              label = 'Contract discount';
-                              reason = '';
-                            }
-                            setDiscountAmount(amt);
-                            setDiscountLabel(label);
-                            setDiscountReason(reason);
-                            setSelectedGateId(gateId);
-
-                            if (onUpdateEstimate) {
-                              onUpdateEstimate({
-                                discountType: newType,
-                                discountAmount: amt,
-                                discountLabel: label,
-                                discountReason: reason
-                              });
+                              setDiscountLabel('Contract discount');
+                              setDiscountReason('');
                             }
                           }}
                           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
@@ -1476,27 +1412,16 @@ export default function CustomerContract({
                             onChange={(e) => {
                               const sId = e.target.value;
                               const selectedGate = allGatesList.find(g => g.gateId === sId);
-                              let amt = 0;
-                              let label = 'Discount - Free Walk Gate';
-                              let reason = '';
                               if (selectedGate) {
                                 setSelectedGateId(sId);
-                                amt = selectedGate.price;
-                                label = `Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`;
-                                reason = sId;
+                                setDiscountAmount(selectedGate.price);
+                                setDiscountLabel(`Discount - Free Walk Gate (${selectedGate.width}' ${selectedGate.type})`);
+                                setDiscountReason(sId);
                               } else {
                                 setSelectedGateId('');
-                              }
-                              setDiscountAmount(amt);
-                              setDiscountLabel(label);
-                              setDiscountReason(reason);
-
-                              if (onUpdateEstimate) {
-                                onUpdateEstimate({
-                                  discountAmount: amt,
-                                  discountLabel: label,
-                                  discountReason: reason
-                                });
+                                setDiscountAmount(0);
+                                setDiscountLabel('Discount - Free Walk Gate');
+                                setDiscountReason('');
                               }
                             }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
@@ -1520,11 +1445,7 @@ export default function CustomerContract({
                           <input
                             type="text"
                             value={discountLabel}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setDiscountLabel(val);
-                              if (onUpdateEstimate) onUpdateEstimate({ discountLabel: val });
-                            }}
+                            onChange={(e) => setDiscountLabel(e.target.value)}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
                         </div>
@@ -1545,7 +1466,6 @@ export default function CustomerContract({
                             onChange={(e) => {
                               const amt = e.target.value === '' ? 0 : parseFloat(e.target.value);
                               setDiscountAmount(amt);
-                              if (onUpdateEstimate) onUpdateEstimate({ discountAmount: amt });
                             }}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
@@ -1561,11 +1481,7 @@ export default function CustomerContract({
                             type="text"
                             placeholder="e.g. Autumn Special, Military Discount, Bundle deal"
                             value={discountReason}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setDiscountReason(val);
-                              if (onUpdateEstimate) onUpdateEstimate({ discountReason: val });
-                            }}
+                            onChange={(e) => setDiscountReason(e.target.value)}
                             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 focus:border-american-blue outline-none transition-all"
                           />
                         </div>
@@ -1827,7 +1743,7 @@ export default function CustomerContract({
                   </div>
                   <div className="text-left">
                     <h3 className="text-sm font-black uppercase tracking-wider">Send Contract Estimate</h3>
-                    <p className="text-[10px] text-yellow-300 font-bold uppercase tracking-widest mt-0.5">LONE STAR DISPATCH CENTER - NO ATTACHMENTS BUILD</p>
+                    <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">Lone Star Dispatch Center</p>
                   </div>
                 </div>
                 <button
@@ -1848,31 +1764,12 @@ export default function CustomerContract({
                 )}
 
                 {sendErrorMessage && (
-                  <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex flex-col gap-2">
-                    <div className="flex items-start gap-2">
-                      <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
-                      <div className="flex-1 space-y-1 text-left">
-                        <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
-                        <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-[#c2410c] font-mono text-[11px] select-all">{sendErrorMessage}</p>
-                      </div>
+                  <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex items-start gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
+                    <div className="flex-1 space-y-1 text-left">
+                      <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
+                      <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-[#c2410c] font-mono text-[11px] select-all">{sendErrorMessage}</p>
                     </div>
-
-                    {smtpDiagnostics && (
-                      <div className="border-t border-slate-200 pt-2.5 mt-1 text-[10px] font-mono text-slate-700 space-y-2">
-                        <span className="font-bold uppercase text-[9px] tracking-wider text-slate-500 block">Connection Diagnostic Metadata (No Passwords)</span>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 bg-white border border-slate-150 p-2 rounded-lg text-[10px]">
-                          <div><span className="text-slate-400">Host:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.smtpHost}</span></div>
-                          <div><span className="text-slate-400">Port:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.smtpPort}</span></div>
-                          <div><span className="text-slate-400">Secure:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.secure ? 'SSL/TLS' : 'STARTTLS'}</span></div>
-                          <div><span className="text-slate-400">From:</span> <span className="font-semibold text-slate-800 break-all">{smtpDiagnostics.fromEmail}</span></div>
-                        </div>
-                        <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[9px] leading-tight max-h-24 overflow-y-auto selection:bg-slate-755 font-mono text-left">
-                          <span className="text-slate-400">ErrCode:</span> {smtpDiagnostics.code || 'N/A'}<br/>
-                          <span className="text-slate-400">RespCode:</span> {smtpDiagnostics.responseCode || 'N/A'}<br/>
-                          <span className="text-slate-400">Trace:</span> {smtpDiagnostics.response || smtpDiagnostics.message || 'No reply logs received.'}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1932,11 +1829,58 @@ export default function CustomerContract({
                   />
                 </div>
 
-                {/* Attach Files Section - Temporarily Disabled */}
-                <div className="hidden space-y-2">
+                {/* Attach Files Section */}
+                <div className="space-y-2">
                   <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
-                    Attach Files (Disabled)
+                    Attach Files (Optional)
                   </label>
+                  
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center justify-center gap-2 w-full p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-slate-100 cursor-pointer transition-all">
+                      <Paperclip size={14} className="text-slate-600" />
+                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Choose Files to Attach</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                        onChange={handleAttachmentChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-[9px] text-slate-400 font-medium">
+                      Supported: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Max 10MB per file, 20MB total)
+                    </span>
+                  </div>
+
+                  {attachmentError && (
+                    <div className="p-2 border border-red-200 bg-red-50 text-red-700 text-[10px] uppercase tracking-wider font-bold rounded-lg leading-relaxed">
+                      ⚠️ {attachmentError}
+                    </div>
+                  )}
+
+                  {attachedFiles.length > 0 && (
+                    <div className="max-h-28 overflow-y-auto border border-slate-100 rounded-xl p-2 bg-slate-50 space-y-1.5 scrollbar-thin">
+                      {attachedFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px] font-medium text-slate-700 bg-white border border-slate-150 rounded-lg px-2.5 py-1.5 shadow-sm">
+                          <span className="truncate max-w-[200px]" title={file.filename}>
+                            📎 {file.filename}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[9px] font-mono text-slate-400 font-medium">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(file.filename)}
+                              className="text-red-500 hover:text-red-700 font-bold transition-all text-xs px-1 hover:bg-red-50 rounded"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                      </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 flex gap-3 border-t border-slate-100">

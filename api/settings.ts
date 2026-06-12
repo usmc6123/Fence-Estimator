@@ -230,114 +230,64 @@ export default async function handler(req: any, res: any) {
           recipientEmail
         } = req.body;
 
+        if (!smtpHost || !smtpPort || !smtpUsername) {
+          return res.status(400).json({ error: 'SMTP host, SMTP port, and SMTP username are required.' });
+        }
+
         if (!recipientEmail) {
           return res.status(400).json({ error: 'Recipient Email address is required to dispatch the test message.' });
         }
 
-        // 1. Resolve candidate settings with exact fallback pattern
-        let resolvedSmtpHost = smtpHost || process.env.SMTP_HOST || '';
-        let resolvedSmtpPort = Number(smtpPort) || Number(process.env.SMTP_PORT) || 465;
-        let resolvedSmtpUser = smtpUsername || process.env.SMTP_USER || '';
-        let resolvedSmtpPass = (smtpPassword !== '••••••••' && smtpPassword) ? smtpPassword : (process.env.SMTP_PASS || '');
-        let resolvedFromName = fromName || 'Lone Star Fence Works';
-        let resolvedFromEmail = fromEmail || process.env.FROM_EMAIL || resolvedSmtpUser || '';
-
-        // If fromEmail is still blank, try companySettings fallback
-        let dbSettings: any = null;
-        try {
+        // Resolve final password if masked is submitted
+        let finalPassword = smtpPassword;
+        if (smtpPassword === '••••••••' || !smtpPassword) {
           const settingsDocSnap = await db.collection('companySettings').doc(uid).get();
-          if (settingsDocSnap.exists) {
-            dbSettings = settingsDocSnap.data() || {};
+          if (settingsDocSnap.exists && settingsDocSnap.data()?.smtpPassword) {
+            finalPassword = settingsDocSnap.data()?.smtpPassword;
+          } else {
+            return res.status(400).json({ error: 'SMTP Password is required for test email dispatch.' });
           }
-        } catch (dbErr) {
-          console.warn('[SMTP DIAGNOSTIC] Failed to read companySettings from firestore:', dbErr);
         }
 
-        if (dbSettings) {
-          if (!resolvedSmtpHost && dbSettings.smtpHost) resolvedSmtpHost = dbSettings.smtpHost;
-          if (!smtpPort && dbSettings.smtpPort) resolvedSmtpPort = Number(dbSettings.smtpPort);
-          if (!resolvedSmtpUser && dbSettings.smtpUsername) resolvedSmtpUser = dbSettings.smtpUsername;
-          if ((smtpPassword === '••••••••' || !smtpPassword) && dbSettings.smtpPassword) {
-            resolvedSmtpPass = dbSettings.smtpPassword;
-          }
-          if (!fromName && dbSettings.fromName) resolvedFromName = dbSettings.fromName;
-          if (!fromEmail && dbSettings.fromEmail) resolvedFromEmail = dbSettings.fromEmail;
-        }
-
-        if (!resolvedSmtpHost) {
-          return res.status(400).json({ error: 'SMTP Host cannot be resolved. Please enter a host name.' });
-        }
-        if (!resolvedSmtpUser) {
-          return res.status(400).json({ error: 'SMTP Username is required.' });
-        }
-
-        // Direct SSL/TLS check (secure: true) ONLY for port 465
-        const isSecure = resolvedSmtpPort === 465;
+        // Direct SSL/TLS check (secure: true) for port 465
+        const isPort465 = Number(smtpPort) === 465 || smtpSecureType === 'SSL/TLS';
 
         const transportConfig: any = {
-          host: resolvedSmtpHost,
-          port: resolvedSmtpPort,
-          secure: isSecure,
+          host: smtpHost,
+          port: Number(smtpPort),
+          secure: isPort465,
           auth: {
-            user: resolvedSmtpUser,
-            pass: resolvedSmtpPass
+            user: smtpUsername,
+            pass: finalPassword
           },
-          connectionTimeout: 6000,
-          greetingTimeout: 6000,
-          socketTimeout: 6000,
-          tls: {
-            rejectUnauthorized: false
-          }
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 10000
         };
+
+        if (isPort465) {
+          transportConfig.tls = {
+            rejectUnauthorized: false
+          };
+        }
 
         const transporter = nodemailer.createTransport(transportConfig);
 
-        // Call transporter.verify()
-        let isConfigVerified = false;
-        let verifyErrorCode = '';
-        let verifyErrorMessage = '';
-        let verifySmtpResponse = '';
-
         try {
-          await transporter.verify();
-          isConfigVerified = true;
-          console.log(`[SMTP DIAGNOSTIC SUCCESS] SMTP connection verify succeeded for ${resolvedSmtpHost}:${resolvedSmtpPort}`);
-        } catch (verifyErr: any) {
-          console.warn(`[SMTP DIAGNOSTIC FAILURE] SMTP connection verify failed:`, verifyErr);
-          verifyErrorCode = verifyErr.code || 'VERIFICATION_FAILED';
-          verifyErrorMessage = verifyErr.message || String(verifyErr);
-          verifySmtpResponse = verifyErr.response || '';
-        }
-
-        if (!isConfigVerified) {
-          return res.status(200).json({
-            success: false,
-            smtpHost: resolvedSmtpHost,
-            smtpPort: resolvedSmtpPort,
-            secure: isSecure,
-            fromEmail: resolvedFromEmail,
-            errorCode: verifyErrorCode,
-            errorMessage: verifyErrorMessage,
-            smtpResponse: verifySmtpResponse,
-            details: `SMTP Authentication or Handshake failed on verify() call. [Code: ${verifyErrorCode}]`
-          });
-        }
-
-        try {
-          const info = await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          await transporter.sendMail({
+            from: `"${fromName || 'Lone Star Test'}" <${fromEmail || smtpUsername}>`,
             to: recipientEmail,
             subject: `[SYSTEM TEST] Secure SMTP Connection Verified!`,
-            text: `Hello!\n\nThis is a secure system authentication check sent from your Lone Star Fence SaaS Admin Console Settings.\n\nYour current connection profile and credentials have been verified successfully on port ${resolvedSmtpPort}.\n\nTime of verification: ${new Date().toLocaleString()}\nHost: ${resolvedSmtpHost}\nUsername: ${resolvedSmtpUser}\n\nHave a great day!\nSystem Engineering Department`,
+            text: `Hello!\n\nThis is a secure system authentication check sent from your Lone Star Fence SaaS Admin Console Settings.\n\nYour current connection profile and credentials have been verified successfully on port ${smtpPort}.\n\nTime of verification: ${new Date().toLocaleString()}\nHost: ${smtpHost}\nUsername: ${smtpUsername}\n\nHave a great day!\nSystem Engineering Department`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
                 <h2 style="color: #10b981; margin-top: 0;">✓ Connection Verified Successfully!</h2>
                 <p>Hello,</p>
                 <p>This is an automated connection check message dispatched from your Lone Star Fence SaaS Admin Console Settings.</p>
                 <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
-                  <strong>Host:</strong> ${resolvedSmtpHost}<br/>
-                  <strong>Port:</strong> ${resolvedSmtpPort}<br/>
-                  <strong>Username:</strong> ${resolvedSmtpUser}<br/>
+                  <strong>Host:</strong> ${smtpHost}<br/>
+                  <strong>Port:</strong> ${smtpPort}<br/>
+                  <strong>Username:</strong> ${smtpUsername}<br/>
                   <strong>Verified At:</strong> ${new Date().toLocaleString()}
                 </div>
                 <p>Your custom SMTP authentication credentials and server pathways are clear and fully operational!</p>
@@ -348,38 +298,19 @@ export default async function handler(req: any, res: any) {
             `
           });
 
-          return res.status(200).json({
-            success: true,
-            smtpHost: resolvedSmtpHost,
-            smtpPort: resolvedSmtpPort,
-            secure: isSecure,
-            fromEmail: resolvedFromEmail,
-            smtpResponse: info.response || 'Message accepted by SMTP relay'
-          });
+          return res.status(200).json({ success: true, message: 'Test email transmitted successfully!' });
         } catch (err: any) {
           const errorMessage = err.message || String(err);
-          console.warn('[SMTP TEST EMAIL FAILURE ON SEND]:', err);
-          
+          console.warn('[SMTP TEST EMAIL FAILURE]:', err);
           let clientMsg = '';
           if (err.code === 'EAUTH' || errorMessage.toLowerCase().includes('auth')) {
             clientMsg = 'SMTP Connection was established, but authentication was rejected. Please verify your SMTP Username and Password.';
           } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEOUT' || err.code === 'ENOTFOUND') {
-            clientMsg = `Could not connect to the SMTP mail server at ${resolvedSmtpHost}:${resolvedSmtpPort}. Verify the host name, port, and security type configuration.`;
+            clientMsg = `Could not connect to the SMTP mail server at ${smtpHost}:${smtpPort}. Verify the host name, port, and security type configuration.`;
           } else {
             clientMsg = `SMTP Send Failed: ${errorMessage}`;
           }
-
-          return res.status(200).json({
-            success: false,
-            smtpHost: resolvedSmtpHost,
-            smtpPort: resolvedSmtpPort,
-            secure: isSecure,
-            fromEmail: resolvedFromEmail,
-            errorCode: err.code || 'SEND_FAILED',
-            errorMessage: clientMsg,
-            smtpResponse: err.response || '',
-            details: err.message || String(err)
-          });
+          return res.status(500).json({ success: false, error: clientMsg });
         }
       } else {
         return res.status(400).json({ error: 'Invalid run action inside settings handler.' });

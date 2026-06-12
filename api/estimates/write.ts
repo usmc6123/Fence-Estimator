@@ -240,7 +240,7 @@ export default async function handler(req: any, res: any) {
             decision,
             customerName: data.customerName || '',
             customerEmail: data.customerEmail || customerEmail || '',
-            totalCost: data.finalCustomerPrice || data.totalCost || data.manualGrandTotal || 0,
+            totalCost: data.totalCost || data.manualGrandTotal || 0,
             signature: signature || '',
             declineReason: declineReason || '',
             timestamp: now
@@ -270,7 +270,7 @@ export default async function handler(req: any, res: any) {
         address: data.customerAddress || data.address || '',
         fenceType: data.fenceType || (data.materials?.[0]?.fenceStyle) || 'Wood Fence',
         linearFeet: Number(data.linearFeet || (data.materials?.[0]?.linearFeet) || data.manualLinearFeet || 0),
-        estimatedPrice: Number(data.finalCustomerPrice || data.totalCost || data.manualGrandTotal || 0),
+        estimatedPrice: Number(data.totalCost || data.manualGrandTotal || 0),
         estimateNumber: data.estimateNumber || '',
         customerSignature: signature || 'Digitally Signed',
         customerSignedDate: now,
@@ -510,9 +510,6 @@ export default async function handler(req: any, res: any) {
           total: resolvedPrice,
           totalCost: resolvedPrice,
           manualGrandTotal: resolvedPrice,
-          baseFencePrice: resolvedPrice,
-          finalCustomerPrice: resolvedPrice,
-          subtotalBeforeDiscount: resolvedPrice,
           isCustomerEstimate: true,
           leadSource: 'Instant Estimator',
           jobStatus: 'Interested',
@@ -721,9 +718,9 @@ https://www.lonestarfenceworks.com`;
               user: resolvedSmtpUser,
               pass: resolvedSmtpPass
             },
-            connectionTimeout: 6000,
-            greetingTimeout: 6000,
-            socketTimeout: 6000,
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 15000,
             tls: {
               rejectUnauthorized: false
             }
@@ -799,421 +796,382 @@ https://www.lonestarfenceworks.com`;
         return res.status(200).json(eventData);
       }
       if (req.body && req.body.action === 'send') {
-        try {
-          const estimateId = req.body.estimateId || req.query.estimateId;
-          const { customerEmail, senderEmail, subject, message, attachments } = req.body;
+        const estimateId = req.body.estimateId || req.query.estimateId;
+        const { customerEmail, senderEmail, subject, message, attachments } = req.body;
 
-          if (!estimateId) {
-            return res.status(400).json({
-              success: false,
-              error: 'Email send failed',
-              details: 'Estimate ID is required.'
-            });
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Estimate ID is required.' });
+        }
+
+        if (!customerEmail) {
+          return res.status(400).json({ error: 'Customer email is required.' });
+        }
+
+        // Helper to sanitize filenames
+        const sanitizeFilename = (name: string): string => {
+          return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        };
+
+        // Validate attachments if present
+        if (attachments && attachments.length > 0) {
+          if (!hasValidAdminToken) {
+            return res.status(403).json({ error: 'Unauthorized: Only authenticated admin/employee users can send attachments.' });
           }
 
-          if (!customerEmail) {
-            return res.status(400).json({
-              success: false,
-              error: 'Email send failed',
-              details: 'Customer email is required.'
-            });
+          const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
+          const allowedMimes = [
+            'application/pdf',
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          ];
+
+          let totalSize = 0;
+          for (const att of attachments) {
+            if (!att.filename || !att.mimeType || !att.base64Data) {
+              return res.status(400).json({ error: 'Invalid attachment structure. Required fields: filename, mimeType, base64Data.' });
+            }
+
+            const ext = att.filename.split('.').pop()?.toLowerCase();
+            if (!ext || !allowedExtensions.includes(ext)) {
+              return res.status(400).json({ error: `File type "${att.filename}" is not supported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX files are allowed.` });
+            }
+
+            if (!allowedMimes.includes(att.mimeType)) {
+              return res.status(400).json({ error: `Unsupported MIME type "${att.mimeType}" for file "${att.filename}".` });
+            }
+
+            let base64Chunk = att.base64Data;
+            if (base64Chunk.includes(';base64,')) {
+              base64Chunk = base64Chunk.split(';base64,')[1];
+            }
+            const buffer = Buffer.from(base64Chunk, 'base64');
+
+            if (buffer.length > 10 * 1024 * 1024) {
+              return res.status(400).json({ error: `File "${att.filename}" exceeds the 10MB individual limit.` });
+            }
+            totalSize += buffer.length;
           }
 
-          // Helper to sanitize filenames
-          const sanitizeFilename = (name: string): string => {
-            return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-          };
+          if (totalSize > 20 * 1024 * 1024) {
+            return res.status(400).json({ error: 'Total attachment size exceeds the 20MB limit.' });
+          }
+        }
 
-          // Temporarily disabled attachments processing to restore original working send behavior
-          const safeAttachments: any[] = [];
+        // 1. Fetch estimate from firestore using Admin SDK
+        const estimateRef = db.collection('estimates').doc(String(estimateId));
+        let snap = await estimateRef.get();
+        let targetRef = estimateRef;
 
-          // 1. Fetch estimate from firestore using Admin SDK
-          const estimateRef = db.collection('estimates').doc(String(estimateId));
-          let snap = await estimateRef.get();
-          let targetRef = estimateRef;
+        if (!snap.exists) {
+          // Seek nested user folder path
+          const usersSnap = await db.collection('users').get();
+          for (const uDoc of usersSnap.docs) {
+            const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+            const nestedSnap = await nestedRef.get();
+            if (nestedSnap.exists) {
+              targetRef = nestedRef;
+              snap = nestedSnap;
+              break;
+            }
+          }
+        }
 
-          if (!snap.exists) {
-            // Seek nested user folder path
-            const usersSnap = await db.collection('users').get();
-            for (const uDoc of usersSnap.docs) {
-              const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
-              const nestedSnap = await nestedRef.get();
-              if (nestedSnap.exists) {
-                targetRef = nestedRef;
-                snap = nestedSnap;
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found in database.' });
+        }
+
+        const estimateData = snap.data() || {};
+        const customerName = estimateData.customerName || 'Valued Customer';
+
+        // 2. Setup access link based on hosting context
+        const host = req.headers.host || 'localhost:3000';
+        const protocol = req.headers['x-forwarded-proto'] === 'https' || req.secure ? 'https' : 'http';
+        const estimateLink = `${protocol}://${host}/?portal=contract&estimateId=${estimateId}`;
+
+        // Resolve user's Saved SMTP and Company settings
+        let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
+        let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
+        let resolvedSmtpSecureType = 'SSL/TLS';
+        let resolvedSmtpUser = process.env.SMTP_USER;
+        let resolvedSmtpPass = process.env.SMTP_PASS;
+        let resolvedFromName = 'Lone Star Fence Works';
+        let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
+        let resolvedReplyToEmail = resolvedFromEmail;
+        let resolvedCompanyLogo = '';
+        let resolvedCompanyPhone = '';
+        let resolvedCompanyWebsite = '';
+        
+        // Default estimate templates:
+        let mailSubject = subject || `Fence Installation Contract Agreement - Lone Star Fence Works`;
+        let mailMessage = message || `Hello {customerName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the link below:\n\n{estimateLink}\n\nThank you for choosing {companyName}!\n\nBest regards,\n{companyName} Estimations Department`;
+
+        // Try finding settings matching owner ID or dynamic candidate sequence:
+        const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+        const candidateUids = [];
+        if (decoded && decoded.uid) candidateUids.push(decoded.uid);
+        if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
+        candidateUids.push('main');
+
+        let settingsData: any = null;
+        for (const uidToTry of candidateUids) {
+          try {
+            const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
+            if (settingsSnap.exists) {
+              const possibleSettings = settingsSnap.data() || {};
+              // Verify they actually configured custom SMTP credentials here
+              if (possibleSettings.smtpHost && possibleSettings.smtpUsername) {
+                settingsData = possibleSettings;
+                console.log(`[SMTP TENANT LOG] Loaded active SMTP settings from candidate '${uidToTry}'`);
                 break;
               }
             }
+          } catch (err) {
+            console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in email send handler:`, err);
           }
+        }
 
-          if (!snap.exists) {
-            return res.status(404).json({
-              success: false,
-              error: 'Email send failed',
-              details: 'Estimate not found in database.'
-            });
+        if (settingsData) {
+          if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
+          if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
+          if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
+          if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
+          if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
+          if (settingsData.fromName) resolvedFromName = settingsData.fromName;
+          if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
+          resolvedReplyToEmail = settingsData.replyToEmail || resolvedFromEmail;
+          resolvedCompanyLogo = settingsData.companyLogo || '';
+          resolvedCompanyPhone = settingsData.companyPhone || '';
+          resolvedCompanyWebsite = settingsData.companyWebsite || '';
+
+          // Set customized templates if not overridden by dynamic subject/message
+          if (!subject && settingsData.estimateEmailSubject) {
+            mailSubject = settingsData.estimateEmailSubject;
           }
-
-          const estimateData = snap.data() || {};
-          const customerName = estimateData.customerName || 'Valued Customer';
-
-          // 2. Setup access link based on hosting context (always formatted properly per guidelines)
-          const resolvedEstimateId = estimateId || snap.id || targetRef.id;
-          const estimateLink = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${resolvedEstimateId}`;
-
-          const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
-          const candidateUids = [];
-          if (decoded && decoded.uid) candidateUids.push(decoded.uid);
-          if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
-          candidateUids.push('main');
-
-          let settingsData: any = null;
-          for (const uidToTry of candidateUids) {
-            try {
-              const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
-              if (settingsSnap.exists) {
-                const possibleSettings = settingsSnap.data() || {};
-                // Verify they actually configured custom SMTP credentials here
-                if (possibleSettings.smtpHost && possibleSettings.smtpUsername) {
-                  settingsData = possibleSettings;
-                  console.log(`[SMTP TENANT LOG] Loaded active SMTP settings from candidate '${uidToTry}'`);
-                  break;
-                }
-              }
-            } catch (err) {
-              console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in email send handler:`, err);
-            }
+          if (!message && settingsData.estimateEmailBody) {
+            mailMessage = settingsData.estimateEmailBody;
           }
+        }
 
-          // Resolve user's Saved SMTP and Company settings
-          let resolvedSmtpHost = process.env.SMTP_HOST || '';
-          let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
-          let resolvedSmtpSecureType = 'SSL/TLS';
-          let resolvedSmtpUser = process.env.SMTP_USER || '';
-          let resolvedSmtpPass = process.env.SMTP_PASS || '';
-          let resolvedFromName = 'Lone Star Fence Works';
-          let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || '';
-          let resolvedReplyToEmail = resolvedFromEmail;
-          let resolvedCompanyLogo = '';
-          let resolvedCompanyPhone = '';
-          let resolvedCompanyWebsite = '';
+        // Replace placeholding variables inside templates
+        const replacePlaceholders = (text: string) => {
+          if (!text) return '';
+          return text
+            .replace(/{customerName}/g, customerName)
+            .replace(/{customerEmail}/g, customerEmail)
+            .replace(/{estimateNumber}/g, estimateData.estimateNumber || estimateId)
+            .replace(/{estimateLink}/g, estimateLink)
+            .replace(/{companyName}/g, resolvedFromName)
+            .replace(/{companyPhone}/g, resolvedCompanyPhone || '')
+            .replace(/{companyWebsite}/g, resolvedCompanyWebsite || '');
+        };
 
-          if (settingsData) {
-            if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
-            if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
-            if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
-            if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
-            if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
-            if (settingsData.fromName) resolvedFromName = settingsData.fromName;
-            if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
-            resolvedReplyToEmail = settingsData.replyToEmail || resolvedFromEmail;
-            resolvedCompanyLogo = settingsData.companyLogo || '';
-            resolvedCompanyPhone = settingsData.companyPhone || '';
-            resolvedCompanyWebsite = settingsData.companyWebsite || '';
-          }
+        mailSubject = replacePlaceholders(mailSubject);
+        mailMessage = replacePlaceholders(mailMessage);
 
-          // Ensure fallbacks are properly resolved before checking completeness
-          if (!resolvedFromEmail && resolvedSmtpUser) {
-            resolvedFromEmail = resolvedSmtpUser;
-          }
-          if (!resolvedReplyToEmail) {
-            resolvedReplyToEmail = resolvedFromEmail;
-          }
+        console.log(`[SMTP SERVERLESS COMPLIANCE CHECK - MULTI-TENANT]`);
+        console.log(`- SMTP_HOST is present: ${!!resolvedSmtpHost} (${resolvedSmtpHost})`);
+        console.log(`- SMTP_PORT is present: ${!!resolvedSmtpPort} (${resolvedSmtpPort})`);
+        console.log(`- SMTP_USER is present: ${!!resolvedSmtpUser} (${resolvedSmtpUser || 'Not Configured'})`);
+        console.log(`- FROM_EMAIL is present: ${!!resolvedFromEmail} (${resolvedFromEmail || 'Not Configured'})`);
+        console.log(`- SMTP_PASS is present: ${!!resolvedSmtpPass}`);
+        console.log(`- Resolved sending from address: '${resolvedFromEmail}'`);
 
-          // Verify SMTP settings exist as required
-          if (!resolvedSmtpHost || !resolvedSmtpPort || !resolvedSmtpUser || !resolvedSmtpPass || !resolvedFromEmail) {
-            return res.status(400).json({
-              success: false,
-              error: 'Email send failed',
-              details: `SMTP settings are incomplete. [Host: ${!!resolvedSmtpHost}, Port: ${!!resolvedSmtpPort}, User: ${!!resolvedSmtpUser}, Pass: ${!!resolvedSmtpPass}, From: ${!!resolvedFromEmail}] Please check companySettings.`
-            });
-          }
+        const missingVars: string[] = [];
+        if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
+        if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
+        if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
 
-          // Safe backwards compatibility defaults
-          let finalCustomerPrice = estimateData.finalCustomerPrice;
-          if (finalCustomerPrice === undefined || finalCustomerPrice === null) {
-            finalCustomerPrice = estimateData.manualGrandTotal;
-          }
-          if (finalCustomerPrice === undefined || finalCustomerPrice === null) {
-            finalCustomerPrice = estimateData.estimatedPrice;
-          }
-          if (finalCustomerPrice === undefined || finalCustomerPrice === null) {
-            finalCustomerPrice = estimateData.grandTotal;
-          }
-          finalCustomerPrice = finalCustomerPrice !== undefined && finalCustomerPrice !== null ? Number(finalCustomerPrice) : 0;
-
-          const manualGrandTotal = estimateData.manualGrandTotal !== undefined && estimateData.manualGrandTotal !== null ? Number(estimateData.manualGrandTotal) : finalCustomerPrice;
-
-          const linearFeet = Number(estimateData.linearFeet || 0);
-          let pricePerFoot = estimateData.pricePerFoot;
-          if (pricePerFoot === undefined || pricePerFoot === null) {
-            pricePerFoot = linearFeet > 0 ? (finalCustomerPrice / linearFeet) : 0;
-          }
-          pricePerFoot = Number(pricePerFoot);
-
-          const discountAmount = Number(estimateData.discountAmount ?? 0);
-          const demoRemovalPrice = Number(estimateData.demoRemovalPrice ?? 0);
-          const addOnSitePrepPrice = Number(estimateData.addOnSitePrepPrice ?? 0);
-          const customerEmailLog = Array.isArray(estimateData.customerEmailLog) ? estimateData.customerEmailLog : [];
-          const repSigName = estimateData.representativeSignatureName || "Braden Scott Smith";
-          const repCompName = estimateData.representativeCompanyName || "Lone Star Fence Works";
-
-          // Default estimate templates:
-          let mailSubject = subject || `Fence Installation Contract Agreement - Lone Star Fence Works`;
-          let mailMessage = message || `Hello {customerName},\n\nWe have generated your custom fencing contract agreement estimate. Please review and sign the agreement directly on your device using the link below:\n\n{estimateLink}\n\nThank you for choosing {companyName}!\n\nBest regards,\n{companyName} Estimations Department`;
-
-          // Replace customized templates if from settings
-          if (settingsData) {
-            if (!subject && settingsData.estimateEmailSubject) {
-              mailSubject = settingsData.estimateEmailSubject;
-            }
-            if (!message && settingsData.estimateEmailBody) {
-              mailMessage = settingsData.estimateEmailBody;
-            }
-          }
-
-          // Replace placeholding variables inside templates
-          const replacePlaceholders = (text: string) => {
-            if (!text) return '';
-            return text
-              .replace(/{customerName}/g, customerName)
-              .replace(/{customerEmail}/g, customerEmail)
-              .replace(/{estimateNumber}/g, estimateData.estimateNumber || estimateId)
-              .replace(/{estimateLink}/g, estimateLink)
-              .replace(/{companyName}/g, resolvedFromName)
-              .replace(/{companyPhone}/g, resolvedCompanyPhone || '')
-              .replace(/{companyWebsite}/g, resolvedCompanyWebsite || '');
-          };
-
-          mailSubject = replacePlaceholders(mailSubject);
-          mailMessage = replacePlaceholders(mailMessage);
-
-          console.log(`[SMTP SERVERLESS COMPLIANCE CHECK - MULTI-TENANT]`);
-          console.log(`- SMTP_HOST is present: ${!!resolvedSmtpHost} (${resolvedSmtpHost})`);
-          console.log(`- SMTP_PORT is present: ${!!resolvedSmtpPort} (${resolvedSmtpPort})`);
-          console.log(`- SMTP_USER is present: ${!!resolvedSmtpUser} (${resolvedSmtpUser || 'Not Configured'})`);
-          console.log(`- FROM_EMAIL is present: ${!!resolvedFromEmail} (${resolvedFromEmail || 'Not Configured'})`);
-          console.log(`- SMTP_PASS is present: ${!!resolvedSmtpPass}`);
-          console.log(`- Resolved sending from address: '${resolvedFromEmail}'`);
-
-          const isPort465 = Number(resolvedSmtpPort) === 465;
-
-          const transporterConfig: any = {
-            host: resolvedSmtpHost,
-            port: resolvedSmtpPort,
-            secure: isPort465,
-            auth: {
-              user: resolvedSmtpUser,
-              pass: resolvedSmtpPass
-            },
-            connectionTimeout: 6000,
-            greetingTimeout: 6000,
-            socketTimeout: 6000,
-            tls: {
-              rejectUnauthorized: false
-            }
-          };
-
-          if (isPort465) {
-            console.log(`[SMTP SERVERLESS SECURITY] Direct SSL/TLS session configured on port ${resolvedSmtpPort} (secure: true).`);
-          } else {
-            console.log(`[SMTP SERVERLESS SECURITY] Standard STARTTLS session configured on port ${resolvedSmtpPort}.`);
-          }
-
-          let mailSent = false;
-          let mailError = null;
-          let errorType = 'UNKNOWN';
-          let diagnosticInfo: any = null;
-
-          try {
-            const transporter = nodemailer.createTransport(transporterConfig);
-            
-            // Call verify() first to confirm connection sanity
-            await transporter.verify();
-
-            await transporter.sendMail({
-              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-              to: customerEmail,
-              replyTo: resolvedReplyToEmail,
-              subject: mailSubject,
-              text: mailMessage,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                  <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-                    ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName} Logo" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />` : ''}
-                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
-                    <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
-                  </div>
-                  <div style="padding: 32px 24px; background-color: #ffffff;">
-                    <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Estimate Prepared for ${customerName}</h2>
-                    <div style="color: #4a5568; line-height: 1.6; font-size: 14px; white-space: pre-wrap; margin-bottom: 24px;">
-      ${mailMessage.replace(estimateLink, '')}
-                    </div>
-                    <div style="text-align: center; margin: 32px 0;">
-                      <a href="${estimateLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
-                        Review & Sign Contract Agreement
-                      </a>
-                    </div>
-                    <p style="color: #718096; font-size: 12px; line-height: 1.5;">
-                      If the button doesn't work, copy and paste the following URL into your browser's address bar:<br/>
-                      <a href="${estimateLink}" style="color: #3182ce;">${estimateLink}</a>
-                    </p>
-                    <p style="color: #4a5568; margin-top: 24px; font-size: 14px; border-top: 1px solid #edf2f7; padding-top: 16px;">
-                      Best regards,<br/>
-                      <strong>${resolvedFromName}</strong><br/>
-                      ${resolvedCompanyPhone ? `Phone: ${resolvedCompanyPhone}<br/>` : ''}
-                      ${resolvedCompanyWebsite ? `<a href="${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">${resolvedCompanyWebsite}</a>` : ''}
-                    </p>
-                  </div>
-                  <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
-                    <p style="color: #a0aec0; font-size: 11px; margin: 0;">
-                      ${resolvedFromName} &bull; Fencing Estimating Suite
-                    </p>
-                  </div>
-                </div>
-              `
-            });
-            mailSent = true;
-            console.log(`Email successfully routed in serverless handler to ${customerEmail}`);
-          } catch (err: any) {
-            const errorMessage = err.message || String(err);
-            const errCode = err.code || '';
-
-            console.error(`[SERVERLESS SMTP TRACE] Failure sending mail:`, err);
-
-            diagnosticInfo = {
-              smtpHost: resolvedSmtpHost,
-              smtpPort: resolvedSmtpPort,
-              secure: isPort465,
-              fromEmail: resolvedFromEmail,
-              code: err.code || '',
-              command: err.command || '',
-              response: err.response || '',
-              responseCode: err.responseCode || '',
-              message: errorMessage
-            };
-
-            if (errCode === 'EAUTH' || errorMessage.toLowerCase().includes('auth') || err.responseCode === 535) {
-              errorType = 'AUTHENTICATION_ERROR';
-              mailError = `SMTP Authentication rejected. Verify SMTP Username and Password. [${errorMessage}]`;
-            } else if (errCode === 'ECONNREFUSED' || errCode === 'ETIMEOUT' || errCode === 'ENOTFOUND' || errorMessage.toLowerCase().includes('connect')) {
-              errorType = 'CONNECTION_ERROR';
-              mailError = `Unable to connect to SMTP server at ${resolvedSmtpHost}:${resolvedSmtpPort}. [${errorMessage}]`;
-            } else if (errorMessage.toLowerCase().includes('tls') || errorMessage.toLowerCase().includes('ssl') || errCode === 'ESOCKET') {
-              errorType = 'TLS_SSL_ERROR';
-              mailError = `SSL/TLS protocol negotiation failure. Port 465 requires secure direct connection. [${errorMessage}]`;
-            } else {
-              errorType = 'SMTP_TRANSMISSION_ERROR';
-              mailError = `SMTP dispatch error: ${errorMessage}`;
-            }
-          }
-
-          // Record the status back in Firestore safely by merging
-          const now = new Date().toISOString();
-          const updates: any = {
-            finalCustomerPrice,
-            manualGrandTotal,
-            pricePerFoot,
-            discountAmount,
-            demoRemovalPrice,
-            addOnSitePrepPrice,
-            representativeSignatureName: repSigName,
-            representativeCompanyName: repCompName,
-            customerEmailSent: mailSent,
-            customerSentAt: mailSent ? now : (estimateData.customerSentAt || null),
-            customerEmailLog: [...customerEmailLog, {
-              sentAt: now,
-              customerEmail,
-              subject: mailSubject,
-              senderEmail: resolvedFromEmail,
-              mailSent,
-              mailError,
-              portalUrl: estimateLink,
-              attachmentFilenames: [],
-              attachmentCount: 0,
-              sendStatus: mailSent ? 'success' : 'failed'
-            }],
-            updatedAt: now
-          };
-
-          if (mailSent) {
-            updates.representativeSignedDate = now;
-            updates.customerEmailSentAt = now;
-            updates.jobStatus = 'Estimate Sent';
-
-            // Trigger manual_estimate_sent GHL webhook asynchronously
-            const manualPayload = {
-              customerName: estimateData.customerName || '',
-              firstName: estimateData.customerFirstName || '',
-              lastName: estimateData.customerLastName || '',
-              email: customerEmail || estimateData.customerEmail || '',
-              phone: estimateData.customerPhone || '',
-              address: estimateData.customerAddress || estimateData.customerStreet || '',
-              city: estimateData.customerCity || '',
-              state: estimateData.customerState || '',
-              zip: estimateData.customerZip || '',
-              fenceType: estimateData.fenceType || (estimateData.materials?.[0]?.fenceStyle) || 'Wood Fence',
-              linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
-              estimatedPrice: Number(finalCustomerPrice),
-              estimateNumber: estimateData.estimateNumber || '',
-              estimateLink: estimateLink,
-              sentAt: now
-            };
-            sendGhlWebhook('manual_estimate_sent', String(estimateId), manualPayload, db, ownerUid).catch(err => {
-              console.error('Triggering manual_estimate_sent webhook failed:', err);
-            });
-          }
-
-          await targetRef.set(updates, { merge: true });
-
-          if (!mailSent) {
-            return res.status(500).json({
-              success: false,
-              error: 'Estimate email failed',
-              details: mailError || 'Failed to send email via SMTP.',
-              errorType,
-              debugBuild: "no-attachments-send-v1",
-              diagnostic: diagnosticInfo || {
-                smtpHost: resolvedSmtpHost,
-                smtpPort: resolvedSmtpPort,
-                secure: isPort465,
-                fromEmail: resolvedFromEmail,
-                code: 'UNKNOWN',
-                command: 'UNKNOWN',
-                response: '',
-                responseCode: 'UNKNOWN',
-                message: mailError || 'Failed to dispatch email'
-              }
-            });
-          }
-
-          return res.status(200).json({
-            success: true,
-            mailSent,
-            portalUrl: estimateLink,
-            sentAt: now,
-            debugBuild: "no-attachments-send-v1"
-          });
-        } catch (error: any) {
-          console.error("Send estimate failed:", error);
+        if (missingVars.length > 0) {
           return res.status(500).json({
             success: false,
-            error: "Estimate email failed",
-            details: error.message || String(error),
-            debugBuild: "no-attachments-send-v1",
-            diagnostic: {
-              smtpHost: process.env.SMTP_HOST || 'Unconfigured',
-              smtpPort: Number(process.env.SMTP_PORT) || 465,
-              secure: Number(process.env.SMTP_PORT) === 465,
-              fromEmail: process.env.FROM_EMAIL || 'Unconfigured',
-              code: error.code || 'HANDLER_CRASH_ERROR',
-              command: error.command || 'CRASH_BEFORE_SEND',
-              response: error.response || '',
-              responseCode: error.responseCode || 'CRASH',
-              message: error.message || String(error)
-            }
+            error: `Missing SMTP environment or saved settings configurations: [${missingVars.join(', ')}]`,
+            errorType: 'MISSING_ENVIRONMENT_VARIABLE'
           });
         }
+
+        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+
+        const transporterConfig: any = {
+          host: resolvedSmtpHost,
+          port: resolvedSmtpPort,
+          secure: isPort465,
+          auth: {
+            user: resolvedSmtpUser,
+            pass: resolvedSmtpPass
+          },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        };
+
+        if (isPort465) {
+          console.log(`[SMTP SERVERLESS SECURITY] Direct SSL/TLS session configured on port ${resolvedSmtpPort} (secure: true).`);
+        } else {
+          console.log(`[SMTP SERVERLESS SECURITY] Standard STARTTLS session configured on port ${resolvedSmtpPort}.`);
+        }
+
+        let mailSent = false;
+        let mailError = null;
+        let errorType = 'UNKNOWN';
+
+        // Prepare email attachments for nodemailer
+        const emailAttachments = attachments && attachments.length > 0
+          ? attachments.map((att: any) => {
+              let base64Chunk = att.base64Data;
+              if (base64Chunk.includes(';base64,')) {
+                base64Chunk = base64Chunk.split(';base64,')[1];
+              }
+              return {
+                filename: sanitizeFilename(att.filename),
+                content: Buffer.from(base64Chunk, 'base64'),
+                contentType: att.mimeType
+              };
+            })
+          : [];
+
+        try {
+          const transporter = nodemailer.createTransport(transporterConfig);
+          await transporter.sendMail({
+            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+            to: customerEmail,
+            replyTo: resolvedReplyToEmail,
+            subject: mailSubject,
+            text: mailMessage,
+            attachments: emailAttachments,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
+                  ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName} Logo" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />` : ''}
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
+                  <p style="color: #ef4444; margin: 6px 0 0 0; font-weight: bold; letter-spacing: 4px; font-size: 11px;">ESTIMATE PORTAL AGREEMENT</p>
+                </div>
+                <div style="padding: 32px 24px; background-color: #ffffff;">
+                  <h2 style="color: #0c1a30; font-size: 18px; margin-top: 0;">Estimate Prepared for ${customerName}</h2>
+                  <div style="color: #4a5568; line-height: 1.6; font-size: 14px; white-space: pre-wrap; margin-bottom: 24px;">
+    ${mailMessage.replace(estimateLink, '')}
+                  </div>
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="${estimateLink}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
+                      Review & Sign Contract Agreement
+                    </a>
+                  </div>
+                  <p style="color: #718096; font-size: 12px; line-height: 1.5;">
+                    If the button doesn't work, copy and paste the following URL into your browser's address bar:<br/>
+                    <a href="${estimateLink}" style="color: #3182ce;">${estimateLink}</a>
+                  </p>
+                  <p style="color: #4a5568; margin-top: 24px; font-size: 14px; border-top: 1px solid #edf2f7; padding-top: 16px;">
+                    Best regards,<br/>
+                    <strong>${resolvedFromName}</strong><br/>
+                    ${resolvedCompanyPhone ? `Phone: ${resolvedCompanyPhone}<br/>` : ''}
+                    ${resolvedCompanyWebsite ? `<a href="${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">${resolvedCompanyWebsite}</a>` : ''}
+                  </p>
+                </div>
+                <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
+                  <p style="color: #a0aec0; font-size: 11px; margin: 0;">
+                    ${resolvedFromName} &bull; Fencing Estimating Suite
+                  </p>
+                </div>
+              </div>
+            `
+          });
+          mailSent = true;
+          console.log(`Email successfully routed in serverless handler to ${customerEmail}`);
+        } catch (err: any) {
+          const errorMessage = err.message || String(err);
+          const errCode = err.code || '';
+          
+          console.error(`[SERVERLESS SMTP TRACE] Failure sending mail:`, err);
+          
+          if (errCode === 'EAUTH' || errorMessage.toLowerCase().includes('auth') || err.responseCode === 535) {
+            errorType = 'AUTHENTICATION_ERROR';
+            mailError = `SMTP Authentication rejected. Verify SMTP Username and Password. [${errorMessage}]`;
+          } else if (errCode === 'ECONNREFUSED' || errCode === 'ETIMEOUT' || errCode === 'ENOTFOUND' || errorMessage.toLowerCase().includes('connect')) {
+            errorType = 'CONNECTION_ERROR';
+            mailError = `Unable to connect to SMTP server at ${resolvedSmtpHost}:${resolvedSmtpPort}. [${errorMessage}]`;
+          } else if (errorMessage.toLowerCase().includes('tls') || errorMessage.toLowerCase().includes('ssl') || errCode === 'ESOCKET') {
+            errorType = 'TLS_SSL_ERROR';
+            mailError = `SSL/TLS protocol negotiation failure. Port 465 requires secure direct connection. [${errorMessage}]`;
+          } else {
+            errorType = 'SMTP_TRANSMISSION_ERROR';
+            mailError = `SMTP dispatch error: ${errorMessage}`;
+          }
+        }
+
+        // Record the status back in Firestore
+        const now = new Date().toISOString();
+        const existingLogs = estimateData.customerEmailLog || [];
+        const updates: any = {
+          customerEmailSent: mailSent,
+          customerSentAt: mailSent ? now : (estimateData.customerSentAt || null),
+          customerEmailLog: [...existingLogs, {
+            sentAt: now,
+            customerEmail,
+            subject: mailSubject,
+            senderEmail: resolvedFromEmail,
+            mailSent,
+            mailError,
+            portalUrl: estimateLink,
+            attachmentFilenames: attachments ? attachments.map((a: any) => sanitizeFilename(a.filename)) : [],
+            attachmentCount: attachments ? attachments.length : 0,
+            sendStatus: mailSent ? 'success' : 'failed'
+          }],
+          updatedAt: now
+        };
+
+        if (mailSent) {
+          updates.representativeSignatureName = "Braden Scott Smith";
+          updates.representativeCompanyName = "Lone Star Fence Works";
+          updates.representativeSignedDate = now;
+          updates.customerEmailSentAt = now;
+          updates.jobStatus = 'Estimate Sent';
+
+          // Trigger manual_estimate_sent GHL webhook asynchronously
+          const manualPayload = {
+            customerName: estimateData.customerName || '',
+            firstName: estimateData.customerFirstName || '',
+            lastName: estimateData.customerLastName || '',
+            email: customerEmail || estimateData.customerEmail || '',
+            phone: estimateData.customerPhone || '',
+            address: estimateData.customerAddress || estimateData.customerStreet || '',
+            city: estimateData.customerCity || '',
+            state: estimateData.customerState || '',
+            zip: estimateData.customerZip || '',
+            fenceType: estimateData.fenceType || (estimateData.materials?.[0]?.fenceStyle) || 'Wood Fence',
+            linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
+            estimatedPrice: Number(estimateData.totalCost || estimateData.manualGrandTotal || 0),
+            estimateNumber: estimateData.estimateNumber || '',
+            estimateLink: estimateLink,
+            sentAt: now
+          };
+          sendGhlWebhook('manual_estimate_sent', String(estimateId), manualPayload, db, ownerUid).catch(err => {
+            console.error('Triggering manual_estimate_sent webhook failed:', err);
+          });
+        }
+
+        await targetRef.set(updates, { merge: true });
+
+        if (!mailSent) {
+          return res.status(500).json({
+            success: false,
+            error: mailError || 'Failed to send email via SMTP.',
+            errorType
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          mailSent,
+          portalUrl: estimateLink,
+          sentAt: now
+        });
       }
 
       // POST logic matches old api/estimates/save.ts
@@ -1321,8 +1279,8 @@ https://www.lonestarfenceworks.com`;
           address: existingData.customerAddress || '',
           fenceType: existingData.fenceType || (existingData.materials?.[0]?.fenceStyle) || 'Wood Fence',
           linearFeet: Number(existingData.linearFeet || (existingData.materials?.[0]?.linearFeet) || existingData.manualLinearFeet || 0),
-          estimatedPrice: Number(existingData.finalCustomerPrice || existingData.totalCost || existingData.manualGrandTotal || 0),
-          finalPrice: Number(updates.finalCustomerPrice || updates.finalPrice || existingData.finalCustomerPrice || existingData.totalCost || existingData.manualGrandTotal || 0),
+          estimatedPrice: Number(existingData.totalCost || existingData.manualGrandTotal || 0),
+          finalPrice: Number(updates.finalPrice || existingData.totalCost || existingData.manualGrandTotal || 0),
           estimateNumber: existingData.estimateNumber || '',
           customerSignature: existingData.customerSignature || 'Digitally Signed',
           customerSignedDate: existingData.customerDecisionDate || nowIso,
