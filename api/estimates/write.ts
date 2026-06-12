@@ -691,61 +691,103 @@ export default async function handler(req: any, res: any) {
         try {
           const transporter = nodemailer.createTransport(transporterConfig);
           
-          const bookingUrl = resolvedCompanyWebsite ? `${resolvedCompanyWebsite}/schedule` : "https://lonestarfenceworks.com/contact";
-          const formattedTotal = Number(estimatedPrice || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+          let bookingUrl = 'https://lonestarfenceworks.com/contact';
+          if (resolvedCompanyWebsite) {
+            let cleanWeb = resolvedCompanyWebsite.trim();
+            if (!/^https?:\/\//i.test(cleanWeb)) {
+              cleanWeb = 'https://' + cleanWeb;
+            }
+            bookingUrl = cleanWeb.endsWith('/') ? `${cleanWeb}schedule` : `${cleanWeb}/schedule`;
+          }
+
+          const emailFirstName = firstName || 'Not Provided';
+          const emailLastName = lastName || 'Not Provided';
+          const emailAddress = address || 'Not Provided';
+          const emailCity = city || 'Not Provided';
+          const emailState = state || 'Not Provided';
+          const emailZip = zip || 'Not Provided';
+          const emailFenceType = fenceType || 'Not Provided';
+          const rawHeight = fenceHeight || rawEstimateDoc?.height || '';
+          const emailFenceHeight = rawHeight ? `${rawHeight} ft` : 'Not Provided';
+          const emailLinearFeet = (linearFeet !== undefined && linearFeet !== null && linearFeet !== '') ? `${linearFeet} LF` : 'Not Provided';
           
-          await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-            to: email,
-            replyTo: resolvedReplyToEmail,
-            subject: 'Your Lone Star Fence Works Instant Fence Estimate',
-            html: `
+          let emailGates = 'None';
+          if (gateCount !== undefined && gateCount !== null) {
+            if (Number(gateCount) > 0) {
+              emailGates = gateSummary || `${gateCount} Gate(s)`;
+            } else {
+              emailGates = 'None';
+            }
+          }
+
+          const emailSelectedOptions = (selectedOptions && selectedOptions !== 'None' && selectedOptions !== '') ? selectedOptions : 'Not Provided';
+          const formattedTotal = (estimatedPrice !== undefined && estimatedPrice !== null && estimatedPrice !== '') ? Number(estimatedPrice).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : 'Not Provided';
+
+          let logoHtml = '';
+          if (resolvedCompanyLogo) {
+            logoHtml = `<img src="${resolvedCompanyLogo}" alt="${resolvedFromName}" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />`;
+          }
+
+          let contactPhoneHtml = '';
+          if (resolvedCompanyPhone) {
+            contactPhoneHtml = `Phone: ${resolvedCompanyPhone}<br/>`;
+          }
+
+          let contactEmailHtml = '';
+          if (resolvedReplyToEmail) {
+            contactEmailHtml = `Email: ${resolvedReplyToEmail}<br/>`;
+          }
+
+          let contactWebHtml = '';
+          if (resolvedCompanyWebsite) {
+            contactWebHtml = `<a href="${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">${resolvedCompanyWebsite}</a>`;
+          }
+
+          const currentYear = new Date().getFullYear();
+
+          const emailHtml = `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-                  \${resolvedCompanyLogo ? \`<img src="\${resolvedCompanyLogo}" alt="\${resolvedFromName}" style="max-height: 70px; max-width: 250px; width: auto !important; height: auto !important; display: block; margin: 0 auto 12px auto;" />\` : ''}
+                  ${logoHtml}
                   <h1 style="color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;">Your Instant Fence Estimate</h1>
                 </div>
                 <div style="padding: 32px 24px; background-color: #ffffff;">
                   <p style="color: #4a5568; line-height: 1.6; font-size: 15px;">
-                    Hello <strong>\${firstName} \${lastName}</strong>,
+                    Hello <strong>${emailFirstName} ${emailLastName}</strong>,
                   </p>
                   <p style="color: #4a5568; line-height: 1.6; font-size: 15px;">
-                    Thank you for requesting an instant estimate from <strong>\${resolvedFromName}</strong>. Below is a summary of your estimated layout and budget parameters based on the options you selected:
+                    Thank you for requesting an instant estimate from <strong>${resolvedFromName}</strong>. Below is a summary of your estimated layout and budget parameters based on the options you selected:
                   </p>
                   
                   <div style="background-color: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #edf2f7; margin: 24px 0;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #4a5568;">
                       <tr>
                         <td style="padding: 8px 0; font-weight: bold; border-bottom: 1px solid #edf2f7;">Estimated Total:</td>
-                        <td style="padding: 8px 0; font-weight: bold; color: #10b981; text-align: right; border-bottom: 1px solid #edf2f7; font-size: 18px;">\${formattedTotal}</td>
+                        <td style="padding: 8px 0; font-weight: bold; color: #10b981; text-align: right; border-bottom: 1px solid #edf2f7; font-size: 18px;">${formattedTotal}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Type:</td>
-                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${fenceType}</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">${emailFenceType}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Height:</td>
-                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${fenceHeight || rawEstimateDoc?.height || ''} ft</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">${emailFenceHeight}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Fence Length:</td>
-                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${linearFeet} LF</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">${emailLinearFeet}</td>
                       </tr>
-                      \${gateCount > 0 ? \`
                       <tr>
                         <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Gates / Options:</td>
-                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\u0024{gateSummary || \`\u0024{gateCount} Gate(s)\`}</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">${emailGates}</td>
                       </tr>
-                      \` : ''}
-                      \${selectedOptions && selectedOptions !== 'None' ? \`
                       <tr>
                         <td style="padding: 8px 0; border-bottom: 1px solid #edf2f7;">Selected Options:</td>
-                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">\${selectedOptions}</td>
+                        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #edf2f7;">${emailSelectedOptions}</td>
                       </tr>
-                      \` : ''}
                       <tr>
                         <td style="padding: 8px 0;">Project Address:</td>
-                        <td style="padding: 8px 0; text-align: right; color: #718096; max-width: 250px; white-space: normal; word-break: break-all;">\${address}</td>
+                        <td style="padding: 8px 0; text-align: right; color: #718096; max-width: 250px; white-space: normal; word-break: break-all;">${emailAddress}</td>
                       </tr>
                     </table>
                   </div>
@@ -755,26 +797,60 @@ export default async function handler(req: any, res: any) {
                   </p>
 
                   <div style="text-align: center; margin: 32px 0;">
-                    <a href="\${bookingUrl}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
+                    <a href="${bookingUrl}" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; border-bottom: 3px solid #b91c1c;">
                       Schedule On-Site Consultation
                     </a>
                   </div>
 
                   <p style="color: #4a5568; margin-top: 32px; font-size: 14px; border-top: 1px solid #edf2f7; padding-top: 16px;">
                     Best regards,<br/>
-                    <strong>\${resolvedFromName}</strong><br/>
-                    \${resolvedCompanyPhone ? \`Phone: \${resolvedCompanyPhone}<br/>\` : ''}
-                    \${resolvedReplyToEmail ? \`Email: \${resolvedReplyToEmail}<br/>\` : ''}
-                    \${resolvedCompanyWebsite ? \`<a href="\${resolvedCompanyWebsite}" style="color: #3182ce; text-decoration: none;">\${resolvedCompanyWebsite}</a>\` : ''}
+                    <strong>${resolvedFromName}</strong><br/>
+                    ${contactPhoneHtml}
+                    ${contactEmailHtml}
+                    ${contactWebHtml}
                   </p>
                 </div>
                 <div style="background-color: #f7fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #edf2f7;">
                   <p style="color: #a0aec0; font-size: 11px; margin: 0;">
-                    Lone Star Fence Works &copy; \${new Date().getFullYear()}. All rights reserved.
+                    Lone Star Fence Works &copy; ${currentYear}. All rights reserved.
                   </p>
                 </div>
               </div>
-            `
+          `;
+
+          // Requirement 7: Add console logging before sending so the rendered email data can be inspected.
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] email:', email);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailFirstName:', emailFirstName);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailLastName:', emailLastName);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] formattedTotal:', formattedTotal);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailFenceType:', emailFenceType);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailFenceHeight:', emailFenceHeight);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailLinearFeet:', emailLinearFeet);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailGates:', emailGates);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailSelectedOptions:', emailSelectedOptions);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] emailAddress:', emailAddress);
+          console.log('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] bookingUrl:', bookingUrl);
+
+          // Requirement 6: Verify the final email body contains no instances of ${...}, {{...}}, undefined, null.
+          let sanitizedHtml = emailHtml;
+          sanitizedHtml = sanitizedHtml.replace(/\$\{.*?\}/g, 'Not Provided');
+          sanitizedHtml = sanitizedHtml.replace(/\{\{.*?\}\}/g, 'Not Provided');
+
+          // Guarantee absolutely no undefined/null literal text slip-ups
+          if (sanitizedHtml.includes('undefined') || sanitizedHtml.includes('null')) {
+            console.warn('[CUSTOMER_ESTIMATOR_EMAIL_RENDER] Warning: Detected literal "undefined" or "null" in generated HTML. Sanitizing...');
+            sanitizedHtml = sanitizedHtml.replace(/>undefined</g, '>Not Provided<');
+            sanitizedHtml = sanitizedHtml.replace(/>null</g, '>Not Provided<');
+            sanitizedHtml = sanitizedHtml.replace(/undefined/g, 'Not Provided');
+            sanitizedHtml = sanitizedHtml.replace(/null/g, 'Not Provided');
+          }
+
+          await transporter.sendMail({
+            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+            to: email,
+            replyTo: resolvedReplyToEmail,
+            subject: 'Your Lone Star Fence Works Instant Fence Estimate',
+            html: sanitizedHtml
           });
 
           emailSent = true;
