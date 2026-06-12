@@ -13,8 +13,7 @@ import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
-import { db, handleFirestoreError, OperationType, getEstimateDoc, storage } from '../lib/firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import FileGallery from './FileGallery';
 import { analyzeBlueprintDocument } from '../services/geminiService';
@@ -113,24 +112,47 @@ export default function Estimator({
       let currentId = estimate.id;
       if (!currentId) {
         currentId = `est-${Math.random().toString(36).substr(2, 9)}`;
-        setEstimate({ ...estimate, id: currentId });
       }
 
-      const timestamp = Date.now();
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `estimate-drawings/${currentId}/${timestamp}-${sanitizedName}`;
-      const fRef = storageRef(storage, storagePath);
+      // Convert selected file to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to read file as base64 string'));
+          }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
 
-      const snapshot = await uploadBytes(fRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+      const base64Data = await base64Promise;
 
-      const drawingMetadata = {
-        drawingUrl: downloadUrl,
-        drawingFileName: file.name,
-        drawingMimeType: file.type,
-        drawingUploadedAt: new Date().toISOString(),
-        drawingStoragePath: storagePath
-      };
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          action: "upload-drawing",
+          estimateId: currentId,
+          filename: file.name,
+          mimeType: file.type,
+          size: file.size,
+          base64Data: base64Data
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Server error uploading drawing');
+      }
+
+      const drawingMetadata = await response.json();
 
       const updatedEstimate = {
         ...estimate,
@@ -139,21 +161,6 @@ export default function Estimator({
       };
 
       setEstimate(updatedEstimate);
-
-      try {
-        const token = localStorage.getItem('company_admin_token');
-        await fetch('/api/estimates/write', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify(updatedEstimate)
-        });
-      } catch (saveErr) {
-        console.warn('Background drawing upload sync failed, but preserved in state:', saveErr);
-      }
-
       alert('Drawing uploaded successfully and attached to this estimate.');
     } catch (error: any) {
       console.error('Error uploading drawing:', error);
@@ -174,41 +181,47 @@ export default function Estimator({
       return;
     }
 
-    const storagePath = estimate.drawingStoragePath;
-    
-    const updatedEstimate = { ...estimate };
-    delete updatedEstimate.drawingUrl;
-    delete updatedEstimate.drawingFileName;
-    delete updatedEstimate.drawingMimeType;
-    delete updatedEstimate.drawingUploadedAt;
-    delete updatedEstimate.drawingStoragePath;
-
-    setEstimate(updatedEstimate);
-
-    try {
-      if (storagePath) {
-        const fRef = storageRef(storage, storagePath);
-        await deleteObject(fRef);
-      }
-    } catch (storageErr) {
-      console.warn('Could not delete original file from Firebase Storage:', storageErr);
+    const currentId = estimate.id;
+    if (!currentId) {
+      alert('No active estimate to remove drawing from.');
+      return;
     }
+
+    const storagePath = estimate.drawingStoragePath;
 
     try {
       const token = localStorage.getItem('company_admin_token');
-      await fetch('/api/estimates/write', {
+      const response = await fetch('/api/estimates/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
-        body: JSON.stringify(updatedEstimate)
+        body: JSON.stringify({
+          action: "remove-drawing",
+          estimateId: currentId,
+          drawingStoragePath: storagePath
+        })
       });
-    } catch (saveErr) {
-      console.warn('Background drawing remove sync failed, but preserved in state:', saveErr);
-    }
 
-    alert('Drawing removed successfully.');
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Server error removing drawing');
+      }
+
+      const updatedEstimate = { ...estimate };
+      delete updatedEstimate.drawingUrl;
+      delete updatedEstimate.drawingFileName;
+      delete updatedEstimate.drawingMimeType;
+      delete updatedEstimate.drawingUploadedAt;
+      delete updatedEstimate.drawingStoragePath;
+
+      setEstimate(updatedEstimate);
+      alert('Drawing removed successfully.');
+    } catch (error: any) {
+      console.error('Error removing drawing:', error);
+      alert(`Removal failed: ${error.message || error}`);
+    }
   };
 
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];

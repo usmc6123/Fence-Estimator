@@ -270,6 +270,25 @@ async function sendGhlWorkflowWebhook(
   }
 }
 
+async function getEstimateDocRef(estimateId: string) {
+  let docRef = db.collection('estimates').doc(String(estimateId));
+  let snap = await docRef.get();
+
+  if (!snap.exists) {
+    const usersSnap = await db.collection('users').get();
+    for (const uDoc of usersSnap.docs) {
+      const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+      const nestedSnap = await nestedRef.get();
+      if (nestedSnap.exists) {
+        docRef = nestedRef;
+        snap = nestedSnap;
+        break;
+      }
+    }
+  }
+  return { docRef, snap };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -647,6 +666,141 @@ export default async function handler(req: any, res: any) {
 
     // Standard Routing
     if (method === 'POST') {
+      if (req.body && req.body.action === 'upload-drawing') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        
+        const { estimateId, filename, mimeType, size, base64Data } = req.body || {};
+        if (!estimateId || !filename || !mimeType || !base64Data) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedMimeTypes.includes(mimeType)) {
+          return res.status(400).json({ error: 'Invalid file format. Only PDF, JPG, PNG, WEBP are allowed.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        
+        if (snap.exists) {
+          const existingData = snap.data() || {};
+          if (
+            existingData.uid !== decoded.uid &&
+            existingData.userId !== decoded.uid &&
+            !isWriteAdmin
+          ) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+          }
+        }
+
+        const timestamp = Date.now();
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `estimate-drawings/${estimateId}/${timestamp}-${sanitizedFilename}`;
+
+        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+        const file = bucket.file(storagePath);
+
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(';base64,')) {
+          cleanBase64 = cleanBase64.split(';base64,')[1];
+        }
+        const buffer = Buffer.from(cleanBase64, 'base64');
+
+        await file.save(buffer, {
+          metadata: {
+            contentType: mimeType,
+          }
+        });
+
+        let downloadUrl = '';
+        try {
+          await file.makePublic();
+          downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        } catch (pubErr: any) {
+          console.warn('makePublic failed during drawing upload, using signed url fallback:', pubErr?.message || pubErr);
+        }
+
+        if (!downloadUrl) {
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: expires
+          });
+          downloadUrl = signedUrl;
+        }
+
+        const drawingMetadata = {
+          drawingUrl: downloadUrl,
+          drawingFileName: filename,
+          drawingMimeType: mimeType,
+          drawingUploadedAt: new Date().toISOString(),
+          drawingStoragePath: storagePath
+        };
+
+        if (snap.exists) {
+          await docRef.set(drawingMetadata, { merge: true });
+        } else {
+          await docRef.set({
+            ...drawingMetadata,
+            uid: decoded.uid,
+            userId: decoded.uid,
+            companyId: 'lonestarfence',
+            createdAt: new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            status: 'active'
+          });
+        }
+
+        return res.status(200).json(drawingMetadata);
+      }
+
+      if (req.body && req.body.action === 'remove-drawing') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+
+        const { estimateId, drawingStoragePath } = req.body || {};
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Missing estimateId parameter' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+
+        if (snap.exists) {
+          const existingData = snap.data() || {};
+          if (
+            existingData.uid !== decoded.uid &&
+            existingData.userId !== decoded.uid &&
+            !isWriteAdmin
+          ) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+          }
+        }
+
+        if (drawingStoragePath) {
+          try {
+            const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+            const file = bucket.file(drawingStoragePath);
+            await file.delete();
+          } catch (storageErr: any) {
+            console.warn('Could not delete original file from Firebase Storage using Admin SDK:', storageErr?.message || storageErr);
+          }
+        }
+
+        if (snap.exists) {
+          await docRef.set({
+            drawingUrl: admin.firestore.FieldValue.delete(),
+            drawingFileName: admin.firestore.FieldValue.delete(),
+            drawingMimeType: admin.firestore.FieldValue.delete(),
+            drawingUploadedAt: admin.firestore.FieldValue.delete(),
+            drawingStoragePath: admin.firestore.FieldValue.delete()
+          }, { merge: true });
+        }
+
+        return res.status(200).json({ success: true, message: 'Drawing successfully removed' });
+      }
+
       if (req.body && req.body.action === 'schedule-event') {
         const { action, ...eventData } = req.body;
         const id = eventData.id;
