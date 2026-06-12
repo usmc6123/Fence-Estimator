@@ -1877,11 +1877,13 @@ export function calculateDetailedTakeOff(
   }
 
   const allItems = [...calculatedSummary, ...manualSummary];
+  const extraLaborTakeoffItems: TakeOffItem[] = [];
+  let extraLaborTotal = 0;
 
   // Add delivery fee as labor item
   const deliveryFee = estimate.deliveryFee ?? laborRates.deliveryFee ?? 50;
   if (deliveryFee > 0) {
-    allItems.push({
+    const deliveryItem = {
       id: 'labor-delivery',
       name: 'Delivery Fee',
       qty: 1,
@@ -1889,13 +1891,16 @@ export function calculateDetailedTakeOff(
       unitCost: deliveryFee,
       total: deliveryFee,
       category: 'Labor'
-    });
+    };
+    allItems.push(deliveryItem);
+    extraLaborTakeoffItems.push(deliveryItem);
+    extraLaborTotal += deliveryFee;
   }
 
   // Add custom labor items
   if (estimate.customLaborItems) {
     estimate.customLaborItems.forEach(item => {
-      allItems.push({
+      const customItem = {
         id: item.id,
         name: item.name,
         qty: 1,
@@ -1903,8 +1908,17 @@ export function calculateDetailedTakeOff(
         unitCost: item.cost,
         total: item.cost,
         category: 'Labor'
-      });
+      };
+      allItems.push(customItem);
+      extraLaborTakeoffItems.push(customItem);
+      extraLaborTotal += item.cost;
     });
+  }
+
+  // To meet the requirement that the delivery fee and custom labor additions are included in the fence installation cost
+  // and count towards the run/section cost summaries on the contract, we assign it to the first run (idx === 0).
+  if (detailedRuns.length > 0) {
+    detailedRuns[0].fenceLaborCost += extraLaborTotal;
   }
 
   // Re-calculate totals based on ALL items
@@ -1920,8 +1934,11 @@ export function calculateDetailedTakeOff(
   // deliveryFee is now included in totalLabor and subtotal
   const grandTotal = subtotal + markup + tax;
 
+  // Append extraLaborTakeoffItems to the returned summary so they show up in the Subcontractor Labor Manifest
+  const finalSummary = [...calculatedSummary, ...extraLaborTakeoffItems];
+
   return {
-    summary: calculatedSummary,
+    summary: finalSummary,
     manualSummary: manualSummary,
     runs: detailedRuns,
     pipeCuttingSummary,
