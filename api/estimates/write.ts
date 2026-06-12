@@ -985,12 +985,20 @@ https://www.lonestarfenceworks.com`;
             resolvedCompanyWebsite = settingsData.companyWebsite || '';
           }
 
+          // Ensure fallbacks are properly resolved before checking completeness
+          if (!resolvedFromEmail && resolvedSmtpUser) {
+            resolvedFromEmail = resolvedSmtpUser;
+          }
+          if (!resolvedReplyToEmail) {
+            resolvedReplyToEmail = resolvedFromEmail;
+          }
+
           // Verify SMTP settings exist as required
           if (!resolvedSmtpHost || !resolvedSmtpPort || !resolvedSmtpUser || !resolvedSmtpPass || !resolvedFromEmail) {
             return res.status(400).json({
               success: false,
               error: 'Email send failed',
-              details: 'SMTP settings are incomplete. Please check Settings.'
+              details: `SMTP settings are incomplete. [Host: ${!!resolvedSmtpHost}, Port: ${!!resolvedSmtpPort}, User: ${!!resolvedSmtpUser}, Pass: ${!!resolvedSmtpPass}, From: ${!!resolvedFromEmail}] Please check companySettings.`
             });
           }
 
@@ -1061,7 +1069,7 @@ https://www.lonestarfenceworks.com`;
           console.log(`- SMTP_PASS is present: ${!!resolvedSmtpPass}`);
           console.log(`- Resolved sending from address: '${resolvedFromEmail}'`);
 
-          const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+          const isPort465 = Number(resolvedSmtpPort) === 465;
 
           const transporterConfig: any = {
             host: resolvedSmtpHost,
@@ -1088,24 +1096,31 @@ https://www.lonestarfenceworks.com`;
           let mailSent = false;
           let mailError = null;
           let errorType = 'UNKNOWN';
+          let diagnosticInfo: any = null;
 
-          // Prepare email attachments for nodemailer
-          const emailAttachments = attachmentsArray.length > 0
-            ? attachmentsArray.map((att: any) => {
-                let base64Chunk = att.base64Data;
-                if (base64Chunk.includes(';base64,')) {
-                  base64Chunk = base64Chunk.split(';base64,')[1];
-                }
-                return {
-                  filename: sanitizeFilename(att.filename),
-                  content: Buffer.from(base64Chunk, 'base64'),
-                  contentType: att.mimeType
-                };
-              })
+          // Prepare email attachments for nodemailer with robust array guards
+          const emailAttachments = (Array.isArray(attachmentsArray) && attachmentsArray.length > 0)
+            ? attachmentsArray
+                .filter((att: any) => att && typeof att.filename === 'string' && typeof att.base64Data === 'string' && att.base64Data.trim() !== '')
+                .map((att: any) => {
+                  let base64Chunk = att.base64Data;
+                  if (base64Chunk.includes(';base64,')) {
+                    base64Chunk = base64Chunk.split(';base64,')[1];
+                  }
+                  return {
+                    filename: sanitizeFilename(att.filename),
+                    content: Buffer.from(base64Chunk, 'base64'),
+                    contentType: att.mimeType || 'application/octet-stream'
+                  };
+                })
             : [];
 
           try {
             const transporter = nodemailer.createTransport(transporterConfig);
+            
+            // Call verify() first to confirm connection sanity
+            await transporter.verify();
+
             await transporter.sendMail({
               from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
               to: customerEmail,
@@ -1157,6 +1172,18 @@ https://www.lonestarfenceworks.com`;
 
             console.error(`[SERVERLESS SMTP TRACE] Failure sending mail:`, err);
 
+            diagnosticInfo = {
+              smtpHost: resolvedSmtpHost,
+              smtpPort: resolvedSmtpPort,
+              secure: isPort465,
+              fromEmail: resolvedFromEmail,
+              code: err.code || '',
+              command: err.command || '',
+              response: err.response || '',
+              responseCode: err.responseCode || '',
+              message: errorMessage
+            };
+
             if (errCode === 'EAUTH' || errorMessage.toLowerCase().includes('auth') || err.responseCode === 535) {
               errorType = 'AUTHENTICATION_ERROR';
               mailError = `SMTP Authentication rejected. Verify SMTP Username and Password. [${errorMessage}]`;
@@ -1193,8 +1220,8 @@ https://www.lonestarfenceworks.com`;
               mailSent,
               mailError,
               portalUrl: estimateLink,
-              attachmentFilenames: attachmentsArray.map((a: any) => sanitizeFilename(a.filename)),
-              attachmentCount: attachmentsArray.length,
+              attachmentFilenames: emailAttachments.map((a: any) => sanitizeFilename(a.filename)),
+              attachmentCount: emailAttachments.length,
               sendStatus: mailSent ? 'success' : 'failed'
             }],
             updatedAt: now
@@ -1233,9 +1260,20 @@ https://www.lonestarfenceworks.com`;
           if (!mailSent) {
             return res.status(500).json({
               success: false,
-              error: 'Email send failed',
+              error: 'Estimate email failed',
               details: mailError || 'Failed to send email via SMTP.',
-              errorType
+              errorType,
+              diagnostic: diagnosticInfo || {
+                smtpHost: resolvedSmtpHost,
+                smtpPort: resolvedSmtpPort,
+                secure: isPort465,
+                fromEmail: resolvedFromEmail,
+                code: 'UNKNOWN',
+                command: 'UNKNOWN',
+                response: '',
+                responseCode: 'UNKNOWN',
+                message: mailError || 'Failed to dispatch email'
+              }
             });
           }
 
@@ -1249,8 +1287,19 @@ https://www.lonestarfenceworks.com`;
           console.error("Send estimate failed:", error);
           return res.status(500).json({
             success: false,
-            error: "Email send failed",
-            details: error.message || String(error)
+            error: "Estimate email failed",
+            details: error.message || String(error),
+            diagnostic: {
+              smtpHost: process.env.SMTP_HOST || 'Unconfigured',
+              smtpPort: Number(process.env.SMTP_PORT) || 465,
+              secure: Number(process.env.SMTP_PORT) === 465,
+              fromEmail: process.env.FROM_EMAIL || 'Unconfigured',
+              code: error.code || 'HANDLER_CRASH_ERROR',
+              command: error.command || 'CRASH_BEFORE_SEND',
+              response: error.response || '',
+              responseCode: error.responseCode || 'CRASH',
+              message: error.message || String(error)
+            }
           });
         }
       }

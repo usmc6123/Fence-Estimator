@@ -37,6 +37,7 @@ export default function CustomerContract({
   const [isSendingEmail, setIsSendingEmail] = React.useState(false);
   const [sendSuccessMessage, setSendSuccessMessage] = React.useState<string | null>(null);
   const [sendErrorMessage, setSendErrorMessage] = React.useState<string | null>(null);
+  const [smtpDiagnostics, setSmtpDiagnostics] = React.useState<any | null>(null);
   const [companySettings, setCompanySettings] = React.useState<any>(null);
   const [attachedFiles, setAttachedFiles] = React.useState<{ filename: string; mimeType: string; size: number; base64Data: string }[]>([]);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
@@ -184,6 +185,7 @@ export default function CustomerContract({
     setIsSendingEmail(true);
     setSendSuccessMessage(null);
     setSendErrorMessage(null);
+    setSmtpDiagnostics(null);
 
     try {
       const token = localStorage.getItem('company_admin_token');
@@ -212,6 +214,10 @@ export default function CustomerContract({
         parsedJson = JSON.parse(responseText);
       } catch (jsonErr) {}
 
+      if (parsedJson && parsedJson.diagnostic) {
+        setSmtpDiagnostics(parsedJson.diagnostic);
+      }
+
       if (response.ok) {
         setSendSuccessMessage('Fencing contract estimate pack successfully sent!');
         setTimeout(() => {
@@ -224,9 +230,28 @@ export default function CustomerContract({
           });
         }
       } else {
-        const errorDetailMsg = parsedJson?.error || responseText || 'Unknown server fail.';
-        const detailedMsg = parsedJson?.details ? ` - Details: ${parsedJson.details}` : '';
-        setSendErrorMessage(`API Error: ${errorDetailMsg}${detailedMsg}`);
+        let friendlyMessage = 'Email dispatch failed.';
+        if (parsedJson) {
+          const detail = (parsedJson.details || '').toLowerCase();
+          const errText = (parsedJson.error || '').toLowerCase();
+          const diagMsg = (parsedJson.diagnostic?.message || '').toLowerCase();
+          const diagCode = parsedJson.diagnostic?.code || '';
+
+          if (parsedJson.errorType === 'AUTHENTICATION_ERROR' || detail.includes('auth') || errText.includes('auth') || diagMsg.includes('auth')) {
+            friendlyMessage = 'SMTP authentication failed. Please verify your SMTP settings and confirm your password is correct.';
+          } else if (detail.includes('timeout') || errText.includes('timeout') || diagMsg.includes('timeout') || diagCode === 'ETIMEOUT') {
+            friendlyMessage = 'SMTP connection timed out. The server could not establish a connection within the timeout limit. Please verify port and firewall configs.';
+          } else if (detail.includes('recipient') || errText.includes('recipient') || diagMsg.includes('rcpt') || detail.includes('rcpt')) {
+            friendlyMessage = 'Recipient was rejected. The recipient email address might be invalid or blocked by the server.';
+          } else if (detail.includes('sender') || errText.includes('sender') || detail.includes('from') || errText.includes('from') || diagMsg.includes('sender') || diagMsg.includes('from') || diagCode === 'EENVELOPE') {
+            friendlyMessage = 'From email/sender was rejected. The SMTP relay server rejected the sender from address. Verify that your sender email matches authorized SMTP profiles.';
+          } else {
+            friendlyMessage = `${parsedJson.error || 'Server error occurred.'} ${parsedJson.details ? '- ' + parsedJson.details : ''}`;
+          }
+        } else {
+          friendlyMessage = `HTTP ${response.status} - failed to send. response context: ${responseText ? responseText.substring(0, 150) : 'Empty text reply.'}`;
+        }
+        setSendErrorMessage(friendlyMessage);
       }
     } catch (err: any) {
       setSendErrorMessage(err.message || 'Network dispatch fail. Please check SMTP settings.');
@@ -1811,12 +1836,31 @@ export default function CustomerContract({
                 )}
 
                 {sendErrorMessage && (
-                  <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex items-start gap-2">
-                    <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
-                    <div className="flex-1 space-y-1 text-left">
-                      <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
-                      <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-[#c2410c] font-mono text-[11px] select-all">{sendErrorMessage}</p>
+                  <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl font-medium tracking-wide flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse shrink-0 mt-1" />
+                      <div className="flex-1 space-y-1 text-left">
+                        <span className="font-bold uppercase block text-[10px] tracking-wider text-red-600 mb-0.5">Transmission Diagnostic Warning</span>
+                        <p className="normal-case break-words leading-relaxed whitespace-pre-wrap text-[#c2410c] font-mono text-[11px] select-all">{sendErrorMessage}</p>
+                      </div>
                     </div>
+
+                    {smtpDiagnostics && (
+                      <div className="border-t border-slate-200 pt-2.5 mt-1 text-[10px] font-mono text-slate-700 space-y-2">
+                        <span className="font-bold uppercase text-[9px] tracking-wider text-slate-500 block">Connection Diagnostic Metadata (No Passwords)</span>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 bg-white border border-slate-150 p-2 rounded-lg text-[10px]">
+                          <div><span className="text-slate-400">Host:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.smtpHost}</span></div>
+                          <div><span className="text-slate-400">Port:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.smtpPort}</span></div>
+                          <div><span className="text-slate-400">Secure:</span> <span className="font-semibold text-slate-800">{smtpDiagnostics.secure ? 'SSL/TLS' : 'STARTTLS'}</span></div>
+                          <div><span className="text-slate-400">From:</span> <span className="font-semibold text-slate-800 break-all">{smtpDiagnostics.fromEmail}</span></div>
+                        </div>
+                        <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[9px] leading-tight max-h-24 overflow-y-auto selection:bg-slate-755 font-mono text-left">
+                          <span className="text-slate-400">ErrCode:</span> {smtpDiagnostics.code || 'N/A'}<br/>
+                          <span className="text-slate-400">RespCode:</span> {smtpDiagnostics.responseCode || 'N/A'}<br/>
+                          <span className="text-slate-400">Trace:</span> {smtpDiagnostics.response || smtpDiagnostics.message || 'No reply logs received.'}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
