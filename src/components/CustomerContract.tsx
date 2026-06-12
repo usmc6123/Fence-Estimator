@@ -214,8 +214,7 @@ export default function CustomerContract({
           customerEmail,
           senderEmail,
           subject: emailSubject,
-          message: emailMessage,
-          attachments: (attachedFiles && attachedFiles.length > 0) ? attachedFiles : []
+          message: emailMessage
         })
       });
 

@@ -824,95 +824,8 @@ https://www.lonestarfenceworks.com`;
             return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
           };
 
-          // Rule 1: Normalize attachments safely
-          const safeAttachments = Array.isArray(attachments) ? attachments : [];
-
-          // Validate attachments if present
-          if (safeAttachments.length > 0) {
-            if (!hasValidAdminToken) {
-              return res.status(403).json({
-                success: false,
-                error: 'Email send failed',
-                details: 'Unauthorized: Only authenticated admin/employee users can send attachments.'
-              });
-            }
-
-            const allowedMimes = [
-              'application/pdf',
-              'image/jpeg',
-              'image/jpg',
-              'image/png',
-              'application/msword',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-excel',
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            ];
-
-            const dangerousExtensions = ['.exe', '.js', '.html', '.svg', '.bat', '.cmd', '.zip'];
-
-            let totalSize = 0;
-            for (const att of safeAttachments) {
-              // Rule 5: Check if the attachment is missing base64Data, filename, or mimeType
-              if (!att || typeof att !== 'object' || !att.filename || !att.mimeType || !att.base64Data) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'Email send failed',
-                  details: 'Attachment format is invalid. Please remove the file and attach it again.'
-                });
-              }
-
-              const filenameLower = att.filename.toLowerCase();
-              const hasDangerousExtension = dangerousExtensions.some(ext => filenameLower.endsWith(ext));
-              if (hasDangerousExtension) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'Email send failed',
-                  details: `File "${att.filename}" has a blocked dangerous extension.`
-                });
-              }
-
-              if (!allowedMimes.includes(att.mimeType)) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'Email send failed',
-                  details: `Unsupported MIME type "${att.mimeType}" for file "${att.filename}".`
-                });
-              }
-
-              let baseLine64 = att.base64Data;
-              if (baseLine64.includes(';base64,')) {
-                baseLine64 = baseLine64.split(';base64,')[1];
-              }
-
-              let buffer: Buffer;
-              try {
-                buffer = Buffer.from(baseLine64, 'base64');
-              } catch (parseErr) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'Email send failed',
-                  details: 'Attachment format is invalid. Please remove the file and attach it again.'
-                });
-              }
-
-              if (buffer.length > 10 * 1024 * 1024) {
-                return res.status(400).json({
-                  success: false,
-                  error: 'Email send failed',
-                  details: `File "${att.filename}" exceeds the 10MB individual limit.`
-                });
-              }
-              totalSize += buffer.length;
-            }
-
-            if (totalSize > 20 * 1024 * 1024) {
-              return res.status(400).json({
-                success: false,
-                error: 'Email send failed',
-                details: 'Total attachment size exceeds the 20MB limit.'
-              });
-            }
-          }
+          // Temporarily disabled attachments processing to restore original working send behavior
+          const safeAttachments: any[] = [];
 
           // 1. Fetch estimate from firestore using Admin SDK
           const estimateRef = db.collection('estimates').doc(String(estimateId));
@@ -1112,39 +1025,6 @@ https://www.lonestarfenceworks.com`;
           let errorType = 'UNKNOWN';
           let diagnosticInfo: any = null;
 
-          // Rule 3: Fix Nodemailer attachment mapping with clean Buffer structure
-          const emailAttachments = (safeAttachments.length > 0)
-            ? safeAttachments.map(file => {
-                let base64Chunk = file.base64Data || '';
-                if (base64Chunk.includes(';base64,')) {
-                  base64Chunk = base64Chunk.split(';base64,')[1];
-                }
-                return {
-                  filename: sanitizeFilename(file.filename || file.name || 'attachment'),
-                  content: Buffer.from(base64Chunk, 'base64'),
-                  contentType: file.mimeType || file.contentType || 'application/octet-stream'
-                };
-              })
-            : [];
-
-          // Rule 7: Add temporary debug logging
-          console.log(`[SMTP ATTACHMENT DEBUG LOG]`);
-          console.log(`- attachment count: ${emailAttachments.length}`);
-          if (emailAttachments.length > 0) {
-            emailAttachments.forEach((att: any, idx: number) => {
-              const fileObj = safeAttachments[idx] || {};
-              console.log(`  - File [${idx + 1}]:`);
-              console.log(`    * filename: ${att.filename}`);
-              console.log(`    * mime type: ${att.contentType}`);
-              console.log(`    * calculated size: ${att.content.length} bytes`);
-              console.log(`    * whether base64Data exists: ${!!fileObj.base64Data}`);
-            });
-            const totalBytes = emailAttachments.reduce((sum: number, att: any) => sum + att.content.length, 0);
-            console.log(`  * total calculated attachment size: ${totalBytes} bytes`);
-          } else {
-            console.log(`  * no files attached to this dispatch request.`);
-          }
-
           try {
             const transporter = nodemailer.createTransport(transporterConfig);
             
@@ -1157,7 +1037,6 @@ https://www.lonestarfenceworks.com`;
               replyTo: resolvedReplyToEmail,
               subject: mailSubject,
               text: mailMessage,
-              attachments: emailAttachments,
               html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                   <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
@@ -1250,8 +1129,8 @@ https://www.lonestarfenceworks.com`;
               mailSent,
               mailError,
               portalUrl: estimateLink,
-              attachmentFilenames: emailAttachments.map((a: any) => sanitizeFilename(a.filename)),
-              attachmentCount: emailAttachments.length,
+              attachmentFilenames: [],
+              attachmentCount: 0,
               sendStatus: mailSent ? 'success' : 'failed'
             }],
             updatedAt: now
