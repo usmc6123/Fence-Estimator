@@ -1172,6 +1172,7 @@ https://www.lonestarfenceworks.com`;
               error: 'Estimate email failed',
               details: mailError || 'Failed to send email via SMTP.',
               errorType,
+              debugBuild: "no-attachments-send-v1",
               diagnostic: diagnosticInfo || {
                 smtpHost: resolvedSmtpHost,
                 smtpPort: resolvedSmtpPort,
@@ -1190,7 +1191,8 @@ https://www.lonestarfenceworks.com`;
             success: true,
             mailSent,
             portalUrl: estimateLink,
-            sentAt: now
+            sentAt: now,
+            debugBuild: "no-attachments-send-v1"
           });
         } catch (error: any) {
           console.error("Send estimate failed:", error);
@@ -1198,6 +1200,7 @@ https://www.lonestarfenceworks.com`;
             success: false,
             error: "Estimate email failed",
             details: error.message || String(error),
+            debugBuild: "no-attachments-send-v1",
             diagnostic: {
               smtpHost: process.env.SMTP_HOST || 'Unconfigured',
               smtpPort: Number(process.env.SMTP_PORT) || 465,

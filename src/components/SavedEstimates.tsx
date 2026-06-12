@@ -986,7 +986,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                         </div>
                         <div>
                           <h3 className="text-sm font-black uppercase tracking-wider">Send Contract Estimate</h3>
-                          <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">Lone Star Dispatch Center</p>
+                          <p className="text-[10px] text-yellow-300 font-bold uppercase tracking-widest mt-0.5">LONE STAR DISPATCH CENTER - NO ATTACHMENTS BUILD</p>
                         </div>
                       </div>
                       <button
@@ -1091,58 +1091,11 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                         />
                       </div>
 
-                      {/* Attach Files Section */}
-                      <div className="space-y-2">
+                      {/* Attach Files Section - Temporarily Disabled */}
+                      <div className="hidden space-y-2">
                         <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
-                          Attach Files (Optional)
+                          Attach Files (Disabled)
                         </label>
-                        
-                        <div className="flex flex-col gap-2">
-                          <label className="flex items-center justify-center gap-2 w-full p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-slate-100 cursor-pointer transition-all">
-                            <Paperclip size={14} className="text-slate-600" />
-                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Choose Files to Attach</span>
-                            <input
-                              type="file"
-                              multiple
-                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                              onChange={handleAttachmentChange}
-                              className="hidden"
-                            />
-                          </label>
-                          <span className="text-[9px] text-slate-400 font-medium">
-                            Supported: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Max 10MB per file, 20MB total)
-                          </span>
-                        </div>
-
-                        {attachmentError && (
-                          <div className="p-2 border border-red-200 bg-red-50 text-red-700 text-[10px] uppercase tracking-wider font-bold rounded-lg leading-relaxed">
-                            ⚠️ {attachmentError}
-                          </div>
-                        )}
-
-                        {attachedFiles.length > 0 && (
-                          <div className="max-h-28 overflow-y-auto border border-slate-100 rounded-xl p-2 bg-slate-50 space-y-1.5 scrollbar-thin">
-                            {attachedFiles.map((file, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-[11px] font-medium text-slate-700 bg-white border border-slate-150 rounded-lg px-2.5 py-1.5 shadow-sm">
-                                <span className="truncate max-w-[200px]" title={file.filename}>
-                                  📎 {file.filename}
-                                </span>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-[9px] font-mono text-slate-400 font-medium">
-                                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeAttachment(file.filename)}
-                                    className="text-red-500 hover:text-red-700 font-bold transition-all text-xs px-1 hover:bg-red-50 rounded"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
 
                       <div className="pt-4 flex gap-3 border-t border-slate-100">
