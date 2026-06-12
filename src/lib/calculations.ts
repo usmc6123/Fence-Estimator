@@ -1120,7 +1120,7 @@ export function calculateDetailedTakeOff(
           unitCost: picketUnitCost,
           priceSource: panelMat.priceSource,
           total: totalPicketCost,
-          category: 'Infill',
+          category: panelMat.category || 'Picket',
           formula: `${totalInches}" / 9" = ${backLayer} Back; ${backLayer}-1 = ${frontLayer} Front; +2 Waste`
         });
         skipGenericInfill = true;
@@ -1146,7 +1146,7 @@ export function calculateDetailedTakeOff(
         unit: meshMat.unit,
         unitCost: meshMat.cost,
         total: meshCost,
-        category: 'Infill'
+        category: meshMat.category || 'Picket'
       });
 
       // Top Rail
@@ -1339,7 +1339,7 @@ export function calculateDetailedTakeOff(
         unitCost: panelUnitCost,
         priceSource: panelMat.priceSource,
         total: panelTotalCost,
-        category: 'Infill',
+        category: panelMat.category || 'Picket',
         formula: picketFormula
       });
 
@@ -1856,7 +1856,8 @@ export function calculateDetailedTakeOff(
 
   if (estimate.manualQuantities) {
     Object.entries(estimate.manualQuantities).forEach(([key, qty]) => {
-      if (qty === 0) return;
+      const numericQty = Number(qty);
+      if (!qty || isNaN(numericQty) || numericQty === 0) return;
       
       const mat = materials.find(m => m.id === key || m.name === key);
       if (mat) {
