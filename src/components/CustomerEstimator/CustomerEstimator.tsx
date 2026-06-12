@@ -295,6 +295,7 @@ export default function CustomerEstimator({
                         onNext={handleNext}
                         onBack={handleBack}
                         fenceType={data.fenceType}
+                        data={data}
                       />
                     )}
 

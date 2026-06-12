@@ -1123,13 +1123,6 @@ export default function Estimator({
                       {isAnalyzingBlueprint ? 'Analyzing...' : 'AI Blueprint Import'}
                     </button>
                     <button 
-                      onClick={() => setShowMap(true)}
-                      className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-american-red/5 text-american-red text-xs font-black uppercase tracking-widest hover:bg-american-red/10 hover:scale-105 active:scale-95 transition-all border-2 border-american-red/10"
-                    >
-                      <MapIcon size={16} />
-                      Measure from Map
-                    </button>
-                    <button 
                       onClick={() => {
                         const newRun = { 
                           id: Math.random().toString(36).substr(2, 9), 

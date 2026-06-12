@@ -35,6 +35,12 @@ const INITIAL_DATA: CustomerEstimateData = {
   hasCapAndTrim: false,
   pipePaintColor: 'Black',
   pipeWireType: 'Black',
+  measuredLinearFeet: undefined,
+  measurementMethod: 'manual',
+  mapMeasurementPoints: undefined,
+  mapMeasurementSegments: undefined,
+  customerEnteredAddress: undefined,
+  measurementUpdatedAt: undefined,
 };
 
 export function useCustomerEstimator(
@@ -201,6 +207,12 @@ export function useCustomerEstimator(
       status: 'active',
       jobStatus: 'Estimate Pending',
       linearFeet: data.linearFeet,
+      measuredLinearFeet: data.measuredLinearFeet !== undefined ? data.measuredLinearFeet : null,
+      measurementMethod: data.measurementMethod || 'manual',
+      mapMeasurementPoints: data.mapMeasurementPoints || null,
+      mapMeasurementSegments: data.mapMeasurementSegments || null,
+      customerEnteredAddress: data.customerEnteredAddress || null,
+      measurementUpdatedAt: data.measurementUpdatedAt || null,
       height: data.height,
       defaultStyleId: defaultStyleId,
       defaultHeight: data.height,
@@ -332,6 +344,8 @@ export function useCustomerEstimator(
           zip: (data.zip || '').trim(),
           fenceType: data.fenceType || 'Wood Fence',
           linearFeet: data.linearFeet,
+          measuredLinearFeet: data.measuredLinearFeet !== undefined ? data.measuredLinearFeet : null,
+          measurementMethod: data.measurementMethod || 'manual',
           gateCount: data.needGates ? data.gateCount : 0,
           estimatedPrice: Math.round(breakdown.total * 100) / 100,
           createdAt: new Date().toISOString()

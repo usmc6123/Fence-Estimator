@@ -29,6 +29,12 @@ export interface CustomerEstimateData {
   hasCapAndTrim?: boolean;
   pipePaintColor?: 'Black' | 'Hunter Green' | 'White';
   pipeWireType?: 'Black' | 'Galvanized';
+  measuredLinearFeet?: number;
+  measurementMethod?: 'google_map' | 'manual';
+  mapMeasurementPoints?: { lat: number; lng: number }[];
+  mapMeasurementSegments?: { length: number; start: { lat: number; lng: number }; end: { lat: number; lng: number } }[];
+  customerEnteredAddress?: string;
+  measurementUpdatedAt?: string;
 }
 
 export const MATERIAL_PRICES: Record<string, number> = {

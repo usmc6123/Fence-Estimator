@@ -928,7 +928,8 @@ export default async function handler(req: any, res: any) {
             .replace(/{estimateLink}/g, estimateLink)
             .replace(/{companyName}/g, resolvedFromName)
             .replace(/{companyPhone}/g, resolvedCompanyPhone || '')
-            .replace(/{companyWebsite}/g, resolvedCompanyWebsite || '');
+            .replace(/{companyWebsite}/g, resolvedCompanyWebsite || '')
+            .replace(/{measuredLinearFeet}/g, estimateData.measuredLinearFeet ? String(estimateData.measuredLinearFeet) : (estimateData.linearFeet ? String(estimateData.linearFeet) : ''));
         };
 
         mailSubject = replacePlaceholders(mailSubject);
