@@ -155,7 +155,12 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
       const reader = new FileReader();
       reader.onload = (event) => {
-        const base64Data = event.target?.result as string;
+        let base64Str = (event.target?.result as string) || '';
+        if (base64Str.includes(';base64,')) {
+          base64Str = base64Str.split(';base64,')[1];
+        } else if (base64Str.includes(',')) {
+          base64Str = base64Str.split(',')[1];
+        }
         setAttachedFiles(prev => {
           const exists = prev.some(f => f.filename === file.name);
           if (!exists) {
@@ -163,7 +168,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
               filename: file.name,
               mimeType: file.type || 'application/octet-stream',
               size: file.size,
-              base64Data
+              base64Data: base64Str
             }];
           }
           return prev;
@@ -191,6 +196,14 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     setSendErrorMessage(null);
     setSmtpDiagnostics(null);
 
+    // Rule 8: Vercel payload size check
+    const totalFilesSize = (attachedFiles || []).reduce((sum, f) => sum + (f.size || 0), 0);
+    if (totalFilesSize > 3.2 * 1024 * 1024) {
+      setSendErrorMessage("Attachment upload is too large. Please send fewer or smaller files.");
+      setIsSendingEmail(false);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch(`/api/estimates/write`, {
@@ -206,7 +219,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           senderEmail,
           subject: emailSubject,
           message: emailMessage,
-          attachments: attachedFiles
+          attachments: (attachedFiles && attachedFiles.length > 0) ? attachedFiles : []
         })
       });
 

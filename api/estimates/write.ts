@@ -824,10 +824,11 @@ https://www.lonestarfenceworks.com`;
             return name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
           };
 
-          const attachmentsArray = attachments || [];
+          // Rule 1: Normalize attachments safely
+          const safeAttachments = Array.isArray(attachments) ? attachments : [];
 
           // Validate attachments if present
-          if (attachmentsArray.length > 0) {
+          if (safeAttachments.length > 0) {
             if (!hasValidAdminToken) {
               return res.status(403).json({
                 success: false,
@@ -836,7 +837,6 @@ https://www.lonestarfenceworks.com`;
               });
             }
 
-            const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
             const allowedMimes = [
               'application/pdf',
               'image/jpeg',
@@ -848,22 +848,26 @@ https://www.lonestarfenceworks.com`;
               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             ];
 
+            const dangerousExtensions = ['.exe', '.js', '.html', '.svg', '.bat', '.cmd', '.zip'];
+
             let totalSize = 0;
-            for (const att of attachmentsArray) {
-              if (!att.filename || !att.mimeType || !att.base64Data) {
+            for (const att of safeAttachments) {
+              // Rule 5: Check if the attachment is missing base64Data, filename, or mimeType
+              if (!att || typeof att !== 'object' || !att.filename || !att.mimeType || !att.base64Data) {
                 return res.status(400).json({
                   success: false,
                   error: 'Email send failed',
-                  details: 'Invalid attachment structure. Required fields: filename, mimeType, base64Data.'
+                  details: 'Attachment format is invalid. Please remove the file and attach it again.'
                 });
               }
 
-              const ext = att.filename.split('.').pop()?.toLowerCase();
-              if (!ext || !allowedExtensions.includes(ext)) {
+              const filenameLower = att.filename.toLowerCase();
+              const hasDangerousExtension = dangerousExtensions.some(ext => filenameLower.endsWith(ext));
+              if (hasDangerousExtension) {
                 return res.status(400).json({
                   success: false,
                   error: 'Email send failed',
-                  details: `File type "${att.filename}" is not supported. Only PDF, JPG, PNG, DOC, DOCX, XLS, XLSX files are allowed.`
+                  details: `File "${att.filename}" has a blocked dangerous extension.`
                 });
               }
 
@@ -875,11 +879,21 @@ https://www.lonestarfenceworks.com`;
                 });
               }
 
-              let base64Chunk = att.base64Data;
-              if (base64Chunk.includes(';base64,')) {
-                base64Chunk = base64Chunk.split(';base64,')[1];
+              let baseLine64 = att.base64Data;
+              if (baseLine64.includes(';base64,')) {
+                baseLine64 = baseLine64.split(';base64,')[1];
               }
-              const buffer = Buffer.from(base64Chunk, 'base64');
+
+              let buffer: Buffer;
+              try {
+                buffer = Buffer.from(baseLine64, 'base64');
+              } catch (parseErr) {
+                return res.status(400).json({
+                  success: false,
+                  error: 'Email send failed',
+                  details: 'Attachment format is invalid. Please remove the file and attach it again.'
+                });
+              }
 
               if (buffer.length > 10 * 1024 * 1024) {
                 return res.status(400).json({
@@ -1098,22 +1112,38 @@ https://www.lonestarfenceworks.com`;
           let errorType = 'UNKNOWN';
           let diagnosticInfo: any = null;
 
-          // Prepare email attachments for nodemailer with robust array guards
-          const emailAttachments = (Array.isArray(attachmentsArray) && attachmentsArray.length > 0)
-            ? attachmentsArray
-                .filter((att: any) => att && typeof att.filename === 'string' && typeof att.base64Data === 'string' && att.base64Data.trim() !== '')
-                .map((att: any) => {
-                  let base64Chunk = att.base64Data;
-                  if (base64Chunk.includes(';base64,')) {
-                    base64Chunk = base64Chunk.split(';base64,')[1];
-                  }
-                  return {
-                    filename: sanitizeFilename(att.filename),
-                    content: Buffer.from(base64Chunk, 'base64'),
-                    contentType: att.mimeType || 'application/octet-stream'
-                  };
-                })
+          // Rule 3: Fix Nodemailer attachment mapping with clean Buffer structure
+          const emailAttachments = (safeAttachments.length > 0)
+            ? safeAttachments.map(file => {
+                let base64Chunk = file.base64Data || '';
+                if (base64Chunk.includes(';base64,')) {
+                  base64Chunk = base64Chunk.split(';base64,')[1];
+                }
+                return {
+                  filename: sanitizeFilename(file.filename || file.name || 'attachment'),
+                  content: Buffer.from(base64Chunk, 'base64'),
+                  contentType: file.mimeType || file.contentType || 'application/octet-stream'
+                };
+              })
             : [];
+
+          // Rule 7: Add temporary debug logging
+          console.log(`[SMTP ATTACHMENT DEBUG LOG]`);
+          console.log(`- attachment count: ${emailAttachments.length}`);
+          if (emailAttachments.length > 0) {
+            emailAttachments.forEach((att: any, idx: number) => {
+              const fileObj = safeAttachments[idx] || {};
+              console.log(`  - File [${idx + 1}]:`);
+              console.log(`    * filename: ${att.filename}`);
+              console.log(`    * mime type: ${att.contentType}`);
+              console.log(`    * calculated size: ${att.content.length} bytes`);
+              console.log(`    * whether base64Data exists: ${!!fileObj.base64Data}`);
+            });
+            const totalBytes = emailAttachments.reduce((sum: number, att: any) => sum + att.content.length, 0);
+            console.log(`  * total calculated attachment size: ${totalBytes} bytes`);
+          } else {
+            console.log(`  * no files attached to this dispatch request.`);
+          }
 
           try {
             const transporter = nodemailer.createTransport(transporterConfig);
