@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -974,6 +974,63 @@ export default function CustomerContract({
               </div>
             </div>
           </div>
+
+          {/* Project Drawing / Site Plan section */}
+          {estimate.drawingUrl && (
+            <div className="space-y-6 pt-12 border-t border-[#F0F0F0]">
+              <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center gap-3">
+                <span className="h-6 w-1 bg-american-red rounded-full" />
+                Project Drawing / Site Plan
+              </h3>
+              {estimate.drawingMimeType?.includes('pdf') ? (
+                <div>
+                  <div className="no-print bg-[#F9F9F9] rounded-3xl p-8 border border-[#E5E5E5] flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <FileText size={24} className="text-american-blue" />
+                      <div>
+                        <h4 className="text-sm font-bold text-american-blue">{estimate.drawingFileName || 'View Uploaded Project Drawing'}</h4>
+                        <p className="text-xs text-[#999999]">PDF Document</p>
+                      </div>
+                    </div>
+                    <a 
+                      href={estimate.drawingUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all w-full sm:w-auto text-center"
+                    >
+                      View Uploaded Project Drawing
+                    </a>
+                  </div>
+                  <div className="hidden print:block p-4 border border-dashed rounded-xl text-xs font-semibold text-slate-800">
+                    📎 Reference PDF Drawing: <strong className="font-bold underline">{estimate.drawingFileName}</strong>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 break-all">{estimate.drawingUrl}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl p-4 border border-[#E5E5E5] flex flex-col gap-4 print:p-0 print:border-0">
+                  <div className="max-w-2xl mx-auto overflow-hidden rounded-2xl border border-american-blue/10 print:border-0">
+                    <img 
+                      src={estimate.drawingUrl} 
+                      alt="Project site plan or layout drawing"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-auto object-contain max-h-[500px]" 
+                    />
+                  </div>
+                  <div className="no-print text-center">
+                    <a 
+                      href={estimate.drawingUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-2 text-xs font-bold text-american-blue hover:underline"
+                    >
+                      <ExternalLink size={14} />
+                      Open Full Resolution Drawing
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Terms & Conditions (From PDFs) */}
           <div className="space-y-8 pt-12 border-t border-[#F0F0F0]">

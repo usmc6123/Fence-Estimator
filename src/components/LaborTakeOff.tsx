@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2 } from 'lucide-react';
+import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -253,6 +253,62 @@ export default function LaborTakeOff({
               </div>
             </div>
           </div>
+
+          {/* Project Drawing / Layout Reference */}
+          {estimate.drawingUrl && (
+            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+              <h3 className="text-sm font-black text-american-blue uppercase tracking-[0.2em] flex items-center gap-2">
+                <Image size={16} /> Project Drawing / Layout Reference
+              </h3>
+              {estimate.drawingMimeType?.includes('pdf') ? (
+                <div>
+                  <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E5E5E5]">
+                    <div className="flex items-center gap-3">
+                      <FileText size={24} className="text-american-blue" />
+                      <div>
+                        <h4 className="text-sm font-bold text-american-blue">{estimate.drawingFileName || 'View Uploaded Project Drawing'}</h4>
+                        <p className="text-xs text-[#999999]">PDF Document</p>
+                      </div>
+                    </div>
+                    <a 
+                      href={estimate.drawingUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="px-6 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all text-center"
+                    >
+                      View Uploaded Project Drawing
+                    </a>
+                  </div>
+                  <div className="hidden print:block p-4 border border-dashed rounded-xl text-xs font-semibold text-slate-800">
+                    📎 Reference PDF Drawing: <strong className="font-bold underline">{estimate.drawingFileName}</strong>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 break-all">{estimate.drawingUrl}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] flex flex-col gap-4 print:p-0 print:border-0">
+                  <div className="max-w-2xl mx-auto overflow-hidden rounded-2xl border border-american-blue/10 print:border-0 p-1">
+                    <img 
+                      src={estimate.drawingUrl} 
+                      alt="Project site plan or layout drawing"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-auto object-contain max-h-[500px]" 
+                    />
+                  </div>
+                  <div className="no-print text-center">
+                    <a 
+                      href={estimate.drawingUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-2 text-xs font-bold text-american-blue hover:underline"
+                    >
+                      <ExternalLink size={14} />
+                      Open Full Resolution Drawing
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {data.runs.map((run) => {
             const runLabor = run.items.filter(i => i.category === 'Labor' || i.category === 'Demolition');

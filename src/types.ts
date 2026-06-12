@@ -159,6 +159,13 @@ export interface Estimate {
   customerZip?: string;
   date: string;
   
+  // Project Drawing / Site Plan
+  drawingUrl?: string;
+  drawingFileName?: string;
+  drawingMimeType?: string;
+  drawingUploadedAt?: string;
+  drawingStoragePath?: string;
+  
   jobStatus?: JobStatus;
   actualExpenses?: JobExpense[];
   actualLaborCost?: number; // Manual entry for total labor payout

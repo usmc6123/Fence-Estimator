@@ -4,7 +4,8 @@ import {
   Calculator, Plus, Trash2, Send, Download, CheckCircle2, 
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map as MapIcon, X, Printer, Share2, Trees, Droplets,
-  TrendingUp, RotateCcw, Package, Navigation, Image, ArrowUp, ArrowDown
+  TrendingUp, RotateCcw, Package, Navigation, Image, ArrowUp, ArrowDown,
+  Upload, ExternalLink
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote, User } from '../types';
@@ -12,7 +13,8 @@ import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
-import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, getEstimateDoc, storage } from '../lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import FileGallery from './FileGallery';
 import { analyzeBlueprintDocument } from '../services/geminiService';
@@ -86,6 +88,128 @@ export default function Estimator({
 
   const [showGhlSync, setShowGhlSync] = React.useState(false);
   const [newCustomLabor, setNewCustomLabor] = React.useState({ name: '', cost: 0 });
+
+  const [isUploadingDrawing, setIsUploadingDrawing] = React.useState(false);
+  const drawingInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleDrawingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!user) {
+      alert('Only logged-in admin/employee users can upload drawings.');
+      return;
+    }
+
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file format. Please upload PDF, JPG, PNG, or WEBP.');
+      return;
+    }
+
+    setIsUploadingDrawing(true);
+
+    try {
+      let currentId = estimate.id;
+      if (!currentId) {
+        currentId = `est-${Math.random().toString(36).substr(2, 9)}`;
+        setEstimate({ ...estimate, id: currentId });
+      }
+
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `estimate-drawings/${currentId}/${timestamp}-${sanitizedName}`;
+      const fRef = storageRef(storage, storagePath);
+
+      const snapshot = await uploadBytes(fRef, file);
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+
+      const drawingMetadata = {
+        drawingUrl: downloadUrl,
+        drawingFileName: file.name,
+        drawingMimeType: file.type,
+        drawingUploadedAt: new Date().toISOString(),
+        drawingStoragePath: storagePath
+      };
+
+      const updatedEstimate = {
+        ...estimate,
+        id: currentId,
+        ...drawingMetadata
+      };
+
+      setEstimate(updatedEstimate);
+
+      try {
+        const token = localStorage.getItem('company_admin_token');
+        await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify(updatedEstimate)
+        });
+      } catch (saveErr) {
+        console.warn('Background drawing upload sync failed, but preserved in state:', saveErr);
+      }
+
+      alert('Drawing uploaded successfully and attached to this estimate.');
+    } catch (error: any) {
+      console.error('Error uploading drawing:', error);
+      alert(`Upload failed: ${error.message || error}`);
+    } finally {
+      setIsUploadingDrawing(false);
+      if (drawingInputRef.current) drawingInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveDrawing = async () => {
+    if (!user) {
+      alert('Only logged-in admin/employee users can remove drawings.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to remove the drawing/site plan?')) {
+      return;
+    }
+
+    const storagePath = estimate.drawingStoragePath;
+    
+    const updatedEstimate = { ...estimate };
+    delete updatedEstimate.drawingUrl;
+    delete updatedEstimate.drawingFileName;
+    delete updatedEstimate.drawingMimeType;
+    delete updatedEstimate.drawingUploadedAt;
+    delete updatedEstimate.drawingStoragePath;
+
+    setEstimate(updatedEstimate);
+
+    try {
+      if (storagePath) {
+        const fRef = storageRef(storage, storagePath);
+        await deleteObject(fRef);
+      }
+    } catch (storageErr) {
+      console.warn('Could not delete original file from Firebase Storage:', storageErr);
+    }
+
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify(updatedEstimate)
+      });
+    } catch (saveErr) {
+      console.warn('Background drawing remove sync failed, but preserved in state:', saveErr);
+    }
+
+    alert('Drawing removed successfully.');
+  };
 
   const defaultStyle = FENCE_STYLES.find(s => s.id === estimate.defaultStyleId) || FENCE_STYLES[0];
   const defaultVisualStyle = defaultStyle.visualStyles.find(vs => vs.id === estimate.defaultVisualStyleId) || defaultStyle.visualStyles[0];
@@ -623,6 +747,101 @@ export default function Estimator({
                   });
                 }}
               />
+            </div>
+
+            {/* Project Drawing / Site Plan Section */}
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-blue/10 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-american-blue uppercase tracking-widest">Project Drawing / Site Plan</h3>
+                  <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mt-1">Attach blueprint or layout reference (PDF, JPG, PNG, WEBP)</p>
+                </div>
+                {user && (
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      ref={drawingInputRef}
+                      className="hidden" 
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      onChange={handleDrawingUpload}
+                    />
+                    <button
+                      type="button"
+                      disabled={isUploadingDrawing}
+                      onClick={() => drawingInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 shadow-md shadow-american-blue/10"
+                    >
+                      <Upload size={14} />
+                      {isUploadingDrawing ? 'Uploading...' : (estimate.drawingUrl ? 'Replace' : 'Upload')}
+                    </button>
+                    {estimate.drawingUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveDrawing}
+                        className="p-2 bg-american-red text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md shadow-american-red/20"
+                        title="Remove Drawing"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {estimate.drawingUrl ? (
+                <div className="rounded-2xl border-2 border-[#F0F0F0] p-4 bg-[#FBFBFB]">
+                  {estimate.drawingMimeType?.includes('pdf') ? (
+                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-[#E5E5E5]">
+                      <div className="flex items-center gap-3">
+                        <FileText size={24} className="text-american-blue" />
+                        <div>
+                          <h4 className="text-sm font-bold text-american-blue truncate max-w-[200px] sm:max-w-xs">{estimate.drawingFileName || 'Document'}</h4>
+                          <p className="text-xs text-[#999999]">PDF Document</p>
+                        </div>
+                      </div>
+                      <a 
+                        href={estimate.drawingUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="px-4 py-2 bg-american-blue/10 hover:bg-american-blue/20 text-american-blue rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-1.5"
+                      >
+                        Open PDF
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="max-h-[300px] overflow-hidden rounded-xl border border-[#E5E5E5] bg-white flex items-center justify-center p-2">
+                        <img 
+                          src={estimate.drawingUrl} 
+                          alt="Layout Drawing" 
+                          referrerPolicy="no-referrer"
+                          className="max-h-[280px] w-auto object-contain"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-[#999999]">
+                        <span className="font-bold truncate max-w-[200px] sm:max-w-xs">{estimate.drawingFileName || 'image.png'}</span>
+                        <a 
+                          href={estimate.drawingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="flex items-center gap-1 hover:text-american-blue font-bold uppercase tracking-widest text-[10px]"
+                        >
+                          View Fullscreen <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-8 flex flex-col items-center justify-center border-2 border-dashed border-[#F0F0F0] rounded-2xl">
+                  <Image size={36} className="text-[#BBBBBB] mb-2 animate-pulse" />
+                  <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest">No Drawing or Site Plan Attached</p>
+                  {!user && (
+                    <p className="text-[9px] font-bold text-american-red uppercase tracking-widest mt-1">Please log in to upload drawings</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );
