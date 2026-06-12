@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { sendGhlWebhook } from '../webhooks/ghl';
+import { sendGhlWorkflowWebhook } from '../../src/lib/ghlWebhook';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
@@ -279,13 +279,13 @@ export default async function handler(req: any, res: any) {
         declineReason: declineReason || 'Not specified'
       };
 
-      sendGhlWebhook(eventType, String(estimateId), eventPayload, db, ownerUid).catch(err => {
+      sendGhlWorkflowWebhook(eventType, eventPayload, null, db, String(estimateId)).catch(err => {
         console.error(`Triggering ${eventType} webhook failed:`, err);
       });
 
       await targetRef.update(updates);
       console.log(`Estimate ${estimateId} public decision recorded:`, updates);
-      return res.status(200).json({ success: true, decision: updates });
+      return res.status(200).json({ success: true, decision: updates, debugBuild: "fixed-ghl-import-crash-v1" });
     }
 
     const authHeader = req.headers.authorization;
@@ -688,31 +688,36 @@ export default async function handler(req: any, res: any) {
           updates.representativeSignedDate = now;
           updates.customerEmailSentAt = now;
           updates.jobStatus = 'Estimate Sent';
-
-          // Trigger manual_estimate_sent GHL webhook asynchronously
-          const manualPayload = {
-            customerName: estimateData.customerName || '',
-            firstName: estimateData.customerFirstName || '',
-            lastName: estimateData.customerLastName || '',
-            email: customerEmail || estimateData.customerEmail || '',
-            phone: estimateData.customerPhone || '',
-            address: estimateData.customerAddress || estimateData.customerStreet || '',
-            city: estimateData.customerCity || '',
-            state: estimateData.customerState || '',
-            zip: estimateData.customerZip || '',
-            fenceType: estimateData.fenceType || (estimateData.materials?.[0]?.fenceStyle) || 'Wood Fence',
-            linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
-            estimatedPrice: Number(estimateData.totalCost || estimateData.manualGrandTotal || 0),
-            estimateNumber: estimateData.estimateNumber || '',
-            estimateLink: estimateLink,
-            sentAt: now
-          };
-          sendGhlWebhook('manual_estimate_sent', String(estimateId), manualPayload, db, ownerUid).catch(err => {
-            console.error('Triggering manual_estimate_sent webhook failed:', err);
-          });
         }
 
+        // Update Firestore email sent log first
         await targetRef.set(updates, { merge: true });
+
+        if (mailSent) {
+          // Trigger manual_estimate_sent GHL webhook separately after database update to prevent blocking
+          try {
+            const manualPayload = {
+              customerName: estimateData.customerName || '',
+              firstName: estimateData.customerFirstName || '',
+              lastName: estimateData.customerLastName || '',
+              email: customerEmail || estimateData.customerEmail || '',
+              phone: estimateData.customerPhone || '',
+              address: estimateData.customerAddress || estimateData.customerStreet || '',
+              city: estimateData.customerCity || '',
+              state: estimateData.customerState || '',
+              zip: estimateData.customerZip || '',
+              fenceType: estimateData.fenceType || (estimateData.materials?.[0]?.fenceStyle) || 'Wood Fence',
+              linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
+              estimatedPrice: Number(estimateData.totalCost || estimateData.manualGrandTotal || 0),
+              estimateNumber: estimateData.estimateNumber || '',
+              estimateLink: estimateLink,
+              sentAt: now
+            };
+            await sendGhlWorkflowWebhook('manual_estimate_sent', manualPayload, settingsData, db, String(estimateId));
+          } catch (ghlError) {
+            console.error("GHL webhook failed, continuing email send:", ghlError);
+          }
+        }
 
         if (!mailSent) {
           return res.status(500).json({
@@ -726,7 +731,8 @@ export default async function handler(req: any, res: any) {
           success: true,
           mailSent,
           portalUrl: estimateLink,
-          sentAt: now
+          sentAt: now,
+          debugBuild: "fixed-ghl-import-crash-v1"
         });
       }
 
@@ -776,7 +782,8 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({
         id: savedId,
-        ...estimateData
+        ...estimateData,
+        debugBuild: "fixed-ghl-import-crash-v1"
       });
 
     } else if (method === 'PUT') {
@@ -848,15 +855,15 @@ export default async function handler(req: any, res: any) {
         const ownerUid = existingData.userId || existingData.uid || existingData.ownerId || (decoded && decoded.uid);
 
         if (newStatus === 'Completed') {
-          sendGhlWebhook('estimate_completed', String(id), eventPayload, db, ownerUid).catch(err => {
+          sendGhlWorkflowWebhook('estimate_completed', eventPayload, null, db, String(id)).catch(err => {
             console.error('Triggering estimate_completed webhook failed:', err);
           });
         } else if (newStatus === 'Accepted') {
-          sendGhlWebhook('estimate_accepted', String(id), eventPayload, db, ownerUid).catch(err => {
+          sendGhlWorkflowWebhook('estimate_accepted', eventPayload, null, db, String(id)).catch(err => {
             console.error('Triggering estimate_accepted webhook failed:', err);
           });
         } else if (newStatus === 'Declined') {
-          sendGhlWebhook('estimate_declined', String(id), eventPayload, db, ownerUid).catch(err => {
+          sendGhlWorkflowWebhook('estimate_declined', eventPayload, null, db, String(id)).catch(err => {
             console.error('Triggering estimate_declined webhook failed:', err);
           });
         }
@@ -865,7 +872,8 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         id,
         ...existingData,
-        ...updates
+        ...updates,
+        debugBuild: "fixed-ghl-import-crash-v1"
       });
 
     } else if (method === 'DELETE') {
