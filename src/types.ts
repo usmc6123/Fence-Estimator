@@ -241,6 +241,9 @@ export interface Estimate {
   discountAmount?: number;
   pricePerFoot?: number;
   totalInvestment?: number;
+  baseFencePrice?: number;
+  calculatedGrandTotal?: number;
+  pricingUpdatedAt?: string;
   contractProjectDate?: string;
   customerEmailSentAt?: string | null;
   customerSentAt?: string | null;

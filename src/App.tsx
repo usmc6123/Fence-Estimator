@@ -1077,6 +1077,8 @@ export default function App() {
               onLoadEstimate={handleLoadEstimate}
               setActiveTab={setActiveTab}
               user={user}
+              materials={materials}
+              laborRates={laborRates}
             />
           )}
           {activeTab === 'financials' && (

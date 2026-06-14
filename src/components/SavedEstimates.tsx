@@ -6,11 +6,12 @@ import {
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
   FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle
 } from 'lucide-react';
-import { SavedEstimate, JobStatus, JobPhoto, User } from '../types';
+import { SavedEstimate, JobStatus, JobPhoto, User, MaterialItem, LaborRates } from '../types';
 import { formatCurrency, cn, assignEstimateNumbers, getEstimateFinalPrice } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
 import { updateDoc, deleteDoc } from 'firebase/firestore';
+import { calculateDetailedTakeOff } from '../lib/calculations';
 
 interface SavedEstimatesProps {
   savedEstimates: SavedEstimate[];
@@ -18,11 +19,13 @@ interface SavedEstimatesProps {
   onLoadEstimate: (estimate: SavedEstimate) => void;
   setActiveTab: (tab: string) => void;
   user: User | null;
+  materials: MaterialItem[];
+  laborRates: LaborRates;
 }
 
 const STATUS_FLOW: JobStatus[] = ['Estimate Pending', 'Estimate Sent', 'Accepted', 'Completed'];
 
-export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user }: SavedEstimatesProps) {
+export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user, materials, laborRates }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
@@ -121,7 +124,128 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     setSendErrorMessage(null);
 
     try {
+      // 1. Recalculate takeoff first on the frontend
+      const mergedEstimate = {
+        ...sendModalEstimate,
+        manualSectionTotals: sendModalEstimate.manualSectionTotals || [],
+        manualGateTotals: sendModalEstimate.manualGateTotals || [],
+        manualDemoTotals: sendModalEstimate.manualDemoTotals || [],
+        manualGrandTotal: sendModalEstimate.manualGrandTotal !== undefined ? sendModalEstimate.manualGrandTotal : null,
+        manualGatePrices: sendModalEstimate.manualGatePrices || {}
+      } as any;
+      
+      const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materials, laborRates);
+      const pricing = recalculatedTakeOff.pricing;
+      const finalPrice = pricing.finalCustomerPrice;
+
+      // Gate Summary construction
+      let gateCount = 0;
+      let singleGates = 0;
+      let doubleGates = 0;
+      const runsData = mergedEstimate.runs || [];
+      runsData.forEach((run: any) => {
+        const gatesList = run.gateDetails || run.gates || [];
+        gatesList.forEach((gate: any) => {
+          gateCount++;
+          if (String(gate.gateType || '').toLowerCase().includes('double') || String(gate.type || '').toLowerCase().includes('double')) {
+            doubleGates++;
+          } else {
+            singleGates++;
+          }
+        });
+      });
+      const gateSummary = gateCount > 0 
+        ? `${gateCount} Gate(s) (${singleGates} Single, ${doubleGates} Double)`
+        : 'None';
+
+      // Fence type summary
+      const styles = Array.from(new Set(recalculatedTakeOff.runs.map((r: any) => r.style || 'Custom Fence')));
+      const fenceType = styles.length === 0 ? 'Custom Fence' : styles.length === 1 ? styles[0] : 'Multi-Style Wood/Iron Fence';
+
+      const height = mergedEstimate.defaultHeight || (recalculatedTakeOff.runs[0]?.height) || 6;
+
+      // Create the contractSnapshot object
+      const contractSnapshot = {
+        estimateId: String(sendModalEstimate.id),
+        estimateNumber: mergedEstimate.estimateNumber || sendModalEstimate.estimateNumber || '',
+        customerName: mergedEstimate.customerName || 'Valued Customer',
+        customerEmail: customerEmail,
+        fenceType: fenceType,
+        height: height,
+        linearFeet: Number(mergedEstimate.linearFeet || recalculatedTakeOff.runs.reduce((sum: number, r: any) => sum + r.netLF, 0) || 0),
+        runs: recalculatedTakeOff.runs.map((run: any, i: number) => {
+          const origRun: any = runsData[i] || {};
+          return {
+            name: run.runName || origRun.name || `Section ${i + 1}`,
+            linearFeet: run.netLF,
+            totalFenceCharge: run.totalFenceCharge || run.finalFence || 0,
+            pricePerFoot: run.pricePerFoot || 0,
+            totalGateCharge: run.totalGateCharge || run.finalGate || 0,
+            demoCharge: run.demoCharge || run.finalDemo || 0,
+            gateDetails: origRun.gateDetails || origRun.gates || [],
+            styleName: run.style || '',
+            styleType: run.styleType || '',
+            height: run.height || 6,
+            hasRotBoard: !!run.hasRotBoard,
+            hasTopCap: !!run.hasTopCap,
+            hasTrim: !!run.hasTrim,
+            picketStyle: run.picketStyle || '',
+            ironInstallType: run.ironInstallType || '',
+            ironPanelType: run.ironPanelType || '',
+          };
+        }),
+        gateSummary: gateSummary,
+        demoRemovalPrice: pricing.demoRemovalPrice || 0,
+        addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
+        discountAmount: pricing.discountAmount || 0,
+        discountLabel: mergedEstimate.discountLabel || 'Discount',
+        subtotalBeforeDiscount: pricing.subtotalBeforeDiscount || 0,
+        finalCustomerPrice: finalPrice,
+        manualGrandTotal: mergedEstimate.manualGrandTotal !== undefined ? mergedEstimate.manualGrandTotal : null,
+        pricePerFoot: pricing.pricePerFoot || 0,
+        totalInvestment: finalPrice,
+        contractScope: mergedEstimate.contractScope || mergedEstimate.localAiScope || 'Detailed Scope of Work is being finalized.',
+        sentAt: new Date().toISOString(),
+        sentBy: user?.email || 'Admin'
+      };
+
+      const pricingUpdates = {
+        finalCustomerPrice: finalPrice,
+        manualGrandTotal: mergedEstimate.manualGrandTotal !== undefined ? mergedEstimate.manualGrandTotal : null,
+        estimatedPrice: finalPrice,
+        grandTotal: finalPrice,
+        totalInvestment: finalPrice,
+        pricePerFoot: pricing.pricePerFoot || 0,
+        subtotalBeforeDiscount: pricing.subtotalBeforeDiscount || 0,
+        baseFencePrice: pricing.totalSectionsSum || 0,
+        addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
+        demoRemovalPrice: pricing.demoRemovalPrice || 0,
+        discountAmount: pricing.discountAmount || 0,
+        calculatedGrandTotal: pricing.calculatedTotal || 0,
+        pricingUpdatedAt: new Date().toISOString(),
+        contractSnapshot: contractSnapshot
+      };
+
       const token = localStorage.getItem('company_admin_token');
+
+      // Phase 1: Call PUT to save recalculated state and snapshot to Firestore prior to sending email
+      const saveResponse = await fetch(`/api/estimates/write`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          id: sendModalEstimate.id,
+          ...pricingUpdates
+        })
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error(`Failed to save updated pricing fields to Firestore prior to sending the contract. Status: ${saveResponse.status}`);
+      }
+
+      // Phase 2: Dispatch SMTP email with precalculated contractSnapshot
       const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
         headers: {
@@ -135,7 +259,12 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           senderEmail,
           subject: emailSubject,
           message: emailMessage,
-          estimateDetails: sendModalEstimate
+          estimateDetails: {
+            ...sendModalEstimate,
+            ...pricingUpdates
+          },
+          pricingUpdates,
+          contractSnapshot
         })
       });
 

@@ -292,6 +292,75 @@ export default function CustomerContract({
     }
   }, [estimate.contractScope]);
 
+  // Synchronize computed contract prices automatically back to parent store / Firestore
+  useEffect(() => {
+    if (isCustomerView) return;
+    if (!onUpdateEstimate) return;
+
+    const finalPrice = Number(data.pricing.finalCustomerPrice || 0);
+    const manualGT = manualGrandTotal !== null ? Number(manualGrandTotal) : null;
+    const calcGT = Number(data.pricing.calculatedTotal || 0);
+    const estPrice = finalPrice;
+    const gTotal = finalPrice;
+    const totInvest = finalPrice;
+    const pPerFoot = Number(data.pricing.pricePerFoot || 0);
+    const subtotal = Number(data.pricing.subtotalBeforeDiscount || 0);
+    const baseFence = Number(data.pricing.totalSectionsSum || 0);
+    const sitePrep = Number(data.pricing.addOnSitePrepPrice || 0);
+    const demoRemoval = Number(data.pricing.demoRemovalPrice || 0);
+    const discount = Number(data.pricing.discountAmount || 0);
+
+    const diff = 
+      (estimate.finalCustomerPrice === undefined ? null : Number(estimate.finalCustomerPrice)) !== finalPrice ||
+      (estimate.manualGrandTotal === undefined ? null : (estimate.manualGrandTotal === null ? null : Number(estimate.manualGrandTotal))) !== manualGT ||
+      (estimate.estimatedPrice === undefined ? null : Number(estimate.estimatedPrice)) !== estPrice ||
+      (estimate.grandTotal === undefined ? null : Number(estimate.grandTotal)) !== gTotal ||
+      (estimate.totalInvestment === undefined ? null : Number(estimate.totalInvestment)) !== totInvest ||
+      (estimate.pricePerFoot === undefined ? null : Number(estimate.pricePerFoot)) !== pPerFoot ||
+      (estimate.subtotalBeforeDiscount === undefined ? null : Number(estimate.subtotalBeforeDiscount)) !== subtotal ||
+      (estimate.baseFencePrice === undefined ? null : Number(estimate.baseFencePrice)) !== baseFence ||
+      (estimate.addOnSitePrepPrice === undefined ? null : Number(estimate.addOnSitePrepPrice)) !== sitePrep ||
+      (estimate.demoRemovalPrice === undefined ? null : Number(estimate.demoRemovalPrice)) !== demoRemoval ||
+      (estimate.discountAmount === undefined ? null : Number(estimate.discountAmount)) !== discount ||
+      (estimate.calculatedGrandTotal === undefined ? null : Number(estimate.calculatedGrandTotal)) !== calcGT;
+
+    if (diff) {
+      onUpdateEstimate({
+        finalCustomerPrice: finalPrice,
+        manualGrandTotal: manualGT,
+        estimatedPrice: estPrice,
+        grandTotal: gTotal,
+        totalInvestment: totInvest,
+        pricePerFoot: pPerFoot,
+        subtotalBeforeDiscount: subtotal,
+        baseFencePrice: baseFence,
+        addOnSitePrepPrice: sitePrep,
+        demoRemovalPrice: demoRemoval,
+        discountAmount: discount,
+        calculatedGrandTotal: calcGT,
+        pricingUpdatedAt: new Date().toISOString()
+      });
+    }
+  }, [
+    estimate.id,
+    data.pricing,
+    manualGrandTotal,
+    onUpdateEstimate,
+    isCustomerView,
+    estimate.finalCustomerPrice,
+    estimate.manualGrandTotal,
+    estimate.estimatedPrice,
+    estimate.grandTotal,
+    estimate.totalInvestment,
+    estimate.pricePerFoot,
+    estimate.subtotalBeforeDiscount,
+    estimate.baseFencePrice,
+    estimate.addOnSitePrepPrice,
+    estimate.demoRemovalPrice,
+    estimate.discountAmount,
+    estimate.calculatedGrandTotal
+  ]);
+
   // Check if all runs are homogenous (same specs)
   const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => {
     const isWood = r.style.includes('Wood') || r.style.includes('Cedar') || r.style.includes('Pine');
@@ -991,7 +1060,7 @@ export default function CustomerContract({
                   <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
                     {isCustomerView ? (
                       <span className="text-5xl md:text-7xl font-black tabular-nums tracking-tighter leading-none text-white">
-                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                        {formatCurrency(getEstimateFinalPrice(estimate))}
                       </span>
                     ) : (
                       <>

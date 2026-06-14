@@ -2,7 +2,6 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
-import { calculateDetailedTakeOff } from '../../src/lib/calculations';
 import { getEstimateFinalPrice } from '../../src/lib/utils';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
@@ -1286,120 +1285,14 @@ export default async function handler(req: any, res: any) {
         let estimateData = snap.data() || {};
         const customerName = estimateData.customerName || 'Valued Customer';
 
-        // Load materials, quotes, and labor rates to recalculate pricing
-        let materialsList: any[] = [];
-        let quotesList: any[] = [];
-        let laborRates: any = {};
-
-        try {
-          const materialsSnap = await db.collection('materials').get();
-          materialsList = materialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (mErr) {
-          console.error("Failed to load materials for contract Snapshot recalculation:", mErr);
-        }
-
-        try {
-          const quotesSnap = await db.collection('quotes').get();
-          quotesList = quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (qErr) {
-          console.error("Failed to load quotes for contract Snapshot recalculation:", qErr);
-        }
-
-        try {
-          const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId || 'main';
-          const settingsSnap = await db.collection('companySettings').doc(ownerUid).get();
-          if (settingsSnap.exists) {
-            laborRates = settingsSnap.data()?.laborRates || {};
-          } else {
-            const mainSettingsSnap = await db.collection('companySettings').doc('main').get();
-            if (mainSettingsSnap.exists) {
-              laborRates = mainSettingsSnap.data()?.laborRates || {};
-            }
-          }
-        } catch (lErr) {
-          console.error("Failed to load labor rates for contract Snapshot recalculation:", lErr);
-        }
-
         const requestEstimateDetails = req.body.estimateDetails || {};
-        const mergedEstimate = {
-          ...estimateData,
-          ...requestEstimateDetails
-        };
+        const pricingUpdatesFromReq = req.body.pricingUpdates || requestEstimateDetails.pricingUpdates;
+        const contractSnapshotFromReq = req.body.contractSnapshot || requestEstimateDetails.contractSnapshot;
 
-        const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materialsList, laborRates);
-        const pricing = recalculatedTakeOff.pricing;
-        const finalPrice = pricing.finalCustomerPrice;
-
-        // Gate Summary construction
-        let gateCount = 0;
-        let singleGates = 0;
-        let doubleGates = 0;
-        const runsData = mergedEstimate.runs || [];
-        runsData.forEach((run: any) => {
-          const gatesList = run.gateDetails || run.gates || [];
-          gatesList.forEach((gate: any) => {
-            gateCount++;
-            if (String(gate.gateType || '').toLowerCase().includes('double') || String(gate.type || '').toLowerCase().includes('double')) {
-              doubleGates++;
-            } else {
-              singleGates++;
-            }
-          });
-        });
-        const gateSummary = gateCount > 0 
-          ? `${gateCount} Gate(s) (${singleGates} Single, ${doubleGates} Double)`
-          : 'None';
-
-        // Fence type summary
-        const styles = Array.from(new Set(recalculatedTakeOff.runs.map((r: any) => r.style || 'Custom Fence')));
-        const fenceType = styles.length === 0 ? 'Custom Fence' : styles.length === 1 ? styles[0] : 'Multi-Style Wood/Iron Fence';
-
-        const height = mergedEstimate.defaultHeight || (recalculatedTakeOff.runs[0]?.height) || 6;
-
-        // Create the contractSnapshot object
-        const contractSnapshot = {
-          estimateId: String(estimateId),
-          estimateNumber: mergedEstimate.estimateNumber || estimateData.estimateNumber || '',
-          customerName: customerName,
-          customerEmail: customerEmail,
-          fenceType: fenceType,
-          height: height,
-          linearFeet: Number(mergedEstimate.linearFeet || recalculatedTakeOff.runs.reduce((sum: number, r: any) => sum + r.netLF, 0) || 0),
-          runs: recalculatedTakeOff.runs.map((run: any, i: number) => {
-            const origRun = runsData[i] || {};
-            return {
-              name: run.runName || origRun.name || `Section ${i + 1}`,
-              linearFeet: run.netLF,
-              totalFenceCharge: run.totalFenceCharge || run.finalFence || 0,
-              pricePerFoot: run.pricePerFoot || 0,
-              totalGateCharge: run.totalGateCharge || run.finalGate || 0,
-              demoCharge: run.demoCharge || run.finalDemo || 0,
-              gateDetails: origRun.gateDetails || origRun.gates || [],
-              styleName: run.style || '',
-              styleType: run.styleType || '',
-              height: run.height || 6,
-              hasRotBoard: !!run.hasRotBoard,
-              hasTopCap: !!run.hasTopCap,
-              hasTrim: !!run.hasTrim,
-              picketStyle: run.picketStyle || '',
-              ironInstallType: run.ironInstallType || '',
-              ironPanelType: run.ironPanelType || '',
-            };
-          }),
-          gateSummary: gateSummary,
-          demoRemovalPrice: pricing.demoRemovalPrice || 0,
-          addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
-          discountAmount: pricing.discountAmount || 0,
-          discountLabel: mergedEstimate.discountLabel || 'Discount',
-          subtotalBeforeDiscount: pricing.subtotalBeforeDiscount || 0,
-          finalCustomerPrice: finalPrice,
-          manualGrandTotal: mergedEstimate.manualGrandTotal !== undefined ? mergedEstimate.manualGrandTotal : null,
-          pricePerFoot: pricing.pricePerFoot || 0,
-          totalInvestment: finalPrice,
-          contractScope: mergedEstimate.contractScope || mergedEstimate.localAiScope || estimateData.contractScope || 'Detailed Scope of Work is being finalized.',
-          sentAt: new Date().toISOString(),
-          sentBy: (decoded as any)?.email || 'Admin'
-        };
+        let finalPrice = requestEstimateDetails.finalCustomerPrice || requestEstimateDetails.grandTotal || 0;
+        if (pricingUpdatesFromReq && pricingUpdatesFromReq.finalCustomerPrice) {
+          finalPrice = pricingUpdatesFromReq.finalCustomerPrice;
+        }
 
         const pricingUpdates = {
           finalCustomerPrice: finalPrice,
@@ -1407,18 +1300,22 @@ export default async function handler(req: any, res: any) {
           grandTotal: finalPrice,
           totalCost: finalPrice,
           total: finalPrice,
-          subtotalBeforeDiscount: pricing.subtotalBeforeDiscount,
-          addOnSitePrepPrice: pricing.addOnSitePrepPrice,
-          demoRemovalPrice: pricing.demoRemovalPrice,
-          discountAmount: pricing.discountAmount,
-          pricePerFoot: pricing.pricePerFoot,
-          contractSnapshot: contractSnapshot,
+          subtotalBeforeDiscount: pricingUpdatesFromReq?.subtotalBeforeDiscount || requestEstimateDetails.subtotalBeforeDiscount || 0,
+          addOnSitePrepPrice: pricingUpdatesFromReq?.addOnSitePrepPrice || requestEstimateDetails.addOnSitePrepPrice || 0,
+          demoRemovalPrice: pricingUpdatesFromReq?.demoRemovalPrice || requestEstimateDetails.demoRemovalPrice || 0,
+          discountAmount: pricingUpdatesFromReq?.discountAmount || requestEstimateDetails.discountAmount || 0,
+          pricePerFoot: pricingUpdatesFromReq?.pricePerFoot || requestEstimateDetails.pricePerFoot || 0,
+          totalInvestment: finalPrice,
+          baseFencePrice: pricingUpdatesFromReq?.baseFencePrice || requestEstimateDetails.baseFencePrice || 0,
+          calculatedGrandTotal: pricingUpdatesFromReq?.calculatedGrandTotal || requestEstimateDetails.calculatedGrandTotal || 0,
+          pricingUpdatedAt: pricingUpdatesFromReq?.pricingUpdatedAt || new Date().toISOString(),
+          contractSnapshot: contractSnapshotFromReq || requestEstimateDetails.contractSnapshot || null,
           // Sync any override arrays if passed or modified
-          ...(mergedEstimate.manualSectionTotals ? { manualSectionTotals: mergedEstimate.manualSectionTotals } : {}),
-          ...(mergedEstimate.manualGateTotals ? { manualGateTotals: mergedEstimate.manualGateTotals } : {}),
-          ...(mergedEstimate.manualDemoTotals ? { manualDemoTotals: mergedEstimate.manualDemoTotals } : {}),
-          ...(mergedEstimate.manualGrandTotal !== undefined ? { manualGrandTotal: mergedEstimate.manualGrandTotal } : {}),
-          ...(mergedEstimate.manualGatePrices ? { manualGatePrices: mergedEstimate.manualGatePrices } : {}),
+          ...(requestEstimateDetails.manualSectionTotals ? { manualSectionTotals: requestEstimateDetails.manualSectionTotals } : {}),
+          ...(requestEstimateDetails.manualGateTotals ? { manualGateTotals: requestEstimateDetails.manualGateTotals } : {}),
+          ...(requestEstimateDetails.manualDemoTotals ? { manualDemoTotals: requestEstimateDetails.manualDemoTotals } : {}),
+          ...(requestEstimateDetails.manualGrandTotal !== undefined ? { manualGrandTotal: requestEstimateDetails.manualGrandTotal } : {}),
+          ...(requestEstimateDetails.manualGatePrices ? { manualGatePrices: requestEstimateDetails.manualGatePrices } : {}),
           updatedAt: new Date().toISOString()
         };
 
