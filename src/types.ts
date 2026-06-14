@@ -231,6 +231,16 @@ export interface Estimate {
   manualGateTotals?: (number | null)[];
   manualDemoTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
+  contractSnapshot?: any;
+  finalCustomerPrice?: number;
+  estimatedPrice?: number;
+  grandTotal?: number;
+  subtotalBeforeDiscount?: number;
+  addOnSitePrepPrice?: number;
+  demoRemovalPrice?: number;
+  discountAmount?: number;
+  pricePerFoot?: number;
+  totalInvestment?: number;
   contractProjectDate?: string;
   customerEmailSentAt?: string | null;
   customerSentAt?: string | null;
@@ -241,14 +251,6 @@ export interface Estimate {
   parentId?: string; // Links to the original version id
   totalCost?: number;
   total?: number;
-  finalCustomerPrice?: number;
-  estimatedPrice?: number;
-  grandTotal?: number;
-  subtotalBeforeDiscount?: number;
-  addOnSitePrepPrice?: number;
-  demoRemovalPrice?: number;
-  discountAmount?: number;
-  pricePerFoot?: number;
 
   scheduledStartDate?: string;
   scheduledEndDate?: string;

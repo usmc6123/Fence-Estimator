@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, getEstimateFinalPrice } from '../lib/utils';
 import { COMPANY_INFO, FENCE_STYLES } from '../constants';
 import { generateAIScope } from '../services/geminiService';
 
@@ -120,14 +120,59 @@ export default function CustomerContract({
       manualGrandTotal: manualGrandTotal,
       manualGatePrices: manualGatePrices
     };
-    return calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
-  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices]);
+    const calculated = calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
+    
+    // OVERRIDE WITH SNAPSHOT IF ON CUSTOMER PORTAL GUEST VIEW
+    if (isCustomerView && estimate.contractSnapshot) {
+      const snap = estimate.contractSnapshot;
+      calculated.pricing = {
+        ...calculated.pricing,
+        finalCustomerPrice: Number(snap.finalCustomerPrice),
+        estimatedPrice: Number(snap.finalCustomerPrice),
+        grandTotal: Number(snap.finalCustomerPrice),
+        manualGrandTotal: snap.manualGrandTotal !== undefined ? snap.manualGrandTotal : null,
+        calculatedTotal: Number(snap.finalCustomerPrice),
+        subtotalBeforeDiscount: snap.subtotalBeforeDiscount !== undefined ? Number(snap.subtotalBeforeDiscount) : calculated.pricing.subtotalBeforeDiscount,
+        addOnSitePrepPrice: snap.addOnSitePrepPrice !== undefined ? Number(snap.addOnSitePrepPrice) : calculated.pricing.addOnSitePrepPrice,
+        demoRemovalPrice: snap.demoRemovalPrice !== undefined ? Number(snap.demoRemovalPrice) : calculated.pricing.demoRemovalPrice,
+        discountAmount: snap.discountAmount !== undefined ? Number(snap.discountAmount) : calculated.pricing.discountAmount,
+        pricePerFoot: snap.pricePerFoot !== undefined ? Number(snap.pricePerFoot) : calculated.pricing.pricePerFoot,
+      };
+      calculated.totals.grandTotal = Number(snap.finalCustomerPrice);
+      calculated.totals.subtotal = snap.subtotalBeforeDiscount !== undefined ? Number(snap.subtotalBeforeDiscount) : calculated.totals.subtotal;
+    }
+    
+    return calculated;
+  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView]);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
 
   // Calculate project financial breakdown for component use
   const projectBreakdown = React.useMemo(() => {
+    if (isCustomerView && estimate.contractSnapshot && estimate.contractSnapshot.runs) {
+      return (estimate.contractSnapshot.runs as any[]).map((run, i) => {
+        return {
+          name: run.name || run.runName || `Section ${i + 1}`,
+          netLF: run.linearFeet !== undefined ? Number(run.linearFeet) : (run.netLF || 0),
+          totalFenceCharge: Number(run.totalFenceCharge !== undefined ? run.totalFenceCharge : (run.finalFence || 0)),
+          pricePerFoot: Number(run.pricePerFoot || 0),
+          totalGateCharge: Number(run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0)),
+          demoCharge: Number(run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0)),
+          gates: run.gateDetails || run.gates || [],
+          style: run.styleName || run.styleId || run.style || '',
+          styleType: run.styleType || '',
+          height: run.height || 6,
+          hasRotBoard: !!run.hasRotBoard,
+          hasTopCap: !!run.hasTopCap,
+          hasTrim: !!run.hasTrim,
+          picketStyle: run.picketStyle || '',
+          ironInstallType: run.ironInstallType || '',
+          ironPanelType: run.ironPanelType || '',
+        };
+      });
+    }
+
     return data.runs.map(run => {
       // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
       const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
@@ -161,7 +206,7 @@ export default function CustomerContract({
         ironPanelType: run.ironPanelType
       };
     });
-  }, [data.runs, markupFactor, taxFactor]);
+  }, [data.runs, markupFactor, taxFactor, isCustomerView, estimate.contractSnapshot]);
 
   // Sync state if estimate changes (e.g. from Estimator tab)
   useEffect(() => {
@@ -983,8 +1028,41 @@ export default function CustomerContract({
                     <span>Debug Admin Pricing Source of Truth</span>
                   </div>
                   <div className="space-y-1">
+                    <div className="flex justify-between text-amber-500 font-bold border-b border-slate-800 pb-1">
+                      <span>Required Diagnoses</span>
+                      <span>Values</span>
+                    </div>
+                    <div className="flex justify-between text-white font-semibold">
+                      <span>Admin Displayed Total:</span>
+                      <span>{formatCurrency(manualGrandTotal ?? editedGrandTotal)}</span>
+                    </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Sum of Run Section Totals:</span>
+                      <span>Firestore finalCustomerPrice:</span>
+                      <span className="text-green-400">{estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null ? formatCurrency(Number(estimate.finalCustomerPrice)) : "undefined"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Firestore manualGrandTotal:</span>
+                      <span className="text-amber-300">{estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? formatCurrency(Number(estimate.manualGrandTotal)) : "undefined"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Firestore estimatedPrice:</span>
+                      <span>{estimate.estimatedPrice !== undefined && estimate.estimatedPrice !== null ? formatCurrency(Number(estimate.estimatedPrice)) : "undefined"}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-800 pb-1.5 mb-1.5">
+                      <span>Firestore grandTotal:</span>
+                      <span>{estimate.grandTotal !== undefined && estimate.grandTotal !== null ? formatCurrency(Number(estimate.grandTotal)) : "undefined"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>contractSnapshot.finalCustomerPrice:</span>
+                      <span className="text-blue-400">{estimate.contractSnapshot?.finalCustomerPrice !== undefined ? formatCurrency(Number(estimate.contractSnapshot.finalCustomerPrice)) : "None (Not Sent)"}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-emerald-400 border-b border-slate-800 pb-1.5 mb-1.5">
+                      <span>Public Portal Displayed Total:</span>
+                      <span>{formatCurrency(getEstimateFinalPrice(estimate))}</span>
+                    </div>
+                    
+                    <div className="flex justify-between pt-1 font-semibold text-slate-400">
+                      <span>Sum of Run Section Totals:</span>
                       <span className="text-white font-bold">{formatCurrency(data.pricing.totalSectionsSum)}</span>
                     </div>
                     {data.pricing.runsPricing.map((run, i) => (
