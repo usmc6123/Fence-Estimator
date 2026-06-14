@@ -41,23 +41,33 @@ export default function CustomerContract({
     }
   };
 
-  // Gracefully clean up case where last name is misplaced in the email field
+  // Gracefully resolve customer metadata preferring contractSnapshot in customer view
+  const resolvedMetaSource = React.useMemo(() => {
+    if (isCustomerView && estimate.contractSnapshot) {
+      return {
+        ...estimate,
+        ...estimate.contractSnapshot
+      };
+    }
+    return estimate;
+  }, [estimate, isCustomerView]);
+
   const resolvedClientName = React.useMemo(() => {
-    let name = estimate.customerName || 'Valued Customer';
-    const email = estimate.customerEmail || '';
+    let name = resolvedMetaSource.customerName || 'Valued Customer';
+    const email = resolvedMetaSource.customerEmail || '';
     if (email && !email.includes('@') && name && !name.toLowerCase().includes(email.toLowerCase())) {
       name = `${name} ${email}`.trim();
     }
     return name;
-  }, [estimate.customerName, estimate.customerEmail]);
+  }, [resolvedMetaSource.customerName, resolvedMetaSource.customerEmail]);
 
   const resolvedClientEmail = React.useMemo(() => {
-    const email = estimate.customerEmail || '';
+    const email = resolvedMetaSource.customerEmail || '';
     if (email && !email.includes('@')) {
       return '';
     }
     return email;
-  }, [estimate.customerEmail]);
+  }, [resolvedMetaSource.customerEmail]);
 
   // Resolve materials based on chosen strategy
   const pricingStrategy = estimate.pricingStrategy || 'best';
@@ -112,6 +122,52 @@ export default function CustomerContract({
   const isInitialMount = React.useRef(true);
 
   const data: DetailedTakeOff = React.useMemo(() => {
+    if (isCustomerView && estimate.contractSnapshot) {
+      const snap = estimate.contractSnapshot;
+      const snapRuns = snap.runs || [];
+      
+      const mockCalculated: DetailedTakeOff = {
+        summary: [],
+        manualSummary: [],
+        runs: [],
+        totals: {
+          material: 0,
+          labor: 0,
+          demo: Number(snap.demoRemovalPrice || 0),
+          prep: Number(snap.addOnSitePrepPrice || 0),
+          subtotal: Number(snap.subtotalBeforeDiscount || 0),
+          markup: 0,
+          tax: 0,
+          grandTotal: Number(snap.finalCustomerPrice || 0)
+        },
+        pricing: {
+          runsPricing: (snapRuns as any[]).map((run, i) => ({
+            runName: run.name || `Section ${i + 1}`,
+            totalFenceCharge: Number(run.totalFenceCharge || 0),
+            totalGateCharge: Number(run.totalGateCharge || 0),
+            demoCharge: Number(run.demoCharge || 0),
+            finalFence: Number(run.totalFenceCharge || 0),
+            finalGate: Number(run.totalGateCharge || 0),
+            finalDemo: Number(run.demoCharge || 0),
+            totalSection: Number(run.totalSectionCharge || (Number(run.totalFenceCharge || 0) + Number(run.totalGateCharge || 0) + Number(run.demoCharge || 0))),
+            netLF: Number(run.linearFeet || 0)
+          })),
+          totalSectionsSum: Number(snap.baseFencePrice || 0),
+          addOnSitePrepPrice: Number(snap.addOnSitePrepPrice || 0),
+          demoRemovalPrice: Number(snap.demoRemovalPrice || 0),
+          discountAmount: Number(snap.discountAmount || 0),
+          manualGrandTotal: snap.manualGrandTotal !== undefined ? snap.manualGrandTotal : null,
+          calculatedTotal: Number(snap.calculatedGrandTotal || snap.subtotalBeforeDiscount || 0),
+          finalCustomerPrice: Number(snap.finalCustomerPrice || 0),
+          estimatedPrice: Number(snap.finalCustomerPrice || 0),
+          grandTotal: Number(snap.finalCustomerPrice || 0),
+          subtotalBeforeDiscount: Number(snap.subtotalBeforeDiscount || 0),
+          pricePerFoot: Number(snap.pricePerFoot || 0)
+        }
+      };
+      return mockCalculated;
+    }
+
     const mergedEstimate = {
       ...estimate,
       manualSectionTotals: sectionTotals,
@@ -121,26 +177,6 @@ export default function CustomerContract({
       manualGatePrices: manualGatePrices
     };
     const calculated = calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
-    
-    // OVERRIDE WITH SNAPSHOT IF ON CUSTOMER PORTAL GUEST VIEW
-    if (isCustomerView && estimate.contractSnapshot) {
-      const snap = estimate.contractSnapshot;
-      calculated.pricing = {
-        ...calculated.pricing,
-        finalCustomerPrice: Number(snap.finalCustomerPrice),
-        estimatedPrice: Number(snap.finalCustomerPrice),
-        grandTotal: Number(snap.finalCustomerPrice),
-        manualGrandTotal: snap.manualGrandTotal !== undefined ? snap.manualGrandTotal : null,
-        calculatedTotal: Number(snap.finalCustomerPrice),
-        subtotalBeforeDiscount: snap.subtotalBeforeDiscount !== undefined ? Number(snap.subtotalBeforeDiscount) : calculated.pricing.subtotalBeforeDiscount,
-        addOnSitePrepPrice: snap.addOnSitePrepPrice !== undefined ? Number(snap.addOnSitePrepPrice) : calculated.pricing.addOnSitePrepPrice,
-        demoRemovalPrice: snap.demoRemovalPrice !== undefined ? Number(snap.demoRemovalPrice) : calculated.pricing.demoRemovalPrice,
-        discountAmount: snap.discountAmount !== undefined ? Number(snap.discountAmount) : calculated.pricing.discountAmount,
-        pricePerFoot: snap.pricePerFoot !== undefined ? Number(snap.pricePerFoot) : calculated.pricing.pricePerFoot,
-      };
-      calculated.totals.grandTotal = Number(snap.finalCustomerPrice);
-      calculated.totals.subtotal = snap.subtotalBeforeDiscount !== undefined ? Number(snap.subtotalBeforeDiscount) : calculated.totals.subtotal;
-    }
     
     return calculated;
   }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView]);
@@ -383,6 +419,11 @@ export default function CustomerContract({
   const isGrandTotalOverridden = manualGrandTotal !== null;
   const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
   const globalPricePerFoot = data.pricing.pricePerFoot;
+
+  const getVal = (overrideVal: number | null | undefined, snapVal: number) => {
+    if (isCustomerView && estimate.contractSnapshot) return snapVal;
+    return overrideVal !== null && overrideVal !== undefined ? overrideVal : snapVal;
+  };
 
   const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
     const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
@@ -699,10 +740,10 @@ export default function CustomerContract({
                 </div>
                 <div>
                   <label className="block text-[8px] font-black text-american-blue uppercase tracking-widest opacity-40">Installation Address</label>
-                  <p className="text-sm font-bold text-[#444444] leading-relaxed">{estimate.customerAddress || 'No address specified'}</p>
+                  <p className="text-sm font-bold text-[#444444] leading-relaxed">{resolvedMetaSource.customerAddress || 'No address specified'}</p>
                 </div>
-                {(estimate.customerPhone || resolvedClientEmail) && (
-                  <p className="text-xs font-bold text-[#666666]">{estimate.customerPhone} {resolvedClientEmail && `• ${resolvedClientEmail}`}</p>
+                {(resolvedMetaSource.customerPhone || resolvedClientEmail) && (
+                  <p className="text-xs font-bold text-[#666666]">{resolvedMetaSource.customerPhone} {resolvedClientEmail && `• ${resolvedClientEmail}`}</p>
                 )}
               </div>
             </div>
@@ -854,11 +895,11 @@ export default function CustomerContract({
                             <div className="text-right">
                               <p className="text-xs font-black text-american-red">
                                 {isCustomerView ? (
-                                  <span>{formatCurrency((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1))}</span>
+                                  <span>{formatCurrency(getVal(sectionTotals[i], run.totalFenceCharge) / (run.netLF || 1))}</span>
                                 ) : (
                                   <input 
                                     type="number" 
-                                    value={((sectionTotals[i] ?? run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
+                                    value={(getVal(sectionTotals[i], run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
                                     onChange={(e) => {
                                       const newRate = parseFloat(e.target.value) || 0;
                                       const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
@@ -880,14 +921,14 @@ export default function CustomerContract({
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(sectionTotals[i] ?? run.totalFenceCharge)}
+                                    {formatCurrency(getVal(sectionTotals[i], run.totalFenceCharge))}
                                   </span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-american-blue">$</span>
                                     <input 
                                       type="number" 
-                                      value={(sectionTotals[i] ?? run.totalFenceCharge).toFixed(2)}
+                                      value={getVal(sectionTotals[i], run.totalFenceCharge).toFixed(2)}
                                       onChange={(e) => {
                                         const newVal = parseFloat(e.target.value) || 0;
                                         const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
@@ -906,14 +947,14 @@ export default function CustomerContract({
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(gateTotals[i] ?? run.totalGateCharge)}
+                                    {formatCurrency(getVal(gateTotals[i], run.totalGateCharge))}
                                   </span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-american-blue">$</span>
                                     <input 
                                       type="number" 
-                                      value={(gateTotals[i] ?? run.totalGateCharge).toFixed(2)}
+                                      value={getVal(gateTotals[i], run.totalGateCharge).toFixed(2)}
                                       onChange={(e) => {
                                         const newVal = parseFloat(e.target.value) || 0;
                                         const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
@@ -932,14 +973,14 @@ export default function CustomerContract({
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(demoTotals[i] ?? run.demoCharge)}
+                                    {formatCurrency(getVal(demoTotals[i], run.demoCharge))}
                                   </span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-american-blue">$</span>
                                     <input 
                                       type="number" 
-                                      value={(demoTotals[i] ?? run.demoCharge).toFixed(2)}
+                                      value={getVal(demoTotals[i], run.demoCharge).toFixed(2)}
                                       onChange={(e) => {
                                         const newVal = parseFloat(e.target.value) || 0;
                                         const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
@@ -958,9 +999,9 @@ export default function CustomerContract({
                             <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Section Total</span>
                             <span className="font-black text-american-blue text-lg">
                               {formatCurrency(
-                                (sectionTotals[i] ?? run.totalFenceCharge) + 
-                                (gateTotals[i] ?? run.totalGateCharge) + 
-                                (demoTotals[i] ?? run.demoCharge)
+                                getVal(sectionTotals[i], run.totalFenceCharge) + 
+                                getVal(gateTotals[i], run.totalGateCharge) + 
+                                getVal(demoTotals[i], run.demoCharge)
                               )}
                             </span>
                           </div>
