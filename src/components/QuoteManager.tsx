@@ -125,6 +125,16 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
     setTimeout(() => setToast(null), 3000);
   };
 
+  React.useEffect(() => {
+    if (!selectedQuote) return;
+    const hasMissing = selectedQuote.items.some(item => 
+      item.mappedMaterialId && !materials.some(m => m.id === item.mappedMaterialId)
+    );
+    if (hasMissing) {
+      window.dispatchEvent(new Event('company_materials_updated'));
+    }
+  }, [selectedQuote, materials]);
+
   const uniqueSuppliers = React.useMemo(() => {
     return Array.from(new Set(quotes.map(q => q.supplierName))).filter(Boolean).sort();
   }, [quotes]);
@@ -221,6 +231,25 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           throw new Error(errData.error || `HTTP error ${response.status}`);
         }
 
+        const resData = await response.json();
+        if (resData.updatedMaterials && Array.isArray(resData.updatedMaterials)) {
+          setMaterials(prev => prev.map(m => {
+            const updated = resData.updatedMaterials.find((u: any) => u.id === m.id);
+            return updated || m;
+          }));
+        } else {
+          const nowIso = new Date().toISOString();
+          setMaterials(prev => prev.map(m => {
+            const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
+            return update ? { 
+              ...m, 
+              cost: update.unitPrice,
+              lastPriceUpdate: nowIso,
+              updatedAt: nowIso
+            } : m;
+          }));
+        }
+
         window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error: any) {
         console.error(error);
@@ -228,12 +257,14 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         return;
       }
     } else {
+      const nowIso = new Date().toISOString();
       setMaterials(prev => prev.map(m => {
         const update = itemsToUpdate.find(i => i.mappedMaterialId === m.id);
         return update ? { 
           ...m, 
           cost: update.unitPrice,
-          lastPriceUpdate: new Date().toISOString()
+          lastPriceUpdate: nowIso,
+          updatedAt: nowIso
         } : m;
       }));
     }
@@ -423,6 +454,8 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
           throw new Error(errData.error || `HTTP error ${response.status}`);
         }
 
+        const updatedMaterial = await response.json();
+        setMaterials(prev => prev.map(m => m.id === materialId ? updatedMaterial : m));
         window.dispatchEvent(new Event('company_materials_updated'));
       } catch (error: any) {
         console.error(error);
@@ -444,80 +477,96 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
   const mapMaterialToItem = async (quoteId: string, itemId: string, materialId: string) => {
     if (!user) return;
 
-    // Save the mapping for future memory
-    if (materialId) {
-      const quote = quotes.find(q => q.id === quoteId);
-      const item = quote?.items.find(i => i.id === itemId);
-      
+    const quote = quotes.find(q => q.id === quoteId);
+    if (!quote) return;
+
+    const materialsMap = new Map(materials.map(m => [m.id, m]));
+    const mat = materialId ? materialsMap.get(materialId) : null;
+
+    const updatedItems = quote.items.map(item => {
+      if (item.id === itemId) {
+        if (!materialId) {
+          return {
+            ...item,
+            mappedMaterialId: null,
+            mappedMaterialName: null,
+            mappedMaterialSku: null,
+            mappedMaterialCategory: null,
+            mappedAt: null
+          };
+        } else {
+          return {
+            ...item,
+            mappedMaterialId: materialId,
+            mappedMaterialName: mat ? mat.name : null,
+            mappedMaterialSku: mat?.sku || null,
+            mappedMaterialCategory: mat?.category || null,
+            mappedAt: new Date().toISOString()
+          };
+        }
+      }
+      return item;
+    });
+
+    if (materialId && mat) {
+      const item = quote.items.find(i => i.id === itemId);
       if (item) {
-        const mat = materials.find(m => m.id === materialId);
-        if (mat) {
-          const currentAliases = mat.aliases || [];
-          const nextAliases = [...currentAliases];
-          let updated = false;
+        const currentAliases = mat.aliases || [];
+        const nextAliases = [...currentAliases];
+        let updated = false;
 
-          // Learn materialName as alias
-          if (!nextAliases.includes(item.materialName)) {
-            nextAliases.push(item.materialName);
-            updated = true;
-          }
+        // Learn materialName as alias
+        if (!nextAliases.includes(item.materialName)) {
+          nextAliases.push(item.materialName);
+          updated = true;
+        }
 
-          // Learn partNumber as alias or SKU
-          if (item.partNumber && !nextAliases.includes(item.partNumber)) {
-            nextAliases.push(item.partNumber);
-            updated = true;
-          }
+        // Learn partNumber as alias or SKU
+        if (item.partNumber && !nextAliases.includes(item.partNumber)) {
+          nextAliases.push(item.partNumber);
+          updated = true;
+        }
 
-          if (updated) {
-            const updates: any = { aliases: nextAliases };
-            // If SKU is not set, set it from the partNumber
-            if (item.partNumber && !mat.sku) {
-              updates.sku = item.partNumber;
-            }
-
-            if (user) {
-              const token = localStorage.getItem('company_admin_token');
-              fetch('/api/materials/list', {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({
-                  id: materialId,
-                  ...updates
-                })
-              }).then(async (response) => {
-                if (!response.ok) {
-                  const errData = await response.json().catch(() => ({}));
-                  throw new Error(errData.error || `HTTP error ${response.status}`);
-                }
-                window.dispatchEvent(new Event('company_materials_updated'));
-              }).catch(err => {
-                console.error('Failed to map material mapping to server', err);
-              });
-            } else {
-              setMaterials(prev => prev.map(m => {
-                if (m.id === materialId) {
-                  return { ...m, ...updates };
-                }
-                return m;
-              }));
-            }
+        const updates: any = { 
+          aliases: nextAliases,
+          supplierAlias: item.materialName,
+          supplierItemName: item.materialName
+        };
+        if (item.partNumber) {
+          updates.supplierPartNumber = item.partNumber;
+          if (!mat.sku) {
+            updates.sku = item.partNumber;
           }
         }
-        showToast(`Learned mapping: ${item.materialName} → ${materials.find(m => m.id === materialId)?.name}`);
+
+        const token = localStorage.getItem('company_admin_token');
+        fetch('/api/materials/list', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            id: materialId,
+            ...updates
+          })
+        }).then(async (response) => {
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP error ${response.status}`);
+          }
+          const updatedMaterial = await response.json();
+          setMaterials(prev => prev.map(m => m.id === materialId ? updatedMaterial : m));
+          window.dispatchEvent(new Event('company_materials_updated'));
+        }).catch(err => {
+          console.error('Failed to map material mapping to server', err);
+        });
+
+        showToast(`Learned mapping: ${item.materialName} → ${mat.name}`);
       }
     }
 
     try {
-      const quote = quotes.find(q => q.id === quoteId);
-      if (!quote) return;
-
-      const updatedItems = quote.items.map(item => 
-        item.id === itemId ? { ...item, mappedMaterialId: materialId } : item
-      );
-
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/quotes/write', {
         method: 'PUT',
@@ -535,6 +584,10 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP error ${response.status}`);
       }
+
+      const updatedQuote = await response.json();
+      setQuotes(prev => prev.map(q => q.id === quoteId ? updatedQuote : q));
+      window.dispatchEvent(new Event('company_quotes_updated'));
     } catch (error) {
       console.error(error);
       showToast("Failed to lock material link on server");
@@ -875,7 +928,22 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                           </span>
                                         )}
                                       </div>
-                                      {mat ? (
+                                      {item.mappedMaterialId && !mat ? (
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-1.5 text-[10px] text-amber-600">
+                                            <AlertCircle size={12} />
+                                            <span className="font-black uppercase tracking-widest">Mapped but library price not loaded</span>
+                                          </div>
+                                          <button 
+                                            onClick={() => {
+                                              window.dispatchEvent(new Event('company_materials_updated'));
+                                            }}
+                                            className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-[8px] text-amber-700 uppercase font-black rounded transition-colors"
+                                          >
+                                            Reload
+                                          </button>
+                                        </div>
+                                      ) : mat ? (
                                         <div className="flex items-center gap-1.5 text-[10px] text-emerald-600">
                                           <CheckCircle2 size={12} />
                                           <span className="font-black uppercase tracking-widest">Matched: {mat.name}</span>
@@ -902,6 +970,18 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                           />
                                         </div>
                                       )}
+
+                                      {/* Debug / admin view */}
+                                      <div className="mt-2 pt-2 border-t border-dashed border-[#EEEEEE] text-[9px] text-[#A0A0A0] space-y-0.5 font-mono bg-[#FAFAFA] p-2 rounded">
+                                        <p><span className="font-bold uppercase tracking-wider text-american-blue">DEBUG DETAILS</span></p>
+                                        <p>Item Name: {item.materialName}</p>
+                                        <p>Supplier Part Number: {item.partNumber || 'None'}</p>
+                                        <p>Mapped Material ID: {item.mappedMaterialId || 'None'}</p>
+                                        <p>Mapped Material Name: {item.mappedMaterialName || (mat ? mat.name : 'None')}</p>
+                                        <p>Library Price Found: {mat ? formatCurrency(mat.cost) : 'N/A'}</p>
+                                        <p>Supplier Price: {formatCurrency(item.unitPrice)}</p>
+                                        <p>Can Sync: {mat && Math.abs(item.unitPrice - mat.cost) > 0.001 ? 'TRUE' : 'FALSE'}</p>
+                                      </div>
                                     </div>
                                   </td>
                                   <td className="px-6 py-5 text-center">
@@ -911,12 +991,20 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
                                     <div className="space-y-1">
                                       <p className="font-black">{formatCurrency(item.unitPrice)}</p>
                                       {mat && (
-                                        <p className={cn(
-                                          "text-[10px] uppercase font-black tracking-widest",
-                                          isHigher ? "text-american-red" : isLower ? "text-emerald-500" : "text-[#999999]"
-                                        )}>
-                                          Library: {formatCurrency(mat.cost)}
-                                        </p>
+                                        <>
+                                          <p className={cn(
+                                            "text-[10px] uppercase font-black tracking-widest",
+                                            isHigher ? "text-american-red" : isLower ? "text-emerald-500" : "text-[#999999]"
+                                          )}>
+                                            Library: {formatCurrency(mat.cost)}
+                                          </p>
+                                          <p className={cn(
+                                            "text-[9px] font-bold uppercase",
+                                            isHigher ? "text-american-red" : isLower ? "text-emerald-500" : "text-gray-400"
+                                          )}>
+                                            Diff: {item.unitPrice > mat.cost ? '+' : ''}{formatCurrency(item.unitPrice - mat.cost)}
+                                          </p>
+                                        </>
                                       )}
                                     </div>
                                   </td>

@@ -13,6 +13,9 @@ export interface MaterialItem {
   aliases?: string[]; // Remembered naming conventions from supplier quotes
   sku?: string; // Part number or SKU
   lastPriceUpdate?: string; // ISO string 
+  supplierAlias?: string;
+  supplierPartNumber?: string;
+  supplierItemName?: string;
 }
 
 export interface FenceStyle {
@@ -119,6 +122,10 @@ export interface QuoteItem {
   totalPrice: number;
   partNumber?: string; // Extracted part number
   mappedMaterialId?: string; // Links to our MaterialLibrary
+  mappedMaterialName?: string;
+  mappedMaterialSku?: string;
+  mappedMaterialCategory?: string;
+  mappedAt?: string;
 }
 
 export interface SupplierQuote {

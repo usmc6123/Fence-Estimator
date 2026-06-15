@@ -146,11 +146,27 @@ export default async function handler(req: any, res: any) {
           count++;
         }
 
+        const updatedMaterials: any[] = [];
         if (count > 0) {
           await batch.commit();
+          const updatedIds = updatesList.map((item: any) => item.materialId || item.id).filter(Boolean);
+          if (updatedIds.length > 0) {
+            const snap = await db.collection('materials').get();
+            snap.forEach(doc => {
+              if (updatedIds.includes(doc.id)) {
+                updatedMaterials.push({
+                  id: doc.id,
+                  ...doc.data(),
+                  createdAt: cleanTimestamp(doc.data().createdAt),
+                  updatedAt: cleanTimestamp(doc.data().updatedAt || doc.data().createdAt),
+                  lastPriceUpdate: doc.data().lastPriceUpdate ? cleanTimestamp(doc.data().lastPriceUpdate) : undefined
+                });
+              }
+            });
+          }
         }
 
-        return res.status(200).json({ success: true, count });
+        return res.status(200).json({ success: true, count, updatedMaterials });
       }
 
       // Handle standard partial update
