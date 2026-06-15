@@ -454,7 +454,7 @@ export default async function handler(req: any, res: any) {
         updates.customerEmailSigned = customerEmail || '';
         updates.customerSignedDate = now;
         updates.acceptedAt = now;
-        updates.jobStatus = 'Approved';
+        updates.jobStatus = 'Accepted';
       } else {
         updates.customerDeclineReason = declineReason || 'Not specified';
         updates.customerEmailSigned = customerEmail || '';
@@ -462,6 +462,30 @@ export default async function handler(req: any, res: any) {
       }
 
       const data = snap.data() || {};
+
+      // Calculate previous label and log transition
+      const getStatusLabelComp = (docData: any) => {
+        if (docData.status === 'archived') return 'Archived';
+        if (docData.jobStatus === 'Completed') return 'Completed';
+        if (docData.jobStatus === 'Declined') return 'Declined';
+        if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
+        if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+        return 'Draft';
+      };
+
+      const previousLabel = getStatusLabelComp(data);
+      const newLabel = decision === 'accepted' ? 'Accepted' : 'Declined';
+
+      if (previousLabel !== newLabel) {
+        const historyEntry = {
+          from: previousLabel,
+          to: newLabel,
+          changedAt: now,
+          changedBy: customerEmail || data.customerEmail || 'Customer',
+          source: 'customer_portal'
+        };
+        updates.statusHistory = [...(data.statusHistory || []), historyEntry];
+      }
       const ownerUid = data.userId || data.uid || data.ownerId;
 
       let customAcceptedMessage = 'Estimate accepted successfully! We will finalize your installation timeframe shortly.';
@@ -1553,7 +1577,46 @@ export default async function handler(req: any, res: any) {
           updates.representativeCompanyName = "Lone Star Fence Works";
           updates.representativeSignedDate = now;
           updates.customerEmailSentAt = now;
+          updates.sentAt = now;
           updates.jobStatus = 'Estimate Sent';
+          updates.customerDecision = 'pending';
+
+          // Clear previous accepted/declined state
+          updates.customerSignature = null;
+          updates.customerSignedDate = null;
+          updates.acceptedAt = null;
+          updates.declinedAt = null;
+          updates.declineReason = null;
+          updates.customerDeclineReason = null;
+
+          if (estimateData.status === 'archived') {
+            updates.status = 'active';
+          }
+
+          // Create status transition logging
+          const getStatusLabelComp = (docData: any) => {
+            if (docData.status === 'archived') return 'Archived';
+            if (docData.jobStatus === 'Completed') return 'Completed';
+            if (docData.jobStatus === 'Declined') return 'Declined';
+            if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
+            if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+            return 'Draft';
+          };
+
+          const previousLabel = getStatusLabelComp(estimateData);
+          const newLabel = 'Estimate Sent';
+
+          if (previousLabel !== newLabel) {
+            const changedBy = decoded?.email || decoded?.uid || 'SYSTEM';
+            const historyEntry = {
+              from: previousLabel,
+              to: newLabel,
+              changedAt: now,
+              changedBy,
+              source: 'send_estimate'
+            };
+            updates.statusHistory = [...(estimateData.statusHistory || []), historyEntry];
+          }
         }
 
         // Update Firestore email sent log first
@@ -1693,6 +1756,83 @@ export default async function handler(req: any, res: any) {
       delete updates.uid;
       delete updates.userId;
       delete updates.companyId;
+
+      const changedBy = decoded?.email || decoded?.uid || 'SYSTEM';
+      const source = updates.source || 'manual_dropdown';
+      delete updates.source;
+
+      // Handle manual status dropdown change requested by client
+      if (updates.manualStatusChange) {
+        const mStatus = updates.manualStatusChange;
+        
+        if (mStatus === 'Estimate Sent') {
+          updates.jobStatus = 'Estimate Sent';
+          updates.customerDecision = 'pending';
+          updates.customerSignature = null;
+          updates.customerSignedDate = null;
+          updates.acceptedAt = null;
+          updates.declinedAt = null;
+          updates.declineReason = null;
+          updates.customerDeclineReason = null;
+          if (existingData.status === 'archived') {
+            updates.status = 'active';
+          }
+        } else if (mStatus === 'Accepted') {
+          updates.jobStatus = 'Accepted';
+          updates.customerDecision = 'accepted';
+          updates.acceptedAt = existingData.acceptedAt || nowIso;
+          if (existingData.status === 'archived') {
+            updates.status = 'active';
+          }
+        } else if (mStatus === 'Declined') {
+          updates.jobStatus = 'Declined';
+          updates.customerDecision = 'declined';
+          updates.declinedAt = existingData.declinedAt || nowIso;
+          if (existingData.status === 'archived') {
+            updates.status = 'active';
+          }
+        } else if (mStatus === 'Completed') {
+          updates.jobStatus = 'Completed';
+          updates.status = 'completed';
+          updates.completedAt = existingData.completedAt || nowIso;
+        } else if (mStatus === 'Archived') {
+          updates.status = 'archived';
+          updates.archivedAt = existingData.archivedAt || nowIso;
+        }
+        
+        delete updates.manualStatusChange;
+      }
+
+      // If status is archived and we change to something else, reset status to active
+      if (existingData.status === 'archived' && updates.status !== 'archived' && (updates.jobStatus || updates.status)) {
+        if (updates.status !== 'completed') {
+          updates.status = 'active';
+        }
+      }
+
+      // Create a status label checker to log transition inside status_history / statusHistory
+      const getStatusLabelComp = (docData: any) => {
+        if (docData.status === 'archived') return 'Archived';
+        if (docData.jobStatus === 'Completed') return 'Completed';
+        if (docData.jobStatus === 'Declined') return 'Declined';
+        if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
+        if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+        return 'Draft';
+      };
+
+      const previousLabel = getStatusLabelComp(existingData);
+      const newLabel = getStatusLabelComp({ ...existingData, ...updates });
+
+      if (previousLabel !== newLabel) {
+        const historyEntry = {
+          from: previousLabel,
+          to: newLabel,
+          changedAt: nowIso,
+          changedBy,
+          source
+        };
+        updates.statusHistory = [...(existingData.statusHistory || []), historyEntry];
+      }
 
       const previousStatus = existingData.jobStatus;
       const newStatus = updates.jobStatus;

@@ -380,13 +380,13 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           address.toLowerCase().includes(searchTerm.toLowerCase());
     
     let matchesFilter = false;
-    const currentStatus = est.status || 'active';
+    const currentStatus = (est.status as any) || 'active';
     if (filter === 'all') {
       matchesFilter = true;
     } else if (filter === 'active') {
-      matchesFilter = currentStatus === 'active' && est.jobStatus !== 'Completed';
+      matchesFilter = (currentStatus === 'active') && est.jobStatus !== 'Completed';
     } else if (filter === 'completed') {
-      matchesFilter = currentStatus === 'active' && est.jobStatus === 'Completed';
+      matchesFilter = (currentStatus === 'active' || currentStatus === 'completed') && est.jobStatus === 'Completed';
     } else if (filter === 'archived') {
       matchesFilter = currentStatus === 'archived';
     }
@@ -753,23 +753,66 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                             <td className="py-2.5 px-4 whitespace-nowrap">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5">
-                                  {estimate.jobStatus === 'Completed' ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
-                                      <Check size={10} /> Completed
-                                    </span>
-                                  ) : estimate.jobStatus === 'Accepted' ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 animate-pulse">
-                                      <CheckCircle2 size={10} fill="#10B981" className="text-white" /> Accepted
-                                    </span>
-                                  ) : estimate.jobStatus === 'Estimate Sent' ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100">
-                                      <Send size={10} /> Sent
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
-                                      <Clock size={10} /> Draft
-                                    </span>
-                                  )}
+                                  <select
+                                    id={`status-dropdown-${estimate.id}`}
+                                    className={cn(
+                                      "text-[10px] uppercase font-black tracking-wider border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-american-blue cursor-pointer transition-all font-sans shadow-sm",
+                                      estimate.status === 'archived' 
+                                        ? 'border-gray-200 bg-gray-50 text-gray-500'
+                                        : ((estimate.jobStatus as any) === 'Completed' 
+                                            ? 'border-purple-200 bg-purple-50 text-purple-700 font-bold'
+                                            : ((estimate.jobStatus as any) === 'Accepted' || (estimate.jobStatus as any) === 'Approved' 
+                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 font-bold'
+                                                : ((estimate.jobStatus as any) === 'Declined' 
+                                                    ? 'border-red-200 bg-red-50 text-red-700 font-bold'
+                                                    : ((estimate.jobStatus as any) === 'Estimate Sent' 
+                                                        ? 'border-blue-200 bg-blue-50 text-blue-700 font-bold'
+                                                        : 'border-amber-200 bg-amber-50 text-amber-700 font-bold'))))
+                                    )}
+                                    value={
+                                      estimate.status === 'archived' 
+                                        ? 'Archived' 
+                                        : ((estimate.jobStatus as any) === 'Completed' 
+                                            ? 'Completed' 
+                                            : ((estimate.jobStatus as any) === 'Declined' 
+                                                ? 'Declined' 
+                                                : ((estimate.jobStatus as any) === 'Accepted' || (estimate.jobStatus as any) === 'Approved' 
+                                                    ? 'Accepted' 
+                                                    : 'Estimate Sent')))
+                                    }
+                                    onChange={async (e) => {
+                                      const newStatus = e.target.value;
+                                      try {
+                                        const token = localStorage.getItem('company_admin_token');
+                                        const response = await fetch('/api/estimates/write', {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token || ''}`
+                                          },
+                                          body: JSON.stringify({
+                                            id: estimate.id,
+                                            manualStatusChange: newStatus
+                                          })
+                                        });
+                                        if (!response.ok) {
+                                          const errData = await response.json();
+                                          throw new Error(errData.error || 'Failed to update estimate status');
+                                        }
+                                        fetchEstimates();
+                                      } catch (error: any) {
+                                        console.error('Failed to update status manually:', error);
+                                        alert(error.message || 'Failed to update status');
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="Estimate Sent">Estimate Sent</option>
+                                    <option value="Accepted">Accepted</option>
+                                    <option value="Declined">Declined</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Archived">Archived</option>
+                                  </select>
                                 </div>
                                 
                                 {/* Engagement & Portal View Status Logs */}
