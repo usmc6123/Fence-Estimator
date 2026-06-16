@@ -312,6 +312,25 @@ export default async function handler(req: any, res: any) {
   try {
     const action = req.query?.action || req.body?.action;
 
+    if (req.method === 'GET') {
+      if (!action) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing public estimate action",
+          expected: "action=get-public-estimate&estimateId=..."
+        });
+      }
+      if (action === 'get-public-estimate' || action === 'view-public-estimate') {
+        const estimateId = req.query?.estimateId || req.body?.estimateId;
+        if (!estimateId) {
+          return res.status(400).json({
+            success: false,
+            error: "Missing estimateId"
+          });
+        }
+      }
+    }
+
     // PUBLIC CUSTOMER PORTAL GUEST ENDPOINTS: Bypass authentication completely!
     if (action === 'get-public-estimate') {
       const estimateId = req.query?.estimateId || req.body?.estimateId;
@@ -1358,9 +1377,8 @@ export default async function handler(req: any, res: any) {
         };
 
         // 2. Setup access link based on hosting context
-        const host = req.headers.host || 'localhost:3000';
-        const protocol = req.headers['x-forwarded-proto'] === 'https' || req.secure ? 'https' : 'http';
-        const estimateLink = `${protocol}://${host}/?portal=contract&estimateId=${estimateId}`;
+        const generatedEstimateLink = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimateId}`;
+        const estimateLink = generatedEstimateLink;
 
         // Resolve user's Saved SMTP and Company settings
         let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
@@ -1585,6 +1603,8 @@ export default async function handler(req: any, res: any) {
           updates.sentAt = now;
           updates.jobStatus = 'Estimate Sent';
           updates.customerDecision = 'pending';
+          updates.generatedEstimateLink = generatedEstimateLink;
+          updates.lastSentEstimateId = estimateId;
 
           // Clear previous accepted/declined state
           updates.customerSignature = null;

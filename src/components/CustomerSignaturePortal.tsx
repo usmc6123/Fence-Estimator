@@ -77,17 +77,33 @@ export default function CustomerSignaturePortal({
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    // Read estimateId from window.location.search first as required, falling back to props
+    const urlParams = new URLSearchParams(window.location.search);
+    const resolvedEstimateId = urlParams.get('estimateId') || urlParams.get('id') || estimateId || '';
+
     async function loadPublicEstimate() {
       try {
         setLoading(true);
-        if (!estimateId || estimateId === 'undefined' || estimateId === 'null') {
+        if (!resolvedEstimateId || resolvedEstimateId === 'undefined' || resolvedEstimateId === 'null') {
+          console.log({
+            estimateId: resolvedEstimateId,
+            action: 'get-public-estimate',
+            found: false,
+            contractSnapshotExists: false
+          });
           throw new Error('No estimate ID was provided in the link. Please ask your Sales Representative for a fresh estimate link.');
         }
 
         // Fetch the estimate through secure guest endpoint
-        const response = await fetch(`/api/estimates/write?action=get-public-estimate&estimateId=${estimateId}`);
+        const response = await fetch(`/api/estimates/write?action=get-public-estimate&estimateId=${resolvedEstimateId}`);
         
         if (!response.ok) {
+          console.log({
+            estimateId: resolvedEstimateId,
+            action: 'get-public-estimate',
+            found: false,
+            contractSnapshotExists: false
+          });
           if (response.status === 404) {
             throw new Error('The requested estimate contract was not found. Please verify the link or contact your Sales Representative.');
           }
@@ -96,10 +112,25 @@ export default function CustomerSignaturePortal({
 
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
+          console.log({
+            estimateId: resolvedEstimateId,
+            action: 'get-public-estimate',
+            found: false,
+            contractSnapshotExists: false
+          });
           throw new Error('The secure portal returned an invalid file format (HTML). This usually means the link has expired or is invalid. Please contact support.');
         }
 
         const data = await response.json();
+        
+        // Log portal diagnostics as required in point 5
+        console.log({
+          estimateId: resolvedEstimateId,
+          action: 'get-public-estimate',
+          found: true,
+          contractSnapshotExists: !!(data.contractSnapshot)
+        });
+
         setEstimate(data);
         const initialEmail = data.customerEmail || '';
         setCustomerEmail(initialEmail.includes('@') ? initialEmail : '');
@@ -108,7 +139,7 @@ export default function CustomerSignaturePortal({
         fetch(`/api/estimates/write`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'view-public-estimate', estimateId })
+          body: JSON.stringify({ action: 'view-public-estimate', estimateId: resolvedEstimateId })
         })
           .then(res => res.json())
           .then(track => console.log('View event recorded:', track))
@@ -121,7 +152,7 @@ export default function CustomerSignaturePortal({
       }
     }
 
-    if (estimateId && estimateId !== 'undefined' && estimateId !== 'null') {
+    if (resolvedEstimateId && resolvedEstimateId !== 'undefined' && resolvedEstimateId !== 'null') {
       loadPublicEstimate();
     } else {
       setError('No estimate ID was found in the link. Please verify the URL or request a new estimate link.');

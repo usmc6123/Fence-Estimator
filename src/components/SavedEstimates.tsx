@@ -4,7 +4,7 @@ import {
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
-  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle
+  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle, Copy
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User, MaterialItem, LaborRates } from '../types';
 import { formatCurrency, cn, assignEstimateNumbers, getEstimateFinalPrice } from '../lib/utils';
@@ -983,6 +983,32 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                           className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
                                         >
                                           <Clock size={14} /> Email Activity Log
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const link = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimate.id}`;
+                                            navigator.clipboard.writeText(link)
+                                              .then(() => alert('Customer link copied to clipboard!'))
+                                              .catch(() => alert('Failed to copy. URL: ' + link));
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2 border-t border-slate-100/50 mt-1 pt-1"
+                                        >
+                                          <Copy size={14} /> Copy Customer Link
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const link = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimate.id}`;
+                                            window.open(link, '_blank');
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                        >
+                                          <ExternalLink size={14} /> Test Customer Link
                                         </button>
                                         <button
                                           type="button"
