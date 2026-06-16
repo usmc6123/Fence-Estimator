@@ -214,6 +214,23 @@ export default function CrewSchedulePortal() {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
+  const handleDayClick = (day: Date) => {
+    const { isBlackout } = checkDayStatus(day);
+    if (isBlackout) {
+      setSubmitError("This date is blocked out for installation. Please choose another date.");
+      return;
+    }
+    setSubmitError("");
+    
+    // Set scheduledStartDate formatted as YYYY-MM-DD (local time-zone safe)
+    const year = day.getFullYear();
+    const month = String(day.getMonth() + 1).padStart(2, '0');
+    const dateNum = String(day.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${dateNum}`;
+    
+    setChosenStartDate(dateStr);
+  };
+
   // Check if selection overlaps with any blackout date
   const getOverlapWarning = () => {
     if (!chosenStartDate || !scheduleData || !scheduleData.events) return null;
@@ -429,7 +446,7 @@ export default function CrewSchedulePortal() {
               <div>Sat</div>
             </div>
 
-            {/* Calendar Days */}
+             {/* Calendar Days */}
             <div className="grid grid-cols-7 gap-1.5 md:gap-2">
               {calendarDays.map((day, idx) => {
                 if (!day) {
@@ -442,12 +459,14 @@ export default function CrewSchedulePortal() {
                 return (
                   <div
                     key={idx}
+                    onClick={() => day && handleDayClick(day)}
                     className={cn(
-                      "aspect-square p-1 sm:p-2 rounded-xl flex flex-col justify-between items-center relative transition-colors font-mono font-medium border border-[#13233B]/20 text-[10px] sm:text-xs",
-                      isBlackout && "bg-amber-950/40 text-amber-500 border border-amber-900/30",
-                      isInstallation && "bg-american-red/10 text-american-red border-american-red/10",
-                      matchesSelection && "bg-emerald-950/40 text-emerald-400 border border-emerald-500/25",
-                      !isBlackout && !isInstallation && !matchesSelection && "bg-[#030A14]/40 hover:bg-[#13233B] text-slate-300",
+                      "aspect-square p-1 sm:p-2 rounded-xl flex flex-col justify-between items-center relative transition-all duration-200 font-mono font-medium border border-[#13233B]/20 text-[10px] sm:text-xs select-none",
+                      day ? "cursor-pointer hover:border-american-blue/50" : "pointer-events-none",
+                      isBlackout && "bg-amber-950/40 text-amber-500 border border-amber-900/40 cursor-not-allowed hover:bg-amber-950/60",
+                      isInstallation && "bg-american-red/10 text-american-red border-american-red/10 hover:bg-american-red/20",
+                      matchesSelection && "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 ring-2 ring-emerald-500/50",
+                      !isBlackout && !isInstallation && !matchesSelection && "bg-[#030A14]/40 hover:bg-[#13233B] hover:text-white text-slate-300",
                       isToday && "ring-2 ring-american-red/50 ring-offset-2 ring-offset-[#060E1A]"
                     )}
                   >
@@ -572,13 +591,13 @@ export default function CrewSchedulePortal() {
               {/* Submit Dispatch */}
               <button
                 type="submit"
-                disabled={isSubmitting || !!errorWarning}
+                disabled={isSubmitting || !!errorWarning || !chosenStartDate}
                 className={cn(
                   "w-full py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl hover:scale-105 active:scale-95 transition-all rounded-2xl flex items-center justify-center gap-2",
                   scheduleData.allowCrewDirectSchedule 
-                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-950/20" 
-                    : "bg-american-blue hover:bg-[#13233B] shadow-american-blue/20",
-                  (isSubmitting || !!errorWarning) && "opacity-50 hover:scale-100 cursor-not-allowed"
+                  ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-950/20" 
+                  : "bg-american-blue hover:bg-[#13233B] shadow-american-blue/20",
+                  (isSubmitting || !!errorWarning || !chosenStartDate) && "opacity-50 hover:scale-100 cursor-not-allowed"
                 )}
               >
                 {isSubmitting ? (

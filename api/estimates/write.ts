@@ -1497,7 +1497,14 @@ export default async function handler(req: any, res: any) {
       }
 
       if (req.body && req.body.action === 'send-labor-contract') {
-        const { estimateId, recipientEmail, crewName, subject, message, includeDrawing, allowCrewDirectSchedule } = req.body || {};
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin or employee login required' });
+        }
+
+        const { estimateId, recipientEmail, crewName, subject, message, includeDrawing, allowCrewDirectSchedule, laborContractSnapshot } = req.body || {};
 
         if (!estimateId) {
           return res.status(400).json({ error: 'Estimate ID is required.' });
@@ -1529,35 +1536,193 @@ export default async function handler(req: any, res: any) {
         const crewScheduleLink = `${appUrl}/?portal=crew-schedule&estimateId=${estimateId}&token=${crewScheduleToken}`;
         const nowIso = new Date().toISOString();
 
-        // 1. Gather specs for the email
-        const customerName = estimateData.customerName || 'Valued Client';
-        const jobAddress = estimateData.customerAddress || estimateData.address || 'N/A';
-        const fenceType = estimateData.fenceType || (estimateData.contractSnapshot && estimateData.contractSnapshot.fenceType) || 'Fence';
-        const height = estimateData.height || (estimateData.contractSnapshot && estimateData.contractSnapshot.runs?.[0]?.height) || 6;
-        const linearFeet = estimateData.linearFeet || (estimateData.contractSnapshot && estimateData.contractSnapshot.linearFeet) || 0;
-        const gateSummary = (estimateData.contractSnapshot && estimateData.contractSnapshot.gateSummary) || estimateData.gateSummary || 'None';
-        const demoTotal = Number(estimateData.demoRemovalPrice || (estimateData.contractSnapshot && (estimateData.contractSnapshot.demoTotal || estimateData.contractSnapshot.demoRemovalPrice)) || 0);
+        // 1. Gather specs for the email from the laborContractSnapshot if provided
+        const snapshot = laborContractSnapshot || estimateData.laborContractSnapshot || null;
+
+        const customerName = snapshot ? snapshot.customerName : (estimateData.customerName || 'Valued Client');
+        const jobAddress = snapshot ? snapshot.jobAddress : (estimateData.customerAddress || estimateData.address || 'N/A');
+        const fenceType = snapshot ? snapshot.fenceType : (estimateData.fenceType || 'Fence');
+        const height = snapshot ? snapshot.height : (estimateData.height || 6);
+        const linearFeet = snapshot ? snapshot.linearFeet : (estimateData.linearFeet || 0);
+
+        let demoTotal = 0;
+        let gateSummary = 'None';
+        if (snapshot) {
+          demoTotal = (snapshot.aggregateLaborManifest || []).some((item: any) => String(item.name).includes('Demo') || String(item.name).includes('Demolition')) ? 1 : 0;
+          const gateCount = (snapshot.aggregateLaborManifest || []).filter((item: any) => String(item.name).includes('Gate')).reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
+          gateSummary = gateCount > 0 ? `${gateCount} Gate(s)` : 'None';
+        } else {
+          demoTotal = Number(estimateData.demoRemovalPrice || 0);
+          gateSummary = estimateData.gateSummary || 'None';
+        }
+
         const scheduledStartDate = estimateData.scheduledStartDate || null;
         const scheduledEndDate = estimateData.scheduledEndDate || null;
         const installDuration = estimateData.installDuration || 1;
 
-        // 2. Build Runs Table Rows
+        // 2. Build Runs Tables
         let runsTableRows = '';
         let laborTotalAmount = 0;
+        let runsDetailedTablesHtml = '';
 
-        const runsToUse = estimateData.contractSnapshot?.costSummaryRuns || estimateData.contractSnapshot?.runs || estimateData.runs || [];
-        if (Array.isArray(runsToUse) && runsToUse.length > 0) {
-          runsToUse.forEach((run: any, idx: number) => {
-            const rName = run.runName || run.name || `Section ${idx + 1}`;
-            const rStyle = run.fenceType || run.styleName || run.style || 'Fence';
-            const rLF = run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0);
+        if (snapshot && Array.isArray(snapshot.laborRuns)) {
+          laborTotalAmount = typeof snapshot.totalDirectLaborPayout === 'number' ? snapshot.totalDirectLaborPayout : 0;
+          
+          // Build individual run-by-run sections as beautiful tables matching the style of the dashboard
+          snapshot.laborRuns.forEach((run: any) => {
+            const rName = run.runName || `Section`;
+            const rLF = run.linearFeet !== undefined ? run.linearFeet : 0;
+            const rStyle = run.styleName || '';
+            const rHeight = run.height || '';
+            const rType = run.styleType || '';
             
-            const fenceVal = Number(run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge || 0));
-            const gateVal = Number(run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || 0));
-            const demoVal = Number(run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || 0));
-            const runTotal = run.sectionTotal !== undefined ? Number(run.sectionTotal) : (fenceVal + gateVal + demoVal);
+            // Generate run spec tags
+            const tags: string[] = [];
+            if (rHeight) tags.push(`${rHeight}' HEIGHT`);
+            if (run.railCount) tags.push(`${run.railCount} RAILS`);
+            if (run.hasRotBoard) tags.push(`ROT BOARD`);
+            if (run.topStyle) tags.push(`${String(run.topStyle).toUpperCase()}`);
+            if (run.hasTopCap) tags.push(`TOP CAP`);
+            if (run.hasTrim) tags.push(`TRIM`);
+            if (run.picketStyle) tags.push(`${String(run.picketStyle).toUpperCase()}`);
+
+            const tagsHtml = tags.map(t => `
+              <span style="display: inline-block; background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #ffffff; padding: 3px 8px; font-size: 9px; font-weight: bold; text-transform: uppercase; border-radius: 9999px; margin-right: 4px; margin-bottom: 4px; letter-spacing: 0.5px; font-family: sans-serif;">${t}</span>
+            `).join('');
+
+            // Build rows for run items
+            let runRows = '';
             
-            laborTotalAmount += runTotal;
+            // Regular installation/demolition items
+            if (Array.isArray(run.items)) {
+              run.items.forEach((item: any) => {
+                const itemTotal = typeof item.total === 'number' ? item.total : 0;
+                const unitCost = typeof item.unitCost === 'number' ? item.unitCost : 0;
+                const isDemo = String(item.name).includes('Demo') || String(item.name).includes('Demolition');
+                const rowBgColor = isDemo ? '#fef2f2' : '#ffffff';
+                const textColor = isDemo ? '#991b1b' : '#334155';
+                
+                // Detailed scope guidelines
+                let detailedDesc = '';
+                if (String(item.name).includes('Installation')) {
+                  detailedDesc = `
+                    <div style="font-weight: bold; color: #1e3a8a; font-size: 11px; margin-top: 4px; text-decoration: underline; font-family: sans-serif;">Project Specs: ${rHeight}' Tall ${rStyle} ${run.picketStyle ? `(${run.picketStyle})` : ''}</div>
+                    <div style="font-size: 10px; color: #64748b; margin-top: 2px; line-height: 1.4; font-family: sans-serif;">
+                      Includes: Layout, utility marking verification, digging to spec (${rHeight === 8 ? '36"' : '24"'} min depth x 8" min width), post setting in wet concrete, ${String(rStyle).includes('Pipe') || String(rType).includes('Chain') ? 'top rail installation' : (run.railCount > 0 ? `${run.railCount}x horizontal rail installation,` : '')} and picket/panel attachment.
+                      ${run.picketStyle === 'Board on Board' ? '<span style="color: #b91c1c; font-weight: bold;">⚠️ BOARD ON BOARD: Pickets in back layer must have exactly 3.5" spacing.</span>' : ''}
+                      ${run.hasRotBoard ? 'Includes installation of 2x6 rot board.' : ''}
+                      ${run.hasTopCap ? 'Includes 2x6 top cap.' : ''}
+                      ${run.hasTrim ? 'Includes trim.' : ''}
+                      Must exercise full due diligence for private lines. All work level, plumb, uniform.
+                    </div>
+                  `;
+                } else if (isDemo) {
+                  detailedDesc = `
+                    <div style="font-size: 10px; color: #64748b; margin-top: 2px; line-height: 1.4; font-family: sans-serif;">
+                      Includes: Removal of existing fence segments, posts, and post concrete. Debris must be hauled away or staged as specified in dumpster/trailer.
+                    </div>
+                  `;
+                } else if (String(item.name).includes('Stain')) {
+                  detailedDesc = `
+                    <div style="font-size: 10px; color: #64748b; margin-top: 2px; line-height: 1.4; font-family: sans-serif;">
+                      Includes: Power washing/cleaning surface followed by uniform application of selected stain. No overspray authorized.
+                    </div>
+                  `;
+                }
+
+                runRows += `
+                  <tr style="background-color: ${rowBgColor}; border-bottom: 1px solid #f1f5f9; color: ${textColor};">
+                    <td style="padding: 10px; font-family: sans-serif; font-size: 13px; font-weight: bold; line-height: 1.4;">
+                      ${item.name}
+                      ${detailedDesc}
+                    </td>
+                    <td style="padding: 10px; text-align: center; font-family: sans-serif; font-size: 12px; width: 85px;">${item.qty} ${item.unit}</td>
+                    <td style="padding: 10px; text-align: right; font-family: monospace; font-size: 12px; width: 80px; white-space: nowrap;">$${Number(unitCost).toFixed(2)}</td>
+                    <td style="padding: 10px; text-align: right; font-family: monospace; font-size: 12px; font-weight: bold; width: 85px; white-space: nowrap;">$${Number(itemTotal).toFixed(2)}</td>
+                  </tr>
+                `;
+              });
+            }
+
+            // Gates embedded
+            if (Array.isArray(run.gates)) {
+              run.gates.forEach((gate: any) => {
+                if (Array.isArray(gate.items)) {
+                  gate.items.forEach((gItem: any) => {
+                    const gItemTotal = typeof gItem.total === 'number' ? gItem.total : 0;
+                    const gUnitCost = typeof gItem.unitCost === 'number' ? gItem.unitCost : 0;
+                    runRows += `
+                      <tr style="background-color: #fffaf0; border-bottom: 1px solid #f1f5f9; color: #b45309;">
+                        <td style="padding: 10px; font-family: sans-serif; font-size: 13px; font-weight: bold; line-height: 1.4;">
+                          <span style="display: inline-block; background-color: #f59e0b; color: #ffffff; font-size: 8px; font-weight: bold; padding: 2px 5px; border-radius: 4px; text-transform: uppercase; margin-right: 6px; letter-spacing: 0.5px; font-family: sans-serif; vertical-align: middle;">GATE</span>
+                          ${gItem.name}
+                        </td>
+                        <td style="padding: 10px; text-align: center; font-family: sans-serif; font-size: 12px; width: 85px;">${gItem.qty} ${gItem.unit}</td>
+                        <td style="padding: 10px; text-align: right; font-family: monospace; font-size: 12px; width: 80px; white-space: nowrap;">$${Number(gUnitCost).toFixed(2)}</td>
+                        <td style="padding: 10px; text-align: right; font-family: monospace; font-size: 12px; font-weight: bold; width: 85px; white-space: nowrap;">$${Number(gItemTotal).toFixed(2)}</td>
+                      </tr>
+                    `;
+                  });
+                }
+              });
+            }
+
+            runsDetailedTablesHtml += `
+              <div style="margin-top: 24px; margin-bottom: 24px; border: 2px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <!-- Run Header Block -->
+                <div style="background-color: #0c1a30; color: #ffffff; padding: 16px;">
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="vertical-align: middle;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; font-family: sans-serif;">${rName}</h3>
+                        <p style="margin: 3px 0 0 0; font-size: 9px; font-weight: bold; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; font-family: sans-serif;">${rLF} LF TOTAL • ${rStyle}</p>
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="margin-top: 10px;">
+                    ${tagsHtml}
+                  </div>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="background-color: #f8fafc; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #f1f5f9;">
+                      <th style="padding: 12px 10px; font-family: sans-serif;">Detailed Work Specification</th>
+                      <th style="padding: 12px 10px; text-align: center; font-family: sans-serif; width: 85px;">Quantities</th>
+                      <th style="padding: 12px 10px; text-align: right; font-family: sans-serif; width: 80px;">Piece Rate</th>
+                      <th style="padding: 12px 10px; text-align: right; font-family: sans-serif; width: 85px;">Net Pay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${runRows}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          });
+
+          // Build intermediate overview list rows for "Labor Manifest & Payout Details"
+          snapshot.laborRuns.forEach((run: any) => {
+            const rName = run.runName || `Section`;
+            const rLF = run.linearFeet !== undefined ? run.linearFeet : 0;
+            const rStyle = run.styleName || '';
+            
+            // Calculate direct run labor total
+            let runLaborTotal = 0;
+            if (Array.isArray(run.items)) {
+              run.items.forEach((item: any) => {
+                runLaborTotal += typeof item.total === 'number' ? item.total : 0;
+              });
+            }
+            if (Array.isArray(run.gates)) {
+              run.gates.forEach((gate: any) => {
+                if (Array.isArray(gate.items)) {
+                  gate.items.forEach((gItem: any) => {
+                    runLaborTotal += typeof gItem.total === 'number' ? gItem.total : 0;
+                  });
+                }
+              });
+            }
 
             runsTableRows += `
               <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -1566,49 +1731,166 @@ export default async function handler(req: any, res: any) {
                   <span style="font-size: 11px; color: #64748b;">Specs: ${rStyle} (Height: ${run.height || 6}ft)</span>
                 </td>
                 <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">${rLF} LF</td>
-                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(runTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace; font-weight: bold; color: #334155;">$${Number(runLaborTotal).toFixed(2)}</td>
               </tr>
             `;
           });
+
+          // Build aggregate master breakdown table
+          if (Array.isArray(snapshot.aggregateLaborManifest)) {
+            let manifestRows = '';
+            snapshot.aggregateLaborManifest.forEach((item: any) => {
+              const itemTotal = typeof item.total === 'number' ? item.total : 0;
+              manifestRows += `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 12px 10px; font-family: sans-serif; font-size: 13px; font-weight: bold; color: #0c1a30;">
+                    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: #ef4444; margin-right: 8px; vertical-align: middle;"></span>
+                    ${item.name}
+                  </td>
+                  <td style="padding: 12px 10px; text-align: center; font-family: sans-serif; width: 140px;">
+                    <span style="display: inline-block; background-color: #f1f5f9; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; color: #0c1a30;">${item.qty} ${item.unit}</span>
+                  </td>
+                  <td style="padding: 12px 10px; text-align: right; font-family: monospace; font-size: 13px; font-weight: bold; color: #ef4444; width: 110px;">$${Number(itemTotal).toFixed(2)}</td>
+                </tr>
+              `;
+            });
+
+            runsDetailedTablesHtml += `
+              <div style="margin-top: 32px; margin-bottom: 24px;">
+                <h3 style="color: #0c1a30; font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; border-bottom: 3px solid #0c1a30; padding-bottom: 6px; letter-spacing: 1px; font-family: sans-serif;">Aggregate Labor Manifest</h3>
+                <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #ef4444; margin-top: 2px; margin-bottom: 16px; letter-spacing: 1.5px; font-family: sans-serif;">Total Subcontractor Pay Breakdown</p>
+                
+                <div style="border: 2px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); background-color: #ffffff;">
+                  <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                      <tr style="background-color: #f8fafc; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #f1f5f9;">
+                        <th style="padding: 14px 10px; font-family: sans-serif;">Operation / Task</th>
+                        <th style="padding: 14px 10px; text-align: center; font-family: sans-serif; width: 140px;">Cumulative Volume</th>
+                        <th style="padding: 14px 10px; text-align: right; font-family: sans-serif; width: 110px;">Total Net Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${manifestRows}
+                    </tbody>
+                    <tfoot>
+                      <tr style="background-color: #0c1a30; color: #ffffff; font-weight: bold; font-size: 14px;">
+                        <td colspan="2" style="padding: 16px 12px; text-align: right; text-transform: uppercase; font-family: sans-serif; letter-spacing: 1px; font-size: 11px;">Total Direct Labor Liability</td>
+                        <td style="padding: 16px 12px; text-align: right; font-family: monospace; font-size: 18px; font-weight: bold;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            `;
+          }
+
         } else {
-          laborTotalAmount = estimateData.contractSnapshot?.totalInvestment || estimateData.grandTotal || 0;
-          runsTableRows = `
-            <tr>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">Generic Project Scope (Calculated Labor Package)</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">1 Job</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            </tr>
-          `;
+          // --- FALLBACK REBUILD IN CASE SNAPSHOT IS EMPTY ---
+          const runsToUse = estimateData.contractSnapshot?.costSummaryRuns || estimateData.contractSnapshot?.runs || estimateData.runs || [];
+          if (Array.isArray(runsToUse) && runsToUse.length > 0) {
+            runsToUse.forEach((run: any, idx: number) => {
+              const rName = run.runName || run.name || `Section ${idx + 1}`;
+              const rStyle = run.fenceType || run.styleName || run.style || 'Fence';
+              const rLF = run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0);
+              
+              const fenceVal = Number(run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge || 0));
+              const gateVal = Number(run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || 0));
+              const demoVal = Number(run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || 0));
+              const runTotal = run.sectionTotal !== undefined ? Number(run.sectionTotal) : (fenceVal + gateVal + demoVal);
+              
+              laborTotalAmount += runTotal;
+
+              runsTableRows += `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">
+                    <strong>${rName}</strong><br/>
+                    <span style="font-size: 11px; color: #64748b;">Specs: ${rStyle} (Height: ${run.height || 6}ft)</span>
+                  </td>
+                  <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">${rLF} LF</td>
+                  <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(runTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `;
+            });
+          } else {
+            laborTotalAmount = estimateData.contractSnapshot?.totalInvestment || estimateData.grandTotal || 0;
+            runsTableRows = `
+              <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">Generic Project Scope (Calculated Labor Package)</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">1 Job</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            `;
+          }
         }
 
         // 3. Build drawing section
         let drawingSection = '';
-        if (includeDrawing && estimateData.drawingUrl) {
-          const isPdf = estimateData.drawingMimeType?.includes('pdf') || estimateData.drawingUrl?.toLowerCase().includes('.pdf');
+        const drawingUrlToUse = snapshot ? snapshot.drawingUrl : estimateData.drawingUrl;
+        const drawingFileNameToUse = snapshot ? snapshot.drawingFileName : estimateData.drawingFileName;
+        const drawingMimeTypeToUse = snapshot ? snapshot.drawingMimeType : estimateData.drawingMimeType;
+
+        if (includeDrawing && drawingUrlToUse) {
+          const isPdf = drawingMimeTypeToUse?.includes('pdf') || drawingUrlToUse?.toLowerCase().includes('.pdf');
           if (isPdf) {
             drawingSection = `
-              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
-                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">📎 Attached PDF site plan / drawing reference</h4>
-                <p style="font-size: 12px; color: #475569; margin-bottom: 12px;">Drawing: ${estimateData.drawingFileName || 'layout.pdf'}</p>
-                <a href="${estimateData.drawingUrl}" target="_blank" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 10px 20px; font-weight: bold; font-size: 12px; border-radius: 4px; display: inline-block;">
-                  View PDF Project Drawing
+              <div style="margin-top: 32px; margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; font-family: sans-serif;">
+                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">📎 PROJECT DRAWING / LAYOUT REFERENCE</h4>
+                <p style="font-size: 12px; color: #475569; margin-bottom: 12px;">Reference PDF Drawing: <strong>${drawingFileNameToUse || 'layout.pdf'}</strong></p>
+                <a href="${drawingUrlToUse}" target="_blank" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 10px 20px; font-weight: bold; font-size: 12px; border-radius: 4px; display: inline-block;">
+                  Open Reference PDF Drawing
                 </a>
               </div>
             `;
           } else {
             drawingSection = `
-              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
-                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; font-size: 13px; text-transform: uppercase;">🖼️ Site plan / layout image reference</h4>
+              <div style="margin-top: 32px; margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; font-family: sans-serif;">
+                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; font-size: 13px; text-transform: uppercase;">🖼️ PROJECT DRAWING / LAYOUT REFERENCE</h4>
                 <div style="max-width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; margin: 0 auto 12px auto; background-color: #ffffff;">
-                  <img src="${estimateData.drawingUrl}" referrerPolicy="no-referrer" alt="Project site plan or layout drawing" style="max-width: 100%; height: auto; max-height: 350px; display: block; margin: 0 auto;" />
+                  <img src="${drawingUrlToUse}" referrerPolicy="no-referrer" alt="Project site plan or layout drawing" style="max-width: 100%; height: auto; max-height: 350px; display: block; margin: 0 auto;" />
                 </div>
-                <a href="${estimateData.drawingUrl}" target="_blank" style="font-size: 12px; font-weight: bold; color: #0c1a30; text-decoration: underline;">
+                <a href="${drawingUrlToUse}" target="_blank" style="font-size: 12px; font-weight: bold; color: #0c1a30; text-decoration: underline;">
                   View drawing image in new tab
                 </a>
               </div>
             `;
           }
         }
+
+        // Build SOW Directives Section
+        let scopeOfWorkSection = '';
+        const sowContent = (snapshot && snapshot.scopeOfWorkHtmlOrText) || estimateData.laborScope || '';
+        if (sowContent) {
+          scopeOfWorkSection = `
+            <div style="margin-top: 32px; margin-bottom: 24px; border-top: 2px dashed #cbd5e1; padding-top: 24px;">
+              <h3 style="color: #0c1a30; font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; border-bottom: 3px solid #0c1a30; padding-bottom: 6px; letter-spacing: 1px; font-family: sans-serif;">SUBCONTRACTOR GENERAL SCOPE OF WORK</h3>
+              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #ef4444; margin-top: 2px; margin-bottom: 16px; letter-spacing: 1.5px; font-family: sans-serif;">Fencing Directives & Excavation Standards</p>
+              
+              <div style="background-color: #fafafa; border-radius: 8px; border: 1px solid #e2e8f0; padding: 18px; font-size: 13px; line-height: 1.6; color: #334155; font-family: sans-serif; white-space: pre-wrap;">
+${sowContent}
+              </div>
+            </div>
+          `;
+        }
+
+        // Build Acknowledgment section as seen in PDF
+        const signatureSection = `
+          <div style="margin-top: 32px; border-top: 2px dashed #cbd5e1; padding-top: 24px; font-family: sans-serif; font-size: 13px; color: #334155;">
+            <h4 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; margin-bottom: 6px;">SUBCONTRACTOR ACKNOWLEDGMENT</h4>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 24px;">By signing below, the subcontractor agrees to execute the work in strict accordance with the specifications, quality standards, and dimensions outlined in this Scope of Work.</p>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+              <tr>
+                <td style="width: 50%; padding-right: 15px; padding-bottom: 20px;">
+                  <span style="font-weight: bold; display: block; margin-bottom: 30px;">Subcontractor Signature: _______________________</span>
+                  <span style="font-weight: bold;">Date: _______________</span>
+                </td>
+                <td style="width: 50%; padding-left: 15px; padding-bottom: 20px;">
+                  <span style="font-weight: bold; display: block; margin-bottom: 30px;">Project Manager Signature: _____________________</span>
+                  <span style="font-weight: bold;">Date: _______________</span>
+                </td>
+              </tr>
+            </table>
+          </div>
+        `;
 
         // 4. Load dynamic SMTP settings (same as normal estimate mail)
         let resolvedSmtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -1684,74 +1966,85 @@ export default async function handler(req: any, res: any) {
         };
 
         const mailHtmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+          <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background-color: #fbfbfc;">
             <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
               ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="Lone Star Fence Works" style="max-height: 60px; max-width: 200px; display: block; margin: 0 auto 10px auto;" />` : ''}
               <h1 style="color: #ffffff; margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
-              <p style="color: #ef4444; margin: 4px 0 0 0; font-weight: bold; letter-spacing: 3px; font-size: 11px;">LABOR CONTRACT & WORK ORDER</p>
+              <p style="color: #ef4444; margin: 4px 0 0 0; font-weight: bold; letter-spacing: 3px; font-size: 11px;">LABOR SCOPE OF WORK • CONTRACT SUMMARY</p>
             </div>
             <div style="padding: 24px; background-color: #ffffff; color: #334155;">
               
               <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h3 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Project Specifications</h3>
+                <h3 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px; font-family: sans-serif;">Job Reference Specifications</h3>
                 <table style="width: 100%; font-size: 13px; line-height: 1.6;">
                   <tr>
-                    <td style="font-weight: bold; width: 140px;">Customer Name:</td>
-                    <td>${customerName}</td>
+                    <td style="font-weight: bold; width: 140px; font-family: sans-serif;">Customer Name:</td>
+                    <td style="font-family: sans-serif;">${customerName}</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Job Site Address:</td>
-                    <td>${jobAddress}</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Job Site Address:</td>
+                    <td style="font-family: sans-serif;">${jobAddress}</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Fence Type / Style:</td>
-                    <td>${fenceType}</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Fence Type / Style:</td>
+                    <td style="font-family: sans-serif;">${fenceType}</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Fence Height:</td>
-                    <td>${height} ft</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Fence Height:</td>
+                    <td style="font-family: sans-serif;">${height} ft</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Linear Footage:</td>
-                    <td>${linearFeet} LF</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Linear Footage:</td>
+                    <td style="font-family: monospace;">${linearFeet} LF</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Gates:</td>
-                    <td>${gateSummary}</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Gates:</td>
+                    <td style="font-family: sans-serif;">${gateSummary}</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: bold;">Demo / Removal:</td>
-                    <td>${demoTotal > 0 ? 'Yes (Included in scope)' : 'None'}</td>
+                    <td style="font-weight: bold; font-family: sans-serif;">Demo / Removal:</td>
+                    <td style="font-family: sans-serif;">${demoTotal > 0 ? 'Yes (Included in scope)' : 'None'}</td>
                   </tr>
                   ${scheduledStartDate ? `
                   <tr>
-                    <td style="font-weight: bold; color: #b91c1c;">Current Schedule:</td>
-                    <td style="color: #b91c1c; font-weight: bold;">${scheduledStartDate} ${scheduledEndDate ? ` to ${scheduledEndDate}` : ''} (${installDuration} Day${installDuration > 1 ? 's' : ''})</td>
+                    <td style="font-weight: bold; color: #b91c1c; font-family: sans-serif;">Current Schedule:</td>
+                    <td style="color: #b91c1c; font-weight: bold; font-family: sans-serif;">${scheduledStartDate} ${scheduledEndDate ? ` to ${scheduledEndDate}` : ''} (${installDuration} Day${installDuration > 1 ? 's' : ''})</td>
                   </tr>` : ''}
                 </table>
               </div>
 
-              <div style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; padding: 12px; border-left: 4px solid #ef4444; background-color: #fafafa;">
+              <div style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; padding: 12px; border-left: 4px solid #ef4444; background-color: #fafafa; font-family: sans-serif;">
 ${message}
               </div>
 
-              <!-- Scheduling Portal Section -->
-              <div style="margin-bottom: 24px; padding: 20px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center;">
-                <h3 style="color: #15803d; margin-top: 0; font-size: 16px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Installation Scheduling</h3>
-                <p style="font-size: 13px; color: #166534; margin-bottom: 16px; line-height: 1.5;">
-                  Use this secure link to view current calendar availability, select blackout dates, and schedule or reschedule the installation date for this job.
+              <!-- Installation Scheduling Secure Portal Section -->
+              <div style="margin-bottom: 24px; padding: 20px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: left; font-family: sans-serif;">
+                <h3 style="color: #15803d; margin-top: 0; font-size: 15px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; border-bottom: 1px solid #bbf7d0; padding-bottom: 4px; margin-bottom: 8px;">Installation Scheduling</h3>
+                <p style="font-size: 13px; color: #166534; margin-bottom: 12px; line-height: 1.5;">
+                  Use this secure link to view current calendar availability, select blackout dates, and schedule or reschedule the installation date for this job:
                 </p>
-                <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 13px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block;">
-                  Schedule / Reschedule Installation
-                </a>
-                <p style="font-size: 11px; color: #166534; margin-top: 12px; font-family: monospace; word-break: break-all;">
+                <div style="text-align: center; margin-bottom: 14px; margin-top: 14px;">
+                  <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 13px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    Schedule / Reschedule Installation
+                  </a>
+                </div>
+                <p style="font-size: 11px; color: #166534; word-break: break-all; margin-bottom: 8px; font-family: monospace; background-color: #ffffff; padding: 6px 10px; border-radius: 4px; border: 1px solid #dcfce7;">
                   ${crewScheduleLink}
+                </p>
+                <p style="font-size: 11px; color: #15803d; line-height: 1.4; margin-top: 6px; font-weight: bold;">
+                  This link only allows access to installation scheduling for this project and blackout dates. It does not provide access to customer estimates, pricing, financials, or admin tools.
                 </p>
               </div>
 
-              <!-- Labor Payout Details -->
+              <!-- Labor Run Breakdowns -->
               <div style="margin-bottom: 24px;">
-                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px;">Labor Manifest & Payout Details</h3>
+                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px; font-family: sans-serif;">Labor Breakdown by Run Segment</h3>
+                ${runsDetailedTablesHtml}
+              </div>
+
+              <!-- Summarized Direct Liability Table -->
+              <div style="margin-bottom: 24px;">
+                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px; font-family: sans-serif;">Labor Summary Overview</h3>
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
                   <thead>
                     <tr style="background-color: #f1f5f9; color: #475569; font-weight: bold; font-size: 11px; text-transform: uppercase;">
@@ -1765,17 +2058,23 @@ ${message}
                   </tbody>
                   <tfoot>
                     <tr style="font-weight: bold; font-size: 14px; background-color: #f8fafc;">
-                      <td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; text-transform: uppercase; color: #0c1a30; font-family: sans-serif;">Total Direct Labor Payout:</td>
+                      <td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; text-transform: uppercase; color: #0c1a30; font-family: sans-serif; font-size: 11px; letter-spacing: 0.5px;">Group Total Net Direct Payout:</td>
                       <td style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; color: #b91c1c; font-size: 16px; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                    </tfoot>
                 </table>
               </div>
 
-              <!-- Drawing Reference -->
+              <!-- SOW Construction & Excavation Standards -->
+              ${scopeOfWorkSection}
+
+              <!-- Project Drawing REFERENCE -->
               ${drawingSection}
 
-              <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #64748b; line-height: 1.5; text-align: center;">
+              <!-- Signature lines -->
+              ${signatureSection}
+
+              <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #64748b; line-height: 1.5; text-align: center; font-family: sans-serif;">
                 This is a secure internal labor contract dispatched on behalf of ${resolvedFromName}.<br/>
                 Privacy Notice: Do not distribute customer-specific credentials or payment details outside scheduled crew members.
               </div>
@@ -1788,7 +2087,8 @@ ${message}
             estimateId,
             to: recipientEmail,
             subject,
-            hasCrewScheduleLink: Boolean(crewScheduleLink)
+            hasCrewScheduleLink: Boolean(crewScheduleLink),
+            hasSnapshot: Boolean(snapshot)
           });
 
           const transporter = nodemailer.createTransport(transporterConfig);
@@ -1821,7 +2121,7 @@ ${message}
               command: "sendMail",
               responseCode: undefined,
               response: info.response,
-              debugBuild: "labor-email-truthful-send-v1"
+              debugBuild: "labor-email-truthful-send-v2"
             });
           }
 
@@ -1836,7 +2136,7 @@ ${message}
             status: "sent"
           };
 
-          const updates = {
+          const updates: any = {
             crewScheduleToken,
             crewScheduleTokenCreatedAt: nowIso,
             crewScheduleTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1849,6 +2149,12 @@ ${message}
             laborContractEmailLog: admin.firestore.FieldValue.arrayUnion(logEntry)
           };
 
+          if (snapshot) {
+            const serializedSnapshot = JSON.parse(JSON.stringify(snapshot));
+            serializedSnapshot.crewScheduleLink = crewScheduleLink;
+            updates.laborContractSnapshot = serializedSnapshot;
+          }
+
           await docRef.update(updates);
 
           return res.status(200).json({
@@ -1858,7 +2164,7 @@ ${message}
             accepted: info.accepted,
             rejected: info.rejected,
             response: info.response,
-            debugBuild: "labor-email-truthful-send-v1"
+            debugBuild: "labor-email-truthful-send-v2"
           });
         } catch (mailErr: any) {
           console.error("Labor email failed", mailErr);
@@ -1870,7 +2176,7 @@ ${message}
             command: mailErr?.command,
             responseCode: mailErr?.responseCode,
             response: mailErr?.response,
-            debugBuild: "labor-email-truthful-send-v1"
+            debugBuild: "labor-email-truthful-send-v2"
           });
         }
       }
