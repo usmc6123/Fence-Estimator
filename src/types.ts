@@ -284,6 +284,10 @@ export interface Estimate {
   representativeSignatureName?: string;
   representativeCompanyName?: string;
   representativeSignedDate?: string;
+  laborContractEmailSent?: boolean;
+  laborContractEmailLog?: any[] | null;
+  laborContractEmailRecipient?: string;
+  laborContractEmailSentAt?: string;
 }
 
 export interface ScheduleEvent {

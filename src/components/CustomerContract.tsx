@@ -413,9 +413,12 @@ export default function CustomerContract({
   ]);
 
   // Check if all runs are homogenous (same specs)
-  const isHomogeneous = projectBreakdown.length > 1 && projectBreakdown.every(r => {
-    const isWood = r.style.includes('Wood') || r.style.includes('Cedar') || r.style.includes('Pine');
-    return r.style === projectBreakdown[0].style && 
+  const isHomogeneous = Array.isArray(projectBreakdown) && projectBreakdown.length > 1 && projectBreakdown.every(r => {
+    if (!r || !projectBreakdown[0]) return false;
+    const style1 = r.style || '';
+    const style2 = projectBreakdown[0].style || '';
+    const isWood = style1.includes('Wood') || style1.includes('Cedar') || style1.includes('Pine');
+    return style1 === style2 && 
       r.height === projectBreakdown[0].height &&
       (!isWood || (
         r.hasRotBoard === projectBreakdown[0].hasRotBoard &&
@@ -423,7 +426,7 @@ export default function CustomerContract({
         r.hasTrim === projectBreakdown[0].hasTrim &&
         r.picketStyle === projectBreakdown[0].picketStyle
       )) &&
-      (r.style !== 'Wrought Iron' || (
+      (style1 !== 'Wrought Iron' || (
         r.ironInstallType === projectBreakdown[0].ironInstallType &&
         r.ironPanelType === projectBreakdown[0].ironPanelType
       ));
@@ -854,15 +857,15 @@ export default function CustomerContract({
                         <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
                           Project-Wide Rate
                         </div>
-                        <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h4>
+                        <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h3>
                         <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">
-                          {projectBreakdown[0].height}' {projectBreakdown[0].style} Specification
-                          {projectBreakdown[0].style.includes('Iron') && (
+                          {projectBreakdown[0]?.height}' {projectBreakdown[0]?.style} Specification
+                          {projectBreakdown[0]?.style?.includes('Iron') && (
                             <>
                               <span className="mx-2">•</span>
-                              {projectBreakdown[0].ironInstallType}
+                              {projectBreakdown[0]?.ironInstallType}
                               <span className="mx-2">•</span>
-                              {projectBreakdown[0].ironPanelType} Panels
+                              {projectBreakdown[0]?.ironPanelType} Panels
                             </>
                           )}
                         </p>

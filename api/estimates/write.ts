@@ -584,8 +584,12 @@ export default async function handler(req: any, res: any) {
       }
 
       return res.status(200).json({
-        ...estimateData,
-        settings: companyConfig
+        success: true,
+        estimate: {
+          ...estimateData,
+          settings: companyConfig
+        },
+        contractSnapshot: estimateData.contractSnapshot || null
       });
     }
 
