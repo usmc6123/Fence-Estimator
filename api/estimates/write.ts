@@ -469,7 +469,12 @@ export default async function handler(req: any, res: any) {
         if (docData.jobStatus === 'Completed') return 'Completed';
         if (docData.jobStatus === 'Declined') return 'Declined';
         if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
-        if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+        if (docData.jobStatus === 'Estimate Sent') {
+          if (!docData.customerEmailSent && !docData.customerEmailSentAt) {
+            return 'Draft';
+          }
+          return 'Estimate Sent';
+        }
         return 'Draft';
       };
 
@@ -1599,7 +1604,12 @@ export default async function handler(req: any, res: any) {
             if (docData.jobStatus === 'Completed') return 'Completed';
             if (docData.jobStatus === 'Declined') return 'Declined';
             if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
-            if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+            if (docData.jobStatus === 'Estimate Sent') {
+              if (!docData.customerEmailSent && !docData.customerEmailSentAt) {
+                return 'Draft';
+              }
+              return 'Estimate Sent';
+            }
             return 'Draft';
           };
 
@@ -1765,7 +1775,23 @@ export default async function handler(req: any, res: any) {
       if (updates.manualStatusChange) {
         const mStatus = updates.manualStatusChange;
         
-        if (mStatus === 'Estimate Sent') {
+        if (mStatus === 'Draft') {
+          updates.jobStatus = 'Draft';
+          updates.customerDecision = 'none';
+          updates.customerEmailSent = false;
+          updates.customerEmailSentAt = null;
+          updates.sentAt = null;
+          updates.customerSignature = null;
+          updates.customerSignedDate = null;
+          updates.acceptedAt = null;
+          updates.declinedAt = null;
+          updates.completedAt = null;
+          updates.declineReason = null;
+          updates.customerDeclineReason = null;
+          if (existingData.status === 'archived' || existingData.status === 'completed') {
+            updates.status = 'active';
+          }
+        } else if (mStatus === 'Estimate Sent') {
           updates.jobStatus = 'Estimate Sent';
           updates.customerDecision = 'pending';
           updates.customerSignature = null;
@@ -1816,7 +1842,12 @@ export default async function handler(req: any, res: any) {
         if (docData.jobStatus === 'Completed') return 'Completed';
         if (docData.jobStatus === 'Declined') return 'Declined';
         if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
-        if (docData.jobStatus === 'Estimate Sent') return 'Estimate Sent';
+        if (docData.jobStatus === 'Estimate Sent') {
+          if (!docData.customerEmailSent && !docData.customerEmailSentAt) {
+            return 'Draft';
+          }
+          return 'Estimate Sent';
+        }
         return 'Draft';
       };
 

@@ -166,7 +166,7 @@ export default function CustomerSignaturePortal({
           customerDecisionDate: new Date().toISOString(),
           customerSignedDate: new Date().toISOString(),
           acceptedAt: new Date().toISOString(),
-          jobStatus: 'Approved'
+          jobStatus: 'Accepted'
         } : null);
       }
     } catch (err: any) {
@@ -210,7 +210,7 @@ export default function CustomerSignaturePortal({
           customerDecision: 'declined',
           customerDeclineReason: declineReason,
           customerDecisionDate: new Date().toISOString(),
-          jobStatus: 'Cancelled'
+          jobStatus: 'Declined'
         } : null);
       }
     } catch (err: any) {

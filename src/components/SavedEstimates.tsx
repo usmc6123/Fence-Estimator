@@ -25,6 +25,39 @@ interface SavedEstimatesProps {
 
 const STATUS_FLOW: JobStatus[] = ['Estimate Pending', 'Estimate Sent', 'Accepted', 'Completed'];
 
+const getEstimateDisplayStatus = (est: any) => {
+  if (est.status === 'archived') return 'Archived';
+  const jobStatus = est.jobStatus;
+  if (jobStatus === 'Completed') return 'Completed';
+  if (jobStatus === 'Declined') return 'Declined';
+  if (jobStatus === 'Accepted' || jobStatus === 'Approved') return 'Accepted';
+  if (jobStatus === 'Estimate Sent') {
+    if (!est.customerEmailSent && !est.customerEmailSentAt) {
+      return 'Draft';
+    }
+    return 'Estimate Sent';
+  }
+  return 'Draft';
+};
+
+const getStatusStyle = (statusLabel: string) => {
+  switch (statusLabel) {
+    case 'Archived':
+      return 'border-gray-200 bg-gray-50 text-gray-500';
+    case 'Completed':
+      return 'border-purple-200 bg-purple-50 text-purple-700 font-bold';
+    case 'Accepted':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 font-bold';
+    case 'Declined':
+      return 'border-red-200 bg-red-50 text-red-700 font-bold';
+    case 'Estimate Sent':
+      return 'border-blue-200 bg-blue-50 text-blue-700 font-bold';
+    case 'Draft':
+    default:
+      return 'border-amber-200 bg-amber-50 text-amber-700 font-bold';
+  }
+};
+
 export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user, materials, laborRates }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
@@ -757,29 +790,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                     id={`status-dropdown-${estimate.id}`}
                                     className={cn(
                                       "text-[10px] uppercase font-black tracking-wider border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-american-blue cursor-pointer transition-all font-sans shadow-sm",
-                                      estimate.status === 'archived' 
-                                        ? 'border-gray-200 bg-gray-50 text-gray-500'
-                                        : ((estimate.jobStatus as any) === 'Completed' 
-                                            ? 'border-purple-200 bg-purple-50 text-purple-700 font-bold'
-                                            : ((estimate.jobStatus as any) === 'Accepted' || (estimate.jobStatus as any) === 'Approved' 
-                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 font-bold'
-                                                : ((estimate.jobStatus as any) === 'Declined' 
-                                                    ? 'border-red-200 bg-red-50 text-red-700 font-bold'
-                                                    : ((estimate.jobStatus as any) === 'Estimate Sent' 
-                                                        ? 'border-blue-200 bg-blue-50 text-blue-700 font-bold'
-                                                        : 'border-amber-200 bg-amber-50 text-amber-700 font-bold'))))
+                                      getStatusStyle(getEstimateDisplayStatus(estimate))
                                     )}
-                                    value={
-                                      estimate.status === 'archived' 
-                                        ? 'Archived' 
-                                        : ((estimate.jobStatus as any) === 'Completed' 
-                                            ? 'Completed' 
-                                            : ((estimate.jobStatus as any) === 'Declined' 
-                                                ? 'Declined' 
-                                                : ((estimate.jobStatus as any) === 'Accepted' || (estimate.jobStatus as any) === 'Approved' 
-                                                    ? 'Accepted' 
-                                                    : 'Estimate Sent')))
-                                    }
+                                    value={getEstimateDisplayStatus(estimate)}
                                     onChange={async (e) => {
                                       const newStatus = e.target.value;
                                       try {
@@ -807,6 +820,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                     }}
                                     onClick={(e) => e.stopPropagation()}
                                   >
+                                    <option value="Draft">Draft</option>
                                     <option value="Estimate Sent">Estimate Sent</option>
                                     <option value="Accepted">Accepted</option>
                                     <option value="Declined">Declined</option>
@@ -824,7 +838,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                       {((estimate as any).viewCount || 1) > 1 && ` (${(estimate as any).viewCount}x)`}
                                     </span>
                                   </div>
-                                ) : estimate.jobStatus === 'Estimate Sent' ? (
+                                ) : getEstimateDisplayStatus(estimate) === 'Estimate Sent' ? (
                                   <div className="text-[10px] text-gray-400 font-bold flex items-center gap-1 pl-1">
                                     <Clock size={10} /> Unopened
                                   </div>

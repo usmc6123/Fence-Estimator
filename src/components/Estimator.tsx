@@ -492,6 +492,8 @@ export default function Estimator({
 
     const wasDecisionMade = estimate.customerDecision === 'accepted' || estimate.customerDecision === 'declined' || !!estimate.customerSignature;
 
+    const isNewDraft = !isExisting || !estimate.jobStatus || estimate.jobStatus === 'Estimate Pending' || estimate.jobStatus === 'Estimate Sent';
+
     const estimateToSave = {
       ...estimate,
       linearFeet: actualLF,
@@ -501,12 +503,13 @@ export default function Estimator({
       createdAt: estimate.createdAt || now,
       lastModified: now,
       status: 'active',
-      jobStatus: wasDecisionMade ? 'Draft' : (estimate.jobStatus || 'Estimate Pending'),
+      jobStatus: (wasDecisionMade || isNewDraft) ? 'Draft' : estimate.jobStatus,
+      customerDecision: (wasDecisionMade || isNewDraft) ? null : (estimate.customerDecision || null),
       userId: user.uid,
       companyId: 'lonestarfence'
     };
 
-    if (wasDecisionMade) {
+    if (wasDecisionMade || isNewDraft) {
       (estimateToSave as any).customerDecision = null;
       (estimateToSave as any).customerSignature = null;
       (estimateToSave as any).customerSignedDate = null;
@@ -516,6 +519,8 @@ export default function Estimator({
       (estimateToSave as any).customerEmailSigned = null;
       (estimateToSave as any).customerEmailSent = false;
       (estimateToSave as any).customerSentAt = null;
+      (estimateToSave as any).customerEmailSentAt = null;
+      (estimateToSave as any).sentAt = null;
     }
 
     // Remove any undefined fields that cause Firestore to crash

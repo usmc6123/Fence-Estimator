@@ -140,7 +140,7 @@ export interface SupplierQuote {
   fileType?: string;
 }
 
-export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Approved' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled';
+export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Approved' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled' | 'Declined';
 
 export interface JobExpense {
   id: string;
