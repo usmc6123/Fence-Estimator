@@ -1522,7 +1522,7 @@ export default async function handler(req: any, res: any) {
             success: false,
             error: "Crew scheduling token generation failed",
             details: tokenErr?.message || String(tokenErr),
-            debugBuild: "labor-email-no-require-v1"
+            debugBuild: "labor-email-truthful-send-v1"
           });
         }
         const appUrl = 'https://fence-estimator-eight.vercel.app';
@@ -1626,6 +1626,7 @@ export default async function handler(req: any, res: any) {
         if (decoded && decoded.uid) candidateUids.push(decoded.uid);
         if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
         candidateUids.push('main');
+        candidateUids.push('braden-lonestar-uid');
 
         let settingsData: any = null;
         for (const uidToTry of candidateUids) {
@@ -1783,14 +1784,46 @@ ${message}
         `;
 
         try {
+          console.log("Sending labor contract email", {
+            estimateId,
+            to: recipientEmail,
+            subject,
+            hasCrewScheduleLink: Boolean(crewScheduleLink)
+          });
+
           const transporter = nodemailer.createTransport(transporterConfig);
-          await transporter.sendMail({
+          const info = await transporter.sendMail({
             from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
             to: recipientEmail,
             replyTo: resolvedReplyToEmail,
             subject: subject || `Labor Contract / Work Order - ${customerName}`,
             html: mailHtmlContent
           });
+
+          console.log("Labor email sendMail result", {
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            response: info.response
+          });
+
+          const isRejected = Array.isArray(info.rejected) && info.rejected.includes(recipientEmail);
+          if (isRejected) {
+            console.error("Labor email failed", {
+              reason: "Recipient address was in raw SMTP rejected list",
+              rejected: info.rejected
+            });
+            return res.status(400).json({
+              success: false,
+              error: "Labor contract email failed",
+              details: `The recipient email address (${recipientEmail}) was rejected by the SMTP server.`,
+              code: "SMTP_REJECTED",
+              command: "sendMail",
+              responseCode: undefined,
+              response: info.response,
+              debugBuild: "labor-email-truthful-send-v1"
+            });
+          }
 
           const logEntry = {
             recipient: recipientEmail,
@@ -1818,17 +1851,26 @@ ${message}
 
           await docRef.update(updates);
 
-          return res.status(200).json({ 
-            success: true, 
-            message: 'Labor contract successfully emailed to crew and logged.',
-            debugBuild: 'labor-email-no-require-v1'
+          return res.status(200).json({
+            success: true,
+            message: "Labor contract email sent",
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            response: info.response,
+            debugBuild: "labor-email-truthful-send-v1"
           });
         } catch (mailErr: any) {
-          console.error('[SMTP LABOR MAIL ERROR]', mailErr);
-          return res.status(500).json({ 
-            success: false, 
-            error: `SMTP execution failure: ${mailErr?.message || mailErr}`,
-            debugBuild: 'labor-email-no-require-v1'
+          console.error("Labor email failed", mailErr);
+          return res.status(500).json({
+            success: false,
+            error: "Labor contract email failed",
+            details: mailErr?.message || String(mailErr),
+            code: mailErr?.code,
+            command: mailErr?.command,
+            responseCode: mailErr?.responseCode,
+            response: mailErr?.response,
+            debugBuild: "labor-email-truthful-send-v1"
           });
         }
       }

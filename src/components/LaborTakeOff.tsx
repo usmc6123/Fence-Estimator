@@ -53,6 +53,12 @@ export default function LaborTakeOff({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [sendSuccessInfo, setSendSuccessInfo] = useState<{
+    messageId?: string;
+    accepted?: string[];
+    rejected?: string[];
+    response?: string;
+  } | null>(null);
 
   React.useEffect(() => {
     const fetchEmployees = async () => {
@@ -77,6 +83,7 @@ export default function LaborTakeOff({
     if (showEmailModal) {
       fetchEmployees();
       setSendSuccess(false);
+      setSendSuccessInfo(null);
       setSendError('');
       setIncludeDrawing(!!estimate.drawingUrl);
       setEmailSubject(`Labor Contract / Work Order - ${estimate.customerName || 'Customer'} - ${estimate.customerAddress || 'Job Site'}`);
@@ -112,11 +119,27 @@ export default function LaborTakeOff({
       });
 
       const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.error || "Failed to send labor contract email.");
+      if (!response.ok || !resData.success) {
+        let errDesc = resData.error || "Failed to send labor contract email.";
+        if (resData.details) {
+          errDesc += ` Details: ${resData.details}`;
+        }
+        if (resData.code) {
+          errDesc += ` (Error Code: ${resData.code})`;
+        }
+        if (resData.response) {
+          errDesc += ` [Server Response: ${resData.response}]`;
+        }
+        throw new Error(errDesc);
       }
 
       setSendSuccess(true);
+      setSendSuccessInfo({
+        messageId: resData.messageId,
+        accepted: resData.accepted,
+        rejected: resData.rejected,
+        response: resData.response
+      });
       
       if (onUpdateEstimate) {
         onUpdateEstimate({
@@ -125,10 +148,6 @@ export default function LaborTakeOff({
           laborContractEmailSentAt: new Date().toISOString()
         });
       }
-
-      setTimeout(() => {
-        setShowEmailModal(false);
-      }, 2500);
 
     } catch (err: any) {
       setSendError(err?.message || String(err));
@@ -768,6 +787,34 @@ export default function LaborTakeOff({
                   <p className="text-sm text-american-blue/60 max-w-md mx-auto font-medium">
                     The labor contract has been securely emailed to the crew along with their personal installation scheduling link.
                   </p>
+
+                  {sendSuccessInfo && (
+                    <div className="mt-6 p-5 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs font-medium space-y-2.5 max-w-lg mx-auto font-mono text-slate-700">
+                      <div className="font-bold border-b border-slate-200 pb-1.5 uppercase text-american-blue text-[10px] tracking-wider font-sans">
+                        📬 Transmission delivery report
+                      </div>
+                      {sendSuccessInfo.messageId && (
+                        <div>
+                          <span className="font-bold">Message ID:</span> {sendSuccessInfo.messageId}
+                        </div>
+                      )}
+                      {Array.isArray(sendSuccessInfo.accepted) && sendSuccessInfo.accepted.length > 0 && (
+                        <div>
+                          <span className="font-bold text-emerald-600">Accepted Recipients:</span> {sendSuccessInfo.accepted.join(', ')}
+                        </div>
+                      )}
+                      {Array.isArray(sendSuccessInfo.rejected) && sendSuccessInfo.rejected.length > 0 && (
+                        <div>
+                          <span className="font-bold text-red-500">Rejected Recipients:</span> {sendSuccessInfo.rejected.join(', ')}
+                        </div>
+                      )}
+                      {sendSuccessInfo.response && (
+                        <div>
+                          <span className="font-bold">SMTP Server Response:</span> {sendSuccessInfo.response}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
