@@ -389,22 +389,31 @@ async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, de
   };
 
   console.log(`[SMTP SEND_APP_EMAIL] Sending mail to ${to} subject: "${subject}" using host: ${resolvedSmtpHost}`);
-  const transporter = nodemailer.createTransport(transporterConfig);
-  const info = await transporter.sendMail({
-    from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-    to,
-    replyTo: resolvedReplyToEmail,
-    subject,
-    text,
-    html
-  });
+  try {
+    const transporter = nodemailer.createTransport(transporterConfig);
+    const info = await transporter.sendMail({
+      from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+      to,
+      replyTo: resolvedReplyToEmail,
+      subject,
+      text,
+      html
+    });
 
-  return {
-    info,
-    resolvedFromName,
-    resolvedFromEmail,
-    resolvedReplyToEmail
-  };
+    return {
+      info,
+      resolvedFromName,
+      resolvedFromEmail,
+      resolvedReplyToEmail
+    };
+  } catch (err: any) {
+    if (err && typeof err === 'object') {
+      err.resolvedFromName = resolvedFromName;
+      err.resolvedFromEmail = resolvedFromEmail;
+      err.resolvedReplyToEmail = resolvedReplyToEmail;
+    }
+    throw err;
+  }
 }
 
 export default async function handler(req: any, res: any) {
@@ -2101,6 +2110,15 @@ Lone Star Fence Works`;
               response: info.response,
               envelope: info.envelope,
               debugBuild: "shared-email-sender-labor-test-v1",
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from || '',
+              envelopeTo: info.envelope?.to || [],
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response,
               smtpDiagnostic: {
                 from,
                 to: recipientEmail,
@@ -2161,6 +2179,8 @@ Lone Star Fence Works`;
           });
         } catch (error: any) {
           console.error("LABOR SIMPLE EMAIL EXCEPTION", error);
+          const resolvedFrom = error?.resolvedFromName && error?.resolvedFromEmail ? `"${error.resolvedFromName}" <${error.resolvedFromEmail}>` : '';
+          const resolvedReplyTo = error?.resolvedReplyToEmail || '';
           
           return res.status(500).json({
             success: false,
@@ -2168,13 +2188,23 @@ Lone Star Fence Works`;
             details: error?.message || String(error),
             code: error?.code,
             response: error?.response,
-            htmlLength,
-            textLength,
             spamSafeVersion: true,
             debugBuild: "shared-email-sender-labor-test-v1",
+            from: resolvedFrom,
+            to: recipientEmail,
+            replyTo: resolvedReplyTo,
+            envelopeFrom: error?.envelope?.from || '',
+            envelopeTo: error?.envelope?.to || [],
+            subject: emailSubject,
+            textLength,
+            htmlLength,
+            smtpResponse: error?.response || error?.message || String(error),
             smtpDiagnostic: {
+              from: resolvedFrom,
               to: recipientEmail,
-              replyTo: recipientEmail,
+              replyTo: resolvedReplyTo,
+              envelopeFrom: error?.envelope?.from || '',
+              envelopeTo: error?.envelope?.to || [],
               subject: emailSubject,
               textLength,
               htmlLength,
@@ -2268,6 +2298,15 @@ Lone Star Fence Works`;
               response: info.response,
               envelope: info.envelope,
               debugBuild: "shared-email-sender-labor-test-v1",
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from || '',
+              envelopeTo: info.envelope?.to || [],
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response,
               smtpDiagnostic: {
                 from,
                 to: recipientEmail,
@@ -2293,6 +2332,8 @@ Lone Star Fence Works`;
           });
         } catch (error: any) {
           console.error("LABOR TEST EMAIL FAILED", error);
+          const resolvedFrom = error?.resolvedFromName && error?.resolvedFromEmail ? `"${error.resolvedFromName}" <${error.resolvedFromEmail}>` : '';
+          const resolvedReplyTo = error?.resolvedReplyToEmail || '';
 
           return res.status(500).json({
             success: false,
@@ -2302,9 +2343,21 @@ Lone Star Fence Works`;
             rejected: [recipientEmail],
             response: error?.response || String(error),
             debugBuild: "shared-email-sender-labor-test-v1",
+            from: resolvedFrom,
+            to: recipientEmail,
+            replyTo: resolvedReplyTo,
+            envelopeFrom: error?.envelope?.from || '',
+            envelopeTo: error?.envelope?.to || [],
+            subject: emailSubject,
+            textLength,
+            htmlLength,
+            smtpResponse: error?.response || error?.message || String(error),
             smtpDiagnostic: {
+              from: resolvedFrom,
               to: recipientEmail,
-              replyTo: recipientEmail,
+              replyTo: resolvedReplyTo,
+              envelopeFrom: error?.envelope?.from || '',
+              envelopeTo: error?.envelope?.to || [],
               subject: emailSubject,
               textLength,
               htmlLength,
