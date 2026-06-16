@@ -3,6 +3,15 @@ import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { getEstimateFinalPrice } from '../../src/lib/utils';
+import { randomBytes } from 'crypto';
+
+function generateSecureToken(): string {
+  try {
+    return randomBytes(32).toString('hex');
+  } catch (err: any) {
+    throw new Error(err?.message || String(err));
+  }
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
@@ -1505,8 +1514,17 @@ export default async function handler(req: any, res: any) {
         const estimateData = snap.data() || {};
 
         // Generate critical token
-        const crypto = require('crypto');
-        const crewScheduleToken = crypto.randomBytes(16).toString('hex');
+        let crewScheduleToken = '';
+        try {
+          crewScheduleToken = generateSecureToken();
+        } catch (tokenErr: any) {
+          return res.status(500).json({
+            success: false,
+            error: "Crew scheduling token generation failed",
+            details: tokenErr?.message || String(tokenErr),
+            debugBuild: "labor-email-no-require-v1"
+          });
+        }
         const appUrl = 'https://fence-estimator-eight.vercel.app';
         const crewScheduleLink = `${appUrl}/?portal=crew-schedule&estimateId=${estimateId}&token=${crewScheduleToken}`;
         const nowIso = new Date().toISOString();
@@ -1800,10 +1818,18 @@ ${message}
 
           await docRef.update(updates);
 
-          return res.status(200).json({ success: true, message: 'Labor contract successfully emailed to crew and logged.' });
+          return res.status(200).json({ 
+            success: true, 
+            message: 'Labor contract successfully emailed to crew and logged.',
+            debugBuild: 'labor-email-no-require-v1'
+          });
         } catch (mailErr: any) {
           console.error('[SMTP LABOR MAIL ERROR]', mailErr);
-          return res.status(500).json({ success: false, error: `SMTP execution failure: ${mailErr?.message || mailErr}` });
+          return res.status(500).json({ 
+            success: false, 
+            error: `SMTP execution failure: ${mailErr?.message || mailErr}`,
+            debugBuild: 'labor-email-no-require-v1'
+          });
         }
       }
 
