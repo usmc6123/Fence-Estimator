@@ -1919,11 +1919,11 @@ ${sowContent}
         `;
 
         // 4. Load dynamic SMTP settings (same as normal estimate mail)
-        let resolvedSmtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-        let resolvedSmtpPort = Number(process.env.SMTP_PORT || 465);
+        let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
+        let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
         let resolvedSmtpSecureType = 'SSL/TLS';
-        let resolvedSmtpUser = process.env.SMTP_USER || '';
-        let resolvedSmtpPass = process.env.SMTP_PASS || '';
+        let resolvedSmtpUser = process.env.SMTP_USER;
+        let resolvedSmtpPass = process.env.SMTP_PASS;
         let resolvedFromName = 'Lone Star Fence Works';
         let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
         let resolvedReplyToEmail = resolvedFromEmail;
@@ -2086,45 +2086,74 @@ ${message}
         `;
 
         try {
-          console.log("Sending labor contract email", {
+          console.log("LABOR EMAIL SEND START", {
             estimateId,
             to: recipientEmail,
             subject,
+            htmlLength: mailHtmlContent?.length,
             hasCrewScheduleLink: Boolean(crewScheduleLink),
-            hasSnapshot: Boolean(snapshot)
+            hasLaborSnapshot: Boolean(laborContractSnapshot)
           });
 
           const transporter = nodemailer.createTransport(transporterConfig);
-          const info = await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-            to: recipientEmail,
-            replyTo: resolvedReplyToEmail,
-            subject: subject || `Labor Contract / Work Order - ${customerName}`,
-            html: mailHtmlContent
-          });
+          let info;
+          try {
+            info = await transporter.sendMail({
+              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+              to: recipientEmail,
+              replyTo: resolvedReplyToEmail,
+              subject: subject || `Labor Contract / Work Order - ${customerName}`,
+              html: mailHtmlContent
+            });
+          } catch (richSendErr: any) {
+            console.warn("LABOR EMAIL SEND WARNING: Rich HTML send failed, attempting clean fallback.", richSendErr);
+            const fallbackHtml = `
+              <div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; background-color: #ffffff;">
+                <h2 style="color: #0c1a30; border-bottom: 2px solid #ef4444; padding-bottom: 8px; text-transform: uppercase; font-family: sans-serif;">Labor Contract / Work Order Ready</h2>
+                <p style="color: #334155; font-size: 14px; line-height: 1.5;">Hello, the labor contract / work order is ready for review.</p>
+                <p style="color: #334155; font-size: 14px; line-height: 1.5;">Use the secure link below to view details and schedule the installation:</p>
+                <div style="margin: 24px 0;">
+                  <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block; text-transform: uppercase; font-size: 13px; font-family: sans-serif; letter-spacing: 0.5px;">
+                    View & Schedule Installation
+                  </a>
+                </div>
+                <p style="font-size: 11px; color: #64748b; font-family: monospace; word-break: break-all; background-color: #f1f5f9; padding: 8px; border-radius: 4px;">
+                  Link: ${crewScheduleLink}
+                </p>
+              </div>
+            `;
+            info = await transporter.sendMail({
+              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+              to: recipientEmail,
+              replyTo: resolvedReplyToEmail,
+              subject: subject || `Labor Contract / Work Order - ${customerName}`,
+              text: `Labor contract/work order is ready. Crew schedule link: ${crewScheduleLink}`,
+              html: fallbackHtml
+            });
+          }
 
-          console.log("Labor email sendMail result", {
+          console.log("LABOR EMAIL SEND RESULT", {
             messageId: info.messageId,
             accepted: info.accepted,
             rejected: info.rejected,
             response: info.response
           });
 
-          const isRejected = Array.isArray(info.rejected) && info.rejected.includes(recipientEmail);
-          if (isRejected) {
-            console.error("Labor email failed", {
-              reason: "Recipient address was in raw SMTP rejected list",
+          const isRejected = Array.isArray(info.rejected) && info.rejected.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
+          const isAccepted = Array.isArray(info.accepted) && info.accepted.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
+
+          if (isRejected || !isAccepted) {
+            console.error("LABOR EMAIL SEND FAILED", {
+              reason: "Recipient address not accepted or rejected by SMTP server",
+              accepted: info.accepted,
               rejected: info.rejected
             });
             return res.status(400).json({
               success: false,
-              error: "Labor contract email failed",
-              details: `The recipient email address (${recipientEmail}) was rejected by the SMTP server.`,
-              code: "SMTP_REJECTED",
-              command: "sendMail",
-              responseCode: undefined,
-              response: info.response,
-              debugBuild: "labor-email-truthful-send-v2"
+              error: "Labor email recipient was rejected",
+              rejected: info.rejected,
+              accepted: info.accepted,
+              debugBuild: "labor-email-verified-send-v2"
             });
           }
 
@@ -2162,24 +2191,24 @@ ${message}
 
           return res.status(200).json({
             success: true,
-            message: "Labor contract email sent",
             messageId: info.messageId,
             accepted: info.accepted,
             rejected: info.rejected,
             response: info.response,
-            debugBuild: "labor-email-truthful-send-v2"
+            envelope: info.envelope,
+            debugBuild: "labor-email-verified-send-v2"
           });
-        } catch (mailErr: any) {
-          console.error("Labor email failed", mailErr);
+        } catch (error: any) {
+          console.error("LABOR EMAIL SEND FAILED", error);
           return res.status(500).json({
             success: false,
             error: "Labor contract email failed",
-            details: mailErr?.message || String(mailErr),
-            code: mailErr?.code,
-            command: mailErr?.command,
-            responseCode: mailErr?.responseCode,
-            response: mailErr?.response,
-            debugBuild: "labor-email-truthful-send-v2"
+            details: error?.message || String(error),
+            code: error?.code,
+            command: error?.command,
+            responseCode: error?.responseCode,
+            response: error?.response,
+            debugBuild: "labor-email-verified-send-v2"
           });
         }
       }

@@ -174,8 +174,13 @@ export default function LaborTakeOff({
       });
 
       const resData = await response.json();
-      if (!response.ok || !resData.success) {
+      const isAccepted = Array.isArray(resData.accepted) && resData.accepted.some((email: string) => email.toLowerCase() === recipient.toLowerCase());
+
+      if (!response.ok || !resData.success || !isAccepted) {
         let errDesc = resData.error || "Failed to send labor contract email.";
+        if (resData.success && !isAccepted) {
+          errDesc = `The recipient email address (${recipient}) was not accepted by the SMTP mail server.`;
+        }
         if (resData.details) {
           errDesc += ` Details: ${resData.details}`;
         }
