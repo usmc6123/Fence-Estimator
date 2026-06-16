@@ -1929,37 +1929,22 @@ ${sowContent}
         let resolvedReplyToEmail = resolvedFromEmail;
         let resolvedCompanyLogo = '';
 
-        const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
-        const candidateUids = [];
-        if (decoded && decoded.uid) candidateUids.push(decoded.uid);
-        if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
-        candidateUids.push('main');
-        candidateUids.push('braden-lonestar-uid');
-
-        let settingsData: any = null;
-        for (const uidToTry of candidateUids) {
-          try {
-            const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
-            if (settingsSnap.exists) {
-              const posS = settingsSnap.data() || {};
-              if (posS.smtpHost && posS.smtpUsername) {
-                settingsData = posS;
-                break;
-              }
-            }
-          } catch (err) {}
-        }
-
-        if (settingsData) {
-          if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
-          if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
-          if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
-          if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
-          if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
-          if (settingsData.fromName) resolvedFromName = settingsData.fromName;
-          if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
-          resolvedReplyToEmail = settingsData.replyToEmail || resolvedFromEmail;
-          resolvedCompanyLogo = settingsData.companyLogo || '';
+        try {
+          const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+          if (settingsSnap.exists) {
+            const s = settingsSnap.data() || {};
+            if (s.smtpHost) resolvedSmtpHost = s.smtpHost;
+            if (s.smtpPort) resolvedSmtpPort = Number(s.smtpPort);
+            if (s.smtpSecureType) resolvedSmtpSecureType = s.smtpSecureType;
+            if (s.smtpUsername) resolvedSmtpUser = s.smtpUsername;
+            if (s.smtpPassword) resolvedSmtpPass = s.smtpPassword;
+            if (s.fromName) resolvedFromName = s.fromName;
+            if (s.fromEmail) resolvedFromEmail = s.fromEmail;
+            resolvedReplyToEmail = s.replyToEmail || resolvedFromEmail;
+            resolvedCompanyLogo = s.companyLogo || '';
+          }
+        } catch (settingsErr) {
+          console.warn('Could not load companySettings for send-labor-contract:', settingsErr);
         }
 
         const missingVars: string[] = [];
@@ -1991,148 +1976,31 @@ ${sowContent}
           }
         };
 
-        const mailHtmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background-color: #fbfbfc;">
-            <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
-              ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="Lone Star Fence Works" style="max-height: 60px; max-width: 200px; display: block; margin: 0 auto 10px auto;" />` : ''}
-              <h1 style="color: #ffffff; margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
-              <p style="color: #ef4444; margin: 4px 0 0 0; font-weight: bold; letter-spacing: 3px; font-size: 11px;">LABOR SCOPE OF WORK • CONTRACT SUMMARY</p>
-            </div>
-            <div style="padding: 24px; background-color: #ffffff; color: #334155;">
-              
-              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h3 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px; font-family: sans-serif;">Job Reference Specifications</h3>
-                <table style="width: 100%; font-size: 13px; line-height: 1.6;">
-                  <tr>
-                    <td style="font-weight: bold; width: 140px; font-family: sans-serif;">Customer Name:</td>
-                    <td style="font-family: sans-serif;">${customerName}</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Job Site Address:</td>
-                    <td style="font-family: sans-serif;">${jobAddress}</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Fence Type / Style:</td>
-                    <td style="font-family: sans-serif;">${fenceType}</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Fence Height:</td>
-                    <td style="font-family: sans-serif;">${height} ft</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Linear Footage:</td>
-                    <td style="font-family: monospace;">${linearFeet} LF</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Gates:</td>
-                    <td style="font-family: sans-serif;">${gateSummary}</td>
-                  </tr>
-                  <tr>
-                    <td style="font-weight: bold; font-family: sans-serif;">Demo / Removal:</td>
-                    <td style="font-family: sans-serif;">${demoTotal > 0 ? 'Yes (Included in scope)' : 'None'}</td>
-                  </tr>
-                  ${scheduledStartDate ? `
-                  <tr>
-                    <td style="font-weight: bold; color: #b91c1c; font-family: sans-serif;">Current Schedule:</td>
-                    <td style="color: #b91c1c; font-weight: bold; font-family: sans-serif;">${scheduledStartDate} ${scheduledEndDate ? ` to ${scheduledEndDate}` : ''} (${installDuration} Day${installDuration > 1 ? 's' : ''})</td>
-                  </tr>` : ''}
-                </table>
-              </div>
+        const simpleSubject = `Labor Contract Test - ${customerName}`;
+        const simpleText = `This is a labor contract test email from Lone Star Fence Works.
+Estimate ID: ${estimateId}
+Crew Schedule Link: ${crewScheduleLink}`;
 
-              <div style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; padding: 12px; border-left: 4px solid #ef4444; background-color: #fafafa; font-family: sans-serif;">
-${message}
-              </div>
-
-              <!-- Installation Scheduling Secure Portal Section -->
-              <div style="margin-bottom: 24px; padding: 20px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: left; font-family: sans-serif;">
-                <h3 style="color: #15803d; margin-top: 0; font-size: 15px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; border-bottom: 1px solid #bbf7d0; padding-bottom: 4px; margin-bottom: 8px;">Installation Scheduling</h3>
-                <p style="font-size: 13px; color: #166534; margin-bottom: 12px; line-height: 1.5;">
-                  Use this secure link to view current calendar availability, select blackout dates, and schedule or reschedule the installation date for this job:
-                </p>
-                <div style="text-align: center; margin-bottom: 14px; margin-top: 14px;">
-                  <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 13px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    Schedule / Reschedule Installation
-                  </a>
-                </div>
-                <p style="font-size: 11px; color: #166534; word-break: break-all; margin-bottom: 8px; font-family: monospace; background-color: #ffffff; padding: 6px 10px; border-radius: 4px; border: 1px solid #dcfce7;">
-                  ${crewScheduleLink}
-                </p>
-                <p style="font-size: 11px; color: #15803d; line-height: 1.4; margin-top: 6px; font-weight: bold;">
-                  This link only allows access to installation scheduling for this project and blackout dates. It does not provide access to customer estimates, pricing, financials, or admin tools.
-                </p>
-              </div>
-
-              <!-- Labor Run Breakdowns -->
-              <div style="margin-bottom: 24px;">
-                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px; font-family: sans-serif;">Labor Breakdown by Run Segment</h3>
-                ${runsDetailedTablesHtml}
-              </div>
-
-              <!-- SOW Construction & Excavation Standards -->
-              ${scopeOfWorkSection}
-
-              <!-- Project Drawing REFERENCE -->
-              ${drawingSection}
-
-              <!-- Signature lines -->
-              ${signatureSection}
-
-              <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #64748b; line-height: 1.5; text-align: center; font-family: sans-serif;">
-                This is a secure internal labor contract dispatched on behalf of ${resolvedFromName}.<br/>
-                Privacy Notice: Do not distribute customer-specific credentials or payment details outside scheduled crew members.
-              </div>
-            </div>
-          </div>
+        const simpleHtml = `
+          <p>This is a labor contract test email from Lone Star Fence Works.</p>
+          <p>Estimate ID: ${estimateId}</p>
+          <p><a href="${crewScheduleLink}">Schedule / Reschedule Installation</a></p>
         `;
 
         try {
-          console.log("LABOR EMAIL SEND START", {
-            estimateId,
-            to: recipientEmail,
-            subject,
-            htmlLength: mailHtmlContent?.length,
-            hasCrewScheduleLink: Boolean(crewScheduleLink),
-            hasLaborSnapshot: Boolean(laborContractSnapshot)
-          });
+          console.log("LABOR SIMPLE EMAIL START", { estimateId, recipientEmail, subject: simpleSubject });
 
           const transporter = nodemailer.createTransport(transporterConfig);
-          let info;
-          try {
-            info = await transporter.sendMail({
-              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-              to: recipientEmail,
-              replyTo: resolvedReplyToEmail,
-              subject: subject || `Labor Contract / Work Order - ${customerName}`,
-              html: mailHtmlContent
-            });
-          } catch (richSendErr: any) {
-            console.warn("LABOR EMAIL SEND WARNING: Rich HTML send failed, attempting clean fallback.", richSendErr);
-            const fallbackHtml = `
-              <div style="font-family: Arial, sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; background-color: #ffffff;">
-                <h2 style="color: #0c1a30; border-bottom: 2px solid #ef4444; padding-bottom: 8px; text-transform: uppercase; font-family: sans-serif;">Labor Contract / Work Order Ready</h2>
-                <p style="color: #334155; font-size: 14px; line-height: 1.5;">Hello, the labor contract / work order is ready for review.</p>
-                <p style="color: #334155; font-size: 14px; line-height: 1.5;">Use the secure link below to view details and schedule the installation:</p>
-                <div style="margin: 24px 0;">
-                  <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block; text-transform: uppercase; font-size: 13px; font-family: sans-serif; letter-spacing: 0.5px;">
-                    View & Schedule Installation
-                  </a>
-                </div>
-                <p style="font-size: 11px; color: #64748b; font-family: monospace; word-break: break-all; background-color: #f1f5f9; padding: 8px; border-radius: 4px;">
-                  Link: ${crewScheduleLink}
-                </p>
-              </div>
-            `;
-            info = await transporter.sendMail({
-              from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-              to: recipientEmail,
-              replyTo: resolvedReplyToEmail,
-              subject: subject || `Labor Contract / Work Order - ${customerName}`,
-              text: `Labor contract/work order is ready. Crew schedule link: ${crewScheduleLink}`,
-              html: fallbackHtml
-            });
-          }
+          const info = await transporter.sendMail({
+            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+            to: recipientEmail,
+            replyTo: resolvedReplyToEmail,
+            subject: simpleSubject,
+            text: simpleText,
+            html: simpleHtml
+          });
 
-          console.log("LABOR EMAIL SEND RESULT", {
+          console.log("LABOR SIMPLE EMAIL RESULT", {
             messageId: info.messageId,
             accepted: info.accepted,
             rejected: info.rejected,
@@ -2143,7 +2011,7 @@ ${message}
           const isAccepted = Array.isArray(info.accepted) && info.accepted.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
 
           if (isRejected || !isAccepted) {
-            console.error("LABOR EMAIL SEND FAILED", {
+            console.error("LABOR SIMPLE EMAIL FAILED", {
               reason: "Recipient address not accepted or rejected by SMTP server",
               accepted: info.accepted,
               rejected: info.rejected
@@ -2151,9 +2019,9 @@ ${message}
             return res.status(400).json({
               success: false,
               error: "Labor email recipient was rejected",
-              rejected: info.rejected,
-              accepted: info.accepted,
-              debugBuild: "labor-email-verified-send-v2"
+              rejected: info.rejected || [],
+              accepted: info.accepted || [],
+              debugBuild: "labor-simple-email-test-v1"
             });
           }
 
@@ -2161,7 +2029,7 @@ ${message}
             recipient: recipientEmail,
             crewName: crewName || 'Crew',
             sentAt: nowIso,
-            subject: subject || `Labor Contract / Work Order - ${customerName}`,
+            subject: simpleSubject,
             includeDrawing: !!includeDrawing,
             crewScheduleLink,
             allowCrewDirectSchedule: !!allowCrewDirectSchedule,
@@ -2192,14 +2060,14 @@ ${message}
           return res.status(200).json({
             success: true,
             messageId: info.messageId,
-            accepted: info.accepted,
-            rejected: info.rejected,
+            accepted: info.accepted || [],
+            rejected: info.rejected || [],
             response: info.response,
             envelope: info.envelope,
-            debugBuild: "labor-email-verified-send-v2"
+            debugBuild: "labor-simple-email-test-v1"
           });
         } catch (error: any) {
-          console.error("LABOR EMAIL SEND FAILED", error);
+          console.error("LABOR SIMPLE EMAIL FAILED", error);
           return res.status(500).json({
             success: false,
             error: "Labor contract email failed",
@@ -2208,7 +2076,7 @@ ${message}
             command: error?.command,
             responseCode: error?.responseCode,
             response: error?.response,
-            debugBuild: "labor-email-verified-send-v2"
+            debugBuild: "labor-simple-email-test-v1"
           });
         }
       }
