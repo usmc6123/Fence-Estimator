@@ -1823,6 +1823,32 @@ export default async function handler(req: any, res: any) {
           }
         }
 
+        // Bridge fallback into the single detailed layout container if standard snapshot isn't present
+        if (!runsDetailedTablesHtml && runsTableRows) {
+          runsDetailedTablesHtml = `
+            <div style="margin-top: 24px; margin-bottom: 24px; border: 2px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); background-color: #ffffff;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                  <tr style="background-color: #f8fafc; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #f1f5f9;">
+                    <th style="padding: 12px 10px; font-family: sans-serif;">Run / Section Description</th>
+                    <th style="padding: 12px 10px; text-align: center; font-family: sans-serif; width: 100px;">Length</th>
+                    <th style="padding: 12px 10px; text-align: right; font-family: sans-serif; width: 120px;">Payout</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${runsTableRows}
+                </tbody>
+                <tfoot>
+                  <tr style="background-color: #0c1a30; color: #ffffff; font-weight: bold; font-size: 14px;">
+                    <td colspan="2" style="padding: 16px 12px; text-align: right; text-transform: uppercase; font-family: sans-serif; letter-spacing: 1px; font-size: 11px;">Total Direct Labor Liability</td>
+                    <td style="padding: 16px 12px; text-align: right; font-family: monospace; font-size: 18px; font-weight: bold;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          `;
+        }
+
         // 3. Build drawing section
         let drawingSection = '';
         const drawingUrlToUse = snapshot ? snapshot.drawingUrl : estimateData.drawingUrl;
@@ -2040,29 +2066,6 @@ ${message}
               <div style="margin-bottom: 24px;">
                 <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px; font-family: sans-serif;">Labor Breakdown by Run Segment</h3>
                 ${runsDetailedTablesHtml}
-              </div>
-
-              <!-- Summarized Direct Liability Table -->
-              <div style="margin-bottom: 24px;">
-                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px; font-family: sans-serif;">Labor Summary Overview</h3>
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
-                  <thead>
-                    <tr style="background-color: #f1f5f9; color: #475569; font-weight: bold; font-size: 11px; text-transform: uppercase;">
-                      <th style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">Run / Section Description</th>
-                      <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: sans-serif;">Length</th>
-                      <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: sans-serif;">Labor Payout</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${runsTableRows}
-                  </tbody>
-                  <tfoot>
-                    <tr style="font-weight: bold; font-size: 14px; background-color: #f8fafc;">
-                      <td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; text-transform: uppercase; color: #0c1a30; font-family: sans-serif; font-size: 11px; letter-spacing: 0.5px;">Group Total Net Direct Payout:</td>
-                      <td style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; color: #b91c1c; font-size: 16px; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    </tr>
-                   </tfoot>
-                </table>
               </div>
 
               <!-- SOW Construction & Excavation Standards -->

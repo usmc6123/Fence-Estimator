@@ -99,6 +99,60 @@ export default function LaborTakeOff({
         throw new Error("Recipient email address is required.");
       }
 
+      // Pre-build exact snapshot of the labor breakdown display data as requested
+      const laborContractSnapshot = {
+        customerName: estimate.customerName || 'Valued Client',
+        jobAddress: estimate.customerAddress || 'N/A',
+        fenceType: (data.runs[0]?.styleName) || 'Fence',
+        height: estimate.height || data.runs[0]?.height || 6,
+        linearFeet: estimate.linearFeet || data.runs.reduce((sum, r) => sum + r.linearFeet, 0) || 0,
+        totalDirectLaborPayout: totalLaborRaw,
+        laborRuns: data.runs.map(run => ({
+          runId: run.runId,
+          runName: run.runName,
+          linearFeet: run.linearFeet,
+          styleName: run.styleName,
+          styleType: run.styleType,
+          height: run.height,
+          railCount: run.railCount,
+          hasRotBoard: run.hasRotBoard,
+          topStyle: run.topStyle,
+          hasTopCap: run.hasTopCap,
+          hasTrim: run.hasTrim,
+          picketStyle: run.picketStyle,
+          woodType: run.woodType,
+          items: run.items.filter(i => i.category === 'Labor' || i.category === 'Demolition').map(item => ({
+            name: item.name,
+            qty: item.qty,
+            unit: item.unit,
+            unitCost: item.unitCost,
+            total: item.total,
+          })),
+          gates: (run.gates || []).map(gate => ({
+            width: gate.width,
+            type: gate.type,
+            construction: gate.construction,
+            items: (gate.items || []).filter(gi => gi.category === 'Labor').map(gitem => ({
+              name: gitem.name,
+              qty: gitem.qty,
+              unit: gitem.unit,
+              unitCost: gitem.unitCost,
+              total: gitem.total,
+            }))
+          }))
+        })),
+        aggregateLaborManifest: laborSummary.map(item => ({
+          name: item.name,
+          qty: item.qty,
+          unit: item.unit,
+          total: item.total,
+        })),
+        drawingUrl: estimate.drawingUrl || null,
+        drawingFileName: estimate.drawingFileName || null,
+        drawingMimeType: estimate.drawingMimeType || null,
+        scopeOfWorkHtmlOrText: localAiScope || "Standard installation procedures apply.",
+      };
+
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
@@ -114,7 +168,8 @@ export default function LaborTakeOff({
           subject: emailSubject,
           message: emailMessage,
           includeDrawing,
-          allowCrewDirectSchedule
+          allowCrewDirectSchedule,
+          laborContractSnapshot
         })
       });
 
