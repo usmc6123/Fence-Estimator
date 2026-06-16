@@ -125,6 +125,8 @@ export default function CustomerContract({
     if (isCustomerView && estimate.contractSnapshot) {
       const snap = estimate.contractSnapshot;
       const snapRuns = snap.runs || [];
+      const costSummaryRuns = snap.costSummaryRuns || [];
+      const runsToUse = costSummaryRuns.length > 0 ? costSummaryRuns : snapRuns;
       
       const mockCalculated: DetailedTakeOff = {
         summary: [],
@@ -133,34 +135,39 @@ export default function CustomerContract({
         totals: {
           material: 0,
           labor: 0,
-          demo: Number(snap.demoRemovalPrice || 0),
+          demo: Number(snap.demoRemovalPrice || snap.demoTotal || 0),
           prep: Number(snap.addOnSitePrepPrice || 0),
           subtotal: Number(snap.subtotalBeforeDiscount || 0),
           markup: 0,
           tax: 0,
-          grandTotal: Number(snap.finalCustomerPrice || 0)
+          grandTotal: Number(snap.finalCustomerPrice || snap.totalInvestment || 0)
         },
         pricing: {
-          runsPricing: (snapRuns as any[]).map((run, i) => ({
-            runName: run.name || `Section ${i + 1}`,
-            totalFenceCharge: Number(run.totalFenceCharge || 0),
-            totalGateCharge: Number(run.totalGateCharge || 0),
-            demoCharge: Number(run.demoCharge || 0),
-            finalFence: Number(run.totalFenceCharge || 0),
-            finalGate: Number(run.totalGateCharge || 0),
-            finalDemo: Number(run.demoCharge || 0),
-            totalSection: Number(run.totalSectionCharge || (Number(run.totalFenceCharge || 0) + Number(run.totalGateCharge || 0) + Number(run.demoCharge || 0))),
-            netLF: Number(run.linearFeet || 0)
-          })),
-          totalSectionsSum: Number(snap.baseFencePrice || 0),
+          runsPricing: (runsToUse as any[]).map((run, i) => {
+            const finalFenceValue = run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge || run.finalFence || 0);
+            const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || run.finalGate || 0);
+            const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || run.finalDemo || 0);
+            return {
+              runName: run.runName || run.name || `Section ${i + 1}`,
+              totalFenceCharge: Number(finalFenceValue),
+              totalGateCharge: Number(finalGateValue),
+              demoCharge: Number(finalDemoValue),
+              finalFence: Number(finalFenceValue),
+              finalGate: Number(finalGateValue),
+              finalDemo: Number(finalDemoValue),
+              totalSection: Number(run.sectionTotal || run.totalSectionCharge || (Number(finalFenceValue) + Number(finalGateValue) + Number(finalDemoValue))),
+              netLF: Number(run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0))
+            };
+          }),
+          totalSectionsSum: Number(snap.baseFencePrice || snap.fenceTotal || 0),
           addOnSitePrepPrice: Number(snap.addOnSitePrepPrice || 0),
-          demoRemovalPrice: Number(snap.demoRemovalPrice || 0),
+          demoRemovalPrice: Number(snap.demoRemovalPrice || snap.demoTotal || 0),
           discountAmount: Number(snap.discountAmount || 0),
           manualGrandTotal: snap.manualGrandTotal !== undefined ? snap.manualGrandTotal : null,
           calculatedTotal: Number(snap.calculatedGrandTotal || snap.subtotalBeforeDiscount || 0),
-          finalCustomerPrice: Number(snap.finalCustomerPrice || 0),
-          estimatedPrice: Number(snap.finalCustomerPrice || 0),
-          grandTotal: Number(snap.finalCustomerPrice || 0),
+          finalCustomerPrice: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
+          estimatedPrice: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
+          grandTotal: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
           subtotalBeforeDiscount: Number(snap.subtotalBeforeDiscount || 0),
           pricePerFoot: Number(snap.pricePerFoot || 0)
         }
@@ -186,17 +193,25 @@ export default function CustomerContract({
 
   // Calculate project financial breakdown for component use
   const projectBreakdown = React.useMemo(() => {
-    if (isCustomerView && estimate.contractSnapshot && estimate.contractSnapshot.runs) {
-      return (estimate.contractSnapshot.runs as any[]).map((run, i) => {
+    if (isCustomerView && estimate.contractSnapshot) {
+      const snap = estimate.contractSnapshot;
+      const snapRuns = snap.runs || [];
+      const costSummaryRuns = snap.costSummaryRuns || [];
+      const runsToUse = costSummaryRuns.length > 0 ? costSummaryRuns : snapRuns;
+
+      return (runsToUse as any[]).map((run, i) => {
+        const finalFenceValue = run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge !== undefined ? run.totalFenceCharge : (run.finalFence || 0));
+        const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0));
+        const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0));
         return {
-          name: run.name || run.runName || `Section ${i + 1}`,
+          name: run.runName || run.name || `Section ${i + 1}`,
           netLF: run.linearFeet !== undefined ? Number(run.linearFeet) : (run.netLF || 0),
-          totalFenceCharge: Number(run.totalFenceCharge !== undefined ? run.totalFenceCharge : (run.finalFence || 0)),
-          pricePerFoot: Number(run.pricePerFoot || 0),
-          totalGateCharge: Number(run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0)),
-          demoCharge: Number(run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0)),
+          totalFenceCharge: Number(finalFenceValue),
+          pricePerFoot: Number(run.fenceRate !== undefined ? run.fenceRate : (run.pricePerFoot || 0)),
+          totalGateCharge: Number(finalGateValue),
+          demoCharge: Number(finalDemoValue),
           gates: run.gateDetails || run.gates || [],
-          style: run.styleName || run.styleId || run.style || '',
+          style: run.fenceType || run.styleName || run.styleId || run.style || '',
           styleType: run.styleType || '',
           height: run.height || 6,
           hasRotBoard: !!run.hasRotBoard,

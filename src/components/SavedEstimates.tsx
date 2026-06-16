@@ -197,6 +197,31 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
 
       const height = mergedEstimate.defaultHeight || (recalculatedTakeOff.runs[0]?.height) || 6;
 
+      // Map costSummaryRuns and runBreakdown explicitly to match requested schema:
+      const costSummaryRuns = recalculatedTakeOff.runs.map((run: any, i: number) => {
+        const origRun: any = runsData[i] || {};
+        const pricingRun = (pricing.runsPricing?.[i] || {}) as any;
+        const finalFenceValue = pricingRun.finalFence !== undefined ? pricingRun.finalFence : (pricingRun.totalFenceCharge || run.totalFenceCharge || run.finalFence || 0);
+        const finalGateValue = pricingRun.finalGate !== undefined ? pricingRun.finalGate : (pricingRun.totalGateCharge || run.totalGateCharge || run.finalGate || 0);
+        const finalDemoValue = pricingRun.finalDemo !== undefined ? pricingRun.finalDemo : (pricingRun.demoCharge || run.demoCharge || run.finalDemo || 0);
+        return {
+          runName: run.runName || origRun.name || `Section ${i + 1}`,
+          fenceType: run.style || origRun.styleId || '',
+          height: run.height || 6,
+          linearFeet: run.netLF,
+          fenceRate: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
+          fenceTotal: finalFenceValue,
+          gatesTotal: finalGateValue,
+          demoTotal: finalDemoValue,
+          sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue)
+        };
+      });
+
+      const fenceTotal = pricing.runsPricing?.reduce((sum: number, r: any) => sum + (r.finalFence || 0), 0) || 0;
+      const gatesTotal = pricing.runsPricing?.reduce((sum: number, r: any) => sum + (r.finalGate || 0), 0) || 0;
+      const demoTotal = pricing.runsPricing?.reduce((sum: number, r: any) => sum + (r.finalDemo || 0), 0) || 0;
+      const sectionTotalsArr = pricing.runsPricing?.map((r: any) => r.totalSection || 0) || [];
+
       // Create the contractSnapshot object
       const contractSnapshot = {
         estimateId: String(sendModalEstimate.id),
@@ -213,13 +238,18 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         linearFeet: Number(mergedEstimate.linearFeet || recalculatedTakeOff.runs.reduce((sum: number, r: any) => sum + r.netLF, 0) || 0),
         runs: recalculatedTakeOff.runs.map((run: any, i: number) => {
           const origRun: any = runsData[i] || {};
+          const pricingRun = (pricing.runsPricing?.[i] || {}) as any;
+          const finalFenceValue = pricingRun.finalFence !== undefined ? pricingRun.finalFence : (pricingRun.totalFenceCharge || run.totalFenceCharge || run.finalFence || 0);
+          const finalGateValue = pricingRun.finalGate !== undefined ? pricingRun.finalGate : (pricingRun.totalGateCharge || run.totalGateCharge || run.finalGate || 0);
+          const finalDemoValue = pricingRun.finalDemo !== undefined ? pricingRun.finalDemo : (pricingRun.demoCharge || run.demoCharge || run.finalDemo || 0);
           return {
             name: run.runName || origRun.name || `Section ${i + 1}`,
+            runName: run.runName || origRun.name || `Section ${i + 1}`,
             linearFeet: run.netLF,
-            totalFenceCharge: run.totalFenceCharge || run.finalFence || 0,
-            pricePerFoot: run.pricePerFoot || 0,
-            totalGateCharge: run.totalGateCharge || run.finalGate || 0,
-            demoCharge: run.demoCharge || run.finalDemo || 0,
+            totalFenceCharge: finalFenceValue,
+            pricePerFoot: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
+            totalGateCharge: finalGateValue,
+            demoCharge: finalDemoValue,
             gateDetails: origRun.gateDetails || origRun.gates || [],
             styleName: run.style || '',
             styleType: run.styleType || '',
@@ -230,8 +260,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             picketStyle: run.picketStyle || '',
             ironInstallType: run.ironInstallType || '',
             ironPanelType: run.ironPanelType || '',
+            
+            // Explicit run snapshot properties requested
+            fenceType: run.style || origRun.styleId || '',
+            fenceRate: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
+            fenceTotal: finalFenceValue,
+            gatesTotal: finalGateValue,
+            demoTotal: finalDemoValue,
+            sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue)
           };
         }),
+        costSummaryRuns: costSummaryRuns,
+        runBreakdown: costSummaryRuns,
+        sectionTotals: sectionTotalsArr,
+        fenceTotal: fenceTotal,
+        gatesTotal: gatesTotal,
+        demoTotal: demoTotal,
+        baseFencePrice: fenceTotal,
         gateSummary: gateSummary,
         demoRemovalPrice: pricing.demoRemovalPrice || 0,
         addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
@@ -255,7 +300,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         totalInvestment: finalPrice,
         pricePerFoot: pricing.pricePerFoot || 0,
         subtotalBeforeDiscount: pricing.subtotalBeforeDiscount || 0,
-        baseFencePrice: pricing.totalSectionsSum || 0,
+        baseFencePrice: fenceTotal,
         addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
         demoRemovalPrice: pricing.demoRemovalPrice || 0,
         discountAmount: pricing.discountAmount || 0,
