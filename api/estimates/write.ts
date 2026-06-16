@@ -331,6 +331,204 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // --- SECURE PUBLIC CREW SCHEDULING PORTAL ENDPOINTS ---
+    if (action === 'get-crew-schedule') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const token = req.query?.token || req.body?.token;
+
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+      if (!token) {
+        return res.status(400).json({ error: 'Security token is required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data() || {};
+      if (!estimateData.crewScheduleAccessEnabled) {
+        return res.status(403).json({ error: 'Crew scheduling access is disabled.' });
+      }
+      if (estimateData.crewScheduleToken !== token) {
+        return res.status(403).json({ error: 'Invalid security token.' });
+      }
+
+      const eventsList: any[] = [];
+      const eventsSnap = await db.collection('schedule_events').get();
+      eventsSnap.forEach(doc => {
+        const data = doc.data() || {};
+        const isInstall = data.eventType === 'install' || data.type === 'installation';
+        const isBlackout = data.eventType === 'blackout' || data.type === 'blackout';
+        
+        if (isInstall || isBlackout) {
+          eventsList.push({
+            id: doc.id,
+            title: isBlackout ? 'Blackout Date (Blocked)' : 'Installation Scheduled (Busy)',
+            start: data.start,
+            end: data.end || data.start,
+            allDay: data.allDay !== undefined ? data.allDay : true,
+            type: data.type || (isBlackout ? 'blackout' : 'installation'),
+            eventType: data.eventType || (isBlackout ? 'blackout' : 'install')
+          });
+        }
+      });
+
+      return res.status(200).json({
+        success: true,
+        estimateId,
+        customerName: estimateData.customerName || 'Valued Client',
+        jobAddress: estimateData.customerAddress || estimateData.address || 'N/A',
+        fenceType: estimateData.fenceType || (estimateData.contractSnapshot && estimateData.contractSnapshot.fenceType) || 'Fence',
+        linearFeet: estimateData.linearFeet || (estimateData.contractSnapshot && estimateData.contractSnapshot.linearFeet) || 0,
+        installDuration: estimateData.installDuration || 1,
+        scheduledStartDate: estimateData.scheduledStartDate || null,
+        scheduledEndDate: estimateData.scheduledEndDate || null,
+        allowCrewDirectSchedule: !!estimateData.allowCrewDirectSchedule,
+        events: eventsList,
+        crewScheduleRequestPending: !!estimateData.crewScheduleRequestPending,
+        crewRequestedStartDate: estimateData.crewRequestedStartDate || null,
+        crewRequestedDuration: estimateData.crewRequestedDuration || null
+      });
+    }
+
+    if (action === 'update-crew-install-schedule') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const token = req.query?.token || req.body?.token;
+      const { scheduledStartDate, installDuration } = req.body || {};
+
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+      if (!token) {
+        return res.status(400).json({ error: 'Security token is required.' });
+      }
+      if (!scheduledStartDate) {
+        return res.status(400).json({ error: 'Scheduled start date is required.' });
+      }
+      if (!installDuration || Number(installDuration) <= 0) {
+        return res.status(400).json({ error: 'Valid installation duration is required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data() || {};
+      if (!estimateData.crewScheduleAccessEnabled) {
+        return res.status(403).json({ error: 'Crew scheduling access is disabled.' });
+      }
+      if (estimateData.crewScheduleToken !== token) {
+        return res.status(403).json({ error: 'Invalid security token.' });
+      }
+
+      const startD = new Date(scheduledStartDate);
+      const endD = new Date(scheduledStartDate);
+      endD.setDate(endD.getDate() + Number(installDuration));
+      
+      const proposedStartStr = startD.toISOString().split('T')[0];
+      const proposedEndStr = endD.toISOString().split('T')[0];
+
+      const eventsSnap = await db.collection('schedule_events').get();
+      let isBlocked = false;
+
+      const cleanDateMs = (dStr: string) => {
+        return new Date(dStr.split('T')[0]).getTime();
+      };
+      const pStart = cleanDateMs(proposedStartStr);
+      const pEnd = cleanDateMs(proposedEndStr);
+
+      eventsSnap.forEach(doc => {
+        const data = doc.data() || {};
+        const isBlackout = data.eventType === 'blackout' || data.type === 'blackout';
+        if (isBlackout) {
+          const bStart = data.start;
+          let bEnd = data.end || data.start;
+          if (bStart === bEnd) {
+            const d = new Date(bStart);
+            d.setDate(d.getDate() + 1);
+            bEnd = d.toISOString().split('T')[0];
+          }
+
+          const bs = cleanDateMs(bStart);
+          const be = cleanDateMs(bEnd);
+
+          if ((pStart < be) && (bs < pEnd)) {
+            isBlocked = true;
+          }
+        }
+      });
+
+      if (isBlocked) {
+        return res.status(400).json({
+          error: 'This date is blocked out for installation. Please choose another date.'
+        });
+      }
+
+      const changedAt = new Date().toISOString();
+      const oldStartDate = estimateData.scheduledStartDate || null;
+
+      const historyEntry = {
+        source: "crew_portal",
+        changedAt,
+        oldStartDate,
+        newStartDate: proposedStartStr,
+        duration: Number(installDuration),
+        crewEmailRecipient: estimateData.crewEmailRecipient || '',
+        action: estimateData.allowCrewDirectSchedule ? "direct_schedule" : "schedule_request"
+      };
+
+      const updates: any = {};
+
+      if (estimateData.allowCrewDirectSchedule) {
+        updates.scheduledStartDate = proposedStartStr;
+        updates.scheduledEndDate = proposedEndStr;
+        updates.installDuration = Number(installDuration);
+        
+        const oldStatus = estimateData.jobStatus || 'Pending';
+        if (oldStatus !== 'In Progress' && oldStatus !== 'Accepted') {
+          updates.jobStatus = 'Scheduled';
+        }
+
+        const eventId = "install-" + estimateId;
+        const eventPayload = {
+          id: eventId,
+          estimateId: estimateId,
+          title: `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.customerAddress || ''}`,
+          start: proposedStartStr,
+          end: proposedEndStr,
+          allDay: true,
+          type: 'installation',
+          eventType: 'install',
+          userId: estimateData.userId || 'braden-lonestar-uid',
+          notes: `Schedule set via Crew Portal for ${estimateData.crewEmailRecipient || 'Crew'}`
+        };
+
+        await db.collection('schedule_events').doc(eventId).set(eventPayload, { merge: true });
+        updates.crewScheduleRequestPending = false;
+      } else {
+        updates.crewScheduleRequestPending = true;
+        updates.crewRequestedStartDate = proposedStartStr;
+        updates.crewRequestedDuration = Number(installDuration);
+        updates.crewScheduleRequestedAt = changedAt;
+      }
+
+      updates.scheduleHistory = admin.firestore.FieldValue.arrayUnion(historyEntry);
+
+      await docRef.update(updates);
+
+      return res.status(200).json({
+        success: true,
+        directScheduled: !!estimateData.allowCrewDirectSchedule,
+        scheduledStartDate: proposedStartStr,
+        scheduledEndDate: proposedEndStr,
+        installDuration: Number(installDuration)
+      });
+    }
+
     // PUBLIC CUSTOMER PORTAL GUEST ENDPOINTS: Bypass authentication completely!
     if (action === 'get-public-estimate') {
       const estimateId = req.query?.estimateId || req.body?.estimateId;
@@ -1283,6 +1481,326 @@ export default async function handler(req: any, res: any) {
         }
 
         return res.status(200).json({ success: true, message: 'Drawing successfully removed' });
+      }
+
+      if (req.body && req.body.action === 'send-labor-contract') {
+        const { estimateId, recipientEmail, crewName, subject, message, includeDrawing, allowCrewDirectSchedule } = req.body || {};
+
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Estimate ID is required.' });
+        }
+        if (!recipientEmail) {
+          return res.status(400).json({ error: 'Recipient email is required.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+
+        const estimateData = snap.data() || {};
+
+        // Generate critical token
+        const crypto = require('crypto');
+        const crewScheduleToken = crypto.randomBytes(16).toString('hex');
+        const appUrl = 'https://fence-estimator-eight.vercel.app';
+        const crewScheduleLink = `${appUrl}/?portal=crew-schedule&estimateId=${estimateId}&token=${crewScheduleToken}`;
+        const nowIso = new Date().toISOString();
+
+        // 1. Gather specs for the email
+        const customerName = estimateData.customerName || 'Valued Client';
+        const jobAddress = estimateData.customerAddress || estimateData.address || 'N/A';
+        const fenceType = estimateData.fenceType || (estimateData.contractSnapshot && estimateData.contractSnapshot.fenceType) || 'Fence';
+        const height = estimateData.height || (estimateData.contractSnapshot && estimateData.contractSnapshot.runs?.[0]?.height) || 6;
+        const linearFeet = estimateData.linearFeet || (estimateData.contractSnapshot && estimateData.contractSnapshot.linearFeet) || 0;
+        const gateSummary = (estimateData.contractSnapshot && estimateData.contractSnapshot.gateSummary) || estimateData.gateSummary || 'None';
+        const demoTotal = Number(estimateData.demoRemovalPrice || (estimateData.contractSnapshot && (estimateData.contractSnapshot.demoTotal || estimateData.contractSnapshot.demoRemovalPrice)) || 0);
+        const scheduledStartDate = estimateData.scheduledStartDate || null;
+        const scheduledEndDate = estimateData.scheduledEndDate || null;
+        const installDuration = estimateData.installDuration || 1;
+
+        // 2. Build Runs Table Rows
+        let runsTableRows = '';
+        let laborTotalAmount = 0;
+
+        const runsToUse = estimateData.contractSnapshot?.costSummaryRuns || estimateData.contractSnapshot?.runs || estimateData.runs || [];
+        if (Array.isArray(runsToUse) && runsToUse.length > 0) {
+          runsToUse.forEach((run: any, idx: number) => {
+            const rName = run.runName || run.name || `Section ${idx + 1}`;
+            const rStyle = run.fenceType || run.styleName || run.style || 'Fence';
+            const rLF = run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0);
+            
+            const fenceVal = Number(run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge || 0));
+            const gateVal = Number(run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || 0));
+            const demoVal = Number(run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || 0));
+            const runTotal = run.sectionTotal !== undefined ? Number(run.sectionTotal) : (fenceVal + gateVal + demoVal);
+            
+            laborTotalAmount += runTotal;
+
+            runsTableRows += `
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">
+                  <strong>${rName}</strong><br/>
+                  <span style="font-size: 11px; color: #64748b;">Specs: ${rStyle} (Height: ${run.height || 6}ft)</span>
+                </td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">${rLF} LF</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(runTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            `;
+          });
+        } else {
+          laborTotalAmount = estimateData.contractSnapshot?.totalInvestment || estimateData.grandTotal || 0;
+          runsTableRows = `
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">Generic Project Scope (Calculated Labor Package)</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: monospace;">1 Job</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          `;
+        }
+
+        // 3. Build drawing section
+        let drawingSection = '';
+        if (includeDrawing && estimateData.drawingUrl) {
+          const isPdf = estimateData.drawingMimeType?.includes('pdf') || estimateData.drawingUrl?.toLowerCase().includes('.pdf');
+          if (isPdf) {
+            drawingSection = `
+              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
+                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">📎 Attached PDF site plan / drawing reference</h4>
+                <p style="font-size: 12px; color: #475569; margin-bottom: 12px;">Drawing: ${estimateData.drawingFileName || 'layout.pdf'}</p>
+                <a href="${estimateData.drawingUrl}" target="_blank" style="background-color: #0c1a30; color: #ffffff; text-decoration: none; padding: 10px 20px; font-weight: bold; font-size: 12px; border-radius: 4px; display: inline-block;">
+                  View PDF Project Drawing
+                </a>
+              </div>
+            `;
+          } else {
+            drawingSection = `
+              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
+                <h4 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; font-size: 13px; text-transform: uppercase;">🖼️ Site plan / layout image reference</h4>
+                <div style="max-width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; margin: 0 auto 12px auto; background-color: #ffffff;">
+                  <img src="${estimateData.drawingUrl}" referrerPolicy="no-referrer" alt="Project site plan or layout drawing" style="max-width: 100%; height: auto; max-height: 350px; display: block; margin: 0 auto;" />
+                </div>
+                <a href="${estimateData.drawingUrl}" target="_blank" style="font-size: 12px; font-weight: bold; color: #0c1a30; text-decoration: underline;">
+                  View drawing image in new tab
+                </a>
+              </div>
+            `;
+          }
+        }
+
+        // 4. Load dynamic SMTP settings (same as normal estimate mail)
+        let resolvedSmtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+        let resolvedSmtpPort = Number(process.env.SMTP_PORT || 465);
+        let resolvedSmtpSecureType = 'SSL/TLS';
+        let resolvedSmtpUser = process.env.SMTP_USER || '';
+        let resolvedSmtpPass = process.env.SMTP_PASS || '';
+        let resolvedFromName = 'Lone Star Fence Works';
+        let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
+        let resolvedReplyToEmail = resolvedFromEmail;
+        let resolvedCompanyLogo = '';
+
+        const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+        const candidateUids = [];
+        if (decoded && decoded.uid) candidateUids.push(decoded.uid);
+        if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
+        candidateUids.push('main');
+
+        let settingsData: any = null;
+        for (const uidToTry of candidateUids) {
+          try {
+            const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
+            if (settingsSnap.exists) {
+              const posS = settingsSnap.data() || {};
+              if (posS.smtpHost && posS.smtpUsername) {
+                settingsData = posS;
+                break;
+              }
+            }
+          } catch (err) {}
+        }
+
+        if (settingsData) {
+          if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
+          if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
+          if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
+          if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
+          if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
+          if (settingsData.fromName) resolvedFromName = settingsData.fromName;
+          if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
+          resolvedReplyToEmail = settingsData.replyToEmail || resolvedFromEmail;
+          resolvedCompanyLogo = settingsData.companyLogo || '';
+        }
+
+        const missingVars: string[] = [];
+        if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
+        if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
+        if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
+
+        if (missingVars.length > 0) {
+          return res.status(500).json({
+            success: false,
+            error: `Missing SMTP environment or saved settings configurations: [${missingVars.join(', ')}]`,
+          });
+        }
+
+        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+        const transporterConfig = {
+          host: resolvedSmtpHost,
+          port: resolvedSmtpPort,
+          secure: isPort465,
+          auth: {
+            user: resolvedSmtpUser,
+            pass: resolvedSmtpPass
+          },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        };
+
+        const mailHtmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <div style="background-color: #0c1a30; padding: 24px; text-align: center; border-bottom: 4px solid #b91c1c;">
+              ${resolvedCompanyLogo ? `<img src="${resolvedCompanyLogo}" alt="Lone Star Fence Works" style="max-height: 60px; max-width: 200px; display: block; margin: 0 auto 10px auto;" />` : ''}
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">${resolvedFromName}</h1>
+              <p style="color: #ef4444; margin: 4px 0 0 0; font-weight: bold; letter-spacing: 3px; font-size: 11px;">LABOR CONTRACT & WORK ORDER</p>
+            </div>
+            <div style="padding: 24px; background-color: #ffffff; color: #334155;">
+              
+              <div style="margin-bottom: 24px; padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h3 style="color: #0c1a30; margin-top: 0; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Project Specifications</h3>
+                <table style="width: 100%; font-size: 13px; line-height: 1.6;">
+                  <tr>
+                    <td style="font-weight: bold; width: 140px;">Customer Name:</td>
+                    <td>${customerName}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Job Site Address:</td>
+                    <td>${jobAddress}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Fence Type / Style:</td>
+                    <td>${fenceType}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Fence Height:</td>
+                    <td>${height} ft</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Linear Footage:</td>
+                    <td>${linearFeet} LF</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Gates:</td>
+                    <td>${gateSummary}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold;">Demo / Removal:</td>
+                    <td>${demoTotal > 0 ? 'Yes (Included in scope)' : 'None'}</td>
+                  </tr>
+                  ${scheduledStartDate ? `
+                  <tr>
+                    <td style="font-weight: bold; color: #b91c1c;">Current Schedule:</td>
+                    <td style="color: #b91c1c; font-weight: bold;">${scheduledStartDate} ${scheduledEndDate ? ` to ${scheduledEndDate}` : ''} (${installDuration} Day${installDuration > 1 ? 's' : ''})</td>
+                  </tr>` : ''}
+                </table>
+              </div>
+
+              <div style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 24px; white-space: pre-wrap; padding: 12px; border-left: 4px solid #ef4444; background-color: #fafafa;">
+${message}
+              </div>
+
+              <!-- Scheduling Portal Section -->
+              <div style="margin-bottom: 24px; padding: 20px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center;">
+                <h3 style="color: #15803d; margin-top: 0; font-size: 16px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Installation Scheduling</h3>
+                <p style="font-size: 13px; color: #166534; margin-bottom: 16px; line-height: 1.5;">
+                  Use this secure link to view current calendar availability, select blackout dates, and schedule or reschedule the installation date for this job.
+                </p>
+                <a href="${crewScheduleLink}" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 13px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; display: inline-block;">
+                  Schedule / Reschedule Installation
+                </a>
+                <p style="font-size: 11px; color: #166534; margin-top: 12px; font-family: monospace; word-break: break-all;">
+                  ${crewScheduleLink}
+                </p>
+              </div>
+
+              <!-- Labor Payout Details -->
+              <div style="margin-bottom: 24px;">
+                <h3 style="color: #0c1a30; text-transform: uppercase; font-size: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 1px;">Labor Manifest & Payout Details</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                  <thead>
+                    <tr style="background-color: #f1f5f9; color: #475569; font-weight: bold; font-size: 11px; text-transform: uppercase;">
+                      <th style="padding: 10px; border: 1px solid #e2e8f0; font-family: sans-serif;">Run / Section Description</th>
+                      <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-family: sans-serif;">Length</th>
+                      <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: right; font-family: sans-serif;">Labor Payout</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${runsTableRows}
+                  </tbody>
+                  <tfoot>
+                    <tr style="font-weight: bold; font-size: 14px; background-color: #f8fafc;">
+                      <td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; text-transform: uppercase; color: #0c1a30; font-family: sans-serif;">Total Direct Labor Payout:</td>
+                      <td style="padding: 12px; border: 1px solid #e2e8f0; text-align: right; color: #b91c1c; font-size: 16px; font-family: monospace;">$${Number(laborTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                   </tfoot>
+                </table>
+              </div>
+
+              <!-- Drawing Reference -->
+              ${drawingSection}
+
+              <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #64748b; line-height: 1.5; text-align: center;">
+                This is a secure internal labor contract dispatched on behalf of ${resolvedFromName}.<br/>
+                Privacy Notice: Do not distribute customer-specific credentials or payment details outside scheduled crew members.
+              </div>
+            </div>
+          </div>
+        `;
+
+        try {
+          const transporter = nodemailer.createTransport(transporterConfig);
+          await transporter.sendMail({
+            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+            to: recipientEmail,
+            replyTo: resolvedReplyToEmail,
+            subject: subject || `Labor Contract / Work Order - ${customerName}`,
+            html: mailHtmlContent
+          });
+
+          const logEntry = {
+            recipient: recipientEmail,
+            crewName: crewName || 'Crew',
+            sentAt: nowIso,
+            subject: subject || `Labor Contract / Work Order - ${customerName}`,
+            includeDrawing: !!includeDrawing,
+            crewScheduleLink,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            status: "sent"
+          };
+
+          const updates = {
+            crewScheduleToken,
+            crewScheduleTokenCreatedAt: nowIso,
+            crewScheduleTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            crewScheduleAccessEnabled: true,
+            crewEmailRecipient: recipientEmail,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            laborContractEmailSent: true,
+            laborContractEmailSentAt: nowIso,
+            laborContractEmailRecipient: recipientEmail,
+            laborContractEmailLog: admin.firestore.FieldValue.arrayUnion(logEntry)
+          };
+
+          await docRef.update(updates);
+
+          return res.status(200).json({ success: true, message: 'Labor contract successfully emailed to crew and logged.' });
+        } catch (mailErr: any) {
+          console.error('[SMTP LABOR MAIL ERROR]', mailErr);
+          return res.status(500).json({ success: false, error: `SMTP execution failure: ${mailErr?.message || mailErr}` });
+        }
       }
 
       if (req.body && req.body.action === 'schedule-event') {

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image } from 'lucide-react';
+import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image, Send, Calendar, Clock } from 'lucide-react';
+import { collection, query, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Employee } from '../types';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
@@ -30,6 +33,109 @@ export default function LaborTakeOff({
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.laborScope || aiProjectScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+
+  // --- STATE FOR EMAIL LABOR CONTRACT ---
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedRecipient, setSelectedRecipient] = useState('custom');
+  const [manualRecipientEmail, setManualRecipientEmail] = useState('');
+  const [crewName, setCrewName] = useState('');
+  
+  const getDefaultMessage = (name: string) => {
+    const address = estimate.customerAddress || 'Job Site';
+    return `Hi ${name || 'Crew'},\n\nAttached below is the labor contract/work order for the project at ${address}.\n\nPlease review the scope, labor breakdown, project details, measurements, gates, demo/removal, and any drawing/site plan references before starting work.\n\nUse the scheduling link below to schedule or reschedule the installation date for this job.\n\nReply to this email if you have any questions.\n\nThank you,\nLone Star Fence Works`;
+  };
+
+  const [emailSubject, setEmailSubject] = useState(`Labor Contract / Work Order - ${estimate.customerName || 'Customer'} - ${estimate.customerAddress || 'Job Site'}`);
+  const [emailMessage, setEmailMessage] = useState(getDefaultMessage(''));
+  const [includeDrawing, setIncludeDrawing] = useState(!!estimate.drawingUrl);
+  const [allowCrewDirectSchedule, setAllowCrewDirectSchedule] = useState(true);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  React.useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const q = query(collection(db, 'employees'));
+        const snap = await getDocs(q);
+        const list: any[] = [];
+        snap.forEach(doc => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        setEmployees(list);
+        if (list.length > 0) {
+          setSelectedRecipient(list[0].email);
+          const name = list[0].name || list[0].email.split('@')[0];
+          setCrewName(name);
+          setEmailMessage(getDefaultMessage(name));
+        }
+      } catch (err) {
+        console.warn("Failed to load employees for dropdown:", err);
+      }
+    };
+    if (showEmailModal) {
+      fetchEmployees();
+      setSendSuccess(false);
+      setSendError('');
+      setIncludeDrawing(!!estimate.drawingUrl);
+      setEmailSubject(`Labor Contract / Work Order - ${estimate.customerName || 'Customer'} - ${estimate.customerAddress || 'Job Site'}`);
+    }
+  }, [showEmailModal, estimate.id, estimate.customerAddress, estimate.drawingUrl]);
+
+  const handleSendLaborContract = async () => {
+    setIsSendingEmail(true);
+    setSendError('');
+    try {
+      const recipient = selectedRecipient === 'custom' ? manualRecipientEmail : selectedRecipient;
+      if (!recipient) {
+        throw new Error("Recipient email address is required.");
+      }
+
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch(`/api/estimates/write`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'send-labor-contract',
+          estimateId: estimate.id,
+          recipientEmail: recipient,
+          crewName,
+          subject: emailSubject,
+          message: emailMessage,
+          includeDrawing,
+          allowCrewDirectSchedule
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || "Failed to send labor contract email.");
+      }
+
+      setSendSuccess(true);
+      
+      if (onUpdateEstimate) {
+        onUpdateEstimate({
+          laborContractEmailSent: true,
+          laborContractEmailRecipient: recipient,
+          laborContractEmailSentAt: new Date().toISOString()
+        });
+      }
+
+      setTimeout(() => {
+        setShowEmailModal(false);
+      }, 2500);
+
+    } catch (err: any) {
+      setSendError(err?.message || String(err));
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
   
   // Update local scope when external scope changes (e.g. from generation or tab sync)
   React.useEffect(() => {
@@ -184,6 +290,13 @@ export default function LaborTakeOff({
             </div>
           )}
           <button
+            onClick={() => setShowEmailModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform active:scale-95 shadow-md"
+          >
+            <Send size={16} />
+            Email Labor Contract
+          </button>
+          <button
             onClick={handleSaveLaborScope}
             className="flex items-center gap-2 px-4 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-transform active:scale-95 shadow-md shadow-american-blue/10"
           >
@@ -207,6 +320,67 @@ export default function LaborTakeOff({
           </button>
         </div>
       </div>
+
+      {/* Labor Contract Delivery Logs */}
+      {estimate.laborContractEmailLog && Array.isArray(estimate.laborContractEmailLog) && estimate.laborContractEmailLog.length > 0 && (
+        <div className="bg-white p-6 rounded-[32px] shadow-xl border-2 border-emerald-100 space-y-4 print:hidden animate-in fade-in duration-500">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm shadow-inner">
+              <Clock size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-american-blue uppercase tracking-tight">Labor Contract Dispatch History</h3>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                Real-time delivery & scheduling portal logs
+              </p>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-slate-100">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                  <th className="px-4 py-3">Crew Subcontractor</th>
+                  <th className="px-4 py-3">Recipient Email</th>
+                  <th className="px-4 py-3">Dispatched At</th>
+                  <th className="px-4 py-3">Schedule Mode</th>
+                  <th className="px-4 py-3 text-right">Portal Link</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-bold text-slate-750">
+                {estimate.laborContractEmailLog.map((log: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">{log.crewName || 'Subcontractor'}</td>
+                    <td className="px-4 py-3 font-normal text-slate-500">{log.recipient}</td>
+                    <td className="px-4 py-3 font-normal text-slate-500">{new Date(log.sentAt).toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[9px] uppercase tracking-wider",
+                        log.allowCrewDirectSchedule ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-amber-50 text-amber-600 border border-amber-100"
+                      )}>
+                        {log.allowCrewDirectSchedule ? "Direct Scheduling" : "Request Mode"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {log.crewScheduleLink ? (
+                        <a 
+                          href={log.crewScheduleLink} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-american-blue hover:text-american-red hover:underline inline-flex items-center gap-1 text-[10px]"
+                        >
+                          Access Portal <ExternalLink size={10} />
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 font-normal">N/A</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Main Content (Printable) */}
       <div className="bg-white rounded-[40px] shadow-2xl border-2 border-american-red/5 overflow-hidden print:border-0 print:shadow-none">
@@ -563,6 +737,205 @@ export default function LaborTakeOff({
           <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Lone Star Fence Works • Strategic Labor Operations • Internal Use Only</p>
         </div>
       </div>
+
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#010915]/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-300">
+          <div className="relative bg-white w-full max-w-2xl rounded-[32px] border-2 border-american-blue/10 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-american-blue text-white p-6 flex justify-between items-start border-b-4 border-american-red">
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tight">Email Labor Contract to Crew</h3>
+                <p className="text-[10px] text-white/75 font-bold uppercase tracking-wider mt-1">
+                  Secure work order & installation dispatch
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowEmailModal(false)}
+                className="text-white/60 hover:text-white transition-colors text-2xl font-normal leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {sendSuccess ? (
+                <div className="text-center py-10 space-y-4">
+                  <div className="h-16 w-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto text-3xl shadow-inner">
+                    ✓
+                  </div>
+                  <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Contract Email Dispatched!</h4>
+                  <p className="text-sm text-american-blue/60 max-w-md mx-auto font-medium">
+                    The labor contract has been securely emailed to the crew along with their personal installation scheduling link.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {sendError && (
+                    <div className="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 text-xs font-bold leading-relaxed">
+                      ⚠️ ERROR: {sendError}
+                    </div>
+                  )}
+
+                  {!estimate.id && (
+                    <div className="p-4 bg-amber-50 text-amber-700 rounded-2xl border border-amber-100 text-xs font-bold leading-relaxed">
+                      ⚠️ Estimate has not been saved yet. You must click "Save Changes" on the main estimator tab to get an Estimate ID before you can send a labor contract link.
+                    </div>
+                  )}
+
+                  {/* Recipient selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-black uppercase text-american-blue tracking-wider">Select Crew Recipient</label>
+                      <select
+                        value={selectedRecipient}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedRecipient(val);
+                          if (val !== 'custom') {
+                            const emp = employees.find(emp => emp.email === val);
+                            const name = emp ? (emp.name || emp.email.split('@')[0]) : val.split('@')[0];
+                            setCrewName(name);
+                            setEmailMessage(getDefaultMessage(name));
+                          } else {
+                            setCrewName('');
+                            setEmailMessage(getDefaultMessage(''));
+                          }
+                        }}
+                        disabled={!estimate.id}
+                        className="w-full text-sm font-bold border-2 border-american-blue/10 rounded-xl px-4 py-3 bg-white focus:outline-none focus:border-american-blue transition-colors disabled:opacity-50"
+                      >
+                        {employees.map(emp => (
+                          <option key={emp.id || emp.email} value={emp.email}>
+                            {emp.name || emp.email.split('@')[0]} ({emp.email})
+                          </option>
+                        ))}
+                        <option value="custom">Custom Email Address...</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-black uppercase text-american-blue tracking-wider">Crew / Subcontractor Name</label>
+                      <input
+                        type="text"
+                        value={crewName}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setCrewName(name);
+                          setEmailMessage(getDefaultMessage(name));
+                        }}
+                        disabled={!estimate.id}
+                        placeholder="e.g. Braden's Construction"
+                        className="w-full text-sm font-bold border-2 border-american-blue/10 rounded-xl px-4 py-3 bg-white focus:outline-none focus:border-american-blue transition-colors disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedRecipient === 'custom' && (
+                    <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                      <label className="block text-[11px] font-black uppercase text-american-blue tracking-wider">Custom Recipient Email</label>
+                      <input
+                        type="email"
+                        value={manualRecipientEmail}
+                        onChange={(e) => setManualRecipientEmail(e.target.value)}
+                        placeholder="crew@example.com"
+                        className="w-full text-sm font-bold border-2 border-american-blue/10 rounded-xl px-4 py-3 bg-white focus:outline-none focus:border-american-blue transition-colors"
+                      />
+                    </div>
+                  )}
+
+                  {/* Subject and Message details */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black uppercase text-american-blue tracking-wider">Email Subject</label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      disabled={!estimate.id}
+                      placeholder="Enter subject line"
+                      className="w-full text-sm font-bold border-2 border-american-blue/10 rounded-xl px-4 py-3 bg-white focus:outline-none focus:border-american-blue transition-colors disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black uppercase text-american-blue tracking-wider">Email Narrative Message</label>
+                    <textarea
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      disabled={!estimate.id}
+                      rows={6}
+                      placeholder="Write message to crew..."
+                      className="w-full text-xs font-medium border-2 border-american-blue/10 rounded-xl px-4 py-3 bg-white focus:outline-none focus:border-american-blue transition-colors focus:ring-0 disabled:opacity-50 border-solid"
+                    />
+                  </div>
+
+                  {/* Config flags */}
+                  <div className="p-4 bg-[#F8F9FA] rounded-2xl border-2 border-american-blue/5 space-y-3">
+                    <h4 className="text-[10px] font-black uppercase text-american-red tracking-widest">Optional Attachments & Permissions</h4>
+                    <div className="flex flex-col gap-2.5">
+                      <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-[#444444] select-none">
+                        <input
+                          type="checkbox"
+                          checked={includeDrawing}
+                          onChange={(e) => setIncludeDrawing(e.target.checked)}
+                          disabled={!estimate.id || !estimate.drawingUrl}
+                          className="h-4 w-4 rounded border-[#dddddd] text-american-blue focus:ring-0 cursor-pointer disabled:opacity-50"
+                        />
+                        <span>
+                          Include project drawing/site plan reference 
+                          {!estimate.drawingUrl && <span className="text-[10px] font-normal text-slate-400 ml-1">(No drawing uploaded)</span>}
+                        </span>
+                      </label>
+
+                      <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-[#444444] select-none">
+                        <input
+                          type="checkbox"
+                          checked={allowCrewDirectSchedule}
+                          onChange={(e) => setAllowCrewDirectSchedule(e.target.checked)}
+                          disabled={!estimate.id}
+                          className="h-4 w-4 rounded border-[#dddddd] text-american-blue focus:ring-0 cursor-pointer disabled:opacity-50"
+                        />
+                        <span>Allow crew to directly schedule / reschedule installations</span>
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 p-4 flex justify-end gap-3 border-t border-slate-100 rounded-b-[32px]">
+              <button
+                type="button"
+                onClick={() => setShowEmailModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition-colors"
+              >
+                Close
+              </button>
+              {!sendSuccess && estimate.id && (
+                <button
+                  type="button"
+                  onClick={handleSendLaborContract}
+                  disabled={isSendingEmail}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:scale-105 transition-transform active:scale-95 shadow-md flex items-center gap-2"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      Send Contract Email
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
