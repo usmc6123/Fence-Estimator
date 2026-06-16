@@ -61,6 +61,7 @@ export default function LaborTakeOff({
     htmlLength?: number;
     textLength?: number;
     spamSafeVersion?: boolean;
+    debugBuild?: string;
   } | null>(null);
 
   React.useEffect(() => {
@@ -214,6 +215,61 @@ export default function LaborTakeOff({
           laborContractEmailSentAt: new Date().toISOString()
         });
       }
+
+    } catch (err: any) {
+      setSendError(err?.message || String(err));
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleSendMinimalTest = async () => {
+    setIsSendingEmail(true);
+    setSendError('');
+    try {
+      const recipient = selectedRecipient === 'custom' ? manualRecipientEmail : selectedRecipient;
+      if (!recipient) {
+        throw new Error("Recipient email address is required.");
+      }
+
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch(`/api/estimates/write`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'send-labor-via-estimate-mailer-test',
+          estimateId: estimate.id,
+          recipientEmail: recipient,
+          crewName
+        })
+      });
+
+      const resData = await response.json();
+      const isAccepted = Array.isArray(resData.accepted) && resData.accepted.some((email: string) => email.toLowerCase() === recipient.toLowerCase());
+
+      if (!response.ok || !resData.success || !isAccepted) {
+        let errDesc = resData.error || "Failed to send minimal test email.";
+        if (resData.success && !isAccepted) {
+          errDesc = `The recipient email address (${recipient}) was not accepted by the SMTP mail server.`;
+        }
+        if (resData.details) {
+          errDesc += ` Details: ${resData.details}`;
+        }
+        throw new Error(errDesc);
+      }
+
+      setSendSuccess(true);
+      setSendSuccessInfo({
+        messageId: resData.messageId,
+        accepted: resData.accepted,
+        rejected: resData.rejected,
+        response: resData.response,
+        spamSafeVersion: true,
+        debugBuild: resData.debugBuild
+      });
 
     } catch (err: any) {
       setSendError(err?.message || String(err));
@@ -849,9 +905,13 @@ export default function LaborTakeOff({
                   <div className="h-16 w-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto text-3xl shadow-inner">
                     ✓
                   </div>
-                  <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">Contract Email Dispatched!</h4>
+                  <h4 className="text-xl font-black text-american-blue uppercase tracking-tight">
+                    {sendSuccessInfo?.debugBuild === "labor-via-estimate-mailer-test-v1" ? "Test Email Delivered!" : "Contract Email Dispatched!"}
+                  </h4>
                   <p className="text-sm text-american-blue/60 max-w-md mx-auto font-medium">
-                    The labor contract has been securely emailed to the crew along with their personal installation scheduling link.
+                    {sendSuccessInfo?.debugBuild === "labor-via-estimate-mailer-test-v1"
+                      ? "The highly simplified test email was accepted by the SMTP server for delivery."
+                      : "The labor contract has been securely emailed to the crew along with their personal installation scheduling link."}
                   </p>
 
                   {sendSuccessInfo && (
@@ -1041,24 +1101,44 @@ export default function LaborTakeOff({
                 Close
               </button>
               {!sendSuccess && estimate.id && (
-                <button
-                  type="button"
-                  onClick={handleSendLaborContract}
-                  disabled={isSendingEmail}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:scale-105 transition-transform active:scale-95 shadow-md flex items-center gap-2"
-                >
-                  {isSendingEmail ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send size={14} />
-                      Send Contract Email
-                    </>
-                  )}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSendMinimalTest}
+                    disabled={isSendingEmail}
+                    className="px-6 py-2.5 bg-american-blue hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:scale-105 transition-transform active:scale-95 shadow-md flex items-center gap-2"
+                  >
+                    {isSendingEmail ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} />
+                        Send Minimal Work Order Test
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendLaborContract}
+                    disabled={isSendingEmail}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:scale-105 transition-transform active:scale-95 shadow-md flex items-center gap-2"
+                  >
+                    {isSendingEmail ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} />
+                        Send Contract Email
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>

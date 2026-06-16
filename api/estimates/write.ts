@@ -305,6 +305,108 @@ async function getEstimateDocRef(estimateId: string) {
   return { docRef, snap };
 }
 
+interface SendAppEmailParams {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  replyTo?: string;
+  estimateData: any;
+  decoded: any;
+}
+
+async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, decoded }: SendAppEmailParams) {
+  let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
+  let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
+  let resolvedSmtpSecureType = 'SSL/TLS';
+  let resolvedSmtpUser = process.env.SMTP_USER;
+  let resolvedSmtpPass = process.env.SMTP_PASS;
+  let resolvedFromName = 'Lone Star Fence Works';
+  let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
+  let resolvedReplyToEmail = replyTo || resolvedFromEmail;
+
+  const ownerUid = estimateData?.userId || estimateData?.uid || estimateData?.ownerId;
+  const candidateUids = [];
+  if (decoded && decoded.uid) candidateUids.push(decoded.uid);
+  if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
+  candidateUids.push('main');
+
+  let settingsData: any = null;
+  for (const uidToTry of candidateUids) {
+    try {
+      const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
+      if (settingsSnap.exists) {
+        const possibleSettings = settingsSnap.data() || {};
+        if (possibleSettings.smtpHost && possibleSettings.smtpUsername) {
+          settingsData = possibleSettings;
+          console.log(`[SMTP TENANT LOG] Loaded active SMTP settings from candidate '${uidToTry}' for sendAppEmail`);
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in sendAppEmail:`, err);
+    }
+  }
+
+  if (settingsData) {
+    if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
+    if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
+    if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
+    if (settingsData.smtpUsername) resolvedSmtpUser = settingsData.smtpUsername;
+    if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
+    if (settingsData.fromName) resolvedFromName = settingsData.fromName;
+    if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
+    resolvedReplyToEmail = replyTo || settingsData.replyToEmail || resolvedFromEmail;
+  }
+
+  const missingVars: string[] = [];
+  if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
+  if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
+  if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
+
+  if (missingVars.length > 0) {
+    throw {
+      message: `Missing SMTP configurations: [${missingVars.join(', ')}]`,
+      code: 'MISSING_ENVIRONMENT_VARIABLE'
+    };
+  }
+
+  const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+  const transporterConfig = {
+    host: resolvedSmtpHost,
+    port: resolvedSmtpPort,
+    secure: isPort465,
+    auth: {
+      user: resolvedSmtpUser,
+      pass: resolvedSmtpPass
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
+    tls: {
+      rejectUnauthorized: false
+    }
+  };
+
+  console.log(`[SMTP SEND_APP_EMAIL] Sending mail to ${to} subject: "${subject}" using host: ${resolvedSmtpHost}`);
+  const transporter = nodemailer.createTransport(transporterConfig);
+  const info = await transporter.sendMail({
+    from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+    to,
+    replyTo: resolvedReplyToEmail,
+    subject,
+    text,
+    html
+  });
+
+  return {
+    info,
+    resolvedFromName,
+    resolvedFromEmail,
+    resolvedReplyToEmail
+  };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1932,75 +2034,17 @@ ${sowContent}
           </div>
         `;
 
-        // 4. Load dynamic SMTP settings (same as normal estimate mail)
-        let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
-        let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
-        let resolvedSmtpSecureType = 'SSL/TLS';
-        let resolvedSmtpUser = process.env.SMTP_USER;
-        let resolvedSmtpPass = process.env.SMTP_PASS;
-        let resolvedFromName = 'Lone Star Fence Works';
-        let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
-        let resolvedReplyToEmail = resolvedFromEmail;
-        let resolvedCompanyLogo = '';
-
-        try {
-          const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
-          if (settingsSnap.exists) {
-            const s = settingsSnap.data() || {};
-            if (s.smtpHost) resolvedSmtpHost = s.smtpHost;
-            if (s.smtpPort) resolvedSmtpPort = Number(s.smtpPort);
-            if (s.smtpSecureType) resolvedSmtpSecureType = s.smtpSecureType;
-            if (s.smtpUsername) resolvedSmtpUser = s.smtpUsername;
-            if (s.smtpPassword) resolvedSmtpPass = s.smtpPassword;
-            if (s.fromName) resolvedFromName = s.fromName;
-            if (s.fromEmail) resolvedFromEmail = s.fromEmail;
-            resolvedReplyToEmail = s.replyToEmail || resolvedFromEmail;
-            resolvedCompanyLogo = s.companyLogo || '';
-          }
-        } catch (settingsErr) {
-          console.warn('Could not load companySettings for send-labor-contract:', settingsErr);
-        }
-
-        const missingVars: string[] = [];
-        if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
-        if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
-        if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
-
-        if (missingVars.length > 0) {
-          return res.status(500).json({
-            success: false,
-            error: `Missing SMTP environment or saved settings configurations: [${missingVars.join(', ')}]`,
-          });
-        }
-
-        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
-        const transporterConfig = {
-          host: resolvedSmtpHost,
-          port: resolvedSmtpPort,
-          secure: isPort465,
-          auth: {
-            user: resolvedSmtpUser,
-            pass: resolvedSmtpPass
-          },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 15000,
-          tls: {
-            rejectUnauthorized: false
-          }
-        };
-
-        const emailSubject = `LSFW Work Order`;
+        const emailSubject = `Estimate Update`;
         const emailHtml = `<p>Hello,</p>
-<p>A Lone Star Fence Works work order is ready for review.</p>
-<p>Please contact Braden at (469) 560-6269 for project details.</p>
+<p>A Lone Star Fence Works project update is available.</p>
+<p>Please contact Braden at (469) 560-6269 with any questions.</p>
 <p>Thank you,<br/>Lone Star Fence Works</p>`;
 
         const emailText = `Hello,
 
-A Lone Star Fence Works work order is ready for review.
+A Lone Star Fence Works project update is available.
 
-Please contact Braden at (469) 560-6269 for project details.
+Please contact Braden at (469) 560-6269 with any questions.
 
 Thank you,
 Lone Star Fence Works`;
@@ -2008,24 +2052,20 @@ Lone Star Fence Works`;
         const htmlLength = emailHtml.length;
         const textLength = emailText.length;
 
-        // Log sizes prior to sending as per Phase 4
-        console.log("Labor Email Size", {
-          htmlLength,
-          textLength
-        });
-
         try {
-          console.log("LABOR SIMPLE EMAIL START", { estimateId, recipientEmail, subject: emailSubject, htmlLength, textLength });
-
-          const transporter = nodemailer.createTransport(transporterConfig);
-          const info = await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          console.log(`[SMTP LABOR CONTRACT] Dispatching to: ${recipientEmail}`);
+          const sendResult = await sendAppEmail({
             to: recipientEmail,
-            replyTo: resolvedReplyToEmail,
             subject: emailSubject,
             text: emailText,
-            html: emailHtml
+            html: emailHtml,
+            estimateData,
+            decoded
           });
+
+          const info = sendResult.info;
+          const from = `"${sendResult.resolvedFromName}" <${sendResult.resolvedFromEmail}>`;
+          const replyTo = sendResult.resolvedReplyToEmail;
 
           console.log("LABOR SIMPLE EMAIL RESULT", {
             messageId: info.messageId,
@@ -2036,24 +2076,42 @@ Lone Star Fence Works`;
             textLength
           });
 
-          const isRejected = Array.isArray(info.rejected) && info.rejected.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
           const isAccepted = Array.isArray(info.accepted) && info.accepted.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
 
-          if (isRejected || !isAccepted) {
-            console.error("LABOR SIMPLE EMAIL FAILED", {
-              reason: "Recipient address not accepted or rejected by SMTP server",
-              accepted: info.accepted,
+          if (!isAccepted) {
+            console.error("LABOR SIMPLE EMAIL REJECTED BY SMTP", {
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from,
+              envelopeTo: info.envelope?.to,
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response,
               rejected: info.rejected
             });
+
             return res.status(400).json({
               success: false,
-              error: "Labor email recipient was rejected",
-              rejected: info.rejected || [],
+              error: "Labor email was not accepted for delivery",
+              messageId: info.messageId,
               accepted: info.accepted || [],
-              htmlLength,
-              textLength,
-              spamSafeVersion: true,
-              debugBuild: "labor-minimal-no-link-test-v1"
+              rejected: info.rejected || [],
+              response: info.response,
+              envelope: info.envelope,
+              debugBuild: "shared-email-sender-labor-test-v1",
+              smtpDiagnostic: {
+                from,
+                to: recipientEmail,
+                replyTo,
+                envelopeFrom: info.envelope?.from,
+                envelopeTo: info.envelope?.to,
+                subject: emailSubject,
+                textLength,
+                htmlLength,
+                smtpResponse: info.response
+              }
             });
           }
 
@@ -2099,22 +2157,159 @@ Lone Star Fence Works`;
             htmlLength,
             textLength,
             spamSafeVersion: true,
-            debugBuild: "labor-minimal-no-link-test-v1"
+            debugBuild: "shared-email-sender-labor-test-v1"
           });
         } catch (error: any) {
-          console.error("LABOR SIMPLE EMAIL FAILED", error);
+          console.error("LABOR SIMPLE EMAIL EXCEPTION", error);
+          
           return res.status(500).json({
             success: false,
             error: "Labor contract email failed",
             details: error?.message || String(error),
             code: error?.code,
-            command: error?.command,
-            responseCode: error?.responseCode,
             response: error?.response,
             htmlLength,
             textLength,
             spamSafeVersion: true,
-            debugBuild: "labor-minimal-no-link-test-v1"
+            debugBuild: "shared-email-sender-labor-test-v1",
+            smtpDiagnostic: {
+              to: recipientEmail,
+              replyTo: recipientEmail,
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: error?.response || error?.message || String(error)
+            }
+          });
+        }
+      }
+
+      if (req.body && req.body.action === 'send-labor-via-estimate-mailer-test') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin or employee login required' });
+        }
+
+        const { estimateId, recipientEmail } = req.body || {};
+
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Estimate ID is required.' });
+        }
+        if (!recipientEmail) {
+          return res.status(400).json({ error: 'Recipient email is required.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+
+        const estimateData = snap.data() || {};
+
+        const emailSubject = `Estimate Update`;
+        const emailHtml = `<p>Hello,</p>
+<p>A Lone Star Fence Works project update is available.</p>
+<p>Please contact Braden at (469) 560-6269 with any questions.</p>
+<p>Thank you,<br/>Lone Star Fence Works</p>`;
+
+        const emailText = `Hello,
+
+A Lone Star Fence Works project update is available.
+
+Please contact Braden at (469) 560-6269 with any questions.
+
+Thank you,
+Lone Star Fence Works`;
+
+        const htmlLength = emailHtml.length;
+        const textLength = emailText.length;
+
+        try {
+          console.log(`[SMTP LABOR TEST MAILER] Sending minimal update to: ${recipientEmail}`);
+          const sendResult = await sendAppEmail({
+            to: recipientEmail,
+            subject: emailSubject,
+            text: emailText,
+            html: emailHtml,
+            estimateData,
+            decoded
+          });
+
+          const info = sendResult.info;
+          const from = `"${sendResult.resolvedFromName}" <${sendResult.resolvedFromEmail}>`;
+          const replyTo = sendResult.resolvedReplyToEmail;
+
+          console.log("LABOR TEST EMAIL SUCCESS", info.messageId);
+
+          const isAccepted = Array.isArray(info.accepted) && info.accepted.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
+
+          if (!isAccepted) {
+            console.error("LABOR TEST EMAIL REJECTED BY SMTP", {
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from,
+              envelopeTo: info.envelope?.to,
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response,
+              rejected: info.rejected
+            });
+
+            return res.status(400).json({
+              success: false,
+              error: "Labor test email was not accepted for delivery",
+              messageId: info.messageId,
+              accepted: info.accepted || [],
+              rejected: info.rejected || [],
+              response: info.response,
+              envelope: info.envelope,
+              debugBuild: "shared-email-sender-labor-test-v1",
+              smtpDiagnostic: {
+                from,
+                to: recipientEmail,
+                replyTo,
+                envelopeFrom: info.envelope?.from,
+                envelopeTo: info.envelope?.to,
+                subject: emailSubject,
+                textLength,
+                htmlLength,
+                smtpResponse: info.response
+              }
+            });
+          }
+
+          return res.status(200).json({
+            success: true,
+            messageId: info.messageId,
+            accepted: info.accepted || [],
+            rejected: info.rejected || [],
+            response: info.response,
+            envelope: info.envelope,
+            debugBuild: "shared-email-sender-labor-test-v1"
+          });
+        } catch (error: any) {
+          console.error("LABOR TEST EMAIL FAILED", error);
+
+          return res.status(500).json({
+            success: false,
+            error: "Labor test email failed",
+            details: error?.message || String(error),
+            accepted: [],
+            rejected: [recipientEmail],
+            response: error?.response || String(error),
+            debugBuild: "shared-email-sender-labor-test-v1",
+            smtpDiagnostic: {
+              to: recipientEmail,
+              replyTo: recipientEmail,
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: error?.response || error?.message || String(error)
+            }
           });
         }
       }
@@ -2345,11 +2540,8 @@ Lone Star Fence Works`;
         let errorType = 'UNKNOWN';
 
         try {
-          const transporter = nodemailer.createTransport(transporterConfig);
-          await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          await sendAppEmail({
             to: customerEmail,
-            replyTo: resolvedReplyToEmail,
             subject: mailSubject,
             text: mailMessage,
             html: `
@@ -2386,7 +2578,10 @@ Lone Star Fence Works`;
                   </p>
                 </div>
               </div>
-            `
+            `,
+            replyTo: resolvedReplyToEmail,
+            estimateData,
+            decoded
           });
           mailSent = true;
           console.log(`Email successfully routed in serverless handler to ${customerEmail}`);
