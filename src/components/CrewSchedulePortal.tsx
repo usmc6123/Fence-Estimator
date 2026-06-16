@@ -20,6 +20,7 @@ export default function CrewSchedulePortal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [activeTab, setActiveTab] = useState<'manifest' | 'breakdown' | 'scope' | 'drawing'>('manifest');
 
   // Load URL credentials
   useEffect(() => {
@@ -629,6 +630,266 @@ export default function CrewSchedulePortal() {
           </div>
 
         </div>
+
+        {/* LABOR PACKAGE SECTIONS BELOW TIMELINE */}
+        {scheduleData.laborContractSnapshot && (
+          <div className="bg-[#0A1424] p-6 sm:p-8 rounded-[32px] border border-american-blue/10 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-american-blue/10 pb-4">
+              <div>
+                <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
+                  <ShieldCheck className="text-emerald-500 animate-pulse" size={22} />
+                  Secure Labor Package & SOW
+                </h2>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mt-1">
+                  Full project drawings, specifications, and crew payout schedules
+                </p>
+              </div>
+
+              {/* Dynamic Tabs */}
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('manifest')}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 border",
+                    activeTab === 'manifest'
+                      ? "bg-[#D92D20] text-white border-[#D92D20] shadow-md shadow-[#D92D20]/20"
+                      : "bg-[#030A14]/40 text-slate-300 border-[#13233B]/40 hover:bg-[#13233B]"
+                  )}
+                >
+                  Aggregate Manifest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('breakdown')}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 border",
+                    activeTab === 'breakdown'
+                      ? "bg-[#D92D20] text-white border-[#D92D20] shadow-md shadow-[#D92D20]/20"
+                      : "bg-[#030A14]/40 text-slate-300 border-[#13233B]/40 hover:bg-[#13233B]"
+                  )}
+                >
+                  Run Breakdown
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('scope')}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 border",
+                    activeTab === 'scope'
+                      ? "bg-[#D92D20] text-white border-[#D92D20] shadow-md shadow-[#D92D20]/20"
+                      : "bg-[#030A14]/40 text-slate-300 border-[#13233B]/40 hover:bg-[#13233B]"
+                  )}
+                >
+                  Scope of Work
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('drawing')}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 border",
+                    activeTab === 'drawing'
+                      ? "bg-[#D92D20] text-white border-[#D92D20] shadow-md shadow-[#D92D20]/20"
+                      : "bg-[#030A14]/40 text-slate-300 border-[#13233B]/40 hover:bg-[#13233B]"
+                  )}
+                >
+                  Layout Drawing
+                </button>
+              </div>
+            </div>
+
+            {/* TAB CONTENTS */}
+            <div className="pt-2">
+              
+              {/* 1. AGGREGATE MANIFEST */}
+              {activeTab === 'manifest' && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D92D20] animate-ping" />
+                    <p className="text-xs font-bold text-slate-300 uppercase">Project Payroll Summary Table</p>
+                  </div>
+                  
+                  <div className="overflow-x-auto rounded-2xl border border-american-blue/10 bg-[#030A14]/20">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                      <thead>
+                        <tr className="bg-[#030A14]/60 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-american-blue/10">
+                          <th className="px-5 py-4">Operation / Task</th>
+                          <th className="px-5 py-4 text-center">Volume</th>
+                          <th className="px-5 py-4 text-right">Net Subpayout</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-american-blue/5">
+                        {Array.isArray(scheduleData.laborContractSnapshot.aggregateLaborManifest) && 
+                         scheduleData.laborContractSnapshot.aggregateLaborManifest.length > 0 ? (
+                          scheduleData.laborContractSnapshot.aggregateLaborManifest.map((item: any, i: number) => (
+                            <tr key={i} className="text-xs text-slate-300 hover:bg-[#13233B]/30 font-medium transition-colors">
+                              <td className="px-5 py-4 flex items-center gap-2.5">
+                                <div className="h-1.5 w-1.5 rounded-full bg-[#D92D20]/80" />
+                                {item.name}
+                              </td>
+                              <td className="px-5 py-4 text-center">
+                                <span className="px-2.5 py-1 bg-american-blue/20 text-slate-200 rounded-full text-[10px] font-black font-mono">
+                                  {item.qty} {item.unit}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-right font-bold text-[#D92D20] font-mono">
+                                ${Number(item.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="px-5 py-8 text-center text-xs text-slate-500 font-bold">
+                              No aggregate labor tasks found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-american-blue/20 border-t-2 border-american-blue/20">
+                          <td colSpan={2} className="px-5 py-4 text-right font-black uppercase tracking-widest text-[10px] text-slate-300">Total Direct Labor Payout</td>
+                          <td className="px-5 py-4 text-right font-black text-[#D92D20] text-base font-mono">
+                            ${Number(scheduleData.laborContractSnapshot.totalDirectLaborPayout || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. RUN BREAKDOWN */}
+              {activeTab === 'breakdown' && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D92D20]" />
+                    <p className="text-xs font-bold text-slate-300 uppercase">Detailed Run-by-Run Specifications</p>
+                  </div>
+
+                  {Array.isArray(scheduleData.laborContractSnapshot.laborRuns) && 
+                   scheduleData.laborContractSnapshot.laborRuns.length > 0 ? (
+                    <div className="space-y-6">
+                      {scheduleData.laborContractSnapshot.laborRuns.map((run: any, idx: number) => (
+                        <div key={idx} className="bg-[#030A14]/30 rounded-2xl border border-american-blue/15 p-5 space-y-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-american-blue/10 pb-3">
+                            <div>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-[#D92D20] block">Run #{run.runId}</span>
+                              <h3 className="text-sm font-black text-slate-200 mt-0.5">{run.label || `Specification ${idx + 1}`}</h3>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-[10px] font-bold font-mono">
+                              <span className="px-2.5 py-1 bg-[#13233B] text-slate-200 rounded-lg">Style: {run.style}</span>
+                              <span className="px-2.5 py-1 bg-[#13233B] text-slate-200 rounded-lg">{run.linearFeet} LF</span>
+                              <span className="px-2.5 py-1 bg-[#13233B] text-slate-200 rounded-lg">{run.height}ft High</span>
+                              {run.postCount !== undefined && (
+                                <span className="px-2.5 py-1 bg-[#13233B] text-slate-200 rounded-lg">{run.postCount} Posts</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse font-sans min-w-[400px]">
+                              <thead>
+                                <tr className="text-[9px] font-black uppercase text-slate-400 border-b border-white/5 bg-white/[0.02]">
+                                  <th className="px-4 py-2.5">Task Description</th>
+                                  <th className="px-4 py-2.5 text-center">Volume</th>
+                                  <th className="px-4 py-2.5 text-right">Rate</th>
+                                  <th className="px-4 py-2.5 text-right">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 font-medium text-slate-300">
+                                {Array.isArray(run.laborItems) && run.laborItems.map((item: any, i: number) => (
+                                  <tr key={i} className="hover:bg-white/[0.01]">
+                                    <td className="px-4 py-3 text-slate-300 text-xs font-semibold">{item.name}</td>
+                                    <td className="px-4 py-3 text-center text-slate-400 font-bold font-mono">{item.qty} {item.unit}</td>
+                                    <td className="px-4 py-3 text-right text-slate-400 font-mono">${Number(item.rate).toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-right text-slate-200 font-black font-mono">${Number(item.total).toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-slate-500 font-bold border-2 border-dashed border-american-blue/10 rounded-2xl">
+                      Detailed run breakdowns are not specified for this project layout.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3. SCOPE OF WORK */}
+              {activeTab === 'scope' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 border-b border-american-blue/15 pb-2">
+                    <div className="h-2 w-2 rounded-full bg-[#D92D20]" />
+                    <p className="text-xs font-bold text-slate-300 uppercase">Subcontractor Scope of Work Procedures</p>
+                  </div>
+                  <div className="bg-[#030A14]/30 rounded-2xl border border-american-blue/15 p-6 text-sm text-slate-300 font-medium leading-relaxed whitespace-pre-wrap font-mono prose prose-invert max-w-none max-h-[500px] overflow-y-auto">
+                    {scheduleData.laborContractSnapshot.scopeOfWorkHtmlOrText || "Standard installation procedures apply."}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. LAYOUT DRAWING */}
+              {activeTab === 'drawing' && (
+                <div className="space-y-4 text-center">
+                  <div className="flex items-center gap-3 border-b border-american-blue/15 pb-2 text-left">
+                    <div className="h-2 w-2 rounded-full bg-[#D92D20]" />
+                    <p className="text-xs font-bold text-slate-300 uppercase">Project Layout & Dimension Drawing</p>
+                  </div>
+                  
+                  {scheduleData.laborContractSnapshot.drawingUrl ? (
+                    <div className="bg-[#030A14]/30 rounded-2xl border border-american-blue/15 p-6 space-y-4">
+                      {scheduleData.laborContractSnapshot.drawingMimeType?.includes('pdf') || 
+                       scheduleData.laborContractSnapshot.drawingUrl?.toLowerCase().includes('.pdf') ? (
+                        <div className="p-8 text-center">
+                          <Eye className="mx-auto text-[#D92D20] mb-3" size={40} />
+                          <p className="font-bold text-slate-200 text-sm mb-1">LAYOUT DESIGN (PDF Reference)</p>
+                          <p className="text-xs text-slate-400 mb-4">{scheduleData.laborContractSnapshot.drawingFileName || 'layout.pdf'}</p>
+                          <a 
+                            href={scheduleData.laborContractSnapshot.drawingUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-block px-6 py-3 bg-[#13233B] hover:bg-[#1C3254] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all"
+                          >
+                            Open Reference PDF Drawing
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <img 
+                            src={scheduleData.laborContractSnapshot.drawingUrl} 
+                            referrerPolicy="no-referrer" 
+                            alt="Project site plan or layout drawing" 
+                            className="max-h-[380px] w-auto max-w-full rounded-xl mx-auto border-4 border-[#13233B]/40 shadow-xl"
+                          />
+                          <p className="text-xs text-slate-400 font-bold">
+                            File: {scheduleData.laborContractSnapshot.drawingFileName || 'Layout_Plan_Drawing.jpg'}
+                          </p>
+                          <a 
+                            href={scheduleData.laborContractSnapshot.drawingUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-block px-6 py-2.5 bg-[#13233B] hover:bg-[#1C3254] text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all"
+                          >
+                            View Drawing in New Tab
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center text-xs text-slate-500 font-bold border-2 border-dashed border-american-blue/10 rounded-2xl">
+                      No layout dimension drawings have been uploaded for this project yet.
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="py-6 text-center text-[10px] font-black uppercase tracking-[0.25em] text-[#444444] border-t border-american-blue/10">

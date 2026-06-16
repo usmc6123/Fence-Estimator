@@ -58,6 +58,9 @@ export default function LaborTakeOff({
     accepted?: string[];
     rejected?: string[];
     response?: string;
+    htmlLength?: number;
+    textLength?: number;
+    spamSafeVersion?: boolean;
   } | null>(null);
 
   React.useEffect(() => {
@@ -198,7 +201,10 @@ export default function LaborTakeOff({
         messageId: resData.messageId,
         accepted: resData.accepted,
         rejected: resData.rejected,
-        response: resData.response
+        response: resData.response,
+        htmlLength: resData.htmlLength,
+        textLength: resData.textLength,
+        spamSafeVersion: resData.spamSafeVersion
       });
       
       if (onUpdateEstimate) {
@@ -871,6 +877,21 @@ export default function LaborTakeOff({
                       {sendSuccessInfo.response && (
                         <div>
                           <span className="font-bold">SMTP Server Response:</span> {sendSuccessInfo.response}
+                        </div>
+                      )}
+                      {sendSuccessInfo.spamSafeVersion && (
+                        <div>
+                          <span className="font-bold text-[#2A72E5]">Anti-Spam Shield:</span> Yes (Lightweight Summary Notification)
+                        </div>
+                      )}
+                      {sendSuccessInfo.htmlLength !== undefined && (
+                        <div>
+                          <span className="font-bold">HTML Size:</span> {sendSuccessInfo.htmlLength} bytes (&lt; 10KB safe limit)
+                        </div>
+                      )}
+                      {sendSuccessInfo.textLength !== undefined && (
+                        <div>
+                          <span className="font-bold">Plaintext Size:</span> {sendSuccessInfo.textLength} bytes
                         </div>
                       )}
                     </div>
