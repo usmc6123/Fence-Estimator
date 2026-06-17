@@ -339,6 +339,7 @@ export default function CustomerSignaturePortal({
     // Read estimateId from window.location.search first as required, falling back to props
     const urlParams = new URLSearchParams(window.location.search);
     const resolvedEstimateId = urlParams.get('estimateId') || urlParams.get('id') || estimateId || '';
+    const resolvedVersionId = urlParams.get('versionId') || '';
     setActiveEstimateId(resolvedEstimateId);
 
     async function loadPublicEstimate() {
@@ -355,7 +356,7 @@ export default function CustomerSignaturePortal({
         }
 
         // Fetch the estimate through secure guest endpoint
-        const response = await fetch(`/api/estimates/write?action=get-public-estimate&estimateId=${resolvedEstimateId}`);
+        const response = await fetch(`/api/estimates/write?action=get-public-estimate&estimateId=${resolvedEstimateId}&versionId=${resolvedVersionId}`);
         
         if (!response.ok) {
           console.log({
@@ -420,7 +421,11 @@ export default function CustomerSignaturePortal({
         fetch(`/api/estimates/write`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'view-public-estimate', estimateId: resolvedEstimateId })
+          body: JSON.stringify({ 
+            action: 'view-public-estimate', 
+            estimateId: resolvedEstimateId,
+            versionId: resolvedVersionId
+          })
         })
           .then(res => res.json())
           .then(track => console.log('View event recorded:', track))
@@ -444,12 +449,15 @@ export default function CustomerSignaturePortal({
   const handleAcceptFallback = async (sigName: string, email: string): Promise<boolean> => {
     try {
       setIsSubmitting(true);
+      const urlParams = new URLSearchParams(window.location.search);
+      const resolvedVersionId = urlParams.get('versionId') || '';
       const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'decision-public-estimate',
           estimateId: activeEstimateId || estimateId,
+          versionId: resolvedVersionId,
           decision: 'accepted',
           signature: sigName,
           customerEmail: email
@@ -487,12 +495,15 @@ export default function CustomerSignaturePortal({
   const handleDeclineFallback = async (reason: string): Promise<boolean> => {
     try {
       setIsSubmitting(true);
+      const urlParams = new URLSearchParams(window.location.search);
+      const resolvedVersionId = urlParams.get('versionId') || '';
       const response = await fetch(`/api/estimates/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'decision-public-estimate',
           estimateId: activeEstimateId || estimateId,
+          versionId: resolvedVersionId,
           decision: 'declined',
           declineReason: reason
         })
@@ -726,6 +737,48 @@ export default function CustomerSignaturePortal({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Customer Portal Version Metadata Header Dashboard */}
+        {estimate && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm text-slate-800 font-sans print:hidden mb-6" id="portal-version-header">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Estimate Identifier</span>
+                <span className="block text-sm font-bold text-[#0c1a30] mt-1">
+                  Estimate #{estimate.estimateNumber || 'Draft'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Contract Revision</span>
+                <span className="block text-sm font-bold text-slate-800 mt-1">
+                  {estimate.contractVersion ? `Version ${estimate.contractVersion}` : 'Version 1 (Original)'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Sent Out Date</span>
+                <span className="block text-sm font-bold text-slate-800 mt-1">
+                  {estimate.versionSentDate 
+                    ? new Date(estimate.versionSentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+                    : (estimate.customerSentAt ? new Date(estimate.customerSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Pending dispatch')
+                  }
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Current Status</span>
+                <div className="mt-1">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${
+                    estimate.customerDecision === 'accepted' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                    estimate.customerDecision === 'declined' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+                    'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    {estimate.customerDecision === 'accepted' ? 'ACCEPTED' : 
+                     estimate.customerDecision === 'declined' ? 'DECLINED' : 'PENDING'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Informative Welcome Header for Guest Customer */}
         {!currentDecision && !actionSuccess && (

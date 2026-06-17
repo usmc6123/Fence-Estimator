@@ -666,6 +666,7 @@ export default async function handler(req: any, res: any) {
     // PUBLIC CUSTOMER PORTAL GUEST ENDPOINTS: Bypass authentication completely!
     if (action === 'get-public-estimate') {
       const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const versionId = req.query?.versionId || req.body?.versionId || '';
       if (!estimateId) {
         return res.status(400).json({ error: 'Estimate ID is required.' });
       }
@@ -691,6 +692,31 @@ export default async function handler(req: any, res: any) {
 
       if (!estimateData) {
         return res.status(404).json({ error: 'Estimate not found in database.' });
+      }
+
+      // Check if specific version history is requested and apply snapshot
+      if (versionId && estimateData.contractVersions) {
+        const matchedVersion = (estimateData.contractVersions || []).find((v: any) => v.versionId === versionId);
+        if (matchedVersion) {
+          estimateData = {
+            ...estimateData,
+            ...matchedVersion.estimateSnapshot,
+            contractSnapshot: matchedVersion.contractSnapshot,
+            // Status and decision belong specifically to this version
+            customerDecision: matchedVersion.customerDecision || 'pending',
+            customerSignature: matchedVersion.customerSignature || null,
+            customerDecisionDate: matchedVersion.customerSignedAt || null,
+            customerSignedDate: matchedVersion.customerSignedAt || null,
+            customerDeclineReason: matchedVersion.customerDeclineReason || null,
+            drawingUrl: matchedVersion.drawingUrl || null,
+            drawingFilename: matchedVersion.drawingFilename || null,
+            drawingVersion: matchedVersion.drawingVersion || null,
+            // Expose version details to client portal
+            contractVersion: matchedVersion.version,
+            versionSentDate: matchedVersion.createdAt,
+            versionStatus: matchedVersion.status
+          };
+        }
       }
 
       const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
@@ -817,6 +843,31 @@ export default async function handler(req: any, res: any) {
       }
 
       const data = snap.data() || {};
+      const versionIdParam = req.query?.versionId || req.body?.versionId || '';
+      
+      let resolvedContractVersion = data.latestContractVersion || 1;
+
+      if (versionIdParam && data.contractVersions) {
+        const contractVersions = [...(data.contractVersions || [])];
+        const vIdx = contractVersions.findIndex((v: any) => v.versionId === versionIdParam);
+        if (vIdx !== -1) {
+          const vObj = { ...contractVersions[vIdx] };
+          vObj.customerDecision = decision;
+          vObj.status = decision === 'accepted' ? 'Accepted' : 'Declined';
+          vObj.customerSignature = decision === 'accepted' ? (signature || 'Digitally Signed') : null;
+          vObj.customerSignedAt = now;
+          vObj.customerDeclineReason = decision === 'declined' ? (declineReason || 'Not specified') : null;
+          
+          contractVersions[vIdx] = vObj;
+          updates.contractVersions = contractVersions;
+          resolvedContractVersion = vObj.version || 1;
+
+          // Keep top level pointers updated for dashboard status display if this is the latest
+          if (data.latestContractVersionId === versionIdParam) {
+            updates.latestContractStatus = vObj.status;
+          }
+        }
+      }
 
       // Calculate previous label and log transition
       const getStatusLabelComp = (docData: any) => {
@@ -885,7 +936,9 @@ export default async function handler(req: any, res: any) {
             totalCost: data.totalCost || data.manualGrandTotal || 0,
             signature: signature || '',
             declineReason: declineReason || '',
-            timestamp: now
+            timestamp: now,
+            versionId: versionIdParam || data.latestContractVersionId || '',
+            contractVersion: resolvedContractVersion || data.latestContractVersion || 1
           };
           fetch(webhookUrl, {
             method: 'POST',
@@ -918,7 +971,9 @@ export default async function handler(req: any, res: any) {
         customerSignedDate: now,
         acceptedAt: now,
         declinedAt: now,
-        declineReason: declineReason || 'Not specified'
+        declineReason: declineReason || 'Not specified',
+        versionId: versionIdParam || data.latestContractVersionId || '',
+        contractVersion: resolvedContractVersion || data.latestContractVersion || 1
       };
 
       sendGhlWorkflowWebhook(eventType, eventPayload, null, db, String(estimateId)).catch(err => {
@@ -2144,6 +2199,27 @@ Lone Star Fence Works`;
             status: "sent"
           };
 
+          const laborContractVersions = estimateData.laborContractVersions || [];
+          const nextLaborVersionNumber = laborContractVersions.length + 1;
+          const laborVersionId = crypto.randomUUID();
+
+          const newLaborVersion = {
+            version: nextLaborVersionNumber,
+            versionId: laborVersionId,
+            createdAt: nowIso,
+            createdBy: decoded?.email || decoded?.uid || 'SYSTEM',
+            recipient: recipientEmail,
+            crewName: crewName || 'Crew',
+            subject: emailSubject,
+            message: message || '',
+            laborContractSnapshot: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
+            includeDrawing: !!includeDrawing,
+            crewScheduleLink: crewScheduleLink || null,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            status: "Sent",
+            emailMessageId: info?.messageId || ''
+          };
+
           const updates: any = {
             crewScheduleToken,
             crewScheduleTokenCreatedAt: nowIso,
@@ -2154,7 +2230,11 @@ Lone Star Fence Works`;
             laborContractEmailSent: true,
             laborContractEmailSentAt: nowIso,
             laborContractEmailRecipient: recipientEmail,
-            laborContractEmailLog: admin.firestore.FieldValue.arrayUnion(logEntry)
+            laborContractEmailLog: admin.firestore.FieldValue.arrayUnion(logEntry),
+            laborContractVersions: [...laborContractVersions, newLaborVersion],
+            latestLaborContractVersion: nextLaborVersionNumber,
+            latestLaborContractVersionId: laborVersionId,
+            latestLaborContractSentAt: nowIso
           };
 
           if (snapshot) {
@@ -2424,7 +2504,7 @@ Lone Star Fence Works`;
           finalPrice = pricingUpdatesFromReq.finalCustomerPrice;
         }
 
-        const pricingUpdates = {
+        const pricingUpdates: any = {
           finalCustomerPrice: finalPrice,
           estimatedPrice: finalPrice,
           grandTotal: finalPrice,
@@ -2449,18 +2529,84 @@ Lone Star Fence Works`;
           updatedAt: new Date().toISOString()
         };
 
-        // Write to Firestore snapshot and clean up main estimate document prior to mail setup
-        await targetRef.set(pricingUpdates, { merge: true });
-
-        // Update local estimateData variable so subsequent logic uses these new saved configurations
-        estimateData = {
+        const mergedEstimateData = {
           ...estimateData,
           ...pricingUpdates
         };
 
-        // 2. Setup access link based on hosting context
+        const resendVersionId = req.body.resendVersionId;
+        let newVersionId = '';
+        let nextVersionNumber = 1;
+        let estimateLink = '';
+        let finalContractVersions = mergedEstimateData.contractVersions || [];
+
+        if (resendVersionId) {
+          // Resend a specific previous version
+          const matchedVersion = finalContractVersions.find((v: any) => v.versionId === resendVersionId);
+          if (!matchedVersion) {
+            return res.status(404).json({ error: `Version matching id ${resendVersionId} was not found on this estimate.` });
+          }
+          newVersionId = resendVersionId;
+          nextVersionNumber = matchedVersion.version;
+          estimateLink = matchedVersion.estimateLink || `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimateId}&versionId=${resendVersionId}`;
+          
+          // Use the snapshot of the resent version for placeholder generation
+          estimateData = {
+            ...mergedEstimateData,
+            ...matchedVersion.estimateSnapshot,
+            contractSnapshot: matchedVersion.contractSnapshot
+          };
+        } else {
+          // Create new immutable contract version
+          newVersionId = crypto.randomUUID();
+          nextVersionNumber = finalContractVersions.length + 1;
+          estimateLink = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimateId}&versionId=${newVersionId}`;
+          
+          // Clone properties for snapshot without nesting previous versions
+          const { contractVersions: _, ...cleanEstimateSnapshot } = mergedEstimateData;
+          
+          const newContractVersion = {
+            version: nextVersionNumber,
+            versionId: newVersionId,
+            createdAt: new Date().toISOString(),
+            createdBy: decoded?.email || decoded?.uid || 'SYSTEM',
+            estimateSnapshot: cleanEstimateSnapshot,
+            contractSnapshot: contractSnapshotFromReq || cleanEstimateSnapshot.contractSnapshot || null,
+            customerDecision: "pending",
+            customerSignature: null,
+            customerSignedAt: null,
+            representativeSignature: "Braden Scott Smith",
+            representativeSignedAt: new Date().toISOString(),
+            emailSentAt: new Date().toISOString(),
+            emailRecipient: customerEmail,
+            emailMessageId: "",
+            estimateLink: estimateLink,
+            status: "Sent",
+            drawingUrl: mergedEstimateData.drawingUrl || mergedEstimateData.drawingMapUrl || null,
+            drawingFilename: mergedEstimateData.drawingFilename || null,
+            drawingVersion: mergedEstimateData.drawingVersion || null
+          };
+          
+          finalContractVersions = [...finalContractVersions, newContractVersion];
+          
+          // Update the top level pointer attributes
+          pricingUpdates.latestContractVersion = nextVersionNumber;
+          pricingUpdates.latestContractVersionId = newVersionId;
+          pricingUpdates.latestContractStatus = "Sent";
+          pricingUpdates.latestContractSentAt = newContractVersion.createdAt;
+          pricingUpdates.contractVersions = finalContractVersions;
+
+          estimateData = {
+            ...mergedEstimateData,
+            ...pricingUpdates
+          };
+        }
+
+        // Write to Firestore snapshot and clean up main estimate document prior to mail setup
+        await targetRef.set(pricingUpdates, { merge: true });
+
+        // Setup access link based on hosting context
         const generatedEstimateLink = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimateId}`;
-        const estimateLink = generatedEstimateLink;
 
         // Resolve user's Saved SMTP and Company settings
         let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
@@ -2751,6 +2897,8 @@ Lone Star Fence Works`;
               linearFeet: Number(estimateData.linearFeet || (estimateData.materials?.[0]?.linearFeet) || estimateData.manualLinearFeet || 0),
               estimatedPrice: Number(estimateData.totalCost || estimateData.manualGrandTotal || 0),
               estimateNumber: estimateData.estimateNumber || '',
+              versionId: newVersionId || '',
+              contractVersion: nextVersionNumber || 1,
               estimateLink: estimateLink,
               sentAt: now
             };
@@ -2772,6 +2920,8 @@ Lone Star Fence Works`;
           success: true,
           mailSent,
           portalUrl: estimateLink,
+          versionId: newVersionId,
+          contractVersion: nextVersionNumber,
           sentAt: now,
           debugBuild: "local-ghl-helper-no-import-v1"
         });

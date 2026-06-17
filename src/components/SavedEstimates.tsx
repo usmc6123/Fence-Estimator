@@ -4,7 +4,7 @@ import {
   ChevronRight, Calendar, MapPin, DollarSign,
   Filter, MoreVertical, ExternalLink, Download,
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
-  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle, Copy
+  FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle, Copy, History
 } from 'lucide-react';
 import { SavedEstimate, JobStatus, JobPhoto, User, MaterialItem, LaborRates } from '../types';
 import { formatCurrency, cn, assignEstimateNumbers, getEstimateFinalPrice } from '../lib/utils';
@@ -66,6 +66,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
   const [selectedLogEstimate, setSelectedLogEstimate] = React.useState<SavedEstimate | null>(null);
+  const [selectedHistoryEstimate, setSelectedHistoryEstimate] = React.useState<any>(null);
+  const [compareFromId, setCompareFromId] = React.useState<string>("");
+  const [compareToId, setCompareToId] = React.useState<string>("");
 
   const [companySettings, setCompanySettings] = React.useState<any>(null);
 
@@ -1033,6 +1036,19 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            setSelectedHistoryEstimate(estimate);
+                                            setCompareFromId("");
+                                            setCompareToId("");
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                        >
+                                          <History size={14} className="text-slate-500" /> Contract History ({estimate.contractVersions?.length || 1})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             const link = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimate.id}`;
                                             navigator.clipboard.writeText(link)
                                               .then(() => alert('Customer link copied to clipboard!'))
@@ -1512,6 +1528,416 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Contract Version History & Revisions Modal */}
+      <AnimatePresence>
+        {selectedHistoryEstimate && (() => {
+          const versions = selectedHistoryEstimate.contractVersions || [
+            {
+              version: 1,
+              versionId: 'legacy-v1',
+              createdAt: selectedHistoryEstimate.createdAt || selectedHistoryEstimate.lastModified || new Date().toISOString(),
+              createdBy: 'SYSTEM',
+              estimateSnapshot: selectedHistoryEstimate,
+              contractSnapshot: selectedHistoryEstimate.contractSnapshot || null,
+              customerDecision: selectedHistoryEstimate.customerDecision || 'pending',
+              customerSignature: selectedHistoryEstimate.customerSignature || null,
+              customerSignedAt: selectedHistoryEstimate.customerSignedDate || null,
+              representativeSignature: 'Braden Scott Smith',
+              representativeSignedAt: selectedHistoryEstimate.customerEmailSentAt || selectedHistoryEstimate.createdAt || null,
+              emailSentAt: selectedHistoryEstimate.customerEmailSentAt || null,
+              emailRecipient: selectedHistoryEstimate.customerEmail || 'N/A',
+              emailMessageId: '',
+              estimateLink: `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${selectedHistoryEstimate.id}`,
+              status: selectedHistoryEstimate.customerDecision === 'accepted' ? 'Accepted' : (selectedHistoryEstimate.customerDecision === 'declined' ? 'Declined' : (selectedHistoryEstimate.jobStatus === 'Estimate Sent' ? 'Sent' : 'Draft')),
+              drawingUrl: selectedHistoryEstimate.drawingUrl || selectedHistoryEstimate.drawingMapUrl || null,
+              drawingFilename: selectedHistoryEstimate.drawingFilename || null,
+              drawingVersion: selectedHistoryEstimate.drawingVersion || null
+            }
+          ];
+
+          const verA = versions.find((v: any) => v.versionId === compareFromId);
+          const verB = versions.find((v: any) => v.versionId === compareToId);
+
+          const renderVersionDiff = (vA: any, vB: any) => {
+            if (!vA || !vB) return null;
+            const snapA = vA.estimateSnapshot || {};
+            const snapB = vB.estimateSnapshot || {};
+
+            const diffs: { label: string; icon: string; fromVal: string; toVal: string; key: string }[] = [];
+
+            // 1. Price comparison
+            const priceA = snapA.totalCost || snapA.manualGrandTotal || 0;
+            const priceB = snapB.totalCost || snapB.manualGrandTotal || 0;
+            if (priceA !== priceB) {
+              diffs.push({
+                label: "Total Contract Price",
+                icon: "💰",
+                fromVal: formatCurrency(priceA),
+                toVal: formatCurrency(priceB),
+                key: "price"
+              });
+            }
+
+            // 2. Linear Feet
+            const lfA = snapA.linearFeet || snapA.manualLinearFeet || 0;
+            const lfB = snapB.linearFeet || snapB.manualLinearFeet || 0;
+            if (lfA !== lfB) {
+              diffs.push({
+                label: "Fence Run (LF)",
+                icon: "📏",
+                fromVal: `${lfA} LF`,
+                toVal: `${lfB} LF`,
+                key: "run"
+              });
+            }
+
+            // 3. Materials / Fence Type
+            const materialA = snapA.fenceType || (snapA.materials?.[0]?.fenceStyle) || 'Wood Fence';
+            const materialB = snapB.fenceType || (snapB.materials?.[0]?.fenceStyle) || 'Wood Fence';
+            const hA = snapA.fenceHeight || (snapA.materials?.[0]?.fenceHeight) || '';
+            const hB = snapB.fenceHeight || (snapB.materials?.[0]?.fenceHeight) || '';
+            const descA = `${materialA} ${hA ? `(${hA})` : ''}`.trim();
+            const descB = `${materialB} ${hB ? `(${hB})` : ''}`.trim();
+            if (descA !== descB) {
+              diffs.push({
+                label: "Lumber & Material Specs",
+                icon: "🪵",
+                fromVal: descA || "Not Configured",
+                toVal: descB || "Not Configured",
+                key: "materials"
+              });
+            }
+
+            // 4. Gates
+            const gatesA = snapA.gates?.length || (snapA.manualGateTotals ? "Configured" : "None");
+            const gatesB = snapB.gates?.length || (snapB.manualGateTotals ? "Configured" : "None");
+            if (gatesA !== gatesB) {
+              diffs.push({
+                label: "Gate Counts / Types",
+                icon: "🚪",
+                fromVal: String(gatesA),
+                toVal: String(gatesB),
+                key: "gates"
+              });
+            }
+
+            // 5. Discount
+            const discA = snapA.discountAmount || 0;
+            const discB = snapB.discountAmount || 0;
+            if (discA !== discB) {
+              diffs.push({
+                label: "Discount / Rebates",
+                icon: "🏷️",
+                fromVal: formatCurrency(discA),
+                toVal: formatCurrency(discB),
+                key: "discount"
+              });
+            }
+
+            // 6. Demo & Removal
+            const demoA = snapA.demoRemovalPrice || 0;
+            const demoB = snapB.demoRemovalPrice || 0;
+            if (demoA !== demoB) {
+              diffs.push({
+                label: "Demolition & Removal",
+                icon: "🚜",
+                fromVal: formatCurrency(demoA),
+                toVal: formatCurrency(demoB),
+                key: "demo"
+              });
+            }
+
+            // 7. Schedule
+            const schedA = snapA.scheduleStartDate || snapA.scheduleDate || 'Unscheduled';
+            const schedB = snapB.scheduleStartDate || snapB.scheduleDate || 'Unscheduled';
+            if (schedA !== schedB) {
+              diffs.push({
+                label: "Project Schedule",
+                icon: "📅",
+                fromVal: schedA,
+                toVal: schedB,
+                key: "schedule"
+              });
+            }
+
+            // 8. Drawings URL/Preservation
+            const drawUrlA = vA.drawingUrl || "No Sketch";
+            const drawUrlB = vB.drawingUrl || "No Sketch";
+            if (drawUrlA !== drawUrlB) {
+              diffs.push({
+                label: "Fencing Sketch Map / Drawing",
+                icon: "🎨",
+                fromVal: vA.drawingFilename ? `${vA.drawingFilename} (v${vA.drawingVersion || 1})` : (drawUrlA !== "No Sketch" ? "Drawing Attached" : "No Sketch"),
+                toVal: vB.drawingFilename ? `${vB.drawingFilename} (v${vB.drawingVersion || 1})` : (drawUrlB !== "No Sketch" ? "Drawing Attached" : "No Sketch"),
+                key: "drawing"
+              });
+            }
+
+            // 9. Contract Snapshot Terms / customMessage wording
+            const termA = vA.contractSnapshot || snapA.contractSnapshot || "Default Terms";
+            const termB = vB.contractSnapshot || snapB.contractSnapshot || "Default Terms";
+            if (termA !== termB) {
+              diffs.push({
+                label: "Contract Terms & Custom Message Wording",
+                icon: "✍️",
+                fromVal: typeof termA === 'string' ? (termA.substring(0, 50) + "...") : "Snapshot Terms Metadata",
+                toVal: typeof termB === 'string' ? (termB.substring(0, 50) + "...") : "Snapshot Terms Metadata",
+                key: "wording"
+              });
+            }
+
+            if (diffs.length === 0) {
+              return (
+                <div className="p-6 bg-emerald-50 text-emerald-800 rounded-2xl text-center border border-emerald-100 text-xs font-bold uppercase tracking-wider">
+                  Perfect Match: No material changes detected between Revision #{vA.version} and Revision #{vB.version}.
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Comparative Audit Differences ({diffs.length})</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {diffs.map((d) => (
+                    <div key={d.key} className="bg-white rounded-xl p-3.5 border border-slate-100 flex flex-col justify-between shadow-sm">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-sm">{d.icon}</span>
+                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">{d.label}</span>
+                      </div>
+                      <div className="grid grid-cols-3 items-center text-xs gap-1">
+                        <div className="text-slate-400 font-bold break-all line-through opacity-70 truncate">{d.fromVal}</div>
+                        <div className="text-center font-bold text-slate-300">➔</div>
+                        <div className="text-emerald-700 font-black break-all truncate">{d.toVal}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          };
+
+          const handleResendHistoryVersion = async (version: any) => {
+            if (!confirm(`Are you sure you want to resend Contract Revision #${version.version} to ${version.emailRecipient || selectedHistoryEstimate.customerEmail}?`)) {
+              return;
+            }
+            const token = localStorage.getItem('company_admin_token');
+            setIsSendingEmail(true);
+            try {
+              const res = await fetch(`/api/estimates/write`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({
+                  action: 'send',
+                  estimateId: selectedHistoryEstimate.id,
+                  customerEmail: version.emailRecipient || selectedHistoryEstimate.customerEmail,
+                  senderEmail: 'BradenS@LoneStarFenceWorks.com',
+                  subject: version.subject || `Fencing Contract Revision #${version.version} - Lone Star Fence Works`,
+                  message: version.message || `Hello,\n\nPlease find your contract revision #${version.version} linked below:`,
+                  resendVersionId: version.versionId
+                })
+              });
+              const text = await res.text();
+              let data: any = {};
+              try { data = JSON.parse(text); } catch(e) {}
+              if (!res.ok) throw new Error(data.error || 'Failed to resend revision');
+              alert(`Contract revision #${version.version} successfully resent!`);
+              fetchEstimates();
+              setSelectedHistoryEstimate(null);
+            } catch (err: any) {
+              alert(`Error resending revision: ` + err.message);
+            } finally {
+              setIsSendingEmail(false);
+            }
+          };
+
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col font-sans max-h-[90vh]"
+              >
+                <div className="p-6 bg-[#0c1a30] text-white flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 p-2.5 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                      <History size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wider">Contract Version Revisions Ledger</h3>
+                      <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">
+                        Est #{selectedHistoryEstimate.estimateNumber || '1201'} - {selectedHistoryEstimate.customerName} &bull; Total Revisions: {versions.length}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedHistoryEstimate(null);
+                      setCompareFromId("");
+                      setCompareToId("");
+                    }}
+                    className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-6 text-left overflow-y-auto flex-1">
+                  
+                  {/* Versions Table list */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Historical Revision Snapshots</h4>
+                    <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 font-black text-slate-400 uppercase text-[9px] tracking-wider">
+                            <th className="p-3">Ver #</th>
+                            <th className="p-3">Created / Sent Date</th>
+                            <th className="p-3">Authorized By</th>
+                            <th className="p-3">Recipient</th>
+                            <th className="p-3 text-center">Fencing Map Sketch</th>
+                            <th className="p-3 text-center">Revision Status</th>
+                            <th className="p-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {versions.map((ver: any) => {
+                            const revisionLink = ver.versionId === 'legacy-v1' 
+                              ? `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${selectedHistoryEstimate.id}`
+                              : `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${selectedHistoryEstimate.id}&versionId=${ver.versionId}`;
+                            return (
+                              <tr key={ver.versionId} className="border-b last:border-0 border-slate-50 hover:bg-slate-50 transition-colors">
+                                <td className="p-3 font-black text-american-blue">v{ver.version}</td>
+                                <td className="p-3 text-slate-800 font-medium">{new Date(ver.createdAt).toLocaleString()}</td>
+                                <td className="p-3 text-slate-600 font-bold">{ver.createdBy || 'SYSTEM'}</td>
+                                <td className="p-3 text-slate-500 break-all">{ver.emailRecipient || 'N/A'}</td>
+                                <td className="p-3 text-center">
+                                  {ver.drawingUrl ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] bg-sky-50 text-sky-700 font-bold px-2 py-0.5 rounded-full border border-sky-100" title={ver.drawingFilename || 'Custom Drawing Design'}>
+                                      🎨 Map Design Attached
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400">No drawing</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className={cn(
+                                    "px-2.5 py-1 text-[9px] uppercase font-black tracking-widest rounded-full border",
+                                    ver.status === 'Accepted' || ver.status === 'accepted' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                    ver.status === 'Declined' || ver.status === 'declined' ? "bg-red-50 text-red-700 border-red-100" :
+                                    "bg-blue-50 text-blue-700 border-blue-100"
+                                  )}>
+                                    {ver.status || 'Sent'}
+                                  </span>
+                                  {ver.customerSignature && (
+                                    <div className="text-[9px] text-emerald-600 font-bold mt-1">
+                                      ✓ {ver.customerSignature}
+                                    </div>
+                                  )}
+                                  {ver.customerDeclineReason && (
+                                    <div className="text-[9px] text-red-500 italic mt-1 max-w-[150px] mx-auto truncate" title={ver.customerDeclineReason}>
+                                      "{ver.customerDeclineReason}"
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(revisionLink)
+                                          .then(() => alert(`Link for Revision #${ver.version} copied to clipboard!`))
+                                          .catch(() => alert('Failed to copy. URL: ' + revisionLink));
+                                      }}
+                                      className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200 flex items-center gap-1"
+                                    >
+                                      <Copy size={11} /> Copy Link
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleResendHistoryVersion(ver)}
+                                      disabled={isSendingEmail}
+                                      className="px-2 py-1 text-[10px] font-bold text-white bg-american-blue hover:bg-[#0b3c8a] disabled:bg-slate-400 rounded-lg transition-colors flex items-center gap-1"
+                                    >
+                                      <Mail size={11} /> Resend
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Compare Revisions Selectors */}
+                  {versions.length >= 1 && (
+                    <div className="bg-slate-50 border border-slate-100 p-5 rounded-2xl space-y-4">
+                      <div>
+                        <h4 className="text-sm font-black text-american-blue uppercase tracking-wider">Side-by-Side Comparative Audit Engine</h4>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Select two revisions below to audit prices, lumber runs, gate totals, discounts, design drawings, and legal snapshot wordings.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Audit Baseline (From Revision)</label>
+                          <select
+                            value={compareFromId}
+                            onChange={(e) => setCompareFromId(e.target.value)}
+                            className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-white font-bold"
+                          >
+                            <option value="">-- Choose Baseline Revision --</option>
+                            {versions.map((v: any) => (
+                              <option key={v.versionId} value={v.versionId}>Revision #{v.version} ({new Date(v.createdAt).toLocaleDateString()})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Target Comparison (To Revision)</label>
+                          <select
+                            value={compareToId}
+                            onChange={(e) => setCompareToId(e.target.value)}
+                            className="w-full text-xs border border-slate-200 rounded-xl p-2.5 bg-white font-bold"
+                          >
+                            <option value="">-- Choose Target Revision --</option>
+                            {versions.map((v: any) => (
+                              <option key={v.versionId} value={v.versionId}>Revision #{v.version} ({new Date(v.createdAt).toLocaleDateString()})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Diff Comparison Result panel */}
+                      {verA && verB && renderVersionDiff(verA, verB)}
+                    </div>
+                  )}
+
+                </div>
+
+                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedHistoryEstimate(null);
+                      setCompareFromId("");
+                      setCompareToId("");
+                    }}
+                    className="py-2.5 px-6 bg-[#0c1a30] hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow"
+                  >
+                    Dismiss Revision Panel
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

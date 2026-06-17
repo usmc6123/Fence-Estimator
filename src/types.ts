@@ -288,6 +288,15 @@ export interface Estimate {
   laborContractEmailLog?: any[] | null;
   laborContractEmailRecipient?: string;
   laborContractEmailSentAt?: string;
+  
+  // Versions
+  contractVersion?: number;
+  versionSentDate?: string;
+  contractVersions?: any[];
+  latestContractVersion?: number;
+  latestContractVersionId?: string;
+  latestContractStatus?: string;
+  latestContractSentAt?: string;
 }
 
 export interface ScheduleEvent {
