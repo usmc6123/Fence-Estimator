@@ -91,6 +91,71 @@ export default function Estimator({
   const [isUploadingDrawing, setIsUploadingDrawing] = React.useState(false);
   const drawingInputRef = React.useRef<HTMLInputElement>(null);
 
+  // --- Customer Prefill Autocomplete ---
+  const [prefillQuery, setPrefillQuery] = React.useState('');
+  const [prefillResults, setPrefillResults] = React.useState<any[]>([]);
+  const [isPrefillSearching, setIsPrefillSearching] = React.useState(false);
+  const [showPrefillDropdown, setShowPrefillDropdown] = React.useState(false);
+  const [prefillNotification, setPrefillNotification] = React.useState('');
+
+  const handleNameChange = async (nameVal: string) => {
+    setEstimate({ ...estimate, customerName: nameVal });
+    setPrefillQuery(nameVal);
+
+    if (nameVal.trim().length < 2) {
+      setPrefillResults([]);
+      setShowPrefillDropdown(false);
+      return;
+    }
+
+    setIsPrefillSearching(true);
+    setShowPrefillDropdown(true);
+
+    try {
+      const response = await fetch(`/api/estimates/write?action=search-customer-prefill&query=${encodeURIComponent(nameVal)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'search-customer-prefill', query: nameVal })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPrefillResults(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.warn('Prefill search failed:', err);
+    } finally {
+      setIsPrefillSearching(false);
+    }
+  };
+
+  const handleSelectCustomer = (customer: any) => {
+    let street = customer.address || '';
+    if (customer.city && street.includes(customer.city)) {
+      street = street.split(',')[0].trim();
+    }
+
+    setEstimate({
+      ...estimate,
+      customerName: customer.customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+      customerEmail: customer.email || '',
+      customerPhone: customer.phone || '',
+      customerStreet: street,
+      customerCity: customer.city || '',
+      customerState: customer.state || '',
+      customerZip: customer.zip || '',
+      customerAddress: customer.address || '',
+    });
+
+    setShowPrefillDropdown(false);
+    setPrefillNotification('Customer info loaded from GHL/App records. Please verify before saving.');
+    setTimeout(() => {
+      setPrefillNotification('');
+    }, 5000);
+  };
+
+
   const handleDrawingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -670,16 +735,73 @@ export default function Estimator({
                 </div>
               </div>
               
+              {prefillNotification && (
+                <div className="mb-4 bg-emerald-50 border-2 border-emerald-500 text-emerald-800 px-4 py-3 rounded-xl font-bold flex items-center gap-2 shadow-sm animate-pulse">
+                  <span className="text-emerald-600">✓</span>
+                  {prefillNotification}
+                </div>
+              )}
+
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Customer Full Name</label>
+                <div className="space-y-2 relative">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Customer Full Name (type to search GHL/Saved)</label>
                   <input 
                     type="text" 
                     value={estimate.customerName} 
-                    onChange={(e) => setEstimate({...estimate, customerName: e.target.value})} 
+                    onChange={(e) => handleNameChange(e.target.value)} 
+                    onFocus={() => {
+                      if (estimate.customerName && estimate.customerName.length >= 2) {
+                        setShowPrefillDropdown(true);
+                      }
+                    }}
                     placeholder="Enter Name"
                     className="w-full rounded-xl border-2 border-[#F0F0F0] bg-white px-5 py-3.5 text-sm font-bold focus:border-american-blue focus:ring-4 focus:ring-american-blue/5 outline-none transition-all placeholder:text-[#CCCCCC]" 
                   />
+
+                  {showPrefillDropdown && (prefillResults.length > 0 || isPrefillSearching) && (
+                    <div className="absolute left-0 right-0 top-full z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-emerald-400 bg-white p-2 shadow-2xl">
+                      {isPrefillSearching && (
+                        <div className="p-3 text-xs text-american-blue font-bold flex items-center gap-2">
+                          <span className="animate-spin">🌀</span> Searching GHL & saved records...
+                        </div>
+                      )}
+                      {!isPrefillSearching && prefillResults.map((cust) => (
+                        <button
+                          key={cust.id + '-' + cust.source}
+                          type="button"
+                          onClick={() => handleSelectCustomer(cust)}
+                          className="w-full text-left p-3 rounded-lg hover:bg-emerald-50 transition-all flex flex-col gap-1 border-b border-gray-100 last:border-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sm text-american-blue">{cust.customerName}</span>
+                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-widest ${
+                              cust.source === 'GHL' ? 'bg-[#E6FFFA] text-[#1D4ED8]' :
+                              cust.source === 'App Customer' ? 'bg-[#EBF8FF] text-[#2B6CB0]' : 'bg-[#EDF2F7] text-[#4A5568]'
+                            }`}>
+                              {cust.source}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
+                            {cust.email && <span>{cust.email}</span>}
+                            {cust.phone && <span>{cust.phone}</span>}
+                            {cust.address && <span className="truncate max-w-[200px]">{cust.address}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showPrefillDropdown && !isPrefillSearching && prefillResults.length === 0 && estimate.customerName.length >= 2 && (
+                    <div className="absolute left-0 right-0 top-full z-[100] mt-2 rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-400 font-bold shadow-xl">
+                      No matching GHL or saved customers found.
+                      <button 
+                        type="button" 
+                        onClick={() => setShowPrefillDropdown(false)} 
+                        className="ml-2 text-american-red underline font-black"
+                      >
+                        [Close]
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/60 ml-1">Email Address</label>

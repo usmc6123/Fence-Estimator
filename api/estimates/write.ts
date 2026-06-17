@@ -432,6 +432,141 @@ export default async function handler(req: any, res: any) {
   try {
     const action = req.query?.action || req.body?.action;
 
+    // --- CUSTOMER LOOKUP & PREFILL SEARCH ENDPOINTS ---
+    if (action === 'search-customer-prefill' || action === 'search-customers') {
+      const searchQuery = (req.body?.query || req.query?.query || '').toString().trim().toLowerCase();
+      
+      if (!searchQuery) {
+        return res.status(200).json([]);
+      }
+
+      const results: any[] = [];
+      const seenKeys = new Set<string>(); // to prevent duplicates
+
+      // 1. Search in /customers collection
+      try {
+        const customersSnap = await db.collection('customers').limit(200).get();
+        customersSnap.forEach(doc => {
+          const data = doc.data() || {};
+          const customerName = data.customerName || `${data.firstName || ''} ${data.lastName || ''}`.trim();
+          const email = data.email || '';
+          const phone = data.phone || '';
+          const address = data.address || data.streetAddress || '';
+          
+          const matchText = `${customerName} ${email} ${phone} ${address}`.toLowerCase();
+          if (matchText.includes(searchQuery)) {
+            const key = `${customerName}|${email}|${phone}|${address}`.toLowerCase();
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              results.push({
+                id: doc.id,
+                customerId: doc.id,
+                firstName: data.firstName || '',
+                lastName: data.lastName || '',
+                customerName,
+                email,
+                phone,
+                address,
+                city: data.city || '',
+                state: data.state || '',
+                zip: data.zip || '',
+                source: data.source === 'GHL' ? 'GHL' : 'App Customer'
+              });
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Error reading customers collection for prefill search:', err);
+      }
+
+      // 2. Search in /estimates
+      try {
+        const estimatesSnap = await db.collection('estimates').orderBy('createdAt', 'desc').limit(200).get();
+        estimatesSnap.forEach(doc => {
+          const data = doc.data() || {};
+          const customerName = data.customerName || `${data.firstName || ''} ${data.lastName || ''}`.trim();
+          const email = data.customerEmail || data.email || '';
+          const phone = data.customerPhone || data.phone || '';
+          const address = data.customerAddress || data.address || '';
+          
+          const matchText = `${customerName} ${email} ${phone} ${address}`.toLowerCase();
+          if (matchText.includes(searchQuery)) {
+            const key = `${customerName}|${email}|${phone}|${address}`.toLowerCase();
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              results.push({
+                id: doc.id,
+                estimateId: doc.id,
+                firstName: data.firstName || '',
+                lastName: data.lastName || '',
+                customerName,
+                email,
+                phone,
+                address,
+                city: data.customerCity || data.city || '',
+                state: data.customerState || data.state || '',
+                zip: data.customerZip || data.zip || '',
+                source: 'Previous Estimate'
+              });
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Error reading estimates for prefill search:', err);
+      }
+
+      return res.status(200).json(results.slice(0, 15));
+    }
+
+    if (action === 'get-customer-prefill') {
+      const customerId = req.query?.customerId || req.body?.customerId;
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+
+      if (customerId) {
+        const docSnap = await db.collection('customers').doc(String(customerId)).get();
+        if (docSnap.exists) {
+          const data = docSnap.data() || {};
+          return res.status(200).json({
+            success: true,
+            customerId: docSnap.id,
+            firstName: data.firstName || '',
+            lastName: data.lastName || '',
+            customerName: data.customerName || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+            email: data.email || '',
+            phone: data.phone || '',
+            address: data.address || data.streetAddress || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            source: data.source === 'GHL' ? 'GHL' : 'App Customer'
+          });
+        }
+      }
+
+      if (estimateId) {
+        const { docRef, snap } = await getEstimateDocRef(String(estimateId));
+        if (snap.exists) {
+          const data = snap.data() || {};
+          return res.status(200).json({
+            success: true,
+            estimateId: snap.id,
+            firstName: data.firstName || '',
+            lastName: data.lastName || '',
+            customerName: data.customerName || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+            email: data.customerEmail || data.email || '',
+            phone: data.customerPhone || data.phone || '',
+            address: data.customerAddress || data.address || '',
+            city: data.customerCity || data.city || '',
+            state: data.customerState || data.state || '',
+            zip: data.customerZip || data.zip || '',
+            source: 'Previous Estimate'
+          });
+        }
+      }
+
+      return res.status(404).json({ error: 'Customer or estimate prefill record not found.' });
+    }
+
     if (req.method === 'GET') {
       if (!action) {
         return res.status(400).json({
