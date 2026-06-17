@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Save, Globe, Mail, Building2, Phone, MapPin, 
   Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2,
-  ImageIcon, Server, Settings2, Send, AlertCircle
+  ImageIcon, Server, Settings2, Send, AlertCircle,
+  Eye, EyeOff, Copy, Plus, Activity, Check, Database,
+  Calendar, Search, Lock, Key, CheckSquare, Square
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -37,6 +39,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     ghlWebhookEstimateCompleted: '',
     ghlWebhookEstimateDeclined: '',
     autoSyncEstimates: true,
+    
+    // GHL Inbound and Prefill Configuration
+    ghlLocationId: '',
+    ghlApiKey: '',
+    ghlInboundWebhookSecret: '',
+    ghlPrefillSources: ['customers', 'estimates', 'ghl'] as string[],
+    ghlMinChars: 2,
+    ghlMaxResults: 10,
     
     // SMTP Configurations
     smtpHost: '',
@@ -123,6 +133,12 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           ghlWebhookEstimateCompleted: apiData.ghlWebhookEstimateCompleted || firebaseData.ghlWebhookEstimateCompleted || '',
           ghlWebhookEstimateDeclined: apiData.ghlWebhookEstimateDeclined || firebaseData.ghlWebhookEstimateDeclined || '',
           smtpPort: String(apiData.smtpPort || firebaseData.smtpPort || '465'),
+          ghlLocationId: apiData.ghlLocationId || firebaseData.ghlLocationId || '',
+          ghlApiKey: apiData.ghlApiKey || firebaseData.ghlApiKey || '',
+          ghlInboundWebhookSecret: apiData.ghlInboundWebhookSecret || firebaseData.ghlInboundWebhookSecret || '',
+          ghlPrefillSources: apiData.ghlPrefillSources || firebaseData.ghlPrefillSources || ['customers', 'estimates', 'ghl'],
+          ghlMinChars: apiData.ghlMinChars !== undefined ? apiData.ghlMinChars : (firebaseData.ghlMinChars !== undefined ? firebaseData.ghlMinChars : 2),
+          ghlMaxResults: apiData.ghlMaxResults !== undefined ? apiData.ghlMaxResults : (firebaseData.ghlMaxResults !== undefined ? firebaseData.ghlMaxResults : 10),
         };
 
         setFormData(merged);
@@ -186,6 +202,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         googleReviewLink: formData.googleReviewLink,
         autoSyncEstimates: formData.autoSyncEstimates,
         
+        // GHL configurations
+        ghlLocationId: formData.ghlLocationId,
+        ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
+        ghlPrefillSources: formData.ghlPrefillSources,
+        ghlMinChars: formData.ghlMinChars,
+        ghlMaxResults: formData.ghlMaxResults,
+        
         // Include templates inside main doc so embed widgets can pull acceptance screens
         estimateEmailSubject: formData.estimateEmailSubject,
         estimateEmailBody: formData.estimateEmailBody,
@@ -231,7 +254,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           estimateEmailSubject: formData.estimateEmailSubject,
           estimateEmailBody: formData.estimateEmailBody,
           estimateAcceptedMessage: formData.estimateAcceptedMessage,
-          estimateDeclinedMessage: formData.estimateDeclinedMessage
+          estimateDeclinedMessage: formData.estimateDeclinedMessage,
+
+          ghlLocationId: formData.ghlLocationId,
+          ghlApiKey: formData.ghlApiKey,
+          ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
+          ghlPrefillSources: formData.ghlPrefillSources,
+          ghlMinChars: formData.ghlMinChars,
+          ghlMaxResults: formData.ghlMaxResults
         };
 
         const response = await fetch('/api/settings', {
@@ -258,6 +288,134 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // GHL live status & tests states
+  const [ghlStatus, setGhlStatus] = React.useState<any>(null);
+  const [isFetchStatusLoading, setIsFetchStatusLoading] = React.useState(false);
+  const [isTestingOutbound, setIsTestingOutbound] = React.useState(false);
+  const [isTestingInbound, setIsTestingInbound] = React.useState(false);
+  const [testOutboundResult, setTestOutboundResult] = React.useState<any>(null);
+  const [testInboundResult, setTestInboundResult] = React.useState<any>(null);
+  const [copiedSecret, setCopiedSecret] = React.useState(false);
+  const [copiedUrl, setCopiedUrl] = React.useState(false);
+  const [showApiKey, setShowApiKey] = React.useState(false);
+  const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
+
+  const fetchGhlIntegrationStatus = async () => {
+    setIsFetchStatusLoading(true);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      if (token) {
+        const response = await fetch('/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: 'ghl-integration-status' })
+        });
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData.success) {
+            setGhlStatus(resData);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch GHL live details:", err);
+    } finally {
+      setIsFetchStatusLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeSection === 'integration') {
+      fetchGhlIntegrationStatus();
+    }
+  }, [activeSection, adminToken]);
+
+  const handleGenerateSecret = () => {
+    const array = new Uint8Array(24);
+    window.crypto.getRandomValues(array);
+    const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    setFormData(prev => ({
+      ...prev,
+      ghlInboundWebhookSecret: hex
+    }));
+  };
+
+  const handleCopyText = (text: string, setCopiedState: (v: boolean) => void) => {
+    navigator.clipboard.writeText(text);
+    setCopiedState(true);
+    setTimeout(() => setCopiedState(false), 2000);
+  };
+
+  const handleTestOutbound = async () => {
+    setIsTestingOutbound(true);
+    setTestOutboundResult(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'test-ghl-outbound',
+          ghlWebhookUrl: formData.ghlWebhookUrl
+        })
+      });
+      const data = await response.json();
+      setTestOutboundResult(data);
+    } catch (err: any) {
+      setTestOutboundResult({ success: false, error: err.message || String(err) });
+    } finally {
+      setIsTestingOutbound(false);
+    }
+  };
+
+  const handleTestInbound = async () => {
+    setIsTestingInbound(true);
+    setTestInboundResult(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'test-ghl-inbound',
+          secret: formData.ghlInboundWebhookSecret
+        })
+      });
+      const data = await response.json();
+      setTestInboundResult(data);
+      setTimeout(() => {
+        fetchGhlIntegrationStatus();
+      }, 1200);
+    } catch (err: any) {
+      setTestInboundResult({ success: false, error: err.message || String(err) });
+    } finally {
+      setIsTestingInbound(false);
+    }
+  };
+
+  const handlePrefillSourcesChange = (source: string) => {
+    const current = formData.ghlPrefillSources || [];
+    let updated;
+    if (current.includes(source)) {
+      updated = current.filter(s => s !== source);
+    } else {
+      updated = [...current, source];
+    }
+    setFormData(prev => ({
+      ...prev,
+      ghlPrefillSources: updated
+    }));
   };
 
   // SMTP Test pipeline dispatcher
@@ -481,20 +639,147 @@ export default function Settings({ user, adminToken }: SettingsProps) {
             )}
 
             {activeSection === 'integration' && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-fade-in">
+                {/* Header Banner */}
                 <div className="p-6 rounded-2xl bg-blue-50 border border-blue-100 flex gap-4">
                   <ShieldCheck className="text-blue-600 shrink-0" size={24} />
                   <div>
-                    <h4 className="text-sm font-bold text-blue-900">CRM & Leads Workspace Links</h4>
+                    <h4 className="text-sm font-bold text-blue-900">CRM & GoHighLevel Integration Hub</h4>
                     <p className="text-xs text-blue-800 mt-1 leading-relaxed">
-                      Sync fencing leads and active estimators securely to other nodes in your sales workflows.
+                      Manage dual-synchronization, webhook log analysis, duplicate protection rules, scheduler links, and lead-prefill lookups from this command board.
                     </p>
                   </div>
                 </div>
 
-                <div className="space-y-6">
+                {/* Section 1: Connection Settings */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Key className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">CRM Credentials & Secrets</h4>
+                    </div>
+                    <span className="text-[10px] text-[#666666] font-medium bg-[#F5F5F5] px-2 py-0.5 rounded">Secure Admin Storage</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#666666] flex items-center gap-1">
+                        GoHighLevel Location ID
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. z9XmKdf89oLpjKws87sH"
+                        value={formData.ghlLocationId}
+                        onChange={(e) => setFormData({...formData, ghlLocationId: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                      />
+                      <p className="text-[10px] text-[#999999]">Required to anchor duplicate matching logic to your specific CRM agency node.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#666666] flex items-center gap-1">
+                        API Key / Bearer Token
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type={showApiKey ? "text" : "password"} 
+                          placeholder="••••••••••••••••"
+                          value={formData.ghlApiKey}
+                          onChange={(e) => setFormData({...formData, ghlApiKey: e.target.value})}
+                          className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] pl-4 pr-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#999999] hover:text-[#333333] transition-colors"
+                        >
+                          {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[#999999]">Never shared with client interfaces. Authorized strictly for server-side CRM query requests.</p>
+                    </div>
+                  </div>
+
+                  {/* Generate Inbound Secret */}
+                  <div className="pt-4 border-t border-[#F2F2F2] space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666] block">
+                      Inbound Webhook Shared Verification Secret
+                    </label>
+                    <div className="xl:flex gap-3">
+                      <div className="relative flex-1">
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="Generate or input a strong webhook signature secret"
+                          value={formData.ghlInboundWebhookSecret}
+                          onChange={(e) => setFormData({...formData, ghlInboundWebhookSecret: e.target.value})}
+                          className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                        />
+                      </div>
+                      <div className="flex gap-2 mt-3 xl:mt-0 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleGenerateSecret}
+                          className="px-4 py-3 rounded-xl bg-[#F5F5F5] hover:bg-[#EAEAEA] text-[#333333] font-bold text-xs flex items-center gap-1.5 transition-all"
+                        >
+                          <RefreshCw size={14} /> Generate Secret
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!formData.ghlInboundWebhookSecret}
+                          onClick={() => handleCopyText(formData.ghlInboundWebhookSecret, setCopiedSecret)}
+                          className="px-4 py-3 rounded-xl bg-american-blue text-white font-bold text-xs flex items-center gap-1.5 hover:bg-[#1a2c4e] transition-all disabled:opacity-50"
+                        >
+                          <Copy size={14} /> {copiedSecret ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[#999999]">Matches incoming "x-lsfw-webhook-secret" header or "?secret=" query parameter to secure webhook execution.</p>
+                  </div>
+                </div>
+
+                {/* Section 3: Webhook Information & Outbound Triggers */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Webhook className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Webhook URL Channels</h4>
+                    </div>
+                  </div>
+
+                  {/* Read-Only Inbound Webhook URL */}
+                  <div className="bg-[#FAF9F6] p-5 rounded-xl border border-[#EBE8E3] space-y-4">
+                    <div className="md:flex justify-between items-center bg-white p-3 rounded-xl border border-[#E5E5E5]">
+                      <div className="space-y-1 min-w-0 pr-3">
+                        <span className="text-[9px] font-bold tracking-widest text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full">Target Inbound URL</span>
+                        <p className="font-mono text-xs text-[#333333] select-all break-all mt-1">
+                          {typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/ghl` : 'https://fence-estimator-eight.vercel.app/api/webhooks/ghl'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText(typeof window !== 'undefined' ? `${window.location.origin}/api/webhooks/ghl` : 'https://fence-estimator-eight.vercel.app/api/webhooks/ghl', setCopiedUrl)}
+                        className="mt-3 md:mt-0 shrink-0 px-4 py-2 bg-[#FAF9F6] hover:bg-[#EBE8E3] text-xs font-bold border border-[#E5E5E5] rounded-xl flex items-center gap-1.5 transition-all"
+                      >
+                        <Copy size={12} /> {copiedUrl ? "Copied!" : "Copy URL"}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-1 text-[#666666]">
+                        <p className="font-bold text-[#333] flex items-center gap-1">Header verification:</p>
+                        <p className="bg-[#F2F2F2] px-2 py-1 rounded font-mono text-[10px] break-all select-all">x-lsfw-webhook-secret: {formData.ghlInboundWebhookSecret || 'YOUR_SECRET'}</p>
+                      </div>
+                      <div className="space-y-1 text-[#666666]">
+                        <p className="font-bold text-[#333] flex items-center gap-1">Query fallback parameter:</p>
+                        <p className="bg-[#F2F2F2] px-2 py-1 rounded font-mono text-[10px] break-all select-all">?secret={formData.ghlInboundWebhookSecret || 'YOUR_SECRET'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Outbound Sync URL (Existing) */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">GoHighLevel webhook URL</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">General GoHighLevel Webhook (Outbound Dispatcher)</label>
                     <div className="relative">
                       <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
                       <input 
@@ -507,106 +792,460 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                     </div>
                   </div>
 
-                  <div className="border-t border-[#E5E5E5] pt-6 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#333333]">Go High Level Workflow Webhooks</h4>
-                    <p className="text-[10px] text-[#666666] -mt-2">Enable surgical triggering into different automation campaigns based on pipeline milestones.</p>
+                  {/* Workflow Webhooks (Existing) */}
+                  <div className="border-t border-[#F2F2F2] pt-6 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#333333]">Specific Outbound Pipeline Milestones</h4>
+                    <p className="text-[10px] text-[#666666] -mt-2">Enable surgical triggering into different CRM automation workflows based on specific app status milestones.</p>
 
                     <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-[#666666]">Instant Estimator Submitted Webhook</label>
-                        <div className="relative">
-                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
-                          <input 
-                            type="url" 
-                            placeholder="https://services.gohighlevel.com/webhook/..."
-                            value={formData.ghlWebhookInstantEstimateSubmitted}
-                            onChange={(e) => setFormData({...formData, ghlWebhookInstantEstimateSubmitted: e.target.value})}
-                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
+                      {[
+                        { label: "Instant Estimator Submitted Webhook", field: "ghlWebhookInstantEstimateSubmitted" },
+                        { label: "Manual Estimate Sent Webhook", field: "ghlWebhookManualEstimateSent" },
+                        { label: "Estimate Accepted Webhook", field: "ghlWebhookEstimateAccepted" },
+                        { label: "Estimate Completed Webhook", field: "ghlWebhookEstimateCompleted" },
+                        { label: "Estimate Declined Webhook", field: "ghlWebhookEstimateDeclined" }
+                      ].map((item) => (
+                        <div key={item.field} className="space-y-1">
+                          <label className="text-xs font-semibold text-[#666666]">{item.label}</label>
+                          <div className="relative">
+                            <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
+                            <input 
+                              type="url" 
+                              placeholder="https://services.gohighlevel.com/webhook/..."
+                              value={(formData as any)[item.field]}
+                              onChange={(e) => setFormData({...formData, [item.field]: e.target.value})}
+                              className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4 & 7 & 8: Connections Status, scheduler and info dashboards merged for high-fidelity density */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Outbound & Inbound Status Tracker */}
+                  <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[#F2F2F2] pb-3">
+                      <Activity className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Connection Status</h4>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                        <div>
+                          <p className="text-xs font-bold text-[#333333]">Outbound Webhooks</p>
+                          <p className="text-[10px] text-[#666666]">Client to CRM Sync</p>
+                        </div>
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase",
+                          formData.ghlWebhookUrl ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-neutral-50 text-neutral-500 border border-neutral-200"
+                        )}>
+                          {formData.ghlWebhookUrl ? "Connected (Live)" : "Not Configured"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                        <div>
+                          <p className="text-xs font-bold text-[#333333]">Inbound Webhooks</p>
+                          <p className="text-[10px] text-[#666666]">CRM to Client Sync</p>
+                        </div>
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase",
+                          ghlStatus?.status?.inbound === 'Connected' ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
+                        )}>
+                          {ghlStatus?.status?.inbound === 'Connected' ? "Connected (Listening)" : "Never Tested / Waiting"}
+                        </span>
+                      </div>
+
+                      <div className="border-t border-[#F2F2F2] pt-4 grid grid-cols-2 gap-3 text-xs">
+                        <div className="p-2 border border-[#E5E5E5] rounded-xl bg-white">
+                          <p className="text-[9px] font-medium text-[#666666] uppercase">Last Success Sync</p>
+                          <p className="font-mono text-[10px] font-bold text-[#333333] mt-0.5 truncate">
+                            {ghlStatus?.status?.lastSuccessfulSync ? new Date(ghlStatus.status.lastSuccessfulSync).toLocaleString() : 'Never'}
+                          </p>
+                        </div>
+                        <div className="p-2 border border-[#E5E5E5] rounded-xl bg-white">
+                          <p className="text-[9px] font-medium text-[#666666] uppercase">Last Failed Sync</p>
+                          <p className="font-mono text-[10px] font-bold text-red-600 mt-0.5 truncate">
+                            {ghlStatus?.status?.lastFailedSync ? new Date(ghlStatus.status.lastFailedSync).toLocaleString() : 'None'}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-[#666666]">Manual Estimate Sent Webhook</label>
-                        <div className="relative">
-                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
-                          <input 
-                            type="url" 
-                            placeholder="https://services.gohighlevel.com/webhook/..."
-                            value={formData.ghlWebhookManualEstimateSent}
-                            onChange={(e) => setFormData({...formData, ghlWebhookManualEstimateSent: e.target.value})}
-                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
+                      {ghlStatus?.status?.lastErrorMessage && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex gap-1.5 text-[10px] text-red-800">
+                          <AlertCircle size={14} className="shrink-0 text-red-600 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Last Error Received:</span>
+                            <p className="font-mono text-[9px] mt-0.5 whitespace-pre-wrap">{ghlStatus.status.lastErrorMessage}</p>
+                          </div>
                         </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Customer Sync Stats Dashboard */}
+                  <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[#F2F2F2] pb-3">
+                      <Database className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Customer Database Analytics</h4>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-slate-50 border border-[#E5E5E5] rounded-xl">
+                        <p className="text-[10px] font-medium text-slate-600 uppercase">Total Cloned Leads</p>
+                        <p className="font-sans text-xl font-black mt-1 text-[#333333]">
+                          {ghlStatus?.stats?.totalCustomers ?? '...'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                        <p className="text-[10px] font-medium text-blue-700 uppercase">Synchronized from GHL</p>
+                        <p className="font-sans text-xl font-black mt-1 text-blue-900">
+                          {ghlStatus?.stats?.customersFromGhl ?? '...'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-white border border-[#E5E5E5] rounded-xl">
+                        <p className="text-[10px] font-medium text-[#666666] uppercase">Previous Estimates Match</p>
+                        <p className="font-sans text-xl font-black mt-1 text-[#333333]">
+                          {ghlStatus?.stats?.customersFromPrevEstimates ?? '...'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                        <p className="text-[10px] font-medium text-emerald-800 uppercase">Duplicate Merges</p>
+                        <p className="font-sans text-xl font-black mt-1 text-emerald-950">
+                          {ghlStatus?.stats?.duplicateMerges ?? '...'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 text-[11px] text-[#666666]">
+                      <div className="flex justify-between border-b border-[#F2F2F2] pb-1">
+                        <span>Last Contact Synced:</span>
+                        <span className="font-medium text-[#333] font-mono whitespace-nowrap truncate pl-2 max-w-[200px]" title={ghlStatus?.status?.lastContactSynced}>
+                          {ghlStatus?.status?.lastContactSynced ? ghlStatus.status.lastContactSynced.split(' (')[0] : 'None'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Appointment Sync:</span>
+                        <span className="font-medium text-[#333] font-mono whitespace-nowrap truncate pl-2 max-w-[200px]" title={ghlStatus?.status?.lastAppointmentSynced}>
+                          {ghlStatus?.status?.lastAppointmentSynced ? ghlStatus.status.lastAppointmentSynced.split(' (')[0] : 'None'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Section 8: Scheduler sync dashboard */}
+                  <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[#F2F2F2] pb-3">
+                      <Calendar className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Scheduler Event Synchronization</h4>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center bg-[#F9F9F9] p-3 rounded-xl border border-[#E5E5E5]">
+                        <div>
+                          <p className="text-xs font-bold text-[#333333]">Appointment Integration</p>
+                          <p className="text-[10px] text-[#666666]">CRM Scheduler Callback Sync</p>
+                        </div>
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                          ACTIVE
+                        </span>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-[#666666]">Estimate Accepted Webhook</label>
-                        <div className="relative">
-                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
-                          <input 
-                            type="url" 
-                            placeholder="https://services.gohighlevel.com/webhook/..."
-                            value={formData.ghlWebhookEstimateAccepted}
-                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateAccepted: e.target.value})}
-                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between border-b border-[#F2F2F2] pb-1.5 text-[#666666]">
+                          <span>Calendar ID Target:</span>
+                          <span className="font-mono text-[10px] text-[#333] font-medium">{ghlStatus?.scheduler?.calendarId || 'test_calendar_id_999'}</span>
                         </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-[#666666]">Estimate Completed Webhook</label>
-                        <div className="relative">
-                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
-                          <input 
-                            type="url" 
-                            placeholder="https://services.gohighlevel.com/webhook/..."
-                            value={formData.ghlWebhookEstimateCompleted}
-                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateCompleted: e.target.value})}
-                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
+                        <div className="flex justify-between border-b border-[#F2F2F2] pb-1.5 text-[#666666]">
+                          <span>Appointment Source:</span>
+                          <span className="font-mono text-[10px] text-[#333] font-medium">{ghlStatus?.scheduler?.appointmentSource || 'GHL Scheduler'}</span>
                         </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-[#666666]">Estimate Declined Webhook</label>
-                        <div className="relative">
-                          <Webhook className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={14} />
-                          <input 
-                            type="url" 
-                            placeholder="https://services.gohighlevel.com/webhook/..."
-                            value={formData.ghlWebhookEstimateDeclined}
-                            onChange={(e) => setFormData({...formData, ghlWebhookEstimateDeclined: e.target.value})}
-                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-2.5 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
+                        <div className="flex justify-between text-[#666666]">
+                          <span>Last Event Synced:</span>
+                          <span className="font-mono text-[10px] text-[#333] font-medium">
+                            {ghlStatus?.scheduler?.lastAppointmentReceived ? new Date(ghlStatus.scheduler.lastAppointmentReceived).toLocaleString() : 'None Syncing'}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Google Review shortcut Link</label>
-                    <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
-                      <input 
-                        type="url" 
-                        placeholder="https://g.page/r/your-id/review"
-                        value={formData.googleReviewLink}
-                        onChange={(e) => setFormData({...formData, googleReviewLink: e.target.value})}
-                        className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                      />
+                  {/* Section 9: Customer Prefill Controls */}
+                  <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[#F2F2F2] pb-3">
+                      <Search className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Customer Lookup Controls</h4>
                     </div>
-                    <p className="text-[10px] text-[#888] font-bold">Appends direct feedback requests on customer signature portal accepted pages.</p>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-[#333]">Lookup Search Sources</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {[
+                            { id: 'customers', label: "My Customers List" },
+                            { id: 'estimates', label: "Previous Estimates font" },
+                            { id: 'ghl', label: "GHL Synced" }
+                          ].map(source => {
+                            const isChecked = (formData.ghlPrefillSources || []).includes(source.id);
+                            return (
+                              <button
+                                key={source.id}
+                                type="button"
+                                onClick={() => handlePrefillSourcesChange(source.id)}
+                                className={cn(
+                                  "p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all",
+                                  isChecked ? "bg-blue-50 text-blue-900 border-blue-200" : "bg-[#F9F9F9] text-[#666666] border-[#E5E5E5] hover:bg-slate-100"
+                                )}
+                              >
+                                {isChecked ? <CheckSquare size={14} className="text-blue-600" /> : <Square size={14} />}
+                                {source.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-[#666666] uppercase">Min Search Characters</label>
+                          <input 
+                            type="number"
+                            min="1"
+                            max="5"
+                            value={formData.ghlMinChars}
+                            onChange={(e) => setFormData({...formData, ghlMinChars: Number(e.target.value) || 2})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-bold focus:border-american-blue focus:outline-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-[#666666] uppercase">Max Auto-Prefill Results</label>
+                          <input 
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={formData.ghlMaxResults}
+                            onChange={(e) => setFormData({...formData, ghlMaxResults: Number(e.target.value) || 10})}
+                            className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-bold focus:border-american-blue focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 5: Webhook Testing sandbox */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Send className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Diagnostic Sandbox & Simulation</h4>
+                    </div>
+                    <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">Risk-Free Playback</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 rounded-2xl border border-[#E5E5E5] bg-[#F9F9F9]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Outbound webhook testing sandbox */}
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-[#333]">Outbound Sync Transmitter Simulator</h5>
+                        <p className="text-[10px] text-[#666666]">Dispatches a valid Instant Lead submission payload to your destination GoHighLevel Webhook URL.</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestOutbound}
+                        disabled={isTestingOutbound || !formData.ghlWebhookUrl}
+                        className="w-full py-2.5 rounded-xl bg-american-blue text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#1a2c4e] transition-all disabled:opacity-50"
+                      >
+                        {isTestingOutbound ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                        Test Outbound Webhook Sync
+                      </button>
+
+                      {testOutboundResult && (
+                        <div className={cn(
+                          "p-4 rounded-xl text-xs space-y-2 border animate-fade-in",
+                          testOutboundResult.success ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+                        )}>
+                          <p className="font-bold">{testOutboundResult.message}</p>
+                          {testOutboundResult.statusCode !== undefined && (
+                            <p className="font-mono text-[10px]">HTTP Status Code: <span className="font-bold">{testOutboundResult.statusCode}</span></p>
+                          )}
+                          {testOutboundResult.responseText && (
+                            <pre className="font-mono text-[9px] bg-white/70 p-2 rounded max-h-24 overflow-y-auto whitespace-pre-wrap select-all">
+                              {testOutboundResult.responseText}
+                            </pre>
+                          )}
+                          {testOutboundResult.error && (
+                            <p className="font-mono text-[10px] text-red-700 font-medium">Error detailing: {testOutboundResult.error}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Inbound webhook testing sandbox */}
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-[#333]">Inbound Sync Receiver Simulator</h5>
+                        <p className="text-[10px] text-[#666666]">Sends a mock GHL `contactCreate` payload directly into your endpoint to verify duplicate detection mechanisms.</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestInbound}
+                        disabled={isTestingInbound || !formData.ghlInboundWebhookSecret}
+                        className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        {isTestingInbound ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                        Test Inbound Webhook Processing
+                      </button>
+
+                      {testInboundResult && (
+                        <div className={cn(
+                          "p-4 rounded-xl text-xs space-y-2 border animate-fade-in",
+                          testInboundResult.success ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+                        )}>
+                          <p className="font-bold">{testInboundResult.message}</p>
+                          {testInboundResult.diagnostics && (
+                            <div className="space-y-1 font-mono text-[9px]">
+                              <p>Gateway Target: <span className="font-bold">{testInboundResult.diagnostics.endpointUrl}</span></p>
+                              <p>HTTP Return Status: <span className="font-bold">{testInboundResult.diagnostics.httpStatus}</span></p>
+                              <p>Duplicate Match Method: <span className="font-bold uppercase text-blue-800">{testInboundResult.diagnostics.matchedBy}</span></p>
+                              <p>Identified Customer Doc ID: <span className="font-bold text-black">{testInboundResult.diagnostics.customerId}</span></p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 6: Webhook Log Viewer */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Server className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Recent Webhook Activity Log Viewer</h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchGhlIntegrationStatus}
+                      className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1 transition-all"
+                    >
+                      <RefreshCw size={12} className={cn(isFetchStatusLoading && "animate-spin")} /> Refresh
+                    </button>
+                  </div>
+
+                  {(!ghlStatus?.logs || ghlStatus.logs.length === 0) ? (
+                    <div className="p-12 text-center rounded-xl bg-slate-50 border border-dashed border-[#E5E5E5] text-[#999999] text-xs">
+                      No inbound webhook transaction logs found. Generate a verification key and execute simulator checks to start syncing logs.
+                    </div>
+                  ) : (
+                    <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white text-xs">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-[#FAF9F6] border-b border-[#E5E5E5] text-[10px] text-[#666666] font-bold uppercase tracking-wider">
+                              <th className="p-3">Received At</th>
+                              <th className="p-3">Event Type</th>
+                              <th className="p-3">Matching Logic</th>
+                              <th className="p-3">Customer ID</th>
+                              <th className="p-3">Status</th>
+                              <th className="p-3 text-right">Details</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#F2F2F2] font-sans">
+                            {ghlStatus.logs.map((log: any) => {
+                              const isExpanded = expandedLogId === log.id;
+                              return (
+                                <React.Fragment key={log.id}>
+                                  <tr className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-3 whitespace-nowrap font-mono text-[10px] text-[#666666]">
+                                      {new Date(log.receivedAt).toLocaleString()}
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap font-semibold text-[#111111]">
+                                      {log.eventType}
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded text-[9px] font-bold uppercase",
+                                        log.matchedBy === 'new' ? "bg-sky-50 text-sky-700 border border-sky-200" : "bg-purple-50 text-purple-700 border border-purple-200"
+                                      )}>
+                                        {log.matchedBy}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap font-mono text-[10px] text-neutral-500">
+                                      {log.customerId || '---'}
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase",
+                                        log.success ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
+                                      )}>
+                                        {log.success ? 'Success' : 'Failed'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                                        className="text-xs text-blue-600 hover:text-blue-900 font-bold"
+                                      >
+                                        {isExpanded ? 'Hide' : 'Expand'}
+                                      </button>
+                                    </td>
+                                  </tr>
+
+                                  {isExpanded && (
+                                    <tr className="bg-slate-50/50">
+                                      <td colSpan={6} className="p-4 border-t border-[#F2F2F2]">
+                                        <div className="space-y-3 font-sans text-xs">
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium text-[#666666]">
+                                            <div>
+                                              <span className="text-[#333] font-bold">GHL Contact Identifier:</span>{' '}
+                                              <span className="font-mono text-[11px] text-[#222222] select-all">{log.ghlContactId || '---'}</span>
+                                            </div>
+                                            {log.error && (
+                                              <div className="text-red-700">
+                                                <span className="font-bold">Execution Error:</span> {log.error}
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <span className="text-[#333] font-bold block">Raw Webhook Payload Preview:</span>
+                                            <pre className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[9px] overflow-x-auto whitespace-pre select-all max-h-60 overflow-y-auto">
+                                              {JSON.stringify(log.payload, null, 2)}
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Legacy Webhooks compatibility switches */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-[#FAF9F6] space-y-4">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-american-blue shadow-sm">
+                      <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-american-blue shadow-sm pb-0.5 border border-[#E5E5E5]">
                         <RefreshCw size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold">Auto-Sync Estimates</p>
-                        <p className="text-[10px] text-[#666666]">Automatically dispatch decision hooks upon customer signatures.</p>
+                        <p className="text-sm font-bold">Auto-Sync Lead Estimates</p>
+                        <p className="text-[10px] text-[#666666]">Automatically dispatch decision hooks upon customer signature portal submittals.</p>
                       </div>
                     </div>
                     <button 

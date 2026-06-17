@@ -99,15 +99,24 @@ export default async function handler(req: any, res: any) {
           ghlWebhookManualEstimateSent: '',
           ghlWebhookEstimateAccepted: '',
           ghlWebhookEstimateCompleted: '',
-          ghlWebhookEstimateDeclined: ''
+          ghlWebhookEstimateDeclined: '',
+          ghlLocationId: '',
+          ghlApiKey: '',
+          ghlInboundWebhookSecret: '',
+          ghlPrefillSources: ['customers', 'estimates', 'ghl'],
+          ghlMinChars: 2,
+          ghlMaxResults: 10
         });
       }
 
       const data = settingsDoc.data() || {};
       
-      // Mask sensitive fields like smtpPassword for secure retrieval
+      // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval
       if (data.smtpPassword) {
         data.smtpPassword = '••••••••';
+      }
+      if (data.ghlApiKey) {
+        data.ghlApiKey = '••••••••';
       }
 
       return res.status(200).json({ id: uid, ...data });
@@ -141,7 +150,13 @@ export default async function handler(req: any, res: any) {
           ghlWebhookManualEstimateSent,
           ghlWebhookEstimateAccepted,
           ghlWebhookEstimateCompleted,
-          ghlWebhookEstimateDeclined
+          ghlWebhookEstimateDeclined,
+          ghlLocationId,
+          ghlApiKey,
+          ghlInboundWebhookSecret,
+          ghlPrefillSources,
+          ghlMinChars,
+          ghlMaxResults
         } = incomingFields;
 
         // Validate email format
@@ -183,6 +198,15 @@ export default async function handler(req: any, res: any) {
           }
         }
 
+        let finalGhlApiKey = ghlApiKey;
+        if (ghlApiKey === '••••••••' || !ghlApiKey) {
+          if (existingData && existingData.ghlApiKey) {
+            finalGhlApiKey = existingData.ghlApiKey;
+          } else {
+            finalGhlApiKey = '';
+          }
+        }
+
         const updatedSettings = {
           id: uid,
           companyName: companyName || '',
@@ -210,6 +234,12 @@ export default async function handler(req: any, res: any) {
           ghlWebhookEstimateAccepted: ghlWebhookEstimateAccepted || '',
           ghlWebhookEstimateCompleted: ghlWebhookEstimateCompleted || '',
           ghlWebhookEstimateDeclined: ghlWebhookEstimateDeclined || '',
+          ghlLocationId: ghlLocationId || '',
+          ghlApiKey: finalGhlApiKey,
+          ghlInboundWebhookSecret: ghlInboundWebhookSecret || '',
+          ghlPrefillSources: ghlPrefillSources || ['customers', 'estimates', 'ghl'],
+          ghlMinChars: ghlMinChars !== undefined ? Number(ghlMinChars) : 2,
+          ghlMaxResults: ghlMaxResults !== undefined ? Number(ghlMaxResults) : 10,
           updatedAt: new Date().toISOString()
         };
 
@@ -309,6 +339,272 @@ export default async function handler(req: any, res: any) {
             clientMsg = `SMTP Send Failed: ${errorMessage}`;
           }
           return res.status(500).json({ success: false, error: clientMsg });
+        }
+      } else if (action === 'ghl-integration-status') {
+        try {
+          const customersSnap = await db.collection('customers').limit(1000).get();
+          const totalCustomers = customersSnap.size;
+          let customersFromGhl = 0;
+          let customersFromApp = 0;
+          let customersFromEstimator = 0;
+          let customersFromPrevEstimates = 0;
+
+          customersSnap.forEach(doc => {
+            const d = doc.data() || {};
+            const source = d.source || '';
+            const cf = d.createdFrom || '';
+
+            if (source === 'GHL') {
+              customersFromGhl++;
+            } else if (source === 'Previous Estimate') {
+              customersFromPrevEstimates++;
+            } else if (cf === 'customer_estimator' || source === 'Customer Estimator') {
+              customersFromEstimator++;
+            } else {
+              customersFromApp++;
+            }
+          });
+
+          // Fetch latest 50 webhook logs
+          const logsSnap = await db.collection('ghlInboundWebhookLogs')
+            .orderBy('receivedAt', 'desc')
+            .limit(50)
+            .get();
+
+          const logs: any[] = [];
+          let duplicateMergesCount = 0;
+
+          // We can calculate last sync info from logs
+          let lastInboundWebhook = '';
+          let lastOutboundWebhook = ''; 
+          let lastSuccessfulSync = '';
+          let lastFailedSync = '';
+          let lastErrorMessage = '';
+          let lastContactSynced = '';
+          let lastAppointmentSynced = '';
+
+          logsSnap.forEach(doc => {
+            const data = doc.data() || {};
+            const matchedBy = data.matchedBy || 'new';
+            const receivedAt = data.receivedAt || '';
+            const success = data.success !== false;
+            const eventType = data.eventType || '';
+
+            if (matchedBy !== 'new') {
+              duplicateMergesCount++;
+            }
+
+            if (!lastInboundWebhook) {
+              lastInboundWebhook = receivedAt;
+            }
+
+            if (success) {
+              if (!lastSuccessfulSync) {
+                lastSuccessfulSync = receivedAt;
+              }
+              const payload = data.payload || {};
+              const contactName = payload.fullName || payload.name || `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || 'Valued Customer';
+              if (eventType.includes('contact') && !lastContactSynced) {
+                lastContactSynced = `${contactName} (${receivedAt})`;
+              }
+              if (eventType.includes('appointment') && !lastAppointmentSynced) {
+                lastAppointmentSynced = `${contactName} (Appt: ${payload.appointmentStartTime || receivedAt})`;
+              }
+            } else {
+              if (!lastFailedSync) {
+                lastFailedSync = receivedAt;
+                lastErrorMessage = data.error || 'Webhook failed with unauthorized or failed sync';
+              }
+            }
+
+            logs.push({
+              id: doc.id,
+              receivedAt,
+              eventType,
+              matchedBy,
+              customerId: data.customerId || '',
+              ghlContactId: data.ghlContactId || '',
+              success,
+              error: data.error || '',
+              payload: data.payload || null
+            });
+          });
+
+          // Let's search historical merge counts
+          if (duplicateMergesCount === 0) {
+            const mergeSnap = await db.collection('ghlInboundWebhookLogs')
+              .where('matchedBy', 'in', ['ghlContactId', 'email', 'phone'])
+              .limit(100)
+              .get();
+            duplicateMergesCount = mergeSnap.size;
+          }
+
+          // Let's also check for scheduler sync info specifically
+          let lastAppointmentReceived = '';
+          let lastAppointmentCreated = '';
+          let lastAppointmentUpdated = '';
+          let calendarId = '';
+          let appointmentSource = '';
+
+          const apptLogsSnap = await db.collection('ghlInboundWebhookLogs')
+            .where('eventType', '==', 'inbound-appointment-created')
+            .orderBy('receivedAt', 'desc')
+            .limit(5)
+            .get();
+
+          if (!apptLogsSnap.empty) {
+            const firstLog = apptLogsSnap.docs[0].data();
+            lastAppointmentReceived = firstLog.receivedAt || '';
+            lastAppointmentCreated = firstLog.receivedAt || '';
+            const payload = firstLog.payload || {};
+            calendarId = payload.calendarId || payload.calendar_id || '';
+            appointmentSource = payload.appointmentSource || 'GHL Scheduler';
+          }
+
+          return res.status(200).json({
+            success: true,
+            stats: {
+              totalCustomers,
+              customersFromGhl,
+              customersFromApp,
+              customersFromEstimator,
+              customersFromPrevEstimates,
+              duplicateMerges: duplicateMergesCount,
+              lastSyncTime: lastSuccessfulSync || 'Never Synced'
+            },
+            status: {
+              outbound: 'Connected', 
+              inbound: logs.length > 0 ? 'Connected' : 'Waiting',
+              lastInboundWebhook,
+              lastOutboundWebhook: lastSuccessfulSync || '', 
+              lastSuccessfulSync,
+              lastFailedSync,
+              lastErrorMessage,
+              lastContactSynced,
+              lastAppointmentSynced
+            },
+            scheduler: {
+              active: true,
+              lastAppointmentReceived,
+              lastAppointmentCreated,
+              lastAppointmentUpdated: lastAppointmentReceived,
+              calendarId,
+              appointmentSource
+            },
+            logs
+          });
+        } catch (err: any) {
+          console.warn('Failed retrieving GHL integration status:', err);
+          return res.status(500).json({ success: false, error: err.message || String(err) });
+        }
+      } else if (action === 'test-ghl-outbound') {
+        const { ghlWebhookUrl } = req.body;
+        const targetUrl = ghlWebhookUrl || '';
+        if (!targetUrl) {
+          return res.status(400).json({ success: false, error: 'Outbound webhook URL is blank.' });
+        }
+
+        try {
+          const samplePayload = {
+            eventType: 'instant_estimate_submitted',
+            leadSource: 'Instant Estimator (Admin Test)',
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john.doe.test@lonestarfence.com',
+            phone: '+15555555555',
+            address: '123 Test Street/Admin Test',
+            city: 'Austin',
+            state: 'TX',
+            zip: '78701',
+            fenceType: 'Wood Cedar',
+            height: '6ft',
+            linearFeet: 150,
+            gateCount: 2,
+            estimatedPrice: 3500,
+            jobStatus: 'Interested',
+            estimateId: 'test-estimate-id-admin-test',
+            createdAt: new Date().toISOString()
+          };
+
+          const response = await fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(samplePayload)
+          });
+
+          const responseText = await response.text();
+          return res.status(200).json({
+            success: response.ok,
+            status: response.status,
+            statusCode: response.status,
+            responseText: responseText.slice(0, 500),
+            message: response.ok ? 'Outbound test payload dispatched successfully!' : `Outbound target responded with Status ${response.status}`
+          });
+        } catch (err: any) {
+          return res.status(200).json({
+            success: false,
+            error: err.message || String(err),
+            message: 'Outbound connection failed. Verify URL configuration and network routing.'
+          });
+        }
+      } else if (action === 'test-ghl-inbound') {
+        const { secret } = req.body;
+        if (!secret) {
+          return res.status(400).json({ success: false, error: 'Inbound Webhook Secret cannot be empty to run test.' });
+        }
+
+        try {
+          const sampleInbound = {
+            eventType: 'contactCreate',
+            type: 'contactCreate',
+            contactId: 'test_ghl_' + Math.floor(Math.random() * 1000000),
+            firstName: 'GHL Inbound',
+            lastName: 'Test User',
+            fullName: 'GHL Inbound Test User',
+            email: `ghl.test.${Math.floor(Math.random() * 1000000)}@lonestarfence.com`,
+            phone: '512555' + Math.floor(1000 + Math.random() * 9000),
+            address1: '456 Webhook Avenue',
+            city: 'Round Rock',
+            state: 'TX',
+            zip: '78664',
+            source: 'GHL Webhook Test',
+            tags: 'test, admin-prefill-check',
+            appointmentStartTime: new Date(Date.now() + 86400000).toISOString(),
+            calendarId: 'test_calendar_id_999'
+          };
+
+          // Make direct POST call to localhost:3000/api/webhooks/ghl
+          const hookResponse = await fetch(`http://localhost:3000/api/webhooks/ghl?secret=${encodeURIComponent(secret)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-lsfw-webhook-secret': secret
+            },
+            body: JSON.stringify(sampleInbound)
+          });
+
+          const resJson: any = await hookResponse.json().catch(() => ({}));
+          const success = hookResponse.status === 200 && resJson.success;
+
+          const diagnostics = {
+            endpointUrl: `http://localhost:3000/api/webhooks/ghl?secret=${secret.substring(0, 5)}...`,
+            httpStatus: hookResponse.status,
+            responseBody: resJson,
+            matchedBy: resJson.matchedBy || 'unknown',
+            customerId: resJson.customerId || 'none'
+          };
+
+          return res.status(200).json({
+            success: !!success,
+            message: success ? 'PASS: Inbound webhook successfully processed!' : 'FAIL: Webhook process returned warnings or errors.',
+            diagnostics
+          });
+        } catch (err: any) {
+          return res.status(200).json({
+            success: false,
+            message: 'FAIL: Outermost connection exception during localhost simulation.',
+            error: err.message || String(err)
+          });
         }
       } else {
         return res.status(400).json({ error: 'Invalid run action inside settings handler.' });
