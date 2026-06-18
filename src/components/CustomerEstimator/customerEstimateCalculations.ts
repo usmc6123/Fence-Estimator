@@ -37,6 +37,7 @@ export interface CustomerEstimateData {
   measurementUpdatedAt?: string;
   customerId?: string;
   ghlContactId?: string;
+  forceTrigger?: boolean;
 }
 
 export const MATERIAL_PRICES: Record<string, number> = {

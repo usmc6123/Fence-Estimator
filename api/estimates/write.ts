@@ -45,6 +45,128 @@ if (admin.apps.length === 0) {
   }
 }
 
+/**
+ * Decision Engine for Customer Estimator automation suppression.
+ * Future workflows can reuse this decision engine as well.
+ */
+export function shouldTriggerCustomerEstimatorWorkflow(
+  customer: any,
+  estimate: any,
+  settings: any,
+  forceTrigger?: boolean
+): { trigger: boolean; reason: string } {
+  // If Force Trigger is checked and allowed by settings, always trigger!
+  const isForceTriggerAllowed = settings?.allowManualForceTrigger !== false;
+  if (forceTrigger && isForceTriggerAllowed) {
+    return { trigger: true, reason: "Manual Force Override Checked" };
+  }
+
+  // Check if outbound webhook general switch is enabled
+  if (settings?.enableInstantEstimateWebhook === false) {
+    return { trigger: false, reason: "Webhook Disabled in Settings" };
+  }
+
+  // If no customer and no estimate exists -> New Customer -> Trigger!
+  if (!customer && !estimate) {
+    return { trigger: true, reason: "New customer" };
+  }
+
+  // Collect any statuses found from customer or estimate
+  const customerStatus = customer?.status || customer?.jobStatus || "";
+  const estimateStatus = estimate?.status || estimate?.jobStatus || "";
+
+  // Helper to normalize status strings for comparison (case-insensitive, trimmed)
+  const normalizeStatus = (s: string) => {
+    return (s || "").trim().toLowerCase();
+  };
+
+  const cStatusNorm = normalizeStatus(customerStatus);
+  const eStatusNorm = normalizeStatus(estimateStatus);
+
+  // Statuses that require suppression:
+  // - Estimate Scheduled
+  // - Estimate Sent
+  // - Accepted
+  // - Scheduled
+  // - In Progress
+  // - Completed
+  // - Archived
+  const suppressionStatuses = [
+    "estimate scheduled",
+    "estimate sent",
+    "accepted",
+    "scheduled",
+    "in progress",
+    "completed",
+    "archived"
+  ];
+
+  // Allowed statuses (only trigger if status is one of these):
+  // - Interested
+  // - New Lead
+  // - Appointment Requested
+  const allowedStatuses = [
+    "interested",
+    "new lead",
+    "appointment requested"
+  ];
+
+  // 1. Check existing customer suppression rule
+  if (settings?.suppressInstantEstimateWorkflowExisting !== false) {
+    if (customer && !allowedStatuses.includes(cStatusNorm) && cStatusNorm !== "") {
+      return { trigger: false, reason: "Existing Customer" };
+    }
+  }
+
+  // 2. Check individual statuses
+  if (settings?.suppressIfEstimateScheduled !== false) {
+    if (cStatusNorm === "estimate scheduled" || eStatusNorm === "estimate scheduled") {
+      return { trigger: false, reason: "Estimate Scheduled" };
+    }
+  }
+
+  if (settings?.suppressIfEstimateSent !== false) {
+    if (cStatusNorm === "estimate sent" || eStatusNorm === "estimate sent") {
+      return { trigger: false, reason: "Estimate Sent" };
+    }
+  }
+
+  if (settings?.suppressIfCustomerAccepted !== false) {
+    if (cStatusNorm === "accepted" || eStatusNorm === "accepted") {
+      return { trigger: false, reason: "Accepted" };
+    }
+  }
+
+  if (settings?.suppressIfCustomerCompleted !== false) {
+    const completedOrActiveFlags = ["completed", "in progress", "scheduled", "archived"];
+    if (completedOrActiveFlags.includes(cStatusNorm) || completedOrActiveFlags.includes(eStatusNorm)) {
+      return { trigger: false, reason: "Completed" };
+    }
+  }
+
+  // General suppression state matching
+  if (suppressionStatuses.includes(cStatusNorm)) {
+    return { trigger: false, reason: customerStatus || "Existing Customer Status" };
+  }
+  if (suppressionStatuses.includes(eStatusNorm)) {
+    return { trigger: false, reason: estimateStatus || "Existing Estimate Status" };
+  }
+
+  // Allowed statuses checks
+  if (customer || estimate) {
+    const hasAllowedCStatus = cStatusNorm === "" || allowedStatuses.includes(cStatusNorm);
+    const hasAllowedEStatus = eStatusNorm === "" || allowedStatuses.includes(eStatusNorm);
+    
+    if (hasAllowedCStatus && hasAllowedEStatus) {
+      return { trigger: true, reason: "Existing Customer allowed status" };
+    }
+    
+    return { trigger: false, reason: "Existing estimate found" };
+  }
+
+  return { trigger: true, reason: "Authorized" };
+}
+
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
 const BRADEN_UID = 'braden-lonestar-uid';
@@ -1305,11 +1427,13 @@ export default async function handler(req: any, res: any) {
       let resolvedCompanyPhone = '';
       let resolvedCompanyWebsite = '';
       let ghlWebhookUrl = '';
+      let companySettingsData: any = {};
 
       try {
         const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
         if (settingsSnap.exists) {
           const s = settingsSnap.data() || {};
+          companySettingsData = s;
           if (s.smtpHost) resolvedSmtpHost = s.smtpHost;
           if (s.smtpPort) resolvedSmtpPort = Number(s.smtpPort);
           if (s.smtpSecureType) resolvedSmtpSecureType = s.smtpSecureType;
@@ -1558,8 +1682,69 @@ export default async function handler(req: any, res: any) {
       let webhookTriggered = false;
       let webhookTriggeredAt: string | null = null;
       let webhookLog = 'Ready to trigger';
+      let webhookSuppressed = false;
+      let suppressionReason: string | null = null;
 
-      if (ghlWebhookUrl) {
+      // RESOLVE CUSTOMER & ESTIMATE DOCUMENTS FOR SUPPRESSION DECISION ENGINE
+      let existingCustDoc: any = null;
+      try {
+        if (customerId) {
+          const s = await db.collection('customers').doc(String(customerId)).get();
+          if (s.exists) existingCustDoc = s.data();
+        }
+        if (!existingCustDoc && ghlContactId) {
+          const snap = await db.collection('customers').where('ghlContactId', '==', String(ghlContactId)).get();
+          if (!snap.empty) existingCustDoc = snap.docs[0].data();
+        }
+        if (!existingCustDoc && normalizedEmail) {
+          const snap = await db.collection('customers').where('normalizedEmail', '==', normalizedEmail).get();
+          if (!snap.empty) existingCustDoc = snap.docs[0].data();
+        }
+        if (!existingCustDoc && normalizedPhone) {
+          const snap = await db.collection('customers').where('normalizedPhone', '==', normalizedPhone).get();
+          if (!snap.empty) existingCustDoc = snap.docs[0].data();
+        }
+      } catch (custLookupErr) {
+        console.warn('Error during customer lookup for suppression:', custLookupErr);
+      }
+
+      let existingEstDoc: any = null;
+      try {
+        if (estId) {
+          const s = await db.collection('estimates').doc(String(estId)).get();
+          if (s.exists) existingEstDoc = s.data();
+        }
+        if (!existingEstDoc && customerId) {
+          const snap = await db.collection('estimates').where('customerId', '==', String(customerId)).orderBy('createdAt', 'desc').limit(1).get();
+          if (!snap.empty) existingEstDoc = snap.docs[0].data();
+        }
+        if (!existingEstDoc && ghlContactId) {
+          const snap = await db.collection('estimates').where('ghlContactId', '==', String(ghlContactId)).orderBy('createdAt', 'desc').limit(1).get();
+          if (!snap.empty) existingEstDoc = snap.docs[0].data();
+        }
+        if (!existingEstDoc && normalizedEmail) {
+          const snap = await db.collection('estimates').where('customerEmail', '==', email).orderBy('createdAt', 'desc').limit(1).get();
+          if (!snap.empty) existingEstDoc = snap.docs[0].data();
+        }
+        if (!existingEstDoc && normalizedPhone) {
+          const snap = await db.collection('estimates').where('customerPhone', '==', phone).orderBy('createdAt', 'desc').limit(1).get();
+          if (!snap.empty) existingEstDoc = snap.docs[0].data();
+        }
+      } catch (estLookupErr) {
+        console.warn('Error during estimate lookup for suppression:', estLookupErr);
+      }
+
+      const forceTrigger = payload.forceTrigger === true || payload.forceTrigger === 'true';
+      const decision = shouldTriggerCustomerEstimatorWorkflow(existingCustDoc, existingEstDoc, companySettingsData, forceTrigger);
+
+      if (!decision.trigger) {
+        webhookSuppressed = true;
+        suppressionReason = decision.reason;
+        webhookLog = `Suppressed by CRM automation decision engine: ${decision.reason}`;
+        console.log(`CRM Automation suppressing customer estimator webhook for estimate ${estId}: ${decision.reason}`);
+      }
+
+      if (ghlWebhookUrl && !webhookSuppressed) {
         try {
           const ghlPayload = {
             userId: 'braden-lonestar-uid',
@@ -1587,7 +1772,7 @@ export default async function handler(req: any, res: any) {
             createdAt: createdAt || nowIso
           };
 
-          const result = await sendGhlWorkflowWebhook('customer_estimator_submitted', ghlPayload, null, db, estId);
+          const result = await sendGhlWorkflowWebhook('customer_estimator_submitted', ghlPayload, companySettingsData, db, estId);
           if (result.success) {
             webhookTriggered = true;
             webhookTriggeredAt = new Date().toISOString();
@@ -1597,9 +1782,9 @@ export default async function handler(req: any, res: any) {
           }
         } catch (gErr: any) {
           console.error('Customer Estimator GHL Webhook trigger failed:', gErr);
-          webhookLog = `Webhook trigger failed: \${gErr.message || gErr}`;
+          webhookLog = `Webhook trigger failed: ${gErr.message || gErr}`;
         }
-      } else {
+      } else if (!ghlWebhookUrl) {
         webhookLog = 'Skipped: GHL webhook URL not configured in settings.';
       }
 
@@ -1608,7 +1793,14 @@ export default async function handler(req: any, res: any) {
         const snapToRead = await docRef.get();
         const currentData = snapToRead.data() || {};
         const logs = currentData.ghlWebhookLog || [];
-        const logEntry = {
+        const logEntry = webhookSuppressed ? {
+          eventType: "customer_estimator_submitted",
+          timestamp: new Date().toISOString(),
+          webhookUrl: ghlWebhookUrl ? ghlWebhookUrl.replace(/^(https?:\/\/[^\/]+).*$/, '$1/... ') : 'None',
+          success: true,
+          webhookSuppressed: true,
+          suppressionReason: suppressionReason
+        } : {
           eventType: "customer_estimator_submitted",
           timestamp: new Date().toISOString(),
           webhookUrl: ghlWebhookUrl ? ghlWebhookUrl.replace(/^(https?:\/\/[^\/]+).*$/, '$1/... ') : 'None',
@@ -1621,7 +1813,9 @@ export default async function handler(req: any, res: any) {
           customerEstimatorEmailLog: emailLog,
           ghlWebhookTriggered: webhookTriggered,
           ghlWebhookTriggeredAt: webhookTriggeredAt,
-          ghlWebhookLog: [...logs, logEntry]
+          ghlWebhookLog: [...logs, logEntry],
+          webhookSuppressed,
+          suppressionReason
         });
       } catch (logErr) {
         console.warn('Failed to update logs inside the output estimate document:', logErr);
@@ -1634,6 +1828,8 @@ export default async function handler(req: any, res: any) {
         emailLog,
         webhookTriggered,
         webhookLog,
+        webhookSuppressed,
+        suppressionReason,
         message: 'Your instant estimate has been submitted. We sent a copy of your estimate results to your email. Lone Star Fence Works will follow up soon.'
       });
     }

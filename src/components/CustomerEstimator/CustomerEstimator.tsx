@@ -36,6 +36,8 @@ export default function CustomerEstimator({
     submitSuccess,
     error,
     ghlSynced,
+    webhookSuppressed,
+    suppressionReason,
     handleNext,
     handleBack,
     handleSubmit,
@@ -409,6 +411,8 @@ export default function CustomerEstimator({
                         data={data}
                         breakdown={breakdown}
                         ghlSynced={ghlSynced}
+                        webhookSuppressed={webhookSuppressed}
+                        suppressionReason={suppressionReason}
                         onReset={resetEstimator}
                       />
                     )}

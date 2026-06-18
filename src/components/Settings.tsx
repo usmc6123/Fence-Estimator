@@ -48,6 +48,15 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     ghlMinChars: 2,
     ghlMaxResults: 10,
     
+    // Outbound automation suppression controls
+    enableInstantEstimateWebhook: true,
+    suppressInstantEstimateWorkflowExisting: true,
+    suppressIfEstimateScheduled: true,
+    suppressIfEstimateSent: true,
+    suppressIfCustomerAccepted: true,
+    suppressIfCustomerCompleted: true,
+    allowManualForceTrigger: true,
+    
     // SMTP Configurations
     smtpHost: '',
     smtpPort: '465',
@@ -139,6 +148,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           ghlPrefillSources: apiData.ghlPrefillSources || firebaseData.ghlPrefillSources || ['customers', 'estimates', 'ghl'],
           ghlMinChars: apiData.ghlMinChars !== undefined ? apiData.ghlMinChars : (firebaseData.ghlMinChars !== undefined ? firebaseData.ghlMinChars : 2),
           ghlMaxResults: apiData.ghlMaxResults !== undefined ? apiData.ghlMaxResults : (firebaseData.ghlMaxResults !== undefined ? firebaseData.ghlMaxResults : 10),
+          
+          enableInstantEstimateWebhook: apiData.enableInstantEstimateWebhook !== undefined ? apiData.enableInstantEstimateWebhook : (firebaseData.enableInstantEstimateWebhook !== undefined ? firebaseData.enableInstantEstimateWebhook : true),
+          suppressInstantEstimateWorkflowExisting: apiData.suppressInstantEstimateWorkflowExisting !== undefined ? apiData.suppressInstantEstimateWorkflowExisting : (firebaseData.suppressInstantEstimateWorkflowExisting !== undefined ? firebaseData.suppressInstantEstimateWorkflowExisting : true),
+          suppressIfEstimateScheduled: apiData.suppressIfEstimateScheduled !== undefined ? apiData.suppressIfEstimateScheduled : (firebaseData.suppressIfEstimateScheduled !== undefined ? firebaseData.suppressIfEstimateScheduled : true),
+          suppressIfEstimateSent: apiData.suppressIfEstimateSent !== undefined ? apiData.suppressIfEstimateSent : (firebaseData.suppressIfEstimateSent !== undefined ? firebaseData.suppressIfEstimateSent : true),
+          suppressIfCustomerAccepted: apiData.suppressIfCustomerAccepted !== undefined ? apiData.suppressIfCustomerAccepted : (firebaseData.suppressIfCustomerAccepted !== undefined ? firebaseData.suppressIfCustomerAccepted : true),
+          suppressIfCustomerCompleted: apiData.suppressIfCustomerCompleted !== undefined ? apiData.suppressIfCustomerCompleted : (firebaseData.suppressIfCustomerCompleted !== undefined ? firebaseData.suppressIfCustomerCompleted : true),
+          allowManualForceTrigger: apiData.allowManualForceTrigger !== undefined ? apiData.allowManualForceTrigger : (firebaseData.allowManualForceTrigger !== undefined ? firebaseData.allowManualForceTrigger : true)
         };
 
         setFormData(merged);
@@ -209,6 +226,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         ghlMinChars: formData.ghlMinChars,
         ghlMaxResults: formData.ghlMaxResults,
         
+        enableInstantEstimateWebhook: formData.enableInstantEstimateWebhook,
+        suppressInstantEstimateWorkflowExisting: formData.suppressInstantEstimateWorkflowExisting,
+        suppressIfEstimateScheduled: formData.suppressIfEstimateScheduled,
+        suppressIfEstimateSent: formData.suppressIfEstimateSent,
+        suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
+        suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
+        allowManualForceTrigger: formData.allowManualForceTrigger,
+        
         // Include templates inside main doc so embed widgets can pull acceptance screens
         estimateEmailSubject: formData.estimateEmailSubject,
         estimateEmailBody: formData.estimateEmailBody,
@@ -258,10 +283,17 @@ export default function Settings({ user, adminToken }: SettingsProps) {
 
           ghlLocationId: formData.ghlLocationId,
           ghlApiKey: formData.ghlApiKey,
-          ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
+           ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
           ghlPrefillSources: formData.ghlPrefillSources,
           ghlMinChars: formData.ghlMinChars,
-          ghlMaxResults: formData.ghlMaxResults
+          ghlMaxResults: formData.ghlMaxResults,
+          enableInstantEstimateWebhook: formData.enableInstantEstimateWebhook,
+          suppressInstantEstimateWorkflowExisting: formData.suppressInstantEstimateWorkflowExisting,
+          suppressIfEstimateScheduled: formData.suppressIfEstimateScheduled,
+          suppressIfEstimateSent: formData.suppressIfEstimateSent,
+          suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
+          suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
+          allowManualForceTrigger: formData.allowManualForceTrigger
         };
 
         const response = await fetch('/api/settings', {
@@ -1117,6 +1149,166 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                             onChange={(e) => setFormData({...formData, ghlMaxResults: Number(e.target.value) || 10})}
                             className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-bold focus:border-american-blue focus:outline-none"
                           />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 10: CRM Automation Suppression Settings */}
+                  <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-4 md:col-span-2">
+                    <div className="flex items-center gap-2 border-b border-[#F2F2F2] pb-3">
+                      <ShieldCheck className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider font-sans">CRM Automation Settings</h4>
+                    </div>
+
+                    <p className="text-xs text-gray-500 font-sans leading-relaxed">
+                      Configure when the system should automatically suppress duplicate outbound webhooks to prevent existing clients or active estimates from being re-entered into marketing/nurture campaigns.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Enable Instant Estimate Webhook</label>
+                            <p className="text-[10px] text-gray-500">Allow submitting estimators to trigger outbound GHL webhooks.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, enableInstantEstimateWebhook: !formData.enableInstantEstimateWebhook})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.enableInstantEstimateWebhook ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.enableInstantEstimateWebhook ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Suppress For Existing Customers</label>
+                            <p className="text-[10px] text-gray-500">Skip automation if customer record already exists in database.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, suppressInstantEstimateWorkflowExisting: !formData.suppressInstantEstimateWorkflowExisting})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.suppressInstantEstimateWorkflowExisting ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.suppressInstantEstimateWorkflowExisting ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Suppress If Estimate Already Scheduled</label>
+                            <p className="text-[10px] text-gray-500">Skip if customer status is 'Estimate Scheduled'.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, suppressIfEstimateScheduled: !formData.suppressIfEstimateScheduled})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.suppressIfEstimateScheduled ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.suppressIfEstimateScheduled ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Suppress If Estimate Already Sent</label>
+                            <p className="text-[10px] text-gray-500">Skip if customer status is 'Estimate Sent'.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, suppressIfEstimateSent: !formData.suppressIfEstimateSent})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.suppressIfEstimateSent ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.suppressIfEstimateSent ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Suppress If Customer Accepted</label>
+                            <p className="text-[10px] text-gray-500">Skip automation if customer status is 'Accepted'.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, suppressIfCustomerAccepted: !formData.suppressIfCustomerAccepted})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.suppressIfCustomerAccepted ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.suppressIfCustomerAccepted ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-gray-800">Suppress If Customer Completed</label>
+                            <p className="text-[10px] text-gray-500">Skip if status is 'Completed' or 'In Progress/Scheduled/Archived'.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, suppressIfCustomerCompleted: !formData.suppressIfCustomerCompleted})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.suppressIfCustomerCompleted ? "bg-blue-600" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.suppressIfCustomerCompleted ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 md:col-span-2">
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                          <div className="space-y-0.5 w-[85%]">
+                            <label className="text-xs font-bold text-blue-900">Allow Manual Force Trigger</label>
+                            <p className="text-[10px] text-blue-700">Display a "Force Instant Estimate Workflow" option to the estimator user during Customer Estimator submission.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({...formData, allowManualForceTrigger: !formData.allowManualForceTrigger})}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                              formData.allowManualForceTrigger ? "bg-blue-600" : "bg-gray-100"
+                            )}
+                          >
+                            <span className={cn(
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              formData.allowManualForceTrigger ? "translate-x-5" : "translate-x-0"
+                            )} />
+                          </button>
                         </div>
                       </div>
                     </div>

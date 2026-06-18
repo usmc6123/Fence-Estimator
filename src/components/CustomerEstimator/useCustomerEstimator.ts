@@ -41,6 +41,7 @@ const INITIAL_DATA: CustomerEstimateData = {
   mapMeasurementSegments: undefined,
   customerEnteredAddress: undefined,
   measurementUpdatedAt: undefined,
+  forceTrigger: false,
 };
 
 export function useCustomerEstimator(
@@ -54,6 +55,8 @@ export function useCustomerEstimator(
   const [submitSuccess, setSubmitSuccess] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [ghlSynced, setGhlSynced] = React.useState<boolean>(false);
+  const [webhookSuppressed, setWebhookSuppressed] = React.useState<boolean>(false);
+  const [suppressionReason, setSuppressionReason] = React.useState<string | null>(null);
 
   // Real-time calculation breakdown
   const [breakdown, setBreakdown] = React.useState<EstimateBreakdown>(() => 
@@ -338,7 +341,8 @@ export function useCustomerEstimator(
         createdAt: new Date().toISOString(),
         rawEstimateDoc: cleanedCustomerEstimateDoc,
         customerId: data.customerId || '',
-        ghlContactId: data.ghlContactId || ''
+        ghlContactId: data.ghlContactId || '',
+        forceTrigger: !!data.forceTrigger
       };
 
       const response = await fetch('/api/estimates/write?action=customer-estimator-submit', {
@@ -357,6 +361,13 @@ export function useCustomerEstimator(
       const result = await response.json();
       if (result.webhookTriggered) {
         setGhlSynced(true);
+      }
+      if (result.webhookSuppressed) {
+        setWebhookSuppressed(true);
+        setSuppressionReason(result.suppressionReason || 'Existing Customer Detected');
+      } else {
+        setWebhookSuppressed(false);
+        setSuppressionReason(null);
       }
 
       setSubmitSuccess(true);
@@ -379,6 +390,8 @@ export function useCustomerEstimator(
     submitSuccess,
     error,
     ghlSynced,
+    webhookSuppressed,
+    suppressionReason,
     handleNext,
     handleBack,
     handleSubmit,

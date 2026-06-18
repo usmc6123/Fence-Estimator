@@ -105,11 +105,27 @@ export default async function handler(req: any, res: any) {
           ghlInboundWebhookSecret: '',
           ghlPrefillSources: ['customers', 'estimates', 'ghl'],
           ghlMinChars: 2,
-          ghlMaxResults: 10
+          ghlMaxResults: 10,
+          enableInstantEstimateWebhook: true,
+          suppressInstantEstimateWorkflowExisting: true,
+          suppressIfEstimateScheduled: true,
+          suppressIfEstimateSent: true,
+          suppressIfCustomerAccepted: true,
+          suppressIfCustomerCompleted: true,
+          allowManualForceTrigger: true
         });
       }
 
       const data = settingsDoc.data() || {};
+      
+      // Merge defaults for newer settings
+      if (data.enableInstantEstimateWebhook === undefined) data.enableInstantEstimateWebhook = true;
+      if (data.suppressInstantEstimateWorkflowExisting === undefined) data.suppressInstantEstimateWorkflowExisting = true;
+      if (data.suppressIfEstimateScheduled === undefined) data.suppressIfEstimateScheduled = true;
+      if (data.suppressIfEstimateSent === undefined) data.suppressIfEstimateSent = true;
+      if (data.suppressIfCustomerAccepted === undefined) data.suppressIfCustomerAccepted = true;
+      if (data.suppressIfCustomerCompleted === undefined) data.suppressIfCustomerCompleted = true;
+      if (data.allowManualForceTrigger === undefined) data.allowManualForceTrigger = true;
       
       // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval
       if (data.smtpPassword) {
@@ -156,7 +172,14 @@ export default async function handler(req: any, res: any) {
           ghlInboundWebhookSecret,
           ghlPrefillSources,
           ghlMinChars,
-          ghlMaxResults
+          ghlMaxResults,
+          enableInstantEstimateWebhook,
+          suppressInstantEstimateWorkflowExisting,
+          suppressIfEstimateScheduled,
+          suppressIfEstimateSent,
+          suppressIfCustomerAccepted,
+          suppressIfCustomerCompleted,
+          allowManualForceTrigger
         } = incomingFields;
 
         // Validate email format
@@ -240,6 +263,13 @@ export default async function handler(req: any, res: any) {
           ghlPrefillSources: ghlPrefillSources || ['customers', 'estimates', 'ghl'],
           ghlMinChars: ghlMinChars !== undefined ? Number(ghlMinChars) : 2,
           ghlMaxResults: ghlMaxResults !== undefined ? Number(ghlMaxResults) : 10,
+          enableInstantEstimateWebhook: enableInstantEstimateWebhook !== undefined ? !!enableInstantEstimateWebhook : true,
+          suppressInstantEstimateWorkflowExisting: suppressInstantEstimateWorkflowExisting !== undefined ? !!suppressInstantEstimateWorkflowExisting : true,
+          suppressIfEstimateScheduled: suppressIfEstimateScheduled !== undefined ? !!suppressIfEstimateScheduled : true,
+          suppressIfEstimateSent: suppressIfEstimateSent !== undefined ? !!suppressIfEstimateSent : true,
+          suppressIfCustomerAccepted: suppressIfCustomerAccepted !== undefined ? !!suppressIfCustomerAccepted : true,
+          suppressIfCustomerCompleted: suppressIfCustomerCompleted !== undefined ? !!suppressIfCustomerCompleted : true,
+          allowManualForceTrigger: allowManualForceTrigger !== undefined ? !!allowManualForceTrigger : true,
           updatedAt: new Date().toISOString()
         };
 

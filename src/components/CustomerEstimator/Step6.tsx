@@ -6,10 +6,19 @@ interface Step6Props {
   data: CustomerEstimateData;
   breakdown: EstimateBreakdown;
   ghlSynced: boolean;
+  webhookSuppressed?: boolean;
+  suppressionReason?: string | null;
   onReset: () => void;
 }
 
-export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Props) {
+export default function Step6({
+  data,
+  breakdown,
+  ghlSynced,
+  webhookSuppressed = false,
+  suppressionReason = null,
+  onReset,
+}: Step6Props) {
   const handlePrint = () => {
     window.print();
   };
@@ -119,10 +128,22 @@ export default function Step6({ data, breakdown, ghlSynced, onReset }: Step6Prop
         </div>
 
         {/* Sync feedback */}
-        {ghlSynced && (
+        {ghlSynced && !webhookSuppressed && (
           <div className="mt-4 p-3 rounded-xl bg-blue-50 text-american-blue text-xs font-medium text-center border border-blue-100 flex items-center justify-center gap-2">
             <div className="h-2 w-2 rounded-full bg-blue-500 animate-ping" />
             Synchronized directly to Lone Star Customer Portal (Go High Level CRM)
+          </div>
+        )}
+
+        {webhookSuppressed && (
+          <div className="mt-4 p-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-medium text-left flex gap-2 shadow-sm">
+            <div className="text-amber-500 shrink-0 mt-0.5">⚠️</div>
+            <div className="space-y-0.5">
+              <p className="font-bold">Existing customer / active deal detected.</p>
+              <p className="text-[11px] text-amber-800 leading-tight">
+                Estimate updated successfully. Instant Estimate follow-up workflow was skipped to avoid duplicating campaigns. (Reason: {suppressionReason || 'Duplicate Suppression'})
+              </p>
+            </div>
           </div>
         )}
       </div>
