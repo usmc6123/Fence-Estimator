@@ -1150,13 +1150,102 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Missing required customer details (email, firstName, lastName)' });
       }
 
+      // Extract optional selected customer details if available from payload
+      let customerId = payload.customerId || '';
+      let ghlContactId = payload.ghlContactId || '';
+
+      const normalizedEmail = (email || '').trim().toLowerCase();
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const normalizedPhone = cleanPhone.length === 10 ? `+1${cleanPhone}` : (cleanPhone.length === 11 && cleanPhone.startsWith('1') ? `+${cleanPhone}` : (cleanPhone ? `+${cleanPhone}` : ''));
+
+      const nowIso = new Date().toISOString();
+
+      // If no customerId is provided but customer exists under email/phone, find and link it
+      if (!customerId && normalizedEmail) {
+        try {
+          const emailSnap = await db.collection('customers').where('normalizedEmail', '==', normalizedEmail).get();
+          if (!emailSnap.empty) {
+            const customerDoc = emailSnap.docs[0];
+            customerId = customerDoc.id;
+            ghlContactId = customerDoc.data().ghlContactId || ghlContactId || '';
+          } else if (normalizedPhone) {
+            const phoneSnap = await db.collection('customers').where('normalizedPhone', '==', normalizedPhone).get();
+            if (!phoneSnap.empty) {
+              const customerDoc = phoneSnap.docs[0];
+              customerId = customerDoc.id;
+              ghlContactId = customerDoc.data().ghlContactId || ghlContactId || '';
+            }
+          }
+        } catch (findErr) {
+          console.warn('Failed to find matching customer pre-save:', findErr);
+        }
+      }
+
+      // If still no customerId, we should create a new customer record
+      if (!customerId) {
+        try {
+          const newCustomerRef = db.collection('customers').doc();
+          customerId = newCustomerRef.id;
+          await newCustomerRef.set({
+            id: customerId,
+            ghlContactId: ghlContactId || '',
+            firstName: firstName,
+            lastName: lastName,
+            customerName: customerName || `${firstName} ${lastName}`.trim(),
+            email: email,
+            normalizedEmail,
+            phone: phone,
+            normalizedPhone,
+            streetAddress: address,
+            address: address,
+            city: city || '',
+            state: state || '',
+            zip: zip || '',
+            source: 'Customer Estimator',
+            createdFrom: 'customer_estimator',
+            createdAt: nowIso,
+            lastSyncedAt: nowIso
+          });
+        } catch (createCustErr) {
+          console.warn('Failed to create customer for customer estimator submission:', createCustErr);
+        }
+      } else {
+        // If customer exists, update their synced info or merge
+        try {
+          const customerRef = db.collection('customers').doc(customerId);
+          const currentCustSnap = await customerRef.get();
+          if (currentCustSnap.exists) {
+            const currentCustData = currentCustSnap.data() || {};
+            await customerRef.set({
+              ghlContactId: ghlContactId || currentCustData.ghlContactId || '',
+              firstName: firstName || currentCustData.firstName || '',
+              lastName: lastName || currentCustData.lastName || '',
+              customerName: customerName || currentCustData.customerName || `${firstName} ${lastName}`.trim(),
+              email: email || currentCustData.email || '',
+              normalizedEmail: normalizedEmail || currentCustData.normalizedEmail || '',
+              phone: phone || currentCustData.phone || '',
+              normalizedPhone: normalizedPhone || currentCustData.normalizedPhone || '',
+              streetAddress: address || currentCustData.streetAddress || currentCustData.address || '',
+              address: address || currentCustData.address || currentCustData.streetAddress || '',
+              city: city || currentCustData.city || '',
+              state: state || currentCustData.state || '',
+              zip: zip || currentCustData.zip || '',
+              lastSyncedAt: nowIso
+            }, { merge: true });
+          }
+        } catch (updateCustErr) {
+          console.warn('Failed to update customer for customer estimator submission:', updateCustErr);
+        }
+      }
+
       const estId = id || `est-cust-${Math.random().toString(36).substring(2, 11)}`;
 
       // Construct a standardized estimate lead document for Firestore
-      const nowIso = new Date().toISOString();
       const estimateDocToSave = {
         ...(rawEstimateDoc || {}),
         id: estId,
+        customerId: customerId, // Real customer document ID linking in `/customers`
+        ghlContactId: ghlContactId || '', // GHL Contact ID integration fields
         firstName: firstName,
         lastName: lastName,
         customerName: customerName || `${firstName} ${lastName}`.trim(),

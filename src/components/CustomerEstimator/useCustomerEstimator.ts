@@ -336,7 +336,9 @@ export function useCustomerEstimator(
         selectedOptions,
         estimatedPrice: Math.round(breakdown.total * 100) / 100,
         createdAt: new Date().toISOString(),
-        rawEstimateDoc: cleanedCustomerEstimateDoc
+        rawEstimateDoc: cleanedCustomerEstimateDoc,
+        customerId: data.customerId || '',
+        ghlContactId: data.ghlContactId || ''
       };
 
       const response = await fetch('/api/estimates/write?action=customer-estimator-submit', {

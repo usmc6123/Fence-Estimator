@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mail, Phone, MapPin, User, FileText, Lock, Globe, CheckCircle2 } from 'lucide-react';
 import { CustomerEstimateData, EstimateBreakdown, MATERIAL_PRICES, GATE_PRICES } from './customerEstimateCalculations';
+import { useCustomerPrefillSearch } from '../../lib/useCustomerPrefillSearch';
 
 interface Step5Props {
   data: CustomerEstimateData;
@@ -21,6 +22,41 @@ export default function Step5({
   onSubmit,
   onBack,
 }: Step5Props) {
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    results,
+    isSearching,
+    showDropdown,
+    setShowDropdown,
+    notification,
+    searchCustomers,
+  } = useCustomerPrefillSearch();
+
+  const handleSelectPrefill = (cust: any) => {
+    onChangeField('firstName', cust.firstName || '');
+    onChangeField('lastName', cust.lastName || '');
+    onChangeField('email', cust.email || '');
+    onChangeField('phone', cust.phone || '');
+    
+    let street = cust.address || '';
+    if (cust.city && street.includes(cust.city)) {
+      street = street.split(',')[0].trim();
+    }
+    
+    onChangeField('street', street);
+    onChangeField('city', cust.city || '');
+    onChangeField('state', cust.state || '');
+    onChangeField('zip', cust.zip || '');
+    onChangeField('address', cust.address || '');
+
+    onChangeField('customerId', cust.customerId || cust.id || '');
+    onChangeField('ghlContactId', cust.ghlContactId || (cust.source === 'GHL' ? cust.id : '') || '');
+
+    setShowDropdown(false);
+    setSearchQuery(cust.customerName || `${cust.firstName || ''} ${cust.lastName || ''}`.trim());
+  };
+
   // Simple form validator to toggle button status
   const isValid = React.useMemo(() => {
     return (
@@ -52,6 +88,79 @@ export default function Step5({
             <User size={16} />
             Contact & Address Details
           </h3>
+
+          {/* Quick Prefill Search */}
+          <div className="space-y-1 relative pb-2 border-b border-[#E5E5E5]/60">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-[#1D4ED8]">
+              ⚡ Quick Prefill Search
+            </label>
+            <input
+              type="text"
+              placeholder="Type name to load GHL/Saved records..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                searchCustomers(e.target.value);
+              }}
+              onFocus={() => {
+                if (searchQuery && searchQuery.length >= 2) {
+                  setShowDropdown(true);
+                }
+              }}
+              className="block w-full rounded-xl border border-indigo-400 bg-sky-50/20 px-4 py-2.5 text-sm font-bold text-[#111111] outline-none focus:ring-4 focus:ring-indigo-100 placeholder:text-slate-400"
+            />
+            {notification && (
+              <div className="mt-1.5 bg-[#EDFDFD] border border-emerald-300 text-[#0F5132] px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-sm">
+                <span className="text-emerald-600">✓</span>
+                {notification}
+              </div>
+            )}
+
+            {showDropdown && (results.length > 0 || isSearching) && (
+              <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-60 overflow-y-auto rounded-xl border border-emerald-400 bg-white p-2 shadow-2xl">
+                {isSearching && (
+                  <div className="p-3 text-xs text-american-blue font-bold flex items-center gap-2">
+                    <span className="animate-spin">🌀</span> Searching...
+                  </div>
+                )}
+                {!isSearching && results.map((cust) => (
+                  <button
+                    key={cust.id + '-' + cust.source}
+                    type="button"
+                    onClick={() => handleSelectPrefill(cust)}
+                    className="w-full text-left p-3 rounded-lg hover:bg-emerald-50 transition-all flex flex-col gap-1 border-b border-gray-100 last:border-0"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-[#111827]">{cust.customerName}</span>
+                      <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-widest ${
+                        cust.source === 'GHL' ? 'bg-[#E6FFFA] text-[#1D4ED8]' :
+                        cust.source === 'App Customer' ? 'bg-[#EBF8FF] text-[#2B6CB0]' : 'bg-[#EDF2F7] text-[#4A5568]'
+                      }`}>
+                        {cust.source}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
+                      {cust.email && <span>{cust.email}</span>}
+                      {cust.phone && <span>{cust.phone}</span>}
+                      {cust.address && <span className="truncate max-w-[200px]">{cust.address}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDropdown && !isSearching && results.length === 0 && searchQuery.length >= 2 && (
+              <div className="absolute left-0 right-0 top-full z-[100] mt-1 rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-400 font-bold shadow-xl">
+                No matching GHL or saved customers found.
+                <button
+                  type="button"
+                  onClick={() => setShowDropdown(false)}
+                  className="ml-2 text-american-red underline font-black"
+                >
+                  [Close]
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* First Name */}
           <div className="space-y-1">

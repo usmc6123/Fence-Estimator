@@ -10,6 +10,7 @@ import {
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote, User } from '../types';
 import { cn, formatCurrency, formatFeetInches } from '../lib/utils';
+import { useCustomerPrefillSearch } from '../lib/useCustomerPrefillSearch';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import SupplierOrderForm from './SupplierOrderForm';
 import SiteMeasurement from './SiteMeasurement';
@@ -92,42 +93,19 @@ export default function Estimator({
   const drawingInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Customer Prefill Autocomplete ---
-  const [prefillQuery, setPrefillQuery] = React.useState('');
-  const [prefillResults, setPrefillResults] = React.useState<any[]>([]);
-  const [isPrefillSearching, setIsPrefillSearching] = React.useState(false);
-  const [showPrefillDropdown, setShowPrefillDropdown] = React.useState(false);
-  const [prefillNotification, setPrefillNotification] = React.useState('');
+  const {
+    results: prefillResults,
+    isSearching: isPrefillSearching,
+    showDropdown: showPrefillDropdown,
+    setShowDropdown: setShowPrefillDropdown,
+    notification: prefillNotification,
+    setNotification: setPrefillNotification,
+    searchCustomers: runPrefillSearch
+  } = useCustomerPrefillSearch();
 
   const handleNameChange = async (nameVal: string) => {
     setEstimate({ ...estimate, customerName: nameVal });
-    setPrefillQuery(nameVal);
-
-    if (nameVal.trim().length < 2) {
-      setPrefillResults([]);
-      setShowPrefillDropdown(false);
-      return;
-    }
-
-    setIsPrefillSearching(true);
-    setShowPrefillDropdown(true);
-
-    try {
-      const response = await fetch(`/api/estimates/write?action=search-customer-prefill&query=${encodeURIComponent(nameVal)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'search-customer-prefill', query: nameVal })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPrefillResults(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.warn('Prefill search failed:', err);
-    } finally {
-      setIsPrefillSearching(false);
-    }
+    runPrefillSearch(nameVal);
   };
 
   const handleSelectCustomer = (customer: any) => {
@@ -138,6 +116,8 @@ export default function Estimator({
 
     setEstimate({
       ...estimate,
+      customerId: customer.customerId || customer.id || '',
+      ghlContactId: customer.ghlContactId || (customer.source === 'GHL' ? customer.id : '') || '',
       customerName: customer.customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
       customerEmail: customer.email || '',
       customerPhone: customer.phone || '',
@@ -150,9 +130,6 @@ export default function Estimator({
 
     setShowPrefillDropdown(false);
     setPrefillNotification('Customer info loaded from GHL/App records. Please verify before saving.');
-    setTimeout(() => {
-      setPrefillNotification('');
-    }, 5000);
   };
 
 

@@ -364,6 +364,13 @@ export default async function handler(req: any, res: any) {
     const rawAction = (body.eventType || body.action || query.action || '').toString().trim();
     let mappedAction = rawAction;
     const ghlType = body.type || '';
+    const workflowName = body.workflow?.name || body.workflowName || '';
+
+    // Detect if this is an inbound contact creation or sync event from GHL
+    const isGhlInboundTrigger = 
+      ghlType === 'contactCreate' || ghlType === 'contactUpdate' || ghlType === 'appointmentCreate' ||
+      rawAction === 'contactCreate' || rawAction === 'contactUpdate' || rawAction === 'appointmentCreate' ||
+      !!(body.contact_id || body.contactId || (body.id && body.contact_type) || (body.customData && (body.customData.contact_id || body.customData.id)) || body.contact?.id);
 
     if (ghlType === 'contactCreate' || rawAction === 'contactCreate') {
       mappedAction = 'inbound-contact-created';
@@ -371,6 +378,14 @@ export default async function handler(req: any, res: any) {
       mappedAction = 'inbound-contact-updated';
     } else if (ghlType === 'appointmentCreate' || rawAction === 'appointmentCreate') {
       mappedAction = 'inbound-appointment-created';
+    } else if (isGhlInboundTrigger) {
+      if (workflowName.toLowerCase().includes('create') || workflowName.toLowerCase().includes('new')) {
+        mappedAction = 'inbound-contact-created';
+      } else if (workflowName.toLowerCase().includes('appointment') || workflowName.toLowerCase().includes('schedule')) {
+        mappedAction = 'inbound-appointment-created';
+      } else {
+        mappedAction = 'inbound-contact-updated';
+      }
     }
 
     const isInbound = [
@@ -737,9 +752,16 @@ export default async function handler(req: any, res: any) {
         timestamp: nowIso,
         eventType: mappedAction,
         direction: 'inbound',
+        sourceSystem: 'GHL',
+        workflowName: workflowName,
+        ghlContactId: rawContactId || '',
+        customerId,
+        matchedBy: matchedByStr,
+        usedCustomData,
+        addressSource,
+        status: matchedByStr === 'new' ? 'Created' : 'Merged',
         customerName: customerName,
         customerEmail: rawEmail,
-        matchedBy: matchedByStr,
         duration,
         result: matchedByStr === 'new' ? 'Created' : 'Merged',
         httpStatus: 200,
@@ -749,10 +771,7 @@ export default async function handler(req: any, res: any) {
         payload: body,
         rawPayload: body,
         normalizedPayload,
-        addressSource,
         missingFields,
-        customerId,
-        usedCustomData,
         normalizedPayloadPreview: JSON.stringify(normalizedPayload).substring(0, 500)
       });
 
@@ -766,7 +785,12 @@ export default async function handler(req: any, res: any) {
         customerId,
         ghlContactId: rawContactId || '',
         success: true,
-        payload: body
+        payload: body,
+        workflowName,
+        sourceSystem: 'GHL',
+        direction: 'inbound',
+         usedCustomData,
+         addressSource
       });
 
       // Cleanup if simulation test

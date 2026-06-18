@@ -35,6 +35,8 @@ export interface CustomerEstimateData {
   mapMeasurementSegments?: { length: number; start: { lat: number; lng: number }; end: { lat: number; lng: number } }[];
   customerEnteredAddress?: string;
   measurementUpdatedAt?: string;
+  customerId?: string;
+  ghlContactId?: string;
 }
 
 export const MATERIAL_PRICES: Record<string, number> = {
