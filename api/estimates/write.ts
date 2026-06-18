@@ -247,13 +247,13 @@ async function sendGhlWorkflowWebhook(
     if (eventType === 'instant_estimate_submitted' || eventType === 'customer_estimator_submitted') {
       webhookUrl = settings.ghlWebhookInstantEstimateSubmitted || settings.gohighlevelWebhookUrl || settings.ghlWebhookUrl;
     } else if (eventType === 'manual_estimate_sent') {
-      webhookUrl = settings.ghlWebhookManualEstimateSent;
+      webhookUrl = settings.ghlWebhookManualEstimateSent || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     } else if (eventType === 'estimate_accepted') {
-      webhookUrl = settings.ghlWebhookEstimateAccepted;
+      webhookUrl = settings.ghlWebhookEstimateAccepted || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     } else if (eventType === 'estimate_completed') {
-      webhookUrl = settings.ghlWebhookEstimateCompleted;
+      webhookUrl = settings.ghlWebhookEstimateCompleted || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     } else if (eventType === 'estimate_declined') {
-      webhookUrl = settings.ghlWebhookEstimateDeclined;
+      webhookUrl = settings.ghlWebhookEstimateDeclined || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     }
 
     if (!webhookUrl) {
@@ -327,7 +327,9 @@ async function sendGhlWorkflowWebhook(
         customerSignature: payloadData.customerSignature || 'Digitally Signed',
         customerSignedDate: payloadData.customerSignedDate || new Date().toISOString(),
         acceptedAt: payloadData.acceptedAt || new Date().toISOString(),
-        jobStatus: 'Accepted'
+        jobStatus: 'Accepted',
+        versionId: payloadData.versionId || '',
+        estimateLink: payloadData.estimateLink || ''
       };
     } else if (eventType === 'estimate_completed') {
       finalPayload = {
@@ -346,19 +348,21 @@ async function sendGhlWorkflowWebhook(
       };
     } else if (eventType === 'estimate_declined') {
       finalPayload = {
-        ...finalPayload,
-        customerName: payloadData.customerName || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
-        email: payloadData.email || '',
+        eventType: 'estimate_declined',
+        customerDecision: 'declined',
+        jobStatus: 'Declined',
+        estimateId: String(estimateId || payloadData.estimateId || ''),
+        versionId: String(payloadData.versionId || ''),
+        estimateNumber: String(payloadData.estimateNumber || ''),
+        customerName: String(payloadData.customerName || ''),
+        firstName: String(payloadData.firstName || (payloadData.customerName ? payloadData.customerName.split(' ')[0] : '')),
+        lastName: String(payloadData.lastName || (payloadData.customerName ? payloadData.customerName.split(' ').slice(1).join(' ') : '')),
+        email: String(payloadData.email || ''),
         phone: formatPhoneForGHL(payloadData.phone || ''),
-        address: payloadData.address || '',
-        fenceType: payloadData.fenceType || '',
-        linearFeet: Number(payloadData.linearFeet || 0),
-        estimatedPrice: Number(payloadData.estimatedPrice || 0),
-        estimateId: estimateId || payloadData.estimateId || '',
-        estimateNumber: payloadData.estimateNumber || '',
-        declinedAt: payloadData.declinedAt || new Date().toISOString(),
-        declineReason: payloadData.declineReason || 'Not specified',
-        jobStatus: 'Declined'
+        estimatedPrice: String(payloadData.estimatedPrice || 0),
+        declineReason: String(payloadData.declineReason || 'Not specified'),
+        declinedAt: String(payloadData.declinedAt || new Date().toISOString()),
+        estimateLink: String(payloadData.estimateLink || '')
       };
     }
 
@@ -1082,6 +1086,16 @@ export default async function handler(req: any, res: any) {
 
       const data = snap.data() || {};
       const versionIdParam = req.query?.versionId || req.body?.versionId || '';
+
+      let originalPreviousDecision = 'pending';
+      if (versionIdParam && data.contractVersions) {
+        const mv = data.contractVersions.find((v: any) => v.versionId === versionIdParam);
+        if (mv) {
+          originalPreviousDecision = mv.customerDecision || 'pending';
+        }
+      } else {
+        originalPreviousDecision = data.customerDecision || 'pending';
+      }
       
       let resolvedContractVersion = data.latestContractVersion || 1;
       let targetVersionFound = false;
@@ -1266,29 +1280,137 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      // Dispatch new custom event-based GHL webhooks asynchronously
-      const eventType = decision === 'accepted' ? 'estimate_accepted' : 'estimate_declined';
-      const eventPayload = {
-        customerName: data.customerName || '',
-        email: data.customerEmail || customerEmail || data.email || '',
-        phone: data.customerPhone || data.phone || '',
-        address: data.customerAddress || data.address || '',
-        fenceType: data.fenceType || (data.materials?.[0]?.fenceStyle) || 'Wood Fence',
-        linearFeet: Number(data.linearFeet || (data.materials?.[0]?.linearFeet) || data.manualLinearFeet || 0),
-        estimatedPrice: Number(data.totalCost || data.manualGrandTotal || 0),
-        estimateNumber: data.estimateNumber || '',
-        customerSignature: signature || 'Digitally Signed',
-        customerSignedDate: now,
-        acceptedAt: now,
-        declinedAt: now,
-        declineReason: declineReason || 'Not specified',
-        versionId: versionIdParam || data.latestContractVersionId || '',
-        contractVersion: resolvedContractVersion || data.latestContractVersion || 1
-      };
+      // Determine what webhooks to trigger based on originalPreviousDecision
+      const shouldTriggerDeclined = (decision === 'declined' && (originalPreviousDecision === 'pending' || originalPreviousDecision === 'accepted'));
+      const shouldTriggerAccepted = (decision === 'accepted' && (originalPreviousDecision === 'pending' || originalPreviousDecision === 'declined'));
 
-      sendGhlWorkflowWebhook(eventType, eventPayload, null, db, String(estimateId)).catch(err => {
-        console.error(`Triggering ${eventType} webhook failed:`, err);
-      });
+      let lastGhlWebhookEvent = '';
+      let webhookSentStatus = false;
+      let logEntryToSave: any = null;
+
+      // Prepare estimate link
+      const matchedContractVersionObj = data.contractVersions?.find((v: any) => v.versionId === (versionIdParam || data.latestContractVersionId));
+      const finalEstimateLink = matchedContractVersionObj?.estimateLink || `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimateId}&versionId=${versionIdParam || data.latestContractVersionId || ''}`;
+
+      if (shouldTriggerDeclined) {
+        // Send estimate_declined webhook
+        const eventPayload = {
+          customerName: data.customerName || '',
+          firstName: data.firstName || (data.customerName ? data.customerName.split(' ')[0] : ''),
+          lastName: data.lastName || (data.customerName ? data.customerName.split(' ').slice(1).join(' ') : ''),
+          email: customerEmail || data.customerEmail || data.email || '',
+          phone: data.customerPhone || data.phone || '',
+          estimatedPrice: String(data.totalCost || data.manualGrandTotal || 0),
+          estimateNumber: data.estimateNumber || '',
+          declineReason: declineReason || 'Not specified',
+          versionId: versionIdParam || data.latestContractVersionId || '',
+          declinedAt: now,
+          estimateLink: finalEstimateLink
+        };
+
+        try {
+          const result = await sendGhlWorkflowWebhook('estimate_declined', eventPayload, null, db, String(estimateId));
+          lastGhlWebhookEvent = 'estimate_declined';
+          webhookSentStatus = result.success;
+
+          // Build log doc
+          logEntryToSave = {
+            timestamp: now,
+            payloadPreview: {
+              eventType: 'estimate_declined',
+              customerDecision: 'declined',
+              jobStatus: 'Declined',
+              estimateId,
+              versionId: eventPayload.versionId,
+              estimateNumber: eventPayload.estimateNumber,
+              customerName: eventPayload.customerName,
+              firstName: eventPayload.firstName,
+              lastName: eventPayload.lastName,
+              email: eventPayload.email,
+              phone: eventPayload.phone,
+              estimatedPrice: eventPayload.estimatedPrice,
+              declineReason: eventPayload.declineReason,
+              declinedAt: eventPayload.declinedAt,
+              estimateLink: eventPayload.estimateLink
+            },
+            status: result.status || (result.success ? 200 : 500),
+            success: result.success,
+            response: result.success ? (result.error || 'Successfully dispatched') : null,
+            error: result.success ? null : (result.error || 'Webhook returned non-OK status')
+          };
+        } catch (webhookErr: any) {
+          console.error('Failed to trigger declined webhook:', webhookErr);
+          lastGhlWebhookEvent = 'estimate_declined';
+          webhookSentStatus = false;
+          logEntryToSave = {
+            timestamp: now,
+            payloadPreview: eventPayload,
+            status: 500,
+            success: false,
+            response: null,
+            error: webhookErr.message || 'Error occurred during fetch dispatch'
+          };
+        }
+      } else if (shouldTriggerAccepted) {
+        // Send estimate_accepted webhook
+        const eventPayload = {
+          customerName: data.customerName || '',
+          firstName: data.firstName || (data.customerName ? data.customerName.split(' ')[0] : ''),
+          lastName: data.lastName || (data.customerName ? data.customerName.split(' ').slice(1).join(' ') : ''),
+          email: customerEmail || data.customerEmail || data.email || '',
+          phone: data.customerPhone || data.phone || '',
+          estimatedPrice: Number(data.totalCost || data.manualGrandTotal || 0),
+          estimateNumber: data.estimateNumber || '',
+          customerSignature: signature || 'Digitally Signed',
+          customerSignedDate: now,
+          acceptedAt: now,
+          versionId: versionIdParam || data.latestContractVersionId || '',
+          contractVersion: resolvedContractVersion || data.latestContractVersion || 1,
+          estimateLink: finalEstimateLink
+        };
+
+        try {
+          await sendGhlWorkflowWebhook('estimate_accepted', eventPayload, null, db, String(estimateId));
+        } catch (webhookErr) {
+          console.error('Failed to trigger accepted webhook:', webhookErr);
+        }
+      }
+
+      // Add Firestore logging fields if logEntryToSave is present
+      if (logEntryToSave) {
+        updates.lastGhlWebhookEvent = lastGhlWebhookEvent;
+        updates.lastGhlWebhookSentAt = now;
+        updates.declinedWebhookSent = webhookSentStatus;
+        
+        const existingDeclinedWebhookLog = data.declinedWebhookLog || [];
+        updates.declinedWebhookLog = [...existingDeclinedWebhookLog, logEntryToSave];
+
+        // Also update matching contract version in contractVersions within updates
+        if (updates.contractVersions) {
+          const cVers = [...updates.contractVersions];
+          const cvIdx = cVers.findIndex((v: any) => v.versionId === versionIdParam);
+          if (cvIdx !== -1) {
+            const upVObj = { ...cVers[cvIdx] };
+            upVObj.declinedWebhookSent = webhookSentStatus;
+            const existingCVDeclinedLog = upVObj.declinedWebhookLog || [];
+            upVObj.declinedWebhookLog = [...existingCVDeclinedLog, logEntryToSave];
+            cVers[cvIdx] = upVObj;
+            updates.contractVersions = cVers;
+          }
+        } else if (versionIdParam && data.contractVersions) {
+          // If contractVersions is not in updates, read, update, and write
+          const cVers = [...data.contractVersions];
+          const cvIdx = cVers.findIndex((v: any) => v.versionId === versionIdParam);
+          if (cvIdx !== -1) {
+            const upVObj = { ...cVers[cvIdx] };
+            upVObj.declinedWebhookSent = webhookSentStatus;
+            const existingCVDeclinedLog = upVObj.declinedWebhookLog || [];
+            upVObj.declinedWebhookLog = [...existingCVDeclinedLog, logEntryToSave];
+            cVers[cvIdx] = upVObj;
+            updates.contractVersions = cVers;
+          }
+        }
+      }
 
       await targetRef.update(updates);
       console.log(`Estimate ${estimateId} public decision recorded:`, updates);
