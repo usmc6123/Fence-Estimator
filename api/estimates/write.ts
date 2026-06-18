@@ -1051,7 +1051,7 @@ export default async function handler(req: any, res: any) {
 
     if (action === 'decision-public-estimate') {
       const estimateId = req.query?.estimateId || req.body?.estimateId;
-      const { decision, signature, declineReason, customerEmail } = req.body || {};
+      const { decision, signature, declineReason, customerEmail, customerName } = req.body || {};
 
       if (!estimateId) {
         return res.status(400).json({ error: 'Estimate ID is required.' });
@@ -1080,48 +1080,101 @@ export default async function handler(req: any, res: any) {
         return res.status(404).json({ error: 'Estimate not found' });
       }
 
-      const now = new Date().toISOString();
-      const updates: any = {
-        customerDecision: decision,
-        customerDecisionDate: now,
-        updatedAt: now
-      };
-
-      if (decision === 'accepted') {
-        updates.customerSignature = signature || 'Digitally Signed';
-        updates.customerEmailSigned = customerEmail || '';
-        updates.customerSignedDate = now;
-        updates.acceptedAt = now;
-        updates.jobStatus = 'Accepted';
-      } else {
-        updates.customerDeclineReason = declineReason || 'Not specified';
-        updates.customerEmailSigned = customerEmail || '';
-        updates.jobStatus = 'Declined';
-      }
-
       const data = snap.data() || {};
       const versionIdParam = req.query?.versionId || req.body?.versionId || '';
       
       let resolvedContractVersion = data.latestContractVersion || 1;
+      let targetVersionFound = false;
+
+      const now = new Date().toISOString();
+      const updates: any = {
+        updatedAt: now
+      };
 
       if (versionIdParam && data.contractVersions) {
         const contractVersions = [...(data.contractVersions || [])];
         const vIdx = contractVersions.findIndex((v: any) => v.versionId === versionIdParam);
         if (vIdx !== -1) {
+          targetVersionFound = true;
           const vObj = { ...contractVersions[vIdx] };
+          const previousDecision = vObj.customerDecision || 'pending';
+          
           vObj.customerDecision = decision;
           vObj.status = decision === 'accepted' ? 'Accepted' : 'Declined';
-          vObj.customerSignature = decision === 'accepted' ? (signature || 'Digitally Signed') : null;
-          vObj.customerSignedAt = now;
-          vObj.customerDeclineReason = decision === 'declined' ? (declineReason || 'Not specified') : null;
           
+          if (decision === 'accepted') {
+            vObj.customerSignature = signature || 'Digitally Signed';
+            vObj.customerSignedAt = now;
+            vObj.acceptedAt = now;
+            vObj.declinedAt = null;
+            vObj.customerDeclineReason = null;
+            vObj.currentAccepted = true;
+          } else {
+            vObj.declinedAt = now;
+            vObj.customerDeclineReason = declineReason || '';
+            vObj.currentAccepted = false;
+          }
+
+          if (previousDecision !== decision) {
+            const historyEntry = {
+              previousDecision,
+              newDecision: decision,
+              changedAt: now,
+              customerName: customerName || data.customerName || 'Customer',
+              customerSignature: decision === 'accepted' ? (signature || 'Digitally Signed') : (vObj.customerSignature || null),
+              declineReason: decision === 'declined' ? (declineReason || 'Not specified') : null,
+              source: "customer_portal"
+            };
+            vObj.decisionHistory = [...(vObj.decisionHistory || []), historyEntry];
+          }
+
           contractVersions[vIdx] = vObj;
           updates.contractVersions = contractVersions;
           resolvedContractVersion = vObj.version || 1;
 
-          // Keep top level pointers updated for dashboard status display if this is the latest
           if (data.latestContractVersionId === versionIdParam) {
+            updates.customerDecision = decision;
+            updates.customerDecisionDate = now;
             updates.latestContractStatus = vObj.status;
+            updates.customerEmailSigned = customerEmail || '';
+            
+            if (decision === 'accepted') {
+              updates.customerSignature = signature || 'Digitally Signed';
+              updates.customerSignedDate = now;
+              updates.acceptedAt = now;
+              updates.declinedAt = null;
+              updates.customerDeclineReason = null;
+              updates.jobStatus = 'Accepted';
+            } else {
+              updates.declinedAt = now;
+              updates.customerDeclineReason = declineReason || '';
+              updates.jobStatus = 'Declined';
+              if (vObj.customerSignature) {
+                updates.customerSignature = vObj.customerSignature;
+              }
+            }
+          }
+        }
+      }
+
+      if (!targetVersionFound) {
+        updates.customerDecision = decision;
+        updates.customerDecisionDate = now;
+        updates.customerEmailSigned = customerEmail || '';
+
+        if (decision === 'accepted') {
+          updates.customerSignature = signature || 'Digitally Signed';
+          updates.customerSignedDate = now;
+          updates.acceptedAt = now;
+          updates.declinedAt = null;
+          updates.customerDeclineReason = null;
+          updates.jobStatus = 'Accepted';
+        } else {
+          updates.customerDeclineReason = declineReason || 'Not specified';
+          updates.declinedAt = now;
+          updates.jobStatus = 'Declined';
+          if (data.customerSignature) {
+            updates.customerSignature = data.customerSignature;
           }
         }
       }

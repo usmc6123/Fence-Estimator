@@ -334,6 +334,7 @@ export default function CustomerSignaturePortal({
   const [declineReason, setDeclineReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [decisionUpdatedMessage, setDecisionUpdatedMessage] = useState(false);
 
   useEffect(() => {
     // Read estimateId from window.location.search first as required, falling back to props
@@ -460,7 +461,8 @@ export default function CustomerSignaturePortal({
           versionId: resolvedVersionId,
           decision: 'accepted',
           signature: sigName,
-          customerEmail: email
+          customerEmail: email,
+          customerName: resolvedClientName
         })
       });
 
@@ -470,6 +472,11 @@ export default function CustomerSignaturePortal({
 
       const result = await response.json();
       if (result.success) {
+        if (estimate?.customerDecision && (estimate.customerDecision as any) !== 'pending') {
+          setDecisionUpdatedMessage(true);
+        } else {
+          setDecisionUpdatedMessage(false);
+        }
         setActionSuccess('accepted');
         setShowSignModal(false);
         setEstimate(prev => prev ? {
@@ -479,6 +486,8 @@ export default function CustomerSignaturePortal({
           customerDecisionDate: new Date().toISOString(),
           customerSignedDate: new Date().toISOString(),
           acceptedAt: new Date().toISOString(),
+          declinedAt: null,
+          customerDeclineReason: null,
           jobStatus: 'Accepted'
         } : null);
         return true;
@@ -505,7 +514,8 @@ export default function CustomerSignaturePortal({
           estimateId: activeEstimateId || estimateId,
           versionId: resolvedVersionId,
           decision: 'declined',
-          declineReason: reason
+          declineReason: reason,
+          customerName: resolvedClientName
         })
       });
 
@@ -515,6 +525,11 @@ export default function CustomerSignaturePortal({
 
       const result = await response.json();
       if (result.success) {
+        if (estimate?.customerDecision && (estimate.customerDecision as any) !== 'pending') {
+          setDecisionUpdatedMessage(true);
+        } else {
+          setDecisionUpdatedMessage(false);
+        }
         setActionSuccess('declined');
         setShowDeclineModal(false);
         setEstimate(prev => prev ? {
@@ -522,6 +537,7 @@ export default function CustomerSignaturePortal({
           customerDecision: 'declined',
           customerDeclineReason: reason,
           customerDecisionDate: new Date().toISOString(),
+          declinedAt: new Date().toISOString(),
           jobStatus: 'Declined'
         } : null);
         return true;
@@ -648,20 +664,37 @@ export default function CustomerSignaturePortal({
                 </button>
               </div>
             ) : currentDecision === 'accepted' ? (
-              <div className="flex items-center gap-2 bg-green-950/40 border border-green-500 px-4 py-2 rounded-xl">
-                <CheckCircle size={16} className="text-green-400" />
-                <div className="text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-green-400 leading-none">ACCEPTED & SIGNED</p>
-                  <p className="text-[9px] font-bold text-slate-300 mt-1">Signed by: {estimate.customerSignature}</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2 bg-green-950/40 border border-green-500 px-4 py-2 rounded-xl">
+                  <CheckCircle size={16} className="text-green-400" />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-green-400 leading-none">ACCEPTED & SIGNED</p>
+                    <p className="text-[9px] font-bold text-slate-300 mt-1">Signed by: {estimate.customerSignature}</p>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setShowDeclineModal(true)}
+                  className="px-3 py-1.5 bg-red-650 hover:bg-red-500 hover:scale-[1.03] active:scale-[0.98] text-white font-bold text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md"
+                >
+                  Change to Decline
+                </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 bg-red-950/40 border border-red-500 px-4 py-2 rounded-xl">
-                <XCircle size={16} className="text-red-400" />
-                <div className="text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-red-400 leading-none">DECLINED</p>
-                  <p className="text-[9px] font-bold text-slate-300 mt-1">Reason: {estimate.customerDeclineReason}</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2 bg-red-950/40 border border-red-500 px-4 py-2 rounded-xl">
+                  <XCircle size={16} className="text-red-400" />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-400 leading-none">DECLINED</p>
+                    <p className="text-[9px] font-bold text-slate-300 mt-1">Reason: {estimate.customerDeclineReason}</p>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setShowSignModal(true)}
+                  className="px-3 py-1.5 bg-green-650 hover:bg-green-500 hover:scale-[1.03] active:scale-[0.98] text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-1"
+                >
+                  <Signature size={12} />
+                  Change to Accept
+                </button>
               </div>
             )}
 
@@ -687,12 +720,26 @@ export default function CustomerSignaturePortal({
               animate={{ opacity: 1, height: 'auto', y: 0 }}
               exit={{ opacity: 0, height: 0, y: -10 }}
               className={`p-6 rounded-2xl border-2 flex items-start gap-4 shadow-lg ${
-                actionSuccess === 'accepted' 
-                  ? 'bg-green-50 border-green-200 text-green-900' 
-                  : 'bg-red-50 border-red-200 text-red-900'
+                decisionUpdatedMessage
+                  ? 'bg-blue-50 border-blue-200 text-blue-900'
+                  : actionSuccess === 'accepted' 
+                    ? 'bg-green-50 border-green-200 text-green-900' 
+                    : 'bg-red-50 border-red-200 text-red-900'
               } print:hidden`}
             >
-              {actionSuccess === 'accepted' ? (
+              {decisionUpdatedMessage ? (
+                <>
+                  <div className="p-2.5 bg-blue-200 text-blue-800 rounded-xl mt-0.5">
+                    <CheckCircle size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold uppercase tracking-tight text-blue-800">Decision Updated</h3>
+                    <p className="text-sm mt-1 text-blue-700 leading-relaxed font-semibold">
+                      Your contract decision has been updated.
+                    </p>
+                  </div>
+                </>
+              ) : actionSuccess === 'accepted' ? (
                 <>
                   <div className="p-2.5 bg-green-200 text-green-800 rounded-xl mt-0.5">
                     <CheckCircle size={24} />
@@ -866,9 +913,17 @@ export default function CustomerSignaturePortal({
                 <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
                   This fencing agreement was authorized and signed digitally by <strong className="text-slate-900">{estimate.customerSignature}</strong> on {formattedDecisionDate}.
                 </p>
-                <div className="pt-4 border-t border-slate-100 max-w-md mx-auto text-xs text-slate-400 font-mono flex items-center justify-between">
+                <div className="pt-4 border-t border-slate-100 max-w-md mx-auto text-xs text-slate-400 font-mono flex items-center justify-between pb-4">
                   <span>Signee IP: {estimate.customerOpenedIp || 'Recorded'}</span>
                   <span>System Reference: #{estimate.id?.substring(0, 8)}</span>
+                </div>
+                <div className="pt-4 border-t border-slate-100 max-w-md mx-auto flex justify-center">
+                  <button
+                    onClick={() => setShowDeclineModal(true)}
+                    className="px-5 py-3 bg-red-600 hover:bg-red-500 hover:scale-[1.03] active:scale-[0.98] text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md"
+                  >
+                    Change to Decline
+                  </button>
                 </div>
               </div>
             ) : (
@@ -883,6 +938,15 @@ export default function CustomerSignaturePortal({
                 <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 max-w-md mx-auto mt-2">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left">Reason Given:</p>
                   <p className="text-xs text-slate-700 italic text-left mt-1 font-medium">"{estimate.customerDeclineReason}"</p>
+                </div>
+                <div className="pt-4 border-t border-slate-100 max-w-md mx-auto flex justify-center">
+                  <button
+                    onClick={() => setShowSignModal(true)}
+                    className="px-6 py-3.5 bg-green-600 hover:bg-green-500 hover:scale-[1.03] active:scale-[0.98] text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                  >
+                    <Signature size={14} />
+                    Change to Accept
+                  </button>
                 </div>
               </div>
             )}

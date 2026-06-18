@@ -1829,20 +1829,41 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                 <td className="p-3 text-center">
                                   <span className={cn(
                                     "px-2.5 py-1 text-[9px] uppercase font-black tracking-widest rounded-full border",
-                                    ver.status === 'Accepted' || ver.status === 'accepted' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                    ver.status === 'Declined' || ver.status === 'declined' ? "bg-red-50 text-red-700 border-red-100" :
+                                    ver.status === 'Accepted' || ver.status === 'accepted' || ver.customerDecision === 'accepted' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                    ver.status === 'Declined' || ver.status === 'declined' || ver.customerDecision === 'declined' ? "bg-red-50 text-red-700 border-red-100" :
                                     "bg-blue-50 text-blue-700 border-blue-100"
                                   )}>
-                                    {ver.status || 'Sent'}
+                                    {ver.status || ver.customerDecision || 'Sent'}
                                   </span>
-                                  {ver.customerSignature && (
+                                  {(ver.status === 'Accepted' || ver.status === 'accepted' || ver.customerDecision === 'accepted') && ver.customerSignature && (
                                     <div className="text-[9px] text-emerald-600 font-bold mt-1">
                                       ✓ {ver.customerSignature}
                                     </div>
                                   )}
-                                  {ver.customerDeclineReason && (
+                                  {(ver.status === 'Declined' || ver.status === 'declined' || ver.customerDecision === 'declined') && ver.customerDeclineReason && (
                                     <div className="text-[9px] text-red-500 italic mt-1 max-w-[150px] mx-auto truncate" title={ver.customerDeclineReason}>
                                       "{ver.customerDeclineReason}"
+                                    </div>
+                                  )}
+                                  {ver.decisionHistory && ver.decisionHistory.length > 0 && (
+                                    <div className="mt-2 text-[9px] bg-slate-50 border border-slate-200 rounded-lg p-2 space-y-1 text-left max-w-[180px] mx-auto">
+                                      <p className="font-extrabold uppercase text-slate-400 text-[8px] tracking-wide mb-1">Decision History ({ver.decisionHistory.length}):</p>
+                                      <div className="max-h-[80px] overflow-y-auto space-y-1">
+                                        {ver.decisionHistory.map((h: any, idx: number) => (
+                                          <div key={idx} className="border-b last:border-0 border-slate-100 pb-1 last:pb-0">
+                                            <p className="text-slate-500 font-bold">
+                                              <span className="capitalize">{h.previousDecision}</span> ➔ <span className="capitalize font-black text-slate-800">{h.newDecision}</span>
+                                            </p>
+                                            <p className="text-slate-400 font-medium">{h.customerName} &bull; {new Date(h.changedAt).toLocaleDateString()}</p>
+                                            {h.newDecision === 'accepted' && h.customerSignature && (
+                                              <p className="text-emerald-600 font-semibold text-[8px]">Sig: {h.customerSignature}</p>
+                                            )}
+                                            {h.newDecision === 'declined' && h.declineReason && (
+                                              <p className="text-red-500 font-mono italic text-[8px] truncate" title={h.declineReason}>Reason: "{h.declineReason}"</p>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
                                 </td>
