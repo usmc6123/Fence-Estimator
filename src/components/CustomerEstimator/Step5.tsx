@@ -303,25 +303,7 @@ export default function Step5({
             </div>
           </div>
 
-          {settings?.allowManualForceTrigger !== false && (
-            <div className="mt-4 pt-4 border-t border-[#F2F2F2] flex items-start gap-2 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50">
-              <input
-                type="checkbox"
-                id="forceTrigger"
-                checked={!!data.forceTrigger}
-                onChange={(e) => onChangeField('forceTrigger', e.target.checked)}
-                className="mt-0.5 rounded border-[#D5D5D5] text-blue-600 focus:ring-blue-500"
-              />
-              <div className="space-y-0.5">
-                <label htmlFor="forceTrigger" className="block text-[11px] font-bold text-blue-900 cursor-pointer">
-                  Force Instant Estimate CRM Workflow
-                </label>
-                <p className="text-[9px] text-blue-700 leading-tight">
-                  Override duplicate suppression. Firing this webhook forces GHL campaigns to trigger on submit.
-                </p>
-              </div>
-            </div>
-          )}
+
 
           <div className="text-slate-400 text-[10px] flex items-center gap-2 mt-4 pt-4 border-t border-[#E5E5E5]">
             <Lock size={12} className="text-emerald-500" />
