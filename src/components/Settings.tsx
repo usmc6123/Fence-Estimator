@@ -302,6 +302,91 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [showApiKey, setShowApiKey] = React.useState(false);
   const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
 
+  // Enterprise diagnostic additional states
+  const [isTestingDiagnostic, setIsTestingDiagnostic] = React.useState(false);
+  const [diagnosticResult, setDiagnosticResult] = React.useState<any>(null);
+  const [dupForm, setDupForm] = React.useState({ name: '', email: '', phone: '' });
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = React.useState(false);
+  const [checkDuplicateResult, setCheckDuplicateResult] = React.useState<any>(null);
+  const [prefillQuery, setPrefillQuery] = React.useState('');
+  const [isTestingPrefillQuery, setIsTestingPrefillQuery] = React.useState(false);
+  const [prefillResults, setPrefillResults] = React.useState<any[]>([]);
+
+  const handleRunDiagnostic = async () => {
+    setIsTestingDiagnostic(true);
+    setDiagnosticResult(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'ghl-full-diagnostic' })
+      });
+      const data = await response.json();
+      setDiagnosticResult(data);
+    } catch (err: any) {
+      setDiagnosticResult({ success: false, error: err.message || String(err) });
+    } finally {
+      setIsTestingDiagnostic(false);
+    }
+  };
+
+  const handleCheckDuplicate = async () => {
+    setIsCheckingDuplicate(true);
+    setCheckDuplicateResult(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'check-ghl-duplicate-contact',
+          name: dupForm.name,
+          email: dupForm.email,
+          phone: dupForm.phone
+        })
+      });
+      const data = await response.json();
+      setCheckDuplicateResult(data);
+    } catch (err: any) {
+      setCheckDuplicateResult({ success: false, error: err.message || String(err) });
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+  };
+
+  const handlePrefillSearch = async () => {
+    if (!prefillQuery.trim()) return;
+    setIsTestingPrefillQuery(true);
+    setPrefillResults([]);
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'search-customer-prefill',
+          query: prefillQuery
+        })
+      });
+      const data = await response.json();
+      if (data.success && Array.isArray(data.suggestions)) {
+        setPrefillResults(data.suggestions);
+      } else {
+        setPrefillResults([]);
+      }
+    } catch (err) {
+      console.warn("Failed prefill search simulation:", err);
+    } finally {
+      setIsTestingPrefillQuery(false);
+    }
+  };
+
   const fetchGhlIntegrationStatus = async () => {
     setIsFetchStatusLoading(true);
     try {
@@ -1120,6 +1205,205 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                           )}
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Connection Validator Suite */}
+                  <div className="border-t border-[#F2F2F2] pt-6 grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in text-sans">
+                    <div className="xl:col-span-1 space-y-4 pr-0 xl:pr-4 xl:border-r border-[#F2F2F2]">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded uppercase">Health Suite</span>
+                        <h5 className="text-xs font-bold text-[#333333] mt-1.5">GoHighLevel 10-Point Diagnostic Checklist</h5>
+                        <p className="text-[10px] leading-relaxed text-[#666666]">
+                          Run diagnostic trace passes covering settings config, server pingbacks, database read/writes, lookup indexes, and prefill APIs.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRunDiagnostic}
+                        disabled={isTestingDiagnostic}
+                        className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        {isTestingDiagnostic ? <RefreshCw size={14} className="animate-spin" /> : <Activity size={14} />}
+                        Run Diagnostic Checklist
+                      </button>
+
+                      {diagnosticResult && (
+                        <div className="p-3 bg-slate-50 border border-[#E5E5E5] rounded-xl text-[10px] text-[#333333]">
+                          <p className="font-extrabold text-[#000000] mb-1.5 flex justify-between">
+                            <span>Diagnostic Result</span>
+                            <span className={diagnosticResult.success ? "text-emerald-600" : "text-amber-600"}>
+                              {diagnosticResult.success ? "Complete" : "Failed"}
+                            </span>
+                          </p>
+                          {diagnosticResult.error && (
+                            <p className="text-[9px] text-red-600 font-mono italic break-words">{diagnosticResult.error}</p>
+                          )}
+                          <p className="text-[9px] text-[#666666] mt-1">Traced: {new Date().toLocaleTimeString()}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="xl:col-span-2 space-y-3">
+                      <h6 className="text-[10px] font-bold uppercase tracking-wider text-[#666666]">Trace Points Evaluation Status</h6>
+                      {diagnosticResult && diagnosticResult.results ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          {[
+                            { key: 'settingsExist', label: 'Company Settings Configured' },
+                            { key: 'locationIdExists', label: 'GHL Location ID Configured' },
+                            { key: 'apiKeyExists', label: 'GHL Authorization API Key' },
+                            { key: 'webhookSecretExists', label: 'Inbound Verification Secret Key' },
+                            { key: 'inboundEndpointResponds', label: 'GHL Inbound Gateway Listener' },
+                            { key: 'firestoreWritable', label: 'Firestore DB Write Integrity' },
+                            { key: 'customersAccessible', label: 'Firestore Customers Collection' },
+                            { key: 'webhookLoggingEnabled', label: 'Double Logging Pipeline (Legacy + Unified)' },
+                            { key: 'searchEndpointResponds', label: 'Prefill Index Lookup Autocomplete API' },
+                            { key: 'prefillEndpointResponds', label: 'Prefill Hydrator API endpoint' }
+                          ].map((check) => {
+                            const passed = diagnosticResult.results[check.key];
+                            return (
+                              <div key={check.key} className="flex items-center justify-between p-2 rounded-xl bg-[#F9F9F9] border border-[#E5E5E5]">
+                                <span className="font-medium text-[#444444]">{check.label}</span>
+                                <span className={cn(
+                                  "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full select-none",
+                                  passed ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-red-50 text-red-600 border border-red-200"
+                                )}>
+                                  {passed ? "Pass" : "Fail"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center text-[11px] text-[#999999] rounded-xl border border-dashed border-[#E5E5E5]">
+                          Launch the 10-Point Trace Checklist to test connection security, router gateways, and query handlers.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Duplicate Scanner & Prefill Customer Lookup row */}
+                  <div className="border-t border-[#F2F2F2] pt-6 grid grid-cols-1 xl:grid-cols-2 gap-6 animate-fade-in text-sans">
+                    {/* Duplicate Scanner Sandbox */}
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-sky-600 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded uppercase">Duplicate Protection Rules</span>
+                        <h5 className="text-xs font-bold text-[#333333] mt-1.5">Interactive Duplicate Contact Detector</h5>
+                        <p className="text-[10px] text-[#666666]">
+                          Run diagnostic test values (Name, Email, Phone) down active database search keys to find exact existing target indexes.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input 
+                            type="text" 
+                            id="dupNameInput"
+                            placeholder="Customer Name"
+                            value={dupForm.name}
+                            onChange={(e) => setDupForm({...dupForm, name: e.target.value})}
+                            className="bg-[#F9F9F9] border border-[#E5E5E5] rounded-lg px-2.5 py-1.5 text-[11px] font-sans focus:outline-none"
+                          />
+                          <input 
+                            type="email" 
+                            id="dupEmailInput"
+                            placeholder="name@email.com"
+                            value={dupForm.email}
+                            onChange={(e) => setDupForm({...dupForm, email: e.target.value})}
+                            className="bg-[#F9F9F9] border border-[#E5E5E5] rounded-lg px-2.5 py-1.5 text-[11px] font-sans focus:outline-none"
+                          />
+                        </div>
+                        <input 
+                          type="tel" 
+                          id="dupPhoneInput"
+                          placeholder="Phone number"
+                          value={dupForm.phone}
+                          onChange={(e) => setDupForm({...dupForm, phone: e.target.value})}
+                          className="w-full bg-[#F9F9F9] border border-[#E5E5E5] rounded-lg px-2.5 py-1.5 text-[11px] font-sans focus:outline-none"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        id="dupAnalyzeBtn"
+                        onClick={handleCheckDuplicate}
+                        disabled={isCheckingDuplicate}
+                        className="w-full py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all rounded-lg"
+                      >
+                        {isCheckingDuplicate ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
+                        Analyze Keys for Duplicates
+                      </button>
+
+                      {checkDuplicateResult && (
+                        <div className={cn(
+                          "p-3 rounded-lg border text-[11px] font-medium transition-all animate-fade-in",
+                          checkDuplicateResult.wouldMatch 
+                            ? "bg-amber-50 text-amber-900 border-amber-200" 
+                            : "bg-emerald-50 text-emerald-900 border-emerald-200"
+                        )}>
+                          <span className="font-extrabold text-[12px] block mb-1">
+                            {checkDuplicateResult.wouldMatch ? "⚠️ Duplicate Entity Detected" : "✅ Lead Clearance Approved"}
+                          </span>
+                          {checkDuplicateResult.wouldMatch ? (
+                            <p>
+                              A pre-existing customer matches by <span className="font-extrabold uppercase text-purple-700 font-mono text-[10px]">{checkDuplicateResult.matchedBy}</span>. 
+                              Inbound triggers will merge automatically on Document ID: <span className="font-extrabold font-mono text-[10px] bg-white p-1 rounded border border-[#E5E5E5] select-all block mt-1 text-black">{checkDuplicateResult.customerId}</span>
+                            </p>
+                          ) : (
+                            <p>No matching Name, Email, or Phone exists inside Firestore. A fresh primary Customer doc will compile cleanly on submittal.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Customer Lookup Prefill Simulator */}
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded uppercase font-sans">Autocomplete Hydrator</span>
+                        <h5 className="text-xs font-bold text-[#333333] mt-1.5">Prefill Customer Autocomplete Lookups</h5>
+                        <p className="text-[10px] text-[#666666]">
+                          Simulate client estimate portal queries. Fast-hydrates fields by searching across Customer List, Previous Estimates, or GHL Contacts.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Search queries (e.g. John, test)"
+                          value={prefillQuery}
+                          onChange={(e) => setPrefillQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handlePrefillSearch()}
+                          className="flex-1 bg-[#F9F9F9] border border-[#E5E5E5] rounded-lg px-2.5 py-1.5 text-[11px] font-sans focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handlePrefillSearch}
+                          disabled={isTestingPrefillQuery || !prefillQuery.trim()}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-all disabled:opacity-50"
+                        >
+                          {isTestingPrefillQuery ? <RefreshCw size={12} className="animate-spin" /> : "Search DB"}
+                        </button>
+                      </div>
+
+                      <div className="max-h-40 overflow-y-auto border border-[#E5E5E5] rounded-xl divide-y divide-[#F2F2F2] bg-white text-[11px]">
+                        {prefillResults.length > 0 ? (
+                          prefillResults.map((resItem: any) => (
+                            <div key={resItem.id} className="p-2.5 hover:bg-slate-50 flex justify-between items-center transition-colors">
+                              <div className="min-w-0 pr-3">
+                                <p className="font-extrabold text-neutral-800 truncate">{resItem.customerName}</p>
+                                <p className="text-[9px] text-[#666666] truncate font-mono mt-0.5">{resItem.email} | {resItem.phone}</p>
+                              </div>
+                              <span className="shrink-0 text-[8px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full uppercase">
+                                {resItem.source || 'Database Match'}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-6 text-center text-[#999999] italic">
+                            {isTestingPrefillQuery ? "Searching..." : "No items simulated. Try searching for 'test'."}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

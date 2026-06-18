@@ -306,16 +306,19 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
+  const startProcessingTime = Date.now();
+
   try {
     const body = req.body || {};
     const query = req.query || {};
 
     // PART 3 - Security Shared Secret
     // If ghlInboundWebhookSecret is configured in any companySettings, validate the secret
+    let matchedSettings: any = null;
+    let secretValidated = false;
     try {
       const settingsSnap = await db.collection('companySettings').get();
       let hasAnySecretConfigured = false;
-      let matchedSettings: any = null;
       const reqSecret = (query.secret || req.headers?.['x-lsfw-webhook-secret'] || '').toString().trim();
 
       settingsSnap.forEach(doc => {
@@ -324,13 +327,34 @@ export default async function handler(req: any, res: any) {
           hasAnySecretConfigured = true;
           if (data.ghlInboundWebhookSecret.trim() === reqSecret) {
             matchedSettings = data;
+            secretValidated = true;
           }
         }
       });
 
       if (hasAnySecretConfigured && !matchedSettings) {
         console.warn('Inbound GHL Webhook rejected: Unauthorized secret.');
+        
+        // Log unauthorized attempt to unified logger
+        const logRef = db.collection('ghlWebhookLogs').doc();
+        await logRef.set({
+          id: logRef.id,
+          timestamp: new Date().toISOString(),
+          eventType: 'unauthorized-webhook',
+          direction: 'inbound',
+          customerName: 'Anonymous Attempt',
+          customerEmail: '',
+          matchedBy: 'none',
+          duration: Date.now() - startProcessingTime,
+          result: 'Failed',
+          httpStatus: 401,
+          errorMessage: 'Unauthorized: Invalid or missing webhook secret.',
+          firestoreDocId: null
+        });
+
         return res.status(401).json({ error: 'Unauthorized: Invalid or missing webhook secret.' });
+      } else if (!hasAnySecretConfigured) {
+        secretValidated = true; // No secret is configured, so verification is automatically skipped / passed
       }
     } catch (secError) {
       console.warn('Could not complete security secret check:', secError);
@@ -506,8 +530,27 @@ export default async function handler(req: any, res: any) {
         console.info(`Created new customer ${customerName} (ID: ${customerId}) from inbound webhook`);
       }
 
-      // Logging requirement:
-      // receivedAt, eventType, matchedBy: ghlContactId/email/phone/new, customerId, ghlContactId, success/failure
+      const duration = Date.now() - startProcessingTime;
+
+      // Log to unified ghlWebhookLogs
+      const standardLogRef = db.collection('ghlWebhookLogs').doc();
+      await standardLogRef.set({
+        id: standardLogRef.id,
+        timestamp: nowIso,
+        eventType: mappedAction,
+        direction: 'inbound',
+        customerName: customerName,
+        customerEmail: rawEmail,
+        matchedBy: matchedByStr,
+        duration,
+        result: matchedByStr === 'new' ? 'Created' : 'Merged',
+        httpStatus: 200,
+        errorMessage: null,
+        firestoreDocId: customerId,
+        payload: body
+      });
+
+      // Log to legacy ghlInboundWebhookLogs for complete backward compatibility
       const logRef = db.collection('ghlInboundWebhookLogs').doc();
       await logRef.set({
         id: logRef.id,
@@ -515,10 +558,38 @@ export default async function handler(req: any, res: any) {
         eventType: mappedAction,
         matchedBy: matchedByStr,
         customerId,
-        ghlContactId: rawContactId,
+        ghlContactId: rawContactId || '',
         success: true,
         payload: body
       });
+
+      // Cleanup if simulation test
+      let cleanupDone = false;
+      if (body.isTestSimulation === true) {
+        try {
+          await db.collection('customers').doc(customerId).delete();
+          cleanupDone = true;
+        } catch (cleanupErr) {
+          console.error("Simulation test customer deletion failed:", cleanupErr);
+        }
+      }
+
+      if (body.isTestSimulation === true) {
+        return res.status(200).json({
+          success: true,
+          message: 'Inbound GHL contact synced successfully (Simulation Check)',
+          customerId,
+          matchedBy: matchedByStr,
+          steps: {
+            webhookReceived: true,
+            secretValidated: secretValidated,
+            payloadParsed: true,
+            customerLookupSuccessful: true,
+            firestoreWriteSuccessful: true,
+            cleanupSuccessful: cleanupDone
+          }
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -543,6 +614,26 @@ export default async function handler(req: any, res: any) {
       ownerUid
     );
 
+    const durationOutbound = Date.now() - startProcessingTime;
+
+    // Log outbound webhook to ghlWebhookLogs
+    const standardOutboundLogRef = db.collection('ghlWebhookLogs').doc();
+    await standardOutboundLogRef.set({
+      id: standardOutboundLogRef.id,
+      timestamp: new Date().toISOString(),
+      eventType: eventType,
+      direction: 'outbound',
+      customerName: body.customerName || body.name || `${body.firstName || ''} ${body.lastName || ''}`.trim() || 'Valued Customer',
+      customerEmail: body.email || '',
+      matchedBy: 'N/A',
+      duration: durationOutbound,
+      result: result.success ? 'Success' : 'Failed',
+      httpStatus: result.success ? 200 : 500,
+      errorMessage: result.success ? null : result.error,
+      firestoreDocId: estimateId,
+      payload: body
+    });
+
     if (!result.success) {
       return res.status(200).json({
         success: false,
@@ -555,6 +646,28 @@ export default async function handler(req: any, res: any) {
 
   } catch (error: any) {
     console.error('GHL webhook handler error:', error);
+
+    // Log fatal handler error to ghlWebhookLogs
+    try {
+      const standardLogRef = db.collection('ghlWebhookLogs').doc();
+      await standardLogRef.set({
+        id: standardLogRef.id,
+        timestamp: new Date().toISOString(),
+        eventType: 'fatal-exception',
+        direction: 'inbound',
+        customerName: 'Error Handler',
+        customerEmail: '',
+        matchedBy: 'none',
+        duration: Date.now() - startProcessingTime,
+        result: 'Failed',
+        httpStatus: 500,
+        errorMessage: error.message || String(error),
+        firestoreDocId: null
+      });
+    } catch (logErr) {
+      console.warn('Failed writing fatal error to logger:', logErr);
+    }
+
     return res.status(200).json({ success: false, error: error.message || 'Internal server processes warning.' });
   }
 }

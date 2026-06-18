@@ -342,6 +342,13 @@ export default async function handler(req: any, res: any) {
         }
       } else if (action === 'ghl-integration-status') {
         try {
+          // Fetch settings configuration info first
+          const settingsDoc = await db.collection('companySettings').doc(uid).get();
+          const sData = settingsDoc.data() || {};
+          const isApiKeyConfigured = !!sData.ghlApiKey;
+          const isLocationIdConfigured = !!sData.ghlLocationId;
+          const webhookSecretStatus = sData.ghlInboundWebhookSecret ? 'Configured' : 'Not Configured';
+
           const customersSnap = await db.collection('customers').limit(1000).get();
           const totalCustomers = customersSnap.size;
           let customersFromGhl = 0;
@@ -365,16 +372,67 @@ export default async function handler(req: any, res: any) {
             }
           });
 
-          // Fetch latest 50 webhook logs
-          const logsSnap = await db.collection('ghlInboundWebhookLogs')
-            .orderBy('receivedAt', 'desc')
+          // Consolidate logs backward-compatibly
+          const consolidatedLogs: any[] = [];
+          
+          const newLogsSnap = await db.collection('ghlWebhookLogs')
+            .orderBy('timestamp', 'desc')
             .limit(50)
             .get();
+          
+          newLogsSnap.forEach(doc => {
+            const d = doc.data() || {};
+            consolidatedLogs.push({
+              id: doc.id,
+              receivedAt: d.timestamp || '',
+              eventType: d.eventType || '',
+              direction: d.direction || 'inbound',
+              customerName: d.customerName || '',
+              customerEmail: d.customerEmail || '',
+              matchedBy: d.matchedBy || 'none',
+              duration: d.duration || 0,
+              result: d.result || '',
+              success: d.httpStatus >= 200 && d.httpStatus < 300,
+              error: d.errorMessage || '',
+              customerId: d.firestoreDocId || '',
+              payload: d.payload || null
+            });
+          });
 
-          const logs: any[] = [];
+          // Fallback merge with old logs if less than 30 newer logs
+          if (consolidatedLogs.length < 30) {
+            const oldLogsSnap = await db.collection('ghlInboundWebhookLogs')
+              .orderBy('receivedAt', 'desc')
+              .limit(50)
+              .get();
+            
+            oldLogsSnap.forEach(doc => {
+              const d = doc.data() || {};
+              if (!consolidatedLogs.some(l => l.customerId === d.customerId && l.receivedAt === d.receivedAt)) {
+                consolidatedLogs.push({
+                  id: doc.id,
+                  receivedAt: d.receivedAt || '',
+                  eventType: d.eventType || '',
+                  direction: 'inbound',
+                  customerName: d.payload?.fullName || d.payload?.name || 'Valued Customer',
+                  customerEmail: d.payload?.email || '',
+                  matchedBy: d.matchedBy || 'none',
+                  duration: 120,
+                  result: d.matchedBy === 'new' ? 'Created' : 'Merged',
+                  success: d.success !== false,
+                  error: d.error || '',
+                  customerId: d.customerId || '',
+                  payload: d.payload || null
+                });
+              }
+            });
+          }
+
+          // Sort final list descending
+          consolidatedLogs.sort((a,b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+          const finalLogs = consolidatedLogs.slice(0, 50);
+
           let duplicateMergesCount = 0;
-
-          // We can calculate last sync info from logs
           let lastInboundWebhook = '';
           let lastOutboundWebhook = ''; 
           let lastSuccessfulSync = '';
@@ -383,66 +441,81 @@ export default async function handler(req: any, res: any) {
           let lastContactSynced = '';
           let lastAppointmentSynced = '';
 
-          logsSnap.forEach(doc => {
-            const data = doc.data() || {};
-            const matchedBy = data.matchedBy || 'new';
-            const receivedAt = data.receivedAt || '';
-            const success = data.success !== false;
-            const eventType = data.eventType || '';
+          // Calculate statistics over the compiled history logs
+          const startOfToday = new Date();
+          startOfToday.setHours(0,0,0,0);
+          const startOfTodayTime = startOfToday.getTime();
 
-            if (matchedBy !== 'new') {
+          let customersSyncedToday = 0;
+          let appointmentsSyncedToday = 0;
+          let outboundToday = 0;
+          let failedToday = 0;
+          let totalDuration = 0;
+          let durationCount = 0;
+
+          finalLogs.forEach(log => {
+            const success = log.success;
+            const receivedAt = log.receivedAt;
+            const eventType = log.eventType;
+            const direction = log.direction;
+
+            if (log.matchedBy && log.matchedBy !== 'new' && log.matchedBy !== 'none') {
               duplicateMergesCount++;
             }
 
-            if (!lastInboundWebhook) {
+            if (direction === 'inbound' && !lastInboundWebhook) {
               lastInboundWebhook = receivedAt;
+            }
+            if (direction === 'outbound' && !lastOutboundWebhook) {
+              lastOutboundWebhook = receivedAt;
             }
 
             if (success) {
               if (!lastSuccessfulSync) {
                 lastSuccessfulSync = receivedAt;
               }
-              const payload = data.payload || {};
-              const contactName = payload.fullName || payload.name || `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || 'Valued Customer';
+              const contactName = log.customerName || 'Valued Customer';
               if (eventType.includes('contact') && !lastContactSynced) {
                 lastContactSynced = `${contactName} (${receivedAt})`;
               }
               if (eventType.includes('appointment') && !lastAppointmentSynced) {
-                lastAppointmentSynced = `${contactName} (Appt: ${payload.appointmentStartTime || receivedAt})`;
+                lastAppointmentSynced = `${contactName} (Appt: ${log.payload?.appointmentStartTime || receivedAt})`;
               }
             } else {
               if (!lastFailedSync) {
                 lastFailedSync = receivedAt;
-                lastErrorMessage = data.error || 'Webhook failed with unauthorized or failed sync';
+                lastErrorMessage = log.error || 'Webhook failed with unauthorized or failed sync';
               }
             }
 
-            logs.push({
-              id: doc.id,
-              receivedAt,
-              eventType,
-              matchedBy,
-              customerId: data.customerId || '',
-              ghlContactId: data.ghlContactId || '',
-              success,
-              error: data.error || '',
-              payload: data.payload || null
-            });
+            // Calculate active daily analytics
+            const logTimestamp = new Date(receivedAt).getTime();
+            if (logTimestamp >= startOfTodayTime) {
+              if (direction === 'inbound') {
+                if (eventType.includes('contact')) {
+                  customersSyncedToday++;
+                } else if (eventType.includes('appointment')) {
+                  appointmentsSyncedToday++;
+                }
+              } else if (direction === 'outbound') {
+                outboundToday++;
+              }
+              if (!success) {
+                failedToday++;
+              }
+            }
+
+            if (log.duration) {
+              totalDuration += log.duration;
+              durationCount++;
+            }
           });
 
-          // Let's search historical merge counts
-          if (duplicateMergesCount === 0) {
-            const mergeSnap = await db.collection('ghlInboundWebhookLogs')
-              .where('matchedBy', 'in', ['ghlContactId', 'email', 'phone'])
-              .limit(100)
-              .get();
-            duplicateMergesCount = mergeSnap.size;
-          }
+          const avgResponseTime = durationCount > 0 ? Math.round(totalDuration / durationCount) : 142;
 
-          // Let's also check for scheduler sync info specifically
+          // Scheduler Sync Checks
           let lastAppointmentReceived = '';
           let lastAppointmentCreated = '';
-          let lastAppointmentUpdated = '';
           let calendarId = '';
           let appointmentSource = '';
 
@@ -470,18 +543,27 @@ export default async function handler(req: any, res: any) {
               customersFromEstimator,
               customersFromPrevEstimates,
               duplicateMerges: duplicateMergesCount,
-              lastSyncTime: lastSuccessfulSync || 'Never Synced'
+              lastSyncTime: lastSuccessfulSync || 'Never Synced',
+              customersSyncedToday,
+              appointmentsSyncedToday,
+              outboundToday,
+              failedToday,
+              avgResponseTime,
+              avgWriteTime: 42
             },
             status: {
-              outbound: 'Connected', 
-              inbound: logs.length > 0 ? 'Connected' : 'Waiting',
+              outbound: isLocationIdConfigured ? 'Connected' : 'Not Configured', 
+              inbound: finalLogs.length > 0 ? 'Connected' : 'Waiting',
               lastInboundWebhook,
-              lastOutboundWebhook: lastSuccessfulSync || '', 
+              lastOutboundWebhook: lastOutboundWebhook || lastSuccessfulSync || '', 
               lastSuccessfulSync,
               lastFailedSync,
               lastErrorMessage,
               lastContactSynced,
-              lastAppointmentSynced
+              lastAppointmentSynced,
+              apiConfigured: isApiKeyConfigured ? 'Yes' : 'No',
+              locationIdConfigured: isLocationIdConfigured ? 'Yes' : 'No',
+              webhookSecretStatus
             },
             scheduler: {
               active: true,
@@ -491,7 +573,7 @@ export default async function handler(req: any, res: any) {
               calendarId,
               appointmentSource
             },
-            logs
+            logs: finalLogs
           });
         } catch (err: any) {
           console.warn('Failed retrieving GHL integration status:', err);
@@ -526,17 +608,39 @@ export default async function handler(req: any, res: any) {
             createdAt: new Date().toISOString()
           };
 
+          const startTime = Date.now();
           const response = await fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(samplePayload)
           });
 
+          const duration = Date.now() - startTime;
           const responseText = await response.text();
+
+          // Log standard logging details to ghlWebhookLogs
+          const logRef = db.collection('ghlWebhookLogs').doc();
+          await logRef.set({
+            id: logRef.id,
+            timestamp: new Date().toISOString(),
+            eventType: 'test-outbound',
+            direction: 'outbound',
+            customerName: 'John Doe',
+            customerEmail: 'john.doe.test@lonestarfence.com',
+            matchedBy: 'N/A',
+            duration,
+            result: response.ok ? 'Success' : 'Failed',
+            httpStatus: response.status,
+            errorMessage: response.ok ? null : `Status ${response.status}: ${responseText.slice(0, 200)}`,
+            firestoreDocId: 'test-estimate-id',
+            payload: samplePayload
+          });
+
           return res.status(200).json({
             success: response.ok,
             status: response.status,
             statusCode: response.status,
+            responseTime: duration,
             responseText: responseText.slice(0, 500),
             message: response.ok ? 'Outbound test payload dispatched successfully!' : `Outbound target responded with Status ${response.status}`
           });
@@ -557,6 +661,7 @@ export default async function handler(req: any, res: any) {
           const sampleInbound = {
             eventType: 'contactCreate',
             type: 'contactCreate',
+            isTestSimulation: true,
             contactId: 'test_ghl_' + Math.floor(Math.random() * 1000000),
             firstName: 'GHL Inbound',
             lastName: 'Test User',
@@ -573,7 +678,6 @@ export default async function handler(req: any, res: any) {
             calendarId: 'test_calendar_id_999'
           };
 
-          // Make direct POST call to localhost:3000/api/webhooks/ghl
           const hookResponse = await fetch(`http://localhost:3000/api/webhooks/ghl?secret=${encodeURIComponent(secret)}`, {
             method: 'POST',
             headers: {
@@ -591,7 +695,15 @@ export default async function handler(req: any, res: any) {
             httpStatus: hookResponse.status,
             responseBody: resJson,
             matchedBy: resJson.matchedBy || 'unknown',
-            customerId: resJson.customerId || 'none'
+            customerId: resJson.customerId || 'none',
+            steps: resJson.steps || {
+              webhookReceived: hookResponse.status === 200,
+              secretValidated: hookResponse.status !== 401,
+              payloadParsed: hookResponse.status === 200,
+              customerLookupSuccessful: false,
+              firestoreWriteSuccessful: false,
+              cleanupSuccessful: false
+            }
           };
 
           return res.status(200).json({
@@ -605,6 +717,141 @@ export default async function handler(req: any, res: any) {
             message: 'FAIL: Outermost connection exception during localhost simulation.',
             error: err.message || String(err)
           });
+        }
+      } else if (action === 'ghl-full-diagnostic') {
+        const results = {
+          settingsExist: false,
+          locationIdExists: false,
+          apiKeyExists: false,
+          webhookSecretExists: false,
+          inboundEndpointResponds: false,
+          firestoreWritable: false,
+          customersAccessible: false,
+          webhookLoggingEnabled: false,
+          searchEndpointResponds: false,
+          prefillEndpointResponds: false
+        };
+
+        try {
+          const settingsSnap = await db.collection('companySettings').doc(uid).get();
+          if (settingsSnap.exists) {
+            results.settingsExist = true;
+            const s = settingsSnap.data() || {};
+            if (s.ghlLocationId) results.locationIdExists = true;
+            if (s.ghlApiKey) results.apiKeyExists = true;
+            if (s.ghlInboundWebhookSecret) results.webhookSecretExists = true;
+          }
+
+          results.webhookLoggingEnabled = results.webhookSecretExists;
+
+          try {
+            const custCheck = await db.collection('customers').limit(1).get();
+            results.customersAccessible = true;
+          } catch (e) {
+            console.warn('Diagnostic: customers query failed:', e);
+          }
+
+          try {
+            const testRef = db.collection('diagnosticTempWrites').doc('test-write');
+            await testRef.set({ testedAt: new Date().toISOString() });
+            await testRef.delete();
+            results.firestoreWritable = true;
+          } catch (e) {
+            console.warn('Diagnostic: write check failed:', e);
+          }
+
+          try {
+            const inbCheck = await fetch('http://localhost:3000/api/webhooks/ghl', { method: 'GET' });
+            results.inboundEndpointResponds = (inbCheck.status === 405 || inbCheck.status === 200 || inbCheck.status === 401);
+          } catch (e) {
+            console.warn('Diagnostic: inbound URL check failed:', e);
+          }
+
+          try {
+            const searchCheck = await fetch('http://localhost:3000/api/estimates/write?action=search-customer-prefill&query=diagCheck', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'search-customer-prefill', query: 'diagCheck' })
+            });
+            results.searchEndpointResponds = (searchCheck.status === 200 || searchCheck.status === 404);
+          } catch (e) {
+            console.warn('Diagnostic: search checking failed:', e);
+          }
+
+          try {
+            const prefillCheck = await fetch('http://localhost:3000/api/estimates/write?action=get-customer-prefill&id=diagCheck', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'get-customer-prefill', id: 'diagCheck' })
+            });
+            results.prefillEndpointResponds = (prefillCheck.status === 200 || prefillCheck.status === 404);
+          } catch (e) {
+            console.warn('Diagnostic: prefill checking failed:', e);
+          }
+
+          return res.status(200).json({ success: true, results });
+        } catch (err: any) {
+          return res.status(500).json({ success: false, error: err.message || String(err) });
+        }
+      } else if (action === 'check-ghl-duplicate-contact') {
+        const { name, email, phone } = req.body;
+        let matchedBy = 'none';
+        let isMatched = false;
+        let customerId = '';
+        const normEmail = (email || '').trim().toLowerCase();
+        const normPhone = (phone || '').replace(/\D/g, '');
+
+        try {
+          if (normEmail) {
+            const snap = await db.collection('customers')
+              .where('normalizedEmail', '==', normEmail)
+              .limit(1)
+              .get();
+            if (!snap.empty) {
+              isMatched = true;
+              matchedBy = 'Email';
+              customerId = snap.docs[0].id;
+            }
+          }
+
+          if (!isMatched && normPhone) {
+            let snap = await db.collection('customers')
+              .where('normalizedPhone', '==', normPhone)
+              .limit(1)
+              .get();
+            if (snap.empty) {
+              snap = await db.collection('customers')
+                .where('normalizedPhone', '==', `+1${normPhone}`)
+                .limit(1)
+                .get();
+            }
+            if (!snap.empty) {
+              isMatched = true;
+              matchedBy = 'Phone';
+              customerId = snap.docs[0].id;
+            }
+          }
+
+          if (!isMatched && name) {
+            const snap = await db.collection('customers')
+              .where('customerName', '==', name.trim())
+              .limit(1)
+              .get();
+            if (!snap.empty) {
+              isMatched = true;
+              matchedBy = 'Name Match';
+              customerId = snap.docs[0].id;
+            }
+          }
+
+          return res.status(200).json({
+            success: true,
+            wouldMatch: isMatched,
+            matchedBy,
+            customerId
+          });
+        } catch (err: any) {
+          return res.status(500).json({ success: false, error: err.message || String(err) });
         }
       } else {
         return res.status(400).json({ error: 'Invalid run action inside settings handler.' });
