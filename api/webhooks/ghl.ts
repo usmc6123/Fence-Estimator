@@ -382,37 +382,43 @@ export default async function handler(req: any, res: any) {
     if (isInbound) {
       console.info(`Processing Inbound GHL Webhook Event: ${mappedAction}`);
 
-      // Parse payload fields with camelCase and snake_case format support
+      // Parse payload fields with camelCase, snake_case and customData priority support
+      const cd = body.customData || {};
+      const contact = body.contact || {};
+      const loc = body.location || {};
+
       const rawContactId = (
-        body.contactId ||
+        cd.contact_id ||
         body.contact_id ||
+        body.contactId ||
         body.id ||
-        body.contact?.id ||
+        contact.id ||
         ''
       ).toString().trim();
 
       let firstName = (
-        body.firstName ||
+        cd.first_name ||
         body.first_name ||
-        body.contact?.firstName ||
-        body.contact?.first_name ||
+        body.firstName ||
+        contact.first_name ||
+        contact.firstName ||
         ''
       ).toString().trim();
 
       let lastName = (
-        body.lastName ||
+        cd.last_name ||
         body.last_name ||
-        body.contact?.lastName ||
-        body.contact?.last_name ||
+        body.lastName ||
+        contact.last_name ||
+        contact.lastName ||
         ''
       ).toString().trim();
 
       let customerName = (
-        body.fullName ||
+        cd.full_name ||
         body.full_name ||
+        body.fullName ||
         body.name ||
-        body.contact?.fullName ||
-        body.contact?.full_name ||
         ''
       ).toString().trim();
 
@@ -422,25 +428,30 @@ export default async function handler(req: any, res: any) {
         if (!lastName) lastName = parsed.lastName;
       }
       if (!customerName) {
-        customerName = `${firstName} ${lastName}`.trim();
+        if (firstName || lastName) {
+          customerName = `${firstName} ${lastName}`.trim();
+        }
       }
 
       const rawEmail = (
+        cd.email ||
         body.email ||
-        body.contact?.email ||
+        contact.email ||
         ''
       ).toString().trim();
 
       const rawPhone = (
+        cd.phone_raw ||
         body.phone ||
-        body.contact?.phone ||
+        cd.phone ||
+        contact.phone ||
         ''
       ).toString().trim();
 
       const normalizedPhone = normalizePhone(rawPhone);
       const normalizedEmail = normalizeEmail(rawEmail);
 
-      const rawTags = body.tags || body.contact?.tags || '';
+      const rawTags = cd.tags || body.tags || contact.tags || '';
       let tagsToSave: string[] = [];
       if (Array.isArray(rawTags)) {
         tagsToSave = rawTags.map(t => String(t).trim()).filter(Boolean);
@@ -460,11 +471,29 @@ export default async function handler(req: any, res: any) {
         ''
       ).toString().trim();
 
+      const rawCompanyName = (
+        cd.companyName ||
+        body.company_name ||
+        body.companyName ||
+        ''
+      ).toString().trim();
+
+      const rawContactSource = (
+        body.contact_source ||
+        body.source ||
+        contact.attributionSource?.medium ||
+        contact.lastAttributionSource?.medium ||
+        ''
+      ).toString().trim();
+
       // Priority Address Mapping
       let rawAddress = '';
       let addressSource: 'contact_fields' | 'customData' | 'ghl_location_fallback' | 'missing' = 'missing';
 
-      if (body.address1 && String(body.address1).trim()) {
+      if (cd.address1 && String(cd.address1).trim()) {
+        rawAddress = String(cd.address1).trim();
+        addressSource = 'customData';
+      } else if (body.address1 && String(body.address1).trim()) {
         rawAddress = String(body.address1).trim();
         addressSource = 'contact_fields';
       } else if (body.address && String(body.address).trim()) {
@@ -473,67 +502,65 @@ export default async function handler(req: any, res: any) {
       } else if (body.full_address && String(body.full_address).trim()) {
         rawAddress = String(body.full_address).trim();
         addressSource = 'contact_fields';
-      } else if (body.contact?.address1 && String(body.contact.address1).trim()) {
-        rawAddress = String(body.contact.address1).trim();
+      } else if (contact.address1 && String(contact.address1).trim()) {
+        rawAddress = String(contact.address1).trim();
         addressSource = 'contact_fields';
-      } else if (body.contact?.address && String(body.contact.address).trim()) {
-        rawAddress = String(body.contact.address).trim();
+      } else if (contact.address && String(contact.address).trim()) {
+        rawAddress = String(contact.address).trim();
         addressSource = 'contact_fields';
-      } else if (body.contact?.full_address && String(body.contact.full_address).trim()) {
-        rawAddress = String(body.contact.full_address).trim();
+      } else if (contact.full_address && String(contact.full_address).trim()) {
+        rawAddress = String(contact.full_address).trim();
         addressSource = 'contact_fields';
-      } else if (body.customData?.address && String(body.customData.address).trim()) {
-        rawAddress = String(body.customData.address).trim();
-        addressSource = 'customData';
-      } else if (body.customData?.streetAddress && String(body.customData.streetAddress).trim()) {
-        rawAddress = String(body.customData.streetAddress).trim();
-        addressSource = 'customData';
-      } else if (body.location?.address && String(body.location.address).trim()) {
-        rawAddress = String(body.location.address).trim();
+      } else if (loc.address && String(loc.address).trim()) {
+        rawAddress = String(loc.address).trim();
         addressSource = 'ghl_location_fallback';
       }
 
       // Priority City Mapping
       let rawCity = '';
-      if (body.city && String(body.city).trim()) {
+      if (cd.city && String(cd.city).trim()) {
+        rawCity = String(cd.city).trim();
+      } else if (body.city && String(body.city).trim()) {
         rawCity = String(body.city).trim();
-      } else if (body.contact?.city && String(body.contact.city).trim()) {
-        rawCity = String(body.contact.city).trim();
-      } else if (body.customData?.city && String(body.customData.city).trim()) {
-        rawCity = String(body.customData.city).trim();
-      } else if (body.location?.city && String(body.location.city).trim()) {
-        rawCity = String(body.location.city).trim();
+      } else if (contact.city && String(contact.city).trim()) {
+        rawCity = String(contact.city).trim();
+      } else if (loc.city && String(loc.city).trim()) {
+        rawCity = String(loc.city).trim();
       }
 
       // Priority State Mapping
       let rawState = '';
-      if (body.state && String(body.state).trim()) {
+      if (cd.state && String(cd.state).trim()) {
+        rawState = String(cd.state).trim();
+      } else if (body.state && String(body.state).trim()) {
         rawState = String(body.state).trim();
-      } else if (body.contact?.state && String(body.contact.state).trim()) {
-        rawState = String(body.contact.state).trim();
-      } else if (body.customData?.state && String(body.customData.state).trim()) {
-        rawState = String(body.customData.state).trim();
-      } else if (body.location?.state && String(body.location.state).trim()) {
-        rawState = String(body.location.state).trim();
+      } else if (contact.state && String(contact.state).trim()) {
+        rawState = String(contact.state).trim();
+      } else if (loc.state && String(loc.state).trim()) {
+        rawState = String(loc.state).trim();
       }
 
       // Priority Zip Mapping
       let rawPostalCode = '';
-      if (body.postalCode && String(body.postalCode).trim()) {
+      if (cd.postalCode && String(cd.postalCode).trim()) {
+        rawPostalCode = String(cd.postalCode).trim();
+      } else if (cd.postal_code && String(cd.postal_code).trim()) {
+        rawPostalCode = String(cd.postal_code).trim();
+      } else if (body.postal_code && String(body.postal_code).trim()) {
+        rawPostalCode = String(body.postal_code).trim();
+      } else if (body.postalCode && String(body.postalCode).trim()) {
         rawPostalCode = String(body.postalCode).trim();
       } else if (body.zip && String(body.zip).trim()) {
         rawPostalCode = String(body.zip).trim();
-      } else if (body.postal_code && String(body.postal_code).trim()) {
-        rawPostalCode = String(body.postal_code).trim();
-      } else if (body.contact?.postalCode && String(body.contact.postalCode).trim()) {
-        rawPostalCode = String(body.contact.postalCode).trim();
-      } else if (body.contact?.zip && String(body.contact.zip).trim()) {
-        rawPostalCode = String(body.contact.zip).trim();
-      } else if (body.customData?.zip && String(body.customData.zip).trim()) {
-        rawPostalCode = String(body.customData.zip).trim();
-      } else if (body.location?.postalCode && String(body.location.postalCode).trim()) {
-        rawPostalCode = String(body.location.postalCode).trim();
+      } else if (contact.postalCode && String(contact.postalCode).trim()) {
+        rawPostalCode = String(contact.postalCode).trim();
+      } else if (contact.zip && String(contact.zip).trim()) {
+        rawPostalCode = String(contact.zip).trim();
+      } else if (loc.postalCode && String(loc.postalCode).trim()) {
+        rawPostalCode = String(loc.postalCode).trim();
       }
+
+      const usedCustomData = !!(body.customData && Object.keys(body.customData).length > 0);
 
       // Duplicate Matching Rules:
       // Before creating a new customer, search existing customers by:
@@ -580,6 +607,25 @@ export default async function handler(req: any, res: any) {
       let customerId = '';
       const nowIso = new Date().toISOString();
 
+      const normalizedPayload = {
+        ghlContactId: rawContactId,
+        firstName,
+        lastName,
+        customerName,
+        email: rawEmail,
+        phone: rawPhone,
+        address: rawAddress,
+        city: rawCity,
+        state: rawState,
+        zip: rawPostalCode,
+        tags: tagsToSave,
+        contactType: rawContactType,
+        dateCreated: rawDateCreated,
+        companyName: rawCompanyName,
+        contactSource: rawContactSource,
+        source: 'GHL'
+      };
+
       if (matchedDoc) {
         customerId = matchedDoc.id;
         const currentData = matchedDoc.data() || {};
@@ -597,11 +643,16 @@ export default async function handler(req: any, res: any) {
           city: rawCity || currentData.city || '',
           state: rawState || currentData.state || '',
           zip: rawPostalCode || currentData.zip || '',
+          companyName: rawCompanyName || currentData.companyName || '',
+          contactSource: rawContactSource || currentData.contactSource || '',
           source: 'GHL',
           tags: tagsToSave.length > 0 ? tagsToSave : (currentData.tags || []),
           contactType: rawContactType || currentData.contactType || '',
           addressSource: addressSource !== 'missing' ? addressSource : (currentData.addressSource || 'missing'),
+          createdFrom: currentData.createdFrom || 'ghl_inbound_webhook',
           lastSyncedAt: nowIso,
+          rawGhlPayloadPreview: JSON.stringify(body).substring(0, 500),
+          normalizedGhlPayloadPreview: JSON.stringify(normalizedPayload).substring(0, 500),
           lastGhlPayloadPreview: JSON.stringify(body).substring(0, 500)
         };
 
@@ -635,6 +686,8 @@ export default async function handler(req: any, res: any) {
           city: rawCity,
           state: rawState,
           zip: rawPostalCode,
+          companyName: rawCompanyName,
+          contactSource: rawContactSource,
           source: 'GHL',
           tags: tagsToSave,
           contactType: rawContactType,
@@ -642,6 +695,8 @@ export default async function handler(req: any, res: any) {
           createdFrom: 'ghl_inbound_webhook',
           createdAt: nowIso,
           lastSyncedAt: nowIso,
+          rawGhlPayloadPreview: JSON.stringify(body).substring(0, 500),
+          normalizedGhlPayloadPreview: JSON.stringify(normalizedPayload).substring(0, 500),
           lastGhlPayloadPreview: JSON.stringify(body).substring(0, 500)
         };
 
@@ -675,23 +730,6 @@ export default async function handler(req: any, res: any) {
         missingFields.push('customerAddress');
       }
 
-      const normalizedPayload = {
-        ghlContactId: rawContactId,
-        firstName,
-        lastName,
-        customerName,
-        email: rawEmail,
-        phone: rawPhone,
-        address: rawAddress,
-        city: rawCity,
-        state: rawState,
-        zip: rawPostalCode,
-        tags: tagsToSave,
-        contactType: rawContactType,
-        dateCreated: rawDateCreated,
-        source: 'GHL'
-      };
-
       // Log to unified ghlWebhookLogs
       const standardLogRef = db.collection('ghlWebhookLogs').doc();
       await standardLogRef.set({
@@ -713,7 +751,9 @@ export default async function handler(req: any, res: any) {
         normalizedPayload,
         addressSource,
         missingFields,
-        customerId
+        customerId,
+        usedCustomData,
+        normalizedPayloadPreview: JSON.stringify(normalizedPayload).substring(0, 500)
       });
 
       // Log to legacy ghlInboundWebhookLogs for complete backward compatibility
