@@ -58,6 +58,65 @@ export default function CustomerEstimator({
     }
   }, []);
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleScrollToTop = () => {
+      const rootEl = document.getElementById('customer-estimator-root');
+      if (!rootEl) return;
+
+      // Find nearest scrollable ancestor container in case we are placed in a custom scroll holder
+      let parent = rootEl.parentElement;
+      let scrollContainer: HTMLElement | null = null;
+
+      while (parent && parent !== document.body && parent !== document.documentElement) {
+        const style = window.getComputedStyle(parent);
+        const overflowY = style.overflowY || style.overflow || '';
+        const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
+        
+        if (isScrollable) {
+          scrollContainer = parent;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+
+      // If we found a scrollable ancestor, scroll that container to the top
+      if (scrollContainer) {
+        scrollContainer.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      } else {
+        // If standalone and full-page or standard viewport, scroll the whole window smoothly
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+
+        // Also ensure the element itself is shifted back into view at the top
+        rootEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+
+      // If inside an iframe, let the parent container know so it can adjust window scroll
+      if (isEmbedded) {
+        try {
+          window.parent.postMessage({ type: 'scroll_to_top' }, '*');
+        } catch (postErr) {
+          // ignore sandboxed message errors
+        }
+      }
+    };
+
+    // requestAnimationFrame ensures scrolling triggers right after the render phase finishes
+    requestAnimationFrame(() => {
+      requestAnimationFrame(handleScrollToTop);
+    });
+  }, [step, activeSubTab, isEmbedded]);
+
   // Send scroll height to parent window when embedded inside an iframe
   React.useEffect(() => {
     if (!standalone) return;
