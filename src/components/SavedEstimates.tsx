@@ -860,7 +860,20 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                           const errData = await response.json();
                                           throw new Error(errData.error || 'Failed to update estimate status');
                                         }
+                                        const resData = await response.json();
                                         fetchEstimates();
+
+                                        if (newStatus === 'Accepted' || newStatus === 'Declined' || newStatus === 'Completed') {
+                                          if (resData.webhookSuccess === true) {
+                                            alert("Status updated and GHL notified.");
+                                          } else if (resData.webhookSuccess === false) {
+                                            alert("Status updated, but GHL webhook failed. Check integration logs.");
+                                          } else {
+                                            alert("Status updated.");
+                                          }
+                                        } else {
+                                          alert("Status updated.");
+                                        }
                                       } catch (error: any) {
                                         console.error('Failed to update status manually:', error);
                                         alert(error.message || 'Failed to update status');

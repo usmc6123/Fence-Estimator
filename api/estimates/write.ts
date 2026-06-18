@@ -315,6 +315,7 @@ async function sendGhlWorkflowWebhook(
     } else if (eventType === 'estimate_accepted') {
       finalPayload = {
         ...finalPayload,
+        source: payloadData.source || 'customer_portal',
         customerName: payloadData.customerName || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
         email: payloadData.email || '',
         phone: formatPhoneForGHL(payloadData.phone || ''),
@@ -334,6 +335,7 @@ async function sendGhlWorkflowWebhook(
     } else if (eventType === 'estimate_completed') {
       finalPayload = {
         ...finalPayload,
+        source: payloadData.source || 'customer_portal',
         customerName: payloadData.customerName || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
         email: payloadData.email || '',
         phone: formatPhoneForGHL(payloadData.phone || ''),
@@ -3618,71 +3620,6 @@ Lone Star Fence Works`;
       const source = updates.source || 'manual_dropdown';
       delete updates.source;
 
-      // Handle manual status dropdown change requested by client
-      if (updates.manualStatusChange) {
-        const mStatus = updates.manualStatusChange;
-        
-        if (mStatus === 'Draft') {
-          updates.jobStatus = 'Draft';
-          updates.customerDecision = 'none';
-          updates.customerEmailSent = false;
-          updates.customerEmailSentAt = null;
-          updates.sentAt = null;
-          updates.customerSignature = null;
-          updates.customerSignedDate = null;
-          updates.acceptedAt = null;
-          updates.declinedAt = null;
-          updates.completedAt = null;
-          updates.declineReason = null;
-          updates.customerDeclineReason = null;
-          if (existingData.status === 'archived' || existingData.status === 'completed') {
-            updates.status = 'active';
-          }
-        } else if (mStatus === 'Estimate Sent') {
-          updates.jobStatus = 'Estimate Sent';
-          updates.customerDecision = 'pending';
-          updates.customerSignature = null;
-          updates.customerSignedDate = null;
-          updates.acceptedAt = null;
-          updates.declinedAt = null;
-          updates.declineReason = null;
-          updates.customerDeclineReason = null;
-          if (existingData.status === 'archived') {
-            updates.status = 'active';
-          }
-        } else if (mStatus === 'Accepted') {
-          updates.jobStatus = 'Accepted';
-          updates.customerDecision = 'accepted';
-          updates.acceptedAt = existingData.acceptedAt || nowIso;
-          if (existingData.status === 'archived') {
-            updates.status = 'active';
-          }
-        } else if (mStatus === 'Declined') {
-          updates.jobStatus = 'Declined';
-          updates.customerDecision = 'declined';
-          updates.declinedAt = existingData.declinedAt || nowIso;
-          if (existingData.status === 'archived') {
-            updates.status = 'active';
-          }
-        } else if (mStatus === 'Completed') {
-          updates.jobStatus = 'Completed';
-          updates.status = 'completed';
-          updates.completedAt = existingData.completedAt || nowIso;
-        } else if (mStatus === 'Archived') {
-          updates.status = 'archived';
-          updates.archivedAt = existingData.archivedAt || nowIso;
-        }
-        
-        delete updates.manualStatusChange;
-      }
-
-      // If status is archived and we change to something else, reset status to active
-      if (existingData.status === 'archived' && updates.status !== 'archived' && (updates.jobStatus || updates.status)) {
-        if (updates.status !== 'completed') {
-          updates.status = 'active';
-        }
-      }
-
       // Create a status label checker to log transition inside status_history / statusHistory
       const getStatusLabelComp = (docData: any) => {
         if (docData.status === 'archived') return 'Archived';
@@ -3697,6 +3634,278 @@ Lone Star Fence Works`;
         }
         return 'Draft';
       };
+
+      let manualWebhookTriggered = false;
+      let webhookSuccessResult: boolean | null = null;
+
+      // Handle manual status dropdown change requested by client
+      if (updates.manualStatusChange) {
+        const mStatus = updates.manualStatusChange;
+        const previousMStatus = getStatusLabelComp(existingData);
+
+        if (mStatus !== previousMStatus) {
+          // Track that a manual webhook firing is needed
+          manualWebhookTriggered = (mStatus === 'Accepted' || mStatus === 'Declined' || mStatus === 'Completed');
+
+          if (mStatus === 'Draft') {
+            updates.jobStatus = 'Draft';
+            updates.customerDecision = 'none';
+            updates.customerEmailSent = false;
+            updates.customerEmailSentAt = null;
+            updates.sentAt = null;
+            updates.customerSignature = null;
+            updates.customerSignedDate = null;
+            updates.acceptedAt = null;
+            updates.declinedAt = null;
+            updates.completedAt = null;
+            updates.declineReason = null;
+            updates.customerDeclineReason = null;
+            if (existingData.status === 'archived' || existingData.status === 'completed') {
+              updates.status = 'active';
+            }
+          } else if (mStatus === 'Estimate Sent') {
+            updates.jobStatus = 'Estimate Sent';
+            updates.customerDecision = 'pending';
+            updates.customerSignature = null;
+            updates.customerSignedDate = null;
+            updates.acceptedAt = null;
+            updates.declinedAt = null;
+            updates.declineReason = null;
+            updates.customerDeclineReason = null;
+            if (existingData.status === 'archived') {
+              updates.status = 'active';
+            }
+          } else if (mStatus === 'Accepted') {
+            updates.jobStatus = 'Accepted';
+            updates.customerDecision = 'accepted';
+            updates.acceptedAt = existingData.acceptedAt || nowIso;
+            updates.source = 'manual_admin';
+            if (existingData.status === 'archived') {
+              updates.status = 'active';
+            }
+          } else if (mStatus === 'Declined') {
+            updates.jobStatus = 'Declined';
+            updates.customerDecision = 'declined';
+            updates.declinedAt = existingData.declinedAt || nowIso;
+            updates.source = 'manual_admin';
+            if (existingData.status === 'archived') {
+              updates.status = 'active';
+            }
+          } else if (mStatus === 'Completed') {
+            updates.jobStatus = 'Completed';
+            updates.status = 'completed';
+            updates.completedAt = existingData.completedAt || nowIso;
+            updates.source = 'manual_admin';
+          } else if (mStatus === 'Archived') {
+            updates.status = 'archived';
+            updates.archivedAt = existingData.archivedAt || nowIso;
+          }
+
+          // Version history:
+          // If the estimate has contractVersions:
+          if (existingData.contractVersions && existingData.contractVersions.length > 0) {
+            const contractVersions = [...(existingData.contractVersions || [])];
+            let vIdx = -1;
+            if (existingData.latestContractVersionId) {
+              vIdx = contractVersions.findIndex((v: any) => v.versionId === existingData.latestContractVersionId);
+            }
+            if (vIdx === -1) {
+              vIdx = contractVersions.length - 1;
+            }
+
+            if (vIdx !== -1) {
+              const vObj = { ...contractVersions[vIdx] };
+              const versionPrevDecision = vObj.customerDecision || 'pending';
+              
+              let targetDecision = vObj.customerDecision || 'pending';
+              let targetStatusField = vObj.status || 'Sent';
+
+              if (mStatus === 'Accepted') {
+                targetDecision = 'accepted';
+                targetStatusField = 'Accepted';
+                vObj.customerSignature = vObj.customerSignature || 'Manually marked accepted by admin';
+                vObj.customerSignedAt = vObj.customerSignedAt || nowIso;
+                vObj.acceptedAt = vObj.acceptedAt || nowIso;
+                vObj.declinedAt = null;
+                vObj.customerDeclineReason = null;
+                vObj.currentAccepted = true;
+              } else if (mStatus === 'Declined') {
+                targetDecision = 'declined';
+                targetStatusField = 'Declined';
+                vObj.declinedAt = vObj.declinedAt || nowIso;
+                vObj.customerDeclineReason = vObj.customerDeclineReason || 'Manually marked declined by admin';
+                vObj.currentAccepted = false;
+              } else if (mStatus === 'Completed') {
+                targetDecision = 'completed';
+                targetStatusField = 'Completed';
+              } else if (mStatus === 'Draft') {
+                targetDecision = 'none';
+                targetStatusField = 'Draft';
+              } else if (mStatus === 'Estimate Sent') {
+                targetDecision = 'pending';
+                targetStatusField = 'Sent';
+              } else if (mStatus === 'Archived') {
+                targetDecision = 'none';
+                targetStatusField = 'Archived';
+              }
+
+              vObj.customerDecision = targetDecision;
+              vObj.status = targetStatusField;
+
+              if (versionPrevDecision !== targetDecision) {
+                const histEntry: any = {
+                  previousDecision: versionPrevDecision,
+                  newDecision: targetDecision,
+                  changedAt: nowIso,
+                  source: "manual_admin",
+                  changedBy: changedBy
+                };
+                if (targetDecision === 'accepted') {
+                  histEntry.customerSignature = vObj.customerSignature || 'Manually marked accepted by admin';
+                } else if (targetDecision === 'declined') {
+                  histEntry.declineReason = vObj.customerDeclineReason || 'Manually marked declined by admin';
+                }
+                vObj.decisionHistory = [...(vObj.decisionHistory || []), histEntry];
+              }
+
+              contractVersions[vIdx] = vObj;
+              updates.contractVersions = contractVersions;
+            }
+          }
+
+          // Fire GHL webhooks if they match Accepted, Declined, or Completed:
+          if (mStatus === 'Accepted' || mStatus === 'Declined' || mStatus === 'Completed') {
+            const tempContractVer = updates.contractVersions || existingData.contractVersions;
+            const matchedContractVersionObj = tempContractVer?.find((v: any) => v.versionId === (existingData.latestContractVersionId));
+            const finalEstimateLink = matchedContractVersionObj?.estimateLink || `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${id}&versionId=${existingData.latestContractVersionId || ''}`;
+
+            let eventType: 'estimate_accepted' | 'estimate_declined' | 'estimate_completed' = 'estimate_accepted';
+            let eventPayload: any = {};
+
+            if (mStatus === 'Declined') {
+              eventType = 'estimate_declined';
+              eventPayload = {
+                eventType: 'estimate_declined',
+                source: 'manual_admin',
+                customerDecision: 'declined',
+                jobStatus: 'Declined',
+                estimateId: String(id),
+                versionId: String(existingData.latestContractVersionId || ''),
+                estimateNumber: String(existingData.estimateNumber || ''),
+                customerName: String(existingData.customerName || ''),
+                firstName: String(existingData.firstName || (existingData.customerName ? existingData.customerName.split(' ')[0] : '')),
+                lastName: String(existingData.lastName || (existingData.customerName ? existingData.customerName.split(' ').slice(1).join(' ') : '')),
+                email: String(existingData.customerEmail || existingData.email || ''),
+                phone: String(existingData.customerPhone || existingData.phone || ''),
+                estimatedPrice: String(existingData.totalCost || existingData.manualGrandTotal || 0),
+                declineReason: 'Manually marked declined by admin',
+                declinedAt: updates.declinedAt || nowIso,
+                estimateLink: finalEstimateLink
+              };
+            } else if (mStatus === 'Accepted') {
+              eventType = 'estimate_accepted';
+              eventPayload = {
+                eventType: 'estimate_accepted',
+                source: 'manual_admin',
+                customerDecision: 'accepted',
+                jobStatus: 'Accepted',
+                estimateId: String(id),
+                versionId: String(existingData.latestContractVersionId || ''),
+                estimateNumber: String(existingData.estimateNumber || ''),
+                customerName: String(existingData.customerName || ''),
+                firstName: String(existingData.firstName || (existingData.customerName ? existingData.customerName.split(' ')[0] : '')),
+                lastName: String(existingData.lastName || (existingData.customerName ? existingData.customerName.split(' ').slice(1).join(' ') : '')),
+                email: String(existingData.customerEmail || existingData.email || ''),
+                phone: String(existingData.customerPhone || existingData.phone || ''),
+                estimatedPrice: String(existingData.totalCost || existingData.manualGrandTotal || 0),
+                customerSignature: 'Manually marked accepted by admin',
+                customerSignedDate: updates.acceptedAt || nowIso,
+                acceptedAt: updates.acceptedAt || nowIso,
+                estimateLink: finalEstimateLink
+              };
+            } else if (mStatus === 'Completed') {
+              eventType = 'estimate_completed';
+              eventPayload = {
+                eventType: 'estimate_completed',
+                source: 'manual_admin',
+                jobStatus: 'Completed',
+                estimateId: String(id),
+                versionId: String(existingData.latestContractVersionId || ''),
+                estimateNumber: String(existingData.estimateNumber || ''),
+                customerName: String(existingData.customerName || ''),
+                firstName: String(existingData.firstName || (existingData.customerName ? existingData.customerName.split(' ')[0] : '')),
+                lastName: String(existingData.lastName || (existingData.customerName ? existingData.customerName.split(' ').slice(1).join(' ') : '')),
+                email: String(existingData.customerEmail || existingData.email || ''),
+                phone: String(existingData.customerPhone || existingData.phone || ''),
+                estimatedPrice: String(existingData.totalCost || existingData.manualGrandTotal || 0),
+                completedAt: updates.completedAt || nowIso,
+                estimateLink: finalEstimateLink
+              };
+            }
+
+            try {
+              const resGhl = await sendGhlWorkflowWebhook(eventType, eventPayload, null, db, String(id));
+              webhookSuccessResult = resGhl.success;
+
+              const logEntryToSave = {
+                eventType,
+                source: 'manual_admin',
+                sentAt: nowIso,
+                payloadPreview: eventPayload,
+                success: resGhl.success,
+                responseStatus: resGhl.status || (resGhl.success ? 200 : 500),
+                error: resGhl.success ? null : (resGhl.error || 'Webhook returned non-OK status')
+              };
+
+              updates.lastGhlWebhookEvent = eventType;
+              updates.lastGhlWebhookSentAt = nowIso;
+              if (eventType === 'estimate_declined') {
+                updates.declinedWebhookSent = resGhl.success;
+              } else if (eventType === 'estimate_accepted') {
+                updates.acceptedWebhookSent = resGhl.success;
+              } else if (eventType === 'estimate_completed') {
+                updates.completedWebhookSent = resGhl.success;
+              }
+
+              const existingGhlLogs = existingData.ghlWebhookLog || [];
+              updates.ghlWebhookLog = [...existingGhlLogs, logEntryToSave];
+            } catch (err: any) {
+              console.error(`Error sending GHL webhook for status ${mStatus}:`, err);
+              webhookSuccessResult = false;
+              const logEntryToSave = {
+                eventType,
+                source: 'manual_admin',
+                sentAt: nowIso,
+                payloadPreview: eventPayload,
+                success: false,
+                responseStatus: 500,
+                error: err.message || 'Error occurred during fetch dispatch'
+              };
+              updates.lastGhlWebhookEvent = eventType;
+              updates.lastGhlWebhookSentAt = nowIso;
+              if (eventType === 'estimate_declined') {
+                updates.declinedWebhookSent = false;
+              } else if (eventType === 'estimate_accepted') {
+                updates.acceptedWebhookSent = false;
+              } else if (eventType === 'estimate_completed') {
+                updates.completedWebhookSent = false;
+              }
+
+              const existingGhlLogs = existingData.ghlWebhookLog || [];
+              updates.ghlWebhookLog = [...existingGhlLogs, logEntryToSave];
+            }
+          }
+        }
+
+        delete updates.manualStatusChange;
+      }
+
+      // If status is archived and we change to something else, reset status to active
+      if (existingData.status === 'archived' && updates.status !== 'archived' && (updates.jobStatus || updates.status)) {
+        if (updates.status !== 'completed') {
+          updates.status = 'active';
+        }
+      }
 
       const previousLabel = getStatusLabelComp(existingData);
       const newLabel = getStatusLabelComp({ ...existingData, ...updates });
@@ -3717,8 +3926,8 @@ Lone Star Fence Works`;
 
       await docRef.update(updates);
 
-      // Trigger webhooks for job status transitions handled by PUT
-      if (newStatus && newStatus !== previousStatus) {
+      // Trigger webhooks for job status transitions handled by PUT (only if not already manually triggered)
+      if (!manualWebhookTriggered && newStatus && newStatus !== previousStatus) {
         const eventPayload = {
           customerName: existingData.customerName || '',
           email: existingData.customerEmail || '',
@@ -3757,6 +3966,7 @@ Lone Star Fence Works`;
         id,
         ...existingData,
         ...updates,
+        webhookSuccess: webhookSuccessResult,
         debugBuild: "local-ghl-helper-no-import-v1"
       });
 
