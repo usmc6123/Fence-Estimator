@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, CheckCircle, HelpCircle, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { CheckCircle, HelpCircle, FileText, AlertTriangle, ArrowLeft } from 'lucide-react';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminDashboard from '../components/AdminDashboard';
 import AdminUserManagement from '../components/AdminUserManagement';
@@ -220,8 +220,13 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       {/* Console Header */}
       <div id="admin_console_nav_header" className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 bg-american-blue text-white rounded-2xl flex items-center justify-center shadow-lg shadow-american-blue/20">
-            <Shield size={24} />
+          <div className="h-20 w-20 rounded-lg overflow-hidden border border-[#E5E5E5] bg-white flex items-center justify-center shadow-md shrink-0">
+            <img 
+              src="https://github.com/usmc6123/Fence-Estimator/blob/main/src/assets/images/3dlogobare.jpg?raw=true" 
+              alt="Lone Star Fence Works Logo" 
+              className="h-full w-full object-contain p-0.5"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
