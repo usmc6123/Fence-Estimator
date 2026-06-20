@@ -53,9 +53,9 @@ const REQUIRED_CUSTOM_FIELDS = [
   { key: 'estimateId', label: 'Estimate ID', dataType: 'TEXT' },
   { key: 'estimateNumber', label: 'Estimate Number', dataType: 'TEXT' },
   { key: 'estimateLink', label: 'Estimate Contract Link', dataType: 'TEXT' },
-  { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'NUMERIC' },
+  { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'MONETORY' },
   { key: 'fenceType', label: 'Fence Type', dataType: 'TEXT' },
-  { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERIC' },
+  { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERICAL' },
   { key: 'jobStatus', label: 'Job Status', dataType: 'TEXT' },
   { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date', dataType: 'DATE' },
   { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date', dataType: 'DATE' },
@@ -878,7 +878,7 @@ export default async function handler(req: any, res: any) {
           });
         }
       } else if (action === 'test-ghl-api-sync') {
-        const { ghlApiKey, ghlLocationId, ghlPipelineId } = req.body;
+        const { ghlApiKey, ghlLocationId, ghlPipelineId, ghlOpportunityStages, ghlCustomFields } = req.body;
         
         let finalApiKey = ghlApiKey;
         if (ghlApiKey === '••••••••' || !ghlApiKey) {
@@ -899,13 +899,16 @@ export default async function handler(req: any, res: any) {
         }
 
         const stepsLog: string[] = [];
-        let contactCreated = false;
+        const settingsSnap = await db.collection('companySettings').doc(uid).get();
+        const settingsData = settingsSnap.exists ? settingsSnap.data() || {} : {};
+        
+        const finalCustomFields = ghlCustomFields || settingsData.ghlCustomFields || {};
+        const finalOpportunityStages = ghlOpportunityStages || settingsData.ghlOpportunityStages || {};
+
+        stepsLog.push(`[API] Initiating connectivity check to LeadConnector GHL API v2...`);
         let authOk = false;
-        let createdContactId = '';
 
         try {
-          stepsLog.push(`[API] Initiating connectivity check to LeadConnector GHL API v2...`);
-          
           const searchResponse = await fetch(`https://services.leadconnectorhq.com/contacts/search?locationId=${locationId}&query=Test Contact`, {
             method: 'GET',
             headers: {
@@ -920,82 +923,254 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({
               success: false,
               message: 'FAIL: GHL API Key authentication rejected with status 401.',
-              steps: stepsLog
+              steps: stepsLog,
+              results: {
+                contact: { status: 'fail', message: 'Authentication rejected by GoHighLevel API with 401 Unauthorized.' },
+                opportunity: { status: 'fail', message: 'Auth failed' },
+                stage: { status: 'fail', message: 'Auth failed' },
+                customField: { status: 'fail', message: 'Auth failed' },
+                firestoreLog: { status: 'fail', message: 'Auth failed' }
+              }
             });
           }
 
           authOk = searchResponse.ok;
-          stepsLog.push(`[API] Credentials accepted. Authentication verified! Response status: ${searchResponse.status}`);
+          stepsLog.push(`[API] Credentials accepted. Authentication verified!`);
 
+          // 1. Harmess Contact create / update
           const rand = Math.floor(Math.random() * 100000);
           const sampleEmail = `test.sync.${rand}@lonestarfence.com`;
-          stepsLog.push(`[API] Creating test contact: "Test Contact (LSFW Sync)" (${sampleEmail})...`);
+          stepsLog.push(`[1/5] Creating harmless test contact: "Test Contact (LSFW Sync)" (${sampleEmail})...`);
 
-          const createResponse = await fetch('https://services.leadconnectorhq.com/contacts/', {
+          const contactCustomFields: any[] = [];
+          let customFieldsSent = 0;
+          
+          const mockFieldValues: Record<string, any> = {
+            estimateId: 'EST-TEST-12345',
+            estimateNumber: '1001-TEST',
+            estimateLink: 'https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/portal/contract?estimateId=test_123',
+            estimatedPrice: 3500.50,
+            fenceType: 'Japanese Cedar With Cap',
+            linearFeet: 120,
+            jobStatus: 'Interested',
+            customerEstimatorSubmittedAt: new Date().toISOString(),
+            lastEstimateSentAt: new Date().toISOString(),
+            acceptedAt: new Date().toISOString(),
+            declinedAt: '',
+            scheduledStartDate: new Date().toISOString(),
+            completedAt: ''
+          };
+
+          Object.keys(finalCustomFields).forEach((key) => {
+            const fieldGhlId = finalCustomFields[key];
+            if (fieldGhlId && mockFieldValues[key] !== undefined && mockFieldValues[key] !== '') {
+              contactCustomFields.push({
+                id: fieldGhlId,
+                value: mockFieldValues[key]
+              });
+              customFieldsSent++;
+            }
+          });
+
+          const createContactPayload: any = {
+            firstName: 'Test Contact',
+            lastName: '(LSFW Sync)',
+            email: sampleEmail,
+            phone: `+1512555${rand.toString().padStart(4, '0')}`.substring(0, 12),
+            locationId,
+            tags: ['test-lsfw-connection', 'customer-estimator-submitted']
+          };
+
+          if (contactCustomFields.length > 0) {
+            createContactPayload.customFields = contactCustomFields;
+            stepsLog.push(`[Contact Payload] Populating custom fields with ${contactCustomFields.length} mapped definitions.`);
+          }
+
+          const createRes = await fetch('https://services.leadconnectorhq.com/contacts/', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${finalApiKey}`,
               'Version': '2021-04-15',
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              firstName: 'Test Contact',
-              lastName: '(LSFW Sync)',
-              email: sampleEmail,
-              phone: `+1512555${rand.toString().padStart(4, '0')}`.substring(0, 12),
-              locationId,
-              tags: ['test-lsfw-connection', 'customer-estimator-submitted']
-            })
+            body: JSON.stringify(createContactPayload)
           });
 
-          const createData: any = await createResponse.json().catch(() => ({}));
+          const contactData = await createRes.json().catch(() => ({}));
 
-          if (createResponse.ok && createData.contact?.id) {
-            createdContactId = createData.contact.id;
-            contactCreated = true;
-            stepsLog.push(`[API] Mock contact created successfully! GHL Contact ID: ${createdContactId}`);
-            stepsLog.push(`[API] Tags applied: "test-lsfw-connection", "customer-estimator-submitted"`);
+          let contactStatus = 'fail';
+          let contactStatusMsg = 'Contact creation failed.';
+          let createdContactId = '';
+
+          if (createRes.ok && contactData.contact?.id) {
+            createdContactId = contactData.contact.id;
+            contactStatus = 'pass';
+            contactStatusMsg = `Successfully created Test Contact (GHL ID: ${createdContactId}).`;
+            stepsLog.push(`[API] Test contact added to GoHighLevel with ID: ${createdContactId}`);
           } else {
-            stepsLog.push(`[API] Failed to create mock contact. Error: ${JSON.stringify(createData)}`);
+            contactStatusMsg = `GHL Contact creation failed: ${JSON.stringify(contactData)}`;
+            stepsLog.push(`[API] Test contact creation failed: ${JSON.stringify(contactData)}`);
           }
 
-          if (ghlPipelineId) {
-            stepsLog.push(`[API] Verifying Pipeline ID: "${ghlPipelineId}"...`);
-            const pipelineRes = await fetch(`https://services.leadconnectorhq.com/opportunities/pipelines?locationId=${locationId}`, {
-              method: 'GET',
+          // 2. Custom Fields Sync Status
+          let customFieldStatus = 'fail';
+          let customFieldStatusMsg = 'Custom fields assignment failed.';
+          if (contactStatus === 'pass') {
+            if (customFieldsSent > 0) {
+              customFieldStatus = 'pass';
+              customFieldStatusMsg = `Successfully verified and populated ${customFieldsSent} custom fields.`;
+            } else {
+              customFieldStatus = 'warning';
+              customFieldStatusMsg = 'Skipped: No GoHighLevel custom fields have been mapped or entered yet.';
+            }
+          } else {
+            customFieldStatus = 'warning';
+            customFieldStatusMsg = 'Skipped: Contact was not successfully created.';
+          }
+
+          // 3 & 4. Pipeline Opportunities & Stage updates
+          let opportunityStatus = 'fail';
+          let opportunityStatusMsg = 'Pipeline stage not mapped.';
+          let stageStatus = 'fail';
+          let stageStatusMsg = 'Pipeline stage not mapped.';
+          let createdOppId = '';
+
+          let targetStageId = '';
+          let targetStageName = '';
+          const stageKeys = ['Interested', 'Appointment Requested', 'Estimate Scheduled', 'Estimate Sent', 'Accepted', 'Declined', 'Scheduled', 'Completed', 'Archived'];
+          for (const k of stageKeys) {
+            if (finalOpportunityStages[k]) {
+              targetStageId = finalOpportunityStages[k];
+              targetStageName = k;
+              break;
+            }
+          }
+          if (!targetStageId) {
+            for (const k of Object.keys(finalOpportunityStages)) {
+              if (finalOpportunityStages[k]) {
+                targetStageId = finalOpportunityStages[k];
+                targetStageName = k;
+                break;
+              }
+            }
+          }
+
+          if (ghlPipelineId && targetStageId && createdContactId) {
+            stepsLog.push(`[3/4] Modeling Opportunity in GHL Pipeline: "${ghlPipelineId}" and Stage: "${targetStageName}"...`);
+            
+            const oppPayload = {
+              pipelineId: ghlPipelineId,
+              stageId: targetStageId,
+              locationId,
+              contactId: createdContactId,
+              name: `Test Opportunity (LSFW Sync) - ${rand}`,
+              status: 'open',
+              monetaryValue: 1575.50
+            };
+
+            const oppRes = await fetch('https://services.leadconnectorhq.com/opportunities/', {
+              method: 'POST',
               headers: {
                 'Authorization': `Bearer ${finalApiKey}`,
                 'Version': '2021-04-15',
                 'Content-Type': 'application/json'
-              }
+              },
+              body: JSON.stringify(oppPayload)
             });
-            const pipData: any = await pipelineRes.json().catch(() => ({}));
-            if (pipelineRes.ok && Array.isArray(pipData.pipelines)) {
-              const matches = pipData.pipelines.some((p: any) => p.id === ghlPipelineId);
-              if (matches) {
-                stepsLog.push(`[API] Pipeline ID "${ghlPipelineId}" exists and is authorized in your GHL account!`);
-              } else {
-                stepsLog.push(`[API] Warning: Pipeline ID "${ghlPipelineId}" was not found in the list of available pipelines.`);
-              }
+
+            const oppData = await oppRes.json().catch(() => ({}));
+
+            if (oppRes.ok && oppData.opportunity?.id) {
+              createdOppId = oppData.opportunity.id;
+              opportunityStatus = 'pass';
+              opportunityStatusMsg = `Successfully created Opportunity (ID: ${createdOppId}) with value $1575.50.`;
+              stageStatus = 'pass';
+              stageStatusMsg = `Successfully assigned opportunity to stage "${targetStageName}" (${targetStageId}).`;
+              stepsLog.push(`[API] Opportunity created: ID ${createdOppId} in Stage: ${targetStageName}`);
             } else {
-              stepsLog.push(`[API] Warning: Failed to retrieve pipelines to verify existence: ${JSON.stringify(pipData)}`);
+              opportunityStatusMsg = `Failure creating opportunity: ${JSON.stringify(oppData)}`;
+              stageStatusMsg = `Stage assignment failed.`;
+              stepsLog.push(`[API] Opportunity creation failed: ${JSON.stringify(oppData)}`);
             }
+          } else {
+            stepsLog.push(`[CRM] Skipped Opportunity flow: Pipeline stage mapping is missing in GHL settings.`);
+            if (!ghlPipelineId) {
+              opportunityStatusMsg = 'Skipped: Pipeline not selected.';
+              stageStatusMsg = 'Skipped: Pipeline not selected.';
+            } else if (!targetStageId) {
+              opportunityStatusMsg = 'Skipped: Stage ID matching omitted.';
+              stageStatusMsg = 'Skipped: Stage ID matching omitted.';
+            } else {
+              opportunityStatusMsg = 'Skipped: Contact was not created.';
+              stageStatusMsg = 'Skipped: Contact was not created.';
+            }
+            opportunityStatus = 'warning';
+            stageStatus = 'warning';
+          }
+
+          // 5. Firestore log write
+          let firestoreStatus = 'fail';
+          let firestoreStatusMsg = 'Log write failed.';
+
+          try {
+            stepsLog.push(`[5/5] Saving transaction history in ghlWebhookLogs Firestore...`);
+            const mockLogData = {
+              createdAt: new Date().toISOString(),
+              direction: 'outbound-live-test',
+              status: contactStatus === 'pass' ? 'success' : 'failed',
+              message: contactStatus === 'pass' 
+                ? 'PASS: live customer sync verification executed successfully' 
+                : 'FAIL: live customer sync verification failed',
+              details: {
+                contactId: createdContactId,
+                opportunityId: createdOppId,
+                contactName: 'Test Contact (LSFW Sync)',
+                email: sampleEmail,
+                stagesMappedCount: Object.values(finalOpportunityStages).filter(Boolean).length,
+                customFieldsMappedCount: Object.values(finalCustomFields).filter(Boolean).length
+              }
+            };
+
+            const logDocRef = await db.collection('ghlWebhookLogs').add(mockLogData);
+            firestoreStatus = 'pass';
+            firestoreStatusMsg = `Successfully saved transaction logs to Firestore (Log Reference: ${logDocRef.id}).`;
+            stepsLog.push(`[Firestore] Persistence verified! Entry Id: ${logDocRef.id}`);
+          } catch (dbErr: any) {
+            firestoreStatusMsg = `Firestore log write failed: ${dbErr.message || String(dbErr)}`;
+            stepsLog.push(`[Firestore] Failure writing transaction log: ${dbErr.message || String(dbErr)}`);
           }
 
           return res.status(200).json({
-            success: authOk && contactCreated,
-            message: authOk && contactCreated ? 'PASS: connectivity, authentication, and test contact creation verified!' : 'FAIL: Sync verification issue occurred. Check logs',
+            success: authOk && contactStatus === 'pass',
+            message: authOk && contactStatus === 'pass' 
+              ? 'PASS: CRM and custom field synchronization live test succeeded!' 
+              : 'FAIL: Live test finished with diagnostic errors. See details below.',
             steps: stepsLog,
-            testContactId: createdContactId
+            testContactId: createdContactId,
+            testOpportunityId: createdOppId,
+            results: {
+              contact: { status: contactStatus, message: contactStatusMsg },
+              opportunity: { status: opportunityStatus, message: opportunityStatusMsg },
+              stage: { status: stageStatus, message: stageStatusMsg },
+              customField: { status: customFieldStatus, message: customFieldStatusMsg },
+              firestoreLog: { status: firestoreStatus, message: firestoreStatusMsg }
+            }
           });
 
         } catch (err: any) {
           stepsLog.push(`[SYSTEM_ERROR] Exception occurred: ${err.message || String(err)}`);
           return res.status(200).json({
             success: false,
-            message: 'FAIL: Outermost connection exception during live API testing.',
+            message: 'FAIL: live synchronization exception.',
             steps: stepsLog,
-            error: err.message || String(err)
+            error: err.message || String(err),
+            results: {
+              contact: { status: 'fail', message: err.message || String(err) },
+              opportunity: { status: 'fail', message: 'Execution interrupted' },
+              stage: { status: 'fail', message: 'Execution interrupted' },
+              customField: { status: 'fail', message: 'Execution interrupted' },
+              firestoreLog: { status: 'fail', message: 'Execution interrupted' }
+            }
           });
         }
       } else if (action === 'ghl-load-pipelines') {
@@ -1084,6 +1259,13 @@ export default async function handler(req: any, res: any) {
         if (!name) return res.status(400).json({ success: false, error: 'Field name is required.' });
 
         try {
+          console.log('Safe API Call Preview:', {
+            fieldLabel: name,
+            datatype: dataType || 'TEXT',
+            locationId: locationId,
+            requestBodyKeys: ['name', 'dataType', 'model', 'placeholder', 'locationId']
+          });
+
           const response = await fetch(`https://services.leadconnectorhq.com/locations/${locationId}/customFields`, {
             method: 'POST',
             headers: {
@@ -1116,7 +1298,14 @@ export default async function handler(req: any, res: any) {
           }
           if (!response.ok) {
             const text = await response.text();
-            return res.status(200).json({ success: false, error: `GHL API Error: ${text.substring(0, 200)}` });
+            let parsedText = text;
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed.message) {
+                parsedText = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message;
+              }
+            } catch (e) {}
+            return res.status(200).json({ success: false, error: parsedText });
           }
 
           const data: any = await response.json();

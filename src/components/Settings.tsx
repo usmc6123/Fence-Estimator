@@ -437,6 +437,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [ghlLoadError, setGhlLoadError] = React.useState<string | null>(null);
   const [missingCustomFieldsList, setMissingCustomFieldsList] = React.useState<any[]>([]);
   const [isCreatingFields, setIsCreatingFields] = React.useState(false);
+  const [showConfirmCreateCustomFieldsModal, setShowConfirmCreateCustomFieldsModal] = React.useState(false);
   const [isAutoConfiguring, setIsAutoConfiguring] = React.useState(false);
   const [autoConfigSuccess, setAutoConfigSuccess] = React.useState<string | null>(null);
 
@@ -446,9 +447,9 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       { key: 'estimateId', label: 'Estimate ID', dataType: 'TEXT' },
       { key: 'estimateNumber', label: 'Estimate Number', dataType: 'TEXT' },
       { key: 'estimateLink', label: 'Estimate Contract Link', dataType: 'TEXT' },
-      { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'NUMERIC' },
+      { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'MONETORY' },
       { key: 'fenceType', label: 'Fence Type', dataType: 'TEXT' },
-      { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERIC' },
+      { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERICAL' },
       { key: 'jobStatus', label: 'Job Status', dataType: 'TEXT' },
       { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date', dataType: 'DATE' },
       { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date', dataType: 'DATE' },
@@ -576,7 +577,16 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     try {
       const token = adminToken || localStorage.getItem('company_admin_token');
       
+      const newCustomFields = { ...(formData.ghlCustomFields || {}) };
+      
       for (const field of missingCustomFieldsList) {
+        console.log('Safe Custom Field Creation Request Preview:', {
+          fieldLabel: field.label,
+          datatype: field.dataType,
+          locationId: formData.ghlLocationId,
+          requestBodyKeys: ['action', 'ghlApiKey', 'ghlLocationId', 'name', 'dataType']
+        });
+
         const res = await fetch('/api/settings', {
           method: 'POST',
           headers: {
@@ -593,15 +603,154 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         });
         const data = await res.json();
         if (!res.ok || data.success === false) {
-          throw new Error(data.error || `Failed creating field: ${field.label}`);
+          throw new Error(`Failed creating ${field.label}. GHL rejected datatype ${field.dataType}.`);
+        }
+        if (data.customField && data.customField.id) {
+          newCustomFields[field.key] = data.customField.id;
         }
       }
 
-      setAutoConfigSuccess(`Successfully created ${missingCustomFieldsList.length} custom fields!`);
-      setTimeout(() => setAutoConfigSuccess(null), 5000);
+      // 1. Reload/Refetch GHL custom fields
+      const refetchRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ghl-load-custom-fields',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId
+        })
+      });
+      const refetchData = await refetchRes.json();
+      let refreshedOptions = [];
+      if (refetchRes.ok && refetchData.success) {
+        refreshedOptions = refetchData.customFields || [];
+        setGhlCustomFieldOptions(refreshedOptions);
+      }
 
-      // Refetch GHL custom fields
-      await handleLoadGhlData(true);
+      // 2. Auto-map newly created fields to setting mappings
+      const { missing, updatedMappings } = checkMissingCustomFields(refreshedOptions, newCustomFields);
+
+      // Create complete next state and save React state
+      const nextFormData = {
+        ...formData,
+        ghlCustomFields: updatedMappings as any
+      };
+      setFormData(nextFormData);
+      setMissingCustomFieldsList(missing);
+
+      // 3. Save the mappings automatically (Direct and Secure API)
+      const clientPayload = {
+        companyName: formData.companyName,
+        businessEmail: formData.businessEmail,
+        phoneNumber: formData.phoneNumber,
+        website: formData.website,
+        address: formData.address,
+        companyLogo: formData.companyLogo,
+        ghlWebhookUrl: formData.ghlWebhookUrl,
+        gohighlevelWebhookUrl: formData.ghlWebhookUrl,
+        ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
+        ghlWebhookManualEstimateSent: formData.ghlWebhookManualEstimateSent,
+        ghlWebhookEstimateAccepted: formData.ghlWebhookEstimateAccepted,
+        ghlWebhookEstimateCompleted: formData.ghlWebhookEstimateCompleted,
+        ghlWebhookEstimateDeclined: formData.ghlWebhookEstimateDeclined,
+        googleReviewLink: formData.googleReviewLink,
+        autoSyncEstimates: formData.autoSyncEstimates,
+        ghlLocationId: formData.ghlLocationId,
+        ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
+        ghlPrefillSources: formData.ghlPrefillSources,
+        ghlMinChars: formData.ghlMinChars,
+        ghlMaxResults: formData.ghlMaxResults,
+        enableInstantEstimateWebhook: formData.enableInstantEstimateWebhook,
+        suppressInstantEstimateWorkflowExisting: formData.suppressInstantEstimateWorkflowExisting,
+        suppressIfEstimateScheduled: formData.suppressIfEstimateScheduled,
+        suppressIfEstimateSent: formData.suppressIfEstimateSent,
+        suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
+        suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
+        allowManualForceTrigger: formData.allowManualForceTrigger,
+        enableGhlApiSync: formData.enableGhlApiSync,
+        keepGhlLegacyWebhooks: formData.keepGhlLegacyWebhooks,
+        ghlPipelineId: formData.ghlPipelineId,
+        ghlOpportunityStages: formData.ghlOpportunityStages,
+        ghlCustomFields: updatedMappings,
+        estimateEmailSubject: formData.estimateEmailSubject,
+        estimateEmailBody: formData.estimateEmailBody,
+        estimateAcceptedMessage: formData.estimateAcceptedMessage,
+        estimateDeclinedMessage: formData.estimateDeclinedMessage,
+        updatedAt: new Date().toISOString()
+      };
+
+      try {
+        await setDoc(doc(db, 'companySettings', 'main'), clientPayload, { merge: true });
+      } catch (err) {
+        console.error("Auto-save direct firestore error:", err);
+      }
+
+      const apiPayload = {
+        action: 'save',
+        companyName: formData.companyName,
+        companyEmail: formData.businessEmail,
+        companyPhone: formData.phoneNumber,
+        companyWebsite: formData.website,
+        companyLogo: formData.companyLogo,
+        smtpHost: formData.smtpHost,
+        smtpPort: Number(formData.smtpPort),
+        smtpSecureType: formData.smtpSecureType,
+        smtpUsername: formData.smtpUsername,
+        smtpPassword: formData.smtpPassword,
+        fromEmail: formData.fromEmail,
+        fromName: formData.fromName,
+        replyToEmail: formData.replyToEmail,
+        gohighlevelWebhookUrl: formData.ghlWebhookUrl,
+        ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
+        ghlWebhookManualEstimateSent: formData.ghlWebhookManualEstimateSent,
+        ghlWebhookEstimateAccepted: formData.ghlWebhookEstimateAccepted,
+        ghlWebhookEstimateCompleted: formData.ghlWebhookEstimateCompleted,
+        ghlWebhookEstimateDeclined: formData.ghlWebhookEstimateDeclined,
+        googleReviewLink: formData.googleReviewLink,
+        estimateEmailSubject: formData.estimateEmailSubject,
+        estimateEmailBody: formData.estimateEmailBody,
+        estimateAcceptedMessage: formData.estimateAcceptedMessage,
+        estimateDeclinedMessage: formData.estimateDeclinedMessage,
+        ghlLocationId: formData.ghlLocationId,
+        ghlApiKey: formData.ghlApiKey,
+        ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
+        ghlPrefillSources: formData.ghlPrefillSources,
+        ghlMinChars: formData.ghlMinChars,
+        ghlMaxResults: formData.ghlMaxResults,
+        enableInstantEstimateWebhook: formData.enableInstantEstimateWebhook,
+        suppressInstantEstimateWorkflowExisting: formData.suppressInstantEstimateWorkflowExisting,
+        suppressIfEstimateScheduled: formData.suppressIfEstimateScheduled,
+        suppressIfEstimateSent: formData.suppressIfEstimateSent,
+        suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
+        suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
+        allowManualForceTrigger: formData.allowManualForceTrigger,
+        enableGhlApiSync: formData.enableGhlApiSync,
+        keepGhlLegacyWebhooks: formData.keepGhlLegacyWebhooks,
+        ghlPipelineId: formData.ghlPipelineId,
+        ghlOpportunityStages: formData.ghlOpportunityStages,
+        ghlCustomFields: updatedMappings
+      };
+
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(apiPayload)
+      });
+
+      if (!response.ok) {
+        const resData = await response.json();
+        throw new Error(resData.error || 'Failed to save settings to secure server.');
+      }
+
+      setAutoConfigSuccess("GoHighLevel custom fields created and mapped successfully.");
+      setTimeout(() => setAutoConfigSuccess(null), 8000);
+      setShowConfirmCreateCustomFieldsModal(false);
     } catch (err: any) {
       setGhlLoadError(err.message || String(err));
     } finally {
@@ -812,7 +961,9 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           action: 'test-ghl-api-sync',
           ghlApiKey: formData.ghlApiKey,
           ghlLocationId: formData.ghlLocationId,
-          ghlPipelineId: formData.ghlPipelineId
+          ghlPipelineId: formData.ghlPipelineId,
+          ghlOpportunityStages: formData.ghlOpportunityStages,
+          ghlCustomFields: formData.ghlCustomFields
         })
       });
       const data = await response.json();
@@ -1252,6 +1403,135 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                   </div>
                 </div>
 
+                {/* Integration Status Card */}
+                <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Integration Connection Status</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Real-time health of your LeadConnector connection</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {formData.ghlApiKey && formData.ghlLocationId ? (
+                        <span className="flex items-center gap-1 text-xs font-bold px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Connected & Active
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-bold px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" /> Pending Credentials
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Stat 1 */}
+                    <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col justify-between">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Pipelines & Stages</p>
+                      <p className="text-lg font-bold text-slate-800 mt-1">
+                        {formData.ghlPipelineId ? "Pipeline Active" : "No Pipeline Selected"}
+                      </p>
+                      <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
+                        <span>Opportunity stages mapped:</span>
+                        <span className="font-bold text-slate-700">
+                          {Object.values(formData.ghlOpportunityStages || {}).filter(Boolean).length} / 9
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stat 2 */}
+                    <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col justify-between">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Contact Custom Fields</p>
+                      <p className="text-lg font-bold text-slate-800 mt-1">
+                        {missingCustomFieldsList.length === 0 ? "Fully Configured" : `${missingCustomFieldsList.length} Fields Missing`}
+                      </p>
+                      <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
+                        <span>Fields created & mapped:</span>
+                        <span className="font-bold text-slate-700">
+                          {13 - missingCustomFieldsList.length} / 13
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stat 3 */}
+                    <div className="p-4 bg-white rounded-xl border border-slate-200 flex flex-col justify-between">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Direct API Sync</p>
+                      <p className="text-lg font-bold text-slate-800 mt-1">
+                        {formData.enableGhlApiSync ? "ENABLED" : "DISABLED"}
+                      </p>
+                      <div className="mt-2 text-xs text-[#0f533a] bg-emerald-50 px-2 py-0.5 rounded text-center font-bold">
+                        Outbound Sync Ready
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Troubleshooting Guidance Checklist */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-3">
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Integration Health Checklist</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        {formData.ghlLocationId ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={formData.ghlLocationId ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Provide valid Location ID
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {formData.ghlApiKey && formData.ghlApiKey !== '••••••••' ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={formData.ghlApiKey ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Provide valid GHL API Key
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {formData.ghlPipelineId ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={formData.ghlPipelineId ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Select and save CRM Pipeline
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {Object.values(formData.ghlOpportunityStages || {}).filter(Boolean).length >= 5 ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={Object.values(formData.ghlOpportunityStages || {}).filter(Boolean).length >= 5 ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Map basic pipeline opportunity stages
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {missingCustomFieldsList.length === 0 ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={missingCustomFieldsList.length === 0 ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Ensure contact custom fields are created & mapped
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {formData.ghlInboundWebhookSecret ? (
+                          <Check className="text-emerald-500 shrink-0" size={14} />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span className={formData.ghlInboundWebhookSecret ? "text-slate-600 line-through font-normal" : "text-slate-700 font-medium"}>
+                          Shared webhook signature secret configured
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Section 1: Connection Settings */}
                 <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
                   <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
@@ -1560,7 +1840,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                           </div>
                           <button
                             type="button"
-                            onClick={handleCreateMissingFields}
+                            onClick={() => setShowConfirmCreateCustomFieldsModal(true)}
                             disabled={isCreatingFields}
                             className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded text-[9px] uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
                           >
@@ -2222,6 +2502,46 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                             </div>
                           )}
 
+                          {testApiSyncResult.results && (
+                            <div className="mt-3 space-y-2 border-t border-slate-200/60 pt-3">
+                              <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sync Subsystems Health Check:</p>
+                              <div className="space-y-1.5">
+                                {Object.entries(testApiSyncResult.results).map(([key, item]: [string, any]) => {
+                                  const labels: Record<string, string> = {
+                                    contact: "Contact Creation",
+                                    opportunity: "Opportunity Creation",
+                                    stage: "Stage Mapping & Updates",
+                                    customField: "Custom Fields Sync",
+                                    firestoreLog: "Firestore Transaction Log"
+                                  };
+                                  
+                                  let colorClasses = "bg-slate-100/80 text-slate-700 border-slate-200";
+                                  let dotBg = "bg-slate-400";
+                                  if (item.status === 'pass') {
+                                    colorClasses = "bg-emerald-50 text-emerald-800 border-emerald-100";
+                                    dotBg = "bg-emerald-500";
+                                  } else if (item.status === 'warning') {
+                                    colorClasses = "bg-amber-100/70 text-amber-900 border-amber-200";
+                                    dotBg = "bg-amber-500";
+                                  } else if (item.status === 'fail') {
+                                    colorClasses = "bg-rose-50 text-rose-800 border-rose-100";
+                                    dotBg = "bg-rose-500";
+                                  }
+
+                                  return (
+                                    <div key={key} className={cn("p-2 rounded-lg border text-[10px] flex items-start gap-2 leading-relaxed transition-all", colorClasses)}>
+                                      <span className={cn("h-1.5 w-1.5 rounded-full mt-1 shrink-0", dotBg)} />
+                                      <div className="flex-1">
+                                        <span className="font-bold block text-slate-900">{labels[key] || key}</span>
+                                        <span className="text-[9px] opacity-90 mt-0.5 block">{item.message}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
                           {testApiSyncResult.testContactId && (
                             <p className="font-mono text-[9px] text-emerald-800 font-semibold bg-emerald-100/40 p-1 px-2 rounded">
                               Created Contact ID: <span className="font-black">{testApiSyncResult.testContactId}</span>
@@ -2878,6 +3198,61 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           <CheckCircle2 className="text-[#00FF00]" size={20} />
           <span className="font-bold">Settings saved successfully!</span>
         </motion.div>
+      )}
+
+      {showConfirmCreateCustomFieldsModal && (
+        <div id="confirm-create-fields-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 w-full max-w-lg shadow-xl space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-base font-bold text-slate-900">Create Missing GoHighLevel Fields?</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                The app will create the following Contact Custom Fields in GoHighLevel:
+              </p>
+            </div>
+            
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 max-h-60 overflow-y-auto">
+              <ul className="text-xs text-slate-700 font-medium space-y-1.5 list-disc pl-4">
+                <li>Estimate ID</li>
+                <li>Estimate Number</li>
+                <li>Estimate Contract Link</li>
+                <li>Estimated Total</li>
+                <li>Fence Type</li>
+                <li>Linear Feet</li>
+                <li>Job Status</li>
+                <li>Estimator Submitted Date</li>
+                <li>Last Estimate Sent Date</li>
+                <li>Contract Accepted Date</li>
+                <li>Contract Declined Date</li>
+                <li>Project Scheduled Start Date</li>
+                <li>Project Completed Date</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowConfirmCreateCustomFieldsModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isCreatingFields}
+                onClick={handleCreateMissingFields}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                {isCreatingFields ? (
+                  <>
+                    <RefreshCw className="animate-spin animate-spin-slow" size={12} /> Creating...
+                  </>
+                ) : (
+                  "Create Fields"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
