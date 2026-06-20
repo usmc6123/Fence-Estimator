@@ -56,6 +56,37 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     suppressIfCustomerAccepted: true,
     suppressIfCustomerCompleted: true,
     allowManualForceTrigger: true,
+
+    // GHL Direct API Sync Layer
+    enableGhlApiSync: false,
+    keepGhlLegacyWebhooks: true,
+    ghlPipelineId: '',
+    ghlOpportunityStages: {
+      'Interested': '',
+      'Appointment Requested': '',
+      'Estimate Scheduled': '',
+      'Estimate Sent': '',
+      'Accepted': '',
+      'Declined': '',
+      'Scheduled': '',
+      'Completed': '',
+      'Archived': ''
+    },
+    ghlCustomFields: {
+      'estimateId': '',
+      'estimateNumber': '',
+      'estimateLink': '',
+      'estimatedPrice': '',
+      'fenceType': '',
+      'linearFeet': '',
+      'jobStatus': '',
+      'customerEstimatorSubmittedAt': '',
+      'lastEstimateSentAt': '',
+      'acceptedAt': '',
+      'declinedAt': '',
+      'scheduledStartDate': '',
+      'completedAt': ''
+    },
     
     // SMTP Configurations
     smtpHost: '',
@@ -155,7 +186,37 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           suppressIfEstimateSent: apiData.suppressIfEstimateSent !== undefined ? apiData.suppressIfEstimateSent : (firebaseData.suppressIfEstimateSent !== undefined ? firebaseData.suppressIfEstimateSent : true),
           suppressIfCustomerAccepted: apiData.suppressIfCustomerAccepted !== undefined ? apiData.suppressIfCustomerAccepted : (firebaseData.suppressIfCustomerAccepted !== undefined ? firebaseData.suppressIfCustomerAccepted : true),
           suppressIfCustomerCompleted: apiData.suppressIfCustomerCompleted !== undefined ? apiData.suppressIfCustomerCompleted : (firebaseData.suppressIfCustomerCompleted !== undefined ? firebaseData.suppressIfCustomerCompleted : true),
-          allowManualForceTrigger: apiData.allowManualForceTrigger !== undefined ? apiData.allowManualForceTrigger : (firebaseData.allowManualForceTrigger !== undefined ? firebaseData.allowManualForceTrigger : true)
+          allowManualForceTrigger: apiData.allowManualForceTrigger !== undefined ? apiData.allowManualForceTrigger : (firebaseData.allowManualForceTrigger !== undefined ? firebaseData.allowManualForceTrigger : true),
+          
+          enableGhlApiSync: apiData.enableGhlApiSync !== undefined ? apiData.enableGhlApiSync : (firebaseData.enableGhlApiSync !== undefined ? firebaseData.enableGhlApiSync : false),
+          keepGhlLegacyWebhooks: apiData.keepGhlLegacyWebhooks !== undefined ? apiData.keepGhlLegacyWebhooks : (firebaseData.keepGhlLegacyWebhooks !== undefined ? firebaseData.keepGhlLegacyWebhooks : true),
+          ghlPipelineId: apiData.ghlPipelineId || firebaseData.ghlPipelineId || '',
+          ghlOpportunityStages: apiData.ghlOpportunityStages || firebaseData.ghlOpportunityStages || {
+            'Interested': '',
+            'Appointment Requested': '',
+            'Estimate Scheduled': '',
+            'Estimate Sent': '',
+            'Accepted': '',
+            'Declined': '',
+            'Scheduled': '',
+            'Completed': '',
+            'Archived': ''
+          },
+          ghlCustomFields: apiData.ghlCustomFields || firebaseData.ghlCustomFields || {
+            'estimateId': '',
+            'estimateNumber': '',
+            'estimateLink': '',
+            'estimatedPrice': '',
+            'fenceType': '',
+            'linearFeet': '',
+            'jobStatus': '',
+            'customerEstimatorSubmittedAt': '',
+            'lastEstimateSentAt': '',
+            'acceptedAt': '',
+            'declinedAt': '',
+            'scheduledStartDate': '',
+            'completedAt': ''
+          }
         };
 
         setFormData(merged);
@@ -233,6 +294,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
         suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
         allowManualForceTrigger: formData.allowManualForceTrigger,
+
+        // Direct GHL API Sync configs
+        enableGhlApiSync: formData.enableGhlApiSync,
+        keepGhlLegacyWebhooks: formData.keepGhlLegacyWebhooks,
+        ghlPipelineId: formData.ghlPipelineId,
+        ghlOpportunityStages: formData.ghlOpportunityStages,
+        ghlCustomFields: formData.ghlCustomFields,
         
         // Include templates inside main doc so embed widgets can pull acceptance screens
         estimateEmailSubject: formData.estimateEmailSubject,
@@ -293,7 +361,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           suppressIfEstimateSent: formData.suppressIfEstimateSent,
           suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
           suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
-          allowManualForceTrigger: formData.allowManualForceTrigger
+          allowManualForceTrigger: formData.allowManualForceTrigger,
+
+          // Direct GHL API Sync configs
+          enableGhlApiSync: formData.enableGhlApiSync,
+          keepGhlLegacyWebhooks: formData.keepGhlLegacyWebhooks,
+          ghlPipelineId: formData.ghlPipelineId,
+          ghlOpportunityStages: formData.ghlOpportunityStages,
+          ghlCustomFields: formData.ghlCustomFields,
         };
 
         const response = await fetch('/api/settings', {
@@ -343,6 +418,41 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [prefillQuery, setPrefillQuery] = React.useState('');
   const [isTestingPrefillQuery, setIsTestingPrefillQuery] = React.useState(false);
   const [prefillResults, setPrefillResults] = React.useState<any[]>([]);
+
+  // GHL Connected API Sync Test suite
+  const [isTestingApiSync, setIsTestingApiSync] = React.useState(false);
+  const [testApiSyncResult, setTestApiSyncResult] = React.useState<any>(null);
+
+  const handleRunApiSyncTest = async () => {
+    setIsTestingApiSync(true);
+    setTestApiSyncResult(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'test-ghl-api-sync',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId,
+          ghlPipelineId: formData.ghlPipelineId
+        })
+      });
+      const data = await response.json();
+      setTestApiSyncResult(data);
+    } catch (err: any) {
+      setTestApiSyncResult({
+        success: false,
+        message: 'FAIL: Outermost diagnostic system rejection.',
+        error: err.message || String(err)
+      });
+    } finally {
+      setIsTestingApiSync(false);
+    }
+  };
 
   const handleRunDiagnostic = async () => {
     setIsTestingDiagnostic(true);
@@ -855,6 +965,143 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                   </div>
                 </div>
 
+                {/* Section 2: Direct GHL API Synchronization & Custom Field Mapping */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="text-american-blue animate-spin-slow" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Direct GoHighLevel API Sync Layer</h4>
+                    </div>
+                    <span className="text-[10px] text-[#0f533a] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded font-bold uppercase select-none">Direct Connection</span>
+                  </div>
+
+                  <p className="text-xs text-[#666666] leading-relaxed">
+                    By bypassing loose webhooks and communicating directly with your CRM, the system creates/updates contacts, updates tags dynamically, maps system fields to GHL custom fields, and moves opportunities to exact pipeline stages securely.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Toggle: Enable GHL API Sync */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Use Direct GHL API Sync</label>
+                        <p className="text-[10px] text-gray-500">Enable real-time, bi-directional direct contact & opportunity updates.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, enableGhlApiSync: !formData.enableGhlApiSync})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.enableGhlApiSync ? "bg-emerald-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.enableGhlApiSync ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Toggle: Suppress background legacy webhooks */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Continue Outbound Legacy Webhooks</label>
+                        <p className="text-[10px] text-gray-500">Keep legacy outbound webhook workflow blocks firing in parallel.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, keepGhlLegacyWebhooks: !formData.keepGhlLegacyWebhooks})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.keepGhlLegacyWebhooks ? "bg-blue-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.keepGhlLegacyWebhooks ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">
+                      GHL Opportunity Pipeline ID
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. pL9nMb8R7qS3tYw2vXz0"
+                      value={formData.ghlPipelineId}
+                      onChange={(e) => setFormData({...formData, ghlPipelineId: e.target.value})}
+                      className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                    />
+                    <p className="text-[10px] text-[#999999]">Required to auto-create and move opportunities to correct pipeline stages during job transitions.</p>
+                  </div>
+
+                  {/* Stage Mapping Grid */}
+                  <div className="border-t border-[#F2F2F2] pt-4 space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-[#333333] uppercase tracking-wider">Opportunity Pipeline Stage IDs Mapping</h4>
+                      <p className="text-[10px] text-[#666666] leading-relaxed mt-0.5">Map system statuses to their corresponding stage IDs in your GoHighLevel Pipeline.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.keys(formData.ghlOpportunityStages).map((stageKey) => (
+                        <div key={stageKey} className="space-y-1">
+                          <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{stageKey} Stage</label>
+                          <input 
+                            type="text" 
+                            placeholder="Stage ID"
+                            value={(formData.ghlOpportunityStages as any)[stageKey] || ''}
+                            onChange={(e) => {
+                              const updatedStages = { ...formData.ghlOpportunityStages, [stageKey]: e.target.value };
+                              setFormData({ ...formData, ghlOpportunityStages: updatedStages });
+                            }}
+                            className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom Field Mapping Grid */}
+                  <div className="border-t border-[#F2F2F2] pt-4 space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-[#333333] uppercase tracking-wider">GoHighLevel Contact Custom Fields Mapping</h4>
+                      <p className="text-[10px] text-[#666666] leading-relaxed mt-0.5">Enter the precise GHL Custom Field API keys (e.g. <code>estimate_id</code> or <code>linear_feet</code>) to synchronize critical estimate metadata deep into contact profiles.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {[
+                        { key: 'estimateId', label: 'Estimate ID Key' },
+                        { key: 'estimateNumber', label: 'Estimate Number Key' },
+                        { key: 'estimateLink', label: 'Estimate Contract Link' },
+                        { key: 'estimatedPrice', label: 'Estimated Total Investment' },
+                        { key: 'fenceType', label: 'Fence Selected/Wood Type' },
+                        { key: 'linearFeet', label: 'Linear Feet Sum' },
+                        { key: 'jobStatus', label: 'Active Job Status' },
+                        { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date' },
+                        { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date' },
+                        { key: 'acceptedAt', label: 'Contract Accepted Date' },
+                        { key: 'declinedAt', label: 'Contract Declined Date' },
+                        { key: 'scheduledStartDate', label: 'Project Scheduled Start Date' },
+                        { key: 'completedAt', label: 'Project Completed Date' }
+                      ].map((mapping) => (
+                        <div key={mapping.key} className="space-y-1">
+                          <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{mapping.label}</label>
+                          <input 
+                            type="text" 
+                            placeholder="GHL Field Key"
+                            value={(formData.ghlCustomFields as any)[mapping.key] || ''}
+                            onChange={(e) => {
+                              const updatedFields = { ...formData.ghlCustomFields, [mapping.key]: e.target.value };
+                              setFormData({ ...formData, ghlCustomFields: updatedFields });
+                            }}
+                            className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Section 3: Webhook Information & Outbound Triggers */}
                 <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
                   <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
@@ -1325,7 +1572,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                     <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">Risk-Free Playback</span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Outbound webhook testing sandbox */}
                     <div className="space-y-4">
                       <div className="space-y-1">
@@ -1394,6 +1641,53 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                               <p>Duplicate Match Method: <span className="font-bold uppercase text-blue-800">{testInboundResult.diagnostics.matchedBy}</span></p>
                               <p>Identified Customer Doc ID: <span className="font-bold text-black">{testInboundResult.diagnostics.customerId}</span></p>
                             </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Direct API Sync Layer testing sandbox */}
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-[#333]">Direct GHL API Sync Simulator</h5>
+                        <p className="text-[10px] text-[#666666]">Invokes your API Key to verify authentication, pipeline visibility, and create a real contact entry.</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleRunApiSyncTest}
+                        disabled={isTestingApiSync || !formData.ghlApiKey || !formData.ghlLocationId}
+                        className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        {isTestingApiSync ? <RefreshCw size={14} className="animate-spin animate-spin-slow" /> : <Activity size={14} />}
+                        Run GHL API Sync Test
+                      </button>
+
+                      {testApiSyncResult && (
+                        <div className={cn(
+                          "p-4 rounded-xl text-xs space-y-2 border animate-fade-in",
+                          testApiSyncResult.success ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+                        )}>
+                          <p className="font-bold flex items-center gap-1.5 text-xs text-black font-extrabold uppercase">
+                            <span>Diagnostic Trace Out:</span>
+                            <span className={testApiSyncResult.success ? "text-emerald-600" : "text-amber-600"}>
+                              {testApiSyncResult.success ? "Passed" : "Warning"}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-gray-700 font-medium">{testApiSyncResult.message}</p>
+                          
+                          {testApiSyncResult.steps && Array.isArray(testApiSyncResult.steps) && (
+                            <div className="bg-white/70 p-2 rounded max-h-32 overflow-y-auto font-mono text-[9px] text-gray-800 space-y-1 my-1.5 border border-gray-100">
+                              {testApiSyncResult.steps.map((stepStr: string, idx: number) => (
+                                <p key={idx} className="leading-normal break-words">{stepStr}</p>
+                              ))}
+                            </div>
+                          )}
+
+                          {testApiSyncResult.testContactId && (
+                            <p className="font-mono text-[9px] text-emerald-800 font-semibold bg-emerald-100/40 p-1 px-2 rounded">
+                              Created Contact ID: <span className="font-black">{testApiSyncResult.testContactId}</span>
+                            </p>
                           )}
                         </div>
                       )}

@@ -103,6 +103,35 @@ export default async function handler(req: any, res: any) {
           ghlLocationId: '',
           ghlApiKey: '',
           ghlInboundWebhookSecret: '',
+          enableGhlApiSync: false,
+          keepGhlLegacyWebhooks: true,
+          ghlPipelineId: '',
+          ghlOpportunityStages: {
+            Interested: '',
+            'Appointment Requested': '',
+            'Estimate Scheduled': '',
+            'Estimate Sent': '',
+            Accepted: '',
+            Declined: '',
+            Scheduled: '',
+            Completed: '',
+            Archived: ''
+          },
+          ghlCustomFields: {
+            estimateId: '',
+            estimateNumber: '',
+            estimateLink: '',
+            estimatedPrice: '',
+            fenceType: '',
+            linearFeet: '',
+            jobStatus: '',
+            customerEstimatorSubmittedAt: '',
+            lastEstimateSentAt: '',
+            acceptedAt: '',
+            declinedAt: '',
+            scheduledStartDate: '',
+            completedAt: ''
+          },
           ghlPrefillSources: ['customers', 'estimates', 'ghl'],
           ghlMinChars: 2,
           ghlMaxResults: 10,
@@ -126,6 +155,39 @@ export default async function handler(req: any, res: any) {
       if (data.suppressIfCustomerAccepted === undefined) data.suppressIfCustomerAccepted = true;
       if (data.suppressIfCustomerCompleted === undefined) data.suppressIfCustomerCompleted = true;
       if (data.allowManualForceTrigger === undefined) data.allowManualForceTrigger = true;
+      if (data.enableGhlApiSync === undefined) data.enableGhlApiSync = false;
+      if (data.keepGhlLegacyWebhooks === undefined) data.keepGhlLegacyWebhooks = true;
+      if (data.ghlPipelineId === undefined) data.ghlPipelineId = '';
+      if (!data.ghlOpportunityStages) {
+        data.ghlOpportunityStages = {
+          Interested: '',
+          'Appointment Requested': '',
+          'Estimate Scheduled': '',
+          'Estimate Sent': '',
+          Accepted: '',
+          Declined: '',
+          Scheduled: '',
+          Completed: '',
+          Archived: ''
+        };
+      }
+      if (!data.ghlCustomFields) {
+        data.ghlCustomFields = {
+          estimateId: '',
+          estimateNumber: '',
+          estimateLink: '',
+          estimatedPrice: '',
+          fenceType: '',
+          linearFeet: '',
+          jobStatus: '',
+          customerEstimatorSubmittedAt: '',
+          lastEstimateSentAt: '',
+          acceptedAt: '',
+          declinedAt: '',
+          scheduledStartDate: '',
+          completedAt: ''
+        };
+      }
       
       // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval
       if (data.smtpPassword) {
@@ -179,7 +241,12 @@ export default async function handler(req: any, res: any) {
           suppressIfEstimateSent,
           suppressIfCustomerAccepted,
           suppressIfCustomerCompleted,
-          allowManualForceTrigger
+          allowManualForceTrigger,
+          enableGhlApiSync,
+          keepGhlLegacyWebhooks,
+          ghlPipelineId,
+          ghlOpportunityStages,
+          ghlCustomFields
         } = incomingFields;
 
         // Validate email format
@@ -270,6 +337,35 @@ export default async function handler(req: any, res: any) {
           suppressIfCustomerAccepted: suppressIfCustomerAccepted !== undefined ? !!suppressIfCustomerAccepted : true,
           suppressIfCustomerCompleted: suppressIfCustomerCompleted !== undefined ? !!suppressIfCustomerCompleted : true,
           allowManualForceTrigger: allowManualForceTrigger !== undefined ? !!allowManualForceTrigger : true,
+          enableGhlApiSync: enableGhlApiSync !== undefined ? !!enableGhlApiSync : false,
+          keepGhlLegacyWebhooks: keepGhlLegacyWebhooks !== undefined ? !!keepGhlLegacyWebhooks : true,
+          ghlPipelineId: ghlPipelineId || '',
+          ghlOpportunityStages: ghlOpportunityStages || {
+            Interested: '',
+            'Appointment Requested': '',
+            'Estimate Scheduled': '',
+            'Estimate Sent': '',
+            Accepted: '',
+            Declined: '',
+            Scheduled: '',
+            Completed: '',
+            Archived: ''
+          },
+          ghlCustomFields: ghlCustomFields || {
+            estimateId: '',
+            estimateNumber: '',
+            estimateLink: '',
+            estimatedPrice: '',
+            fenceType: '',
+            linearFeet: '',
+            jobStatus: '',
+            customerEstimatorSubmittedAt: '',
+            lastEstimateSentAt: '',
+            acceptedAt: '',
+            declinedAt: '',
+            scheduledStartDate: '',
+            completedAt: ''
+          },
           updatedAt: new Date().toISOString()
         };
 
@@ -745,6 +841,127 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: false,
             message: 'FAIL: Outermost connection exception during localhost simulation.',
+            error: err.message || String(err)
+          });
+        }
+      } else if (action === 'test-ghl-api-sync') {
+        const { ghlApiKey, ghlLocationId, ghlPipelineId } = req.body;
+        
+        let finalApiKey = ghlApiKey;
+        if (ghlApiKey === '••••••••' || !ghlApiKey) {
+          const settingsSnap = await db.collection('companySettings').doc(uid).get();
+          if (settingsSnap.exists && settingsSnap.data()?.ghlApiKey) {
+            finalApiKey = settingsSnap.data()?.ghlApiKey;
+          } else {
+            return res.status(400).json({ success: false, error: 'GHL API Key is required to run live tests.' });
+          }
+        }
+
+        const locationId = ghlLocationId || '';
+        if (!finalApiKey) {
+          return res.status(400).json({ success: false, error: 'Authorization API Key is empty.' });
+        }
+        if (!locationId) {
+          return res.status(400).json({ success: false, error: 'Location ID is empty.' });
+        }
+
+        const stepsLog: string[] = [];
+        let contactCreated = false;
+        let authOk = false;
+        let createdContactId = '';
+
+        try {
+          stepsLog.push(`[API] Initiating connectivity check to LeadConnector GHL API v2...`);
+          
+          const searchResponse = await fetch(`https://services.leadconnectorhq.com/contacts/search?locationId=${locationId}&query=Test Contact`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${finalApiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (searchResponse.status === 401) {
+            stepsLog.push(`[API] Authentication failed: received 401 Unauthorized from GHL.`);
+            return res.status(200).json({
+              success: false,
+              message: 'FAIL: GHL API Key authentication rejected with status 401.',
+              steps: stepsLog
+            });
+          }
+
+          authOk = searchResponse.ok;
+          stepsLog.push(`[API] Credentials accepted. Authentication verified! Response status: ${searchResponse.status}`);
+
+          const rand = Math.floor(Math.random() * 100000);
+          const sampleEmail = `test.sync.${rand}@lonestarfence.com`;
+          stepsLog.push(`[API] Creating test contact: "Test Contact (LSFW Sync)" (${sampleEmail})...`);
+
+          const createResponse = await fetch('https://services.leadconnectorhq.com/contacts/', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${finalApiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              firstName: 'Test Contact',
+              lastName: '(LSFW Sync)',
+              email: sampleEmail,
+              phone: `+1512555${rand.toString().padStart(4, '0')}`.substring(0, 12),
+              locationId,
+              tags: ['test-lsfw-connection', 'customer-estimator-submitted']
+            })
+          });
+
+          const createData: any = await createResponse.json().catch(() => ({}));
+
+          if (createResponse.ok && createData.contact?.id) {
+            createdContactId = createData.contact.id;
+            contactCreated = true;
+            stepsLog.push(`[API] Mock contact created successfully! GHL Contact ID: ${createdContactId}`);
+            stepsLog.push(`[API] Tags applied: "test-lsfw-connection", "customer-estimator-submitted"`);
+          } else {
+            stepsLog.push(`[API] Failed to create mock contact. Error: ${JSON.stringify(createData)}`);
+          }
+
+          if (ghlPipelineId) {
+            stepsLog.push(`[API] Verifying Pipeline ID: "${ghlPipelineId}"...`);
+            const pipelineRes = await fetch(`https://services.leadconnectorhq.com/opportunities/pipelines?locationId=${locationId}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${finalApiKey}`,
+                'Version': '2021-04-15',
+                'Content-Type': 'application/json'
+              }
+            });
+            const pipData: any = await pipelineRes.json().catch(() => ({}));
+            if (pipelineRes.ok && Array.isArray(pipData.pipelines)) {
+              const matches = pipData.pipelines.some((p: any) => p.id === ghlPipelineId);
+              if (matches) {
+                stepsLog.push(`[API] Pipeline ID "${ghlPipelineId}" exists and is authorized in your GHL account!`);
+              } else {
+                stepsLog.push(`[API] Warning: Pipeline ID "${ghlPipelineId}" was not found in the list of available pipelines.`);
+              }
+            } else {
+              stepsLog.push(`[API] Warning: Failed to retrieve pipelines to verify existence: ${JSON.stringify(pipData)}`);
+            }
+          }
+
+          return res.status(200).json({
+            success: authOk && contactCreated,
+            message: authOk && contactCreated ? 'PASS: connectivity, authentication, and test contact creation verified!' : 'FAIL: Sync verification issue occurred. Check logs',
+            steps: stepsLog,
+            testContactId: createdContactId
+          });
+
+        } catch (err: any) {
+          stepsLog.push(`[SYSTEM_ERROR] Exception occurred: ${err.message || String(err)}`);
+          return res.status(200).json({
+            success: false,
+            message: 'FAIL: Outermost connection exception during live API testing.',
+            steps: stepsLog,
             error: err.message || String(err)
           });
         }

@@ -243,6 +243,11 @@ async function sendGhlWorkflowWebhook(
       }
     }
 
+    if (settings && settings.keepGhlLegacyWebhooks === false) {
+      console.log(`[LEGACY WEBHOOK SUPPRESSION] Legacy webhooks are disabled in settings. Skipping GHL webhook for event: ${eventType}`);
+      return { success: true, error: 'Skipped: legacy webhooks disabled.' };
+    }
+
     let webhookUrl = '';
     if (eventType === 'instant_estimate_submitted' || eventType === 'customer_estimator_submitted') {
       webhookUrl = settings.ghlWebhookInstantEstimateSubmitted || settings.gohighlevelWebhookUrl || settings.ghlWebhookUrl;
@@ -411,6 +416,519 @@ async function sendGhlWorkflowWebhook(
       await saveLocalWebhookLog(firestoreDb, estimateId, logEntry);
     }
     return { success: false, error: err.message };
+  }
+}
+
+async function syncCustomerToGhl({
+  eventType,
+  customer,
+  estimate,
+  status,
+  source,
+  scheduleDate
+}: {
+  eventType: string;
+  customer?: any;
+  estimate?: any;
+  status?: string;
+  source?: string;
+  scheduleDate?: string;
+}): Promise<{ success: boolean; message?: string; error?: string; ghlContactId?: string; ghlOpportunityId?: string }> {
+  console.log(`[GHL API SYNC] Starting sync for event: ${eventType}`);
+  let logId = 'log_' + Math.random().toString(36).substring(2, 10);
+  let nowIso = new Date().toISOString();
+  
+  try {
+    // 1. Resolve Company Settings
+    const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+    let settings: any = {};
+    if (settingsSnap.exists) {
+      settings = settingsSnap.data() || {};
+    }
+
+    // Check if GHL API Sync is enabled
+    if (!settings.enableGhlApiSync) {
+      console.log(`[GHL API SYNC] GHL API Sync is disabled in settings. Skipping API sync updates.`);
+      const skippedLog = {
+        id: logId,
+        timestamp: nowIso,
+        eventType,
+        ghlContactId: null,
+        ghlOpportunityId: null,
+        success: true,
+        message: 'Sync skipped: API Sync disabled'
+      };
+      await saveGhlSyncLogLocal(estimate?.id, customer?.id, skippedLog);
+      return { success: true, message: 'Sync skipped: API Sync disabled' };
+    }
+
+    const apiKey = settings.ghlApiKey;
+    const locationId = settings.ghlLocationId;
+
+    if (!apiKey || !locationId) {
+      console.warn(`[GHL API SYNC] Missing CRM API Key or Location ID.`);
+      const errorLog = {
+        id: logId,
+        timestamp: nowIso,
+        eventType,
+        ghlContactId: null,
+        ghlOpportunityId: null,
+        success: false,
+        error: 'Missing API Key or Location ID configuration'
+      };
+      await saveGhlSyncLogLocal(estimate?.id, customer?.id, errorLog);
+      return { success: false, error: 'Missing CRM credentials' };
+    }
+
+    // 2. Extract and format contact fields
+    // Use customer data or estimate data to form name, email, phone
+    const email = (customer?.email || estimate?.customerEmail || estimate?.email || '').trim().toLowerCase();
+    const phone = (customer?.phone || estimate?.customerPhone || estimate?.phone || '').trim();
+    const firstName = (customer?.firstName || estimate?.firstName || '').trim();
+    const lastName = (customer?.lastName || estimate?.lastName || '').trim();
+    const customerName = (customer?.customerName || estimate?.customerName || `${firstName} ${lastName}`).trim();
+    const address = (customer?.address || estimate?.address || estimate?.streetAddress || '').trim();
+    const city = (customer?.city || estimate?.city || '').trim();
+    const state = (customer?.state || estimate?.state || '').trim();
+    const zip = (customer?.zip || estimate?.zip || estimate?.postalCode || '').trim();
+
+    if (!email && !phone && !customerName) {
+      console.warn(`[GHL API SYNC] Insufficient data to locate or create contact.`);
+      return { success: false, error: 'Insufficient contact details' };
+    }
+
+    let ghlContactId = customer?.ghlContactId || estimate?.ghlContactId || '';
+    
+    // GHL API request helper headers
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Version': '2021-04-15',
+      'Content-Type': 'application/json'
+    };
+
+    // 3. Search or Find existing Contact in GHL (if not already cached)
+    if (!ghlContactId) {
+      console.log(`[GHL API SYNC] No cached contact ID. Searching GHL...`);
+      let foundContactId = '';
+
+      if (email) {
+        try {
+          const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&email=${encodeURIComponent(email)}`, { headers });
+          if (res.ok) {
+            const data: any = await res.json();
+            if (data.contacts && data.contacts.length > 0) {
+              foundContactId = data.contacts[0].id;
+              console.log(`[GHL API SYNC] Found contact by email: ${foundContactId}`);
+            }
+          }
+        } catch (err) {
+          console.warn('[GHL API SYNC] Search by email failed:', err);
+        }
+      }
+
+      if (!foundContactId && phone) {
+        // format phone safely
+        const cleanedPhone = phone.replace(/\D/g, '');
+        const phoneVariants = [phone, cleanedPhone, `+1${cleanedPhone}`].filter(Boolean);
+        for (const pv of phoneVariants) {
+          try {
+            const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&phone=${encodeURIComponent(pv)}`, { headers });
+            if (res.ok) {
+              const data: any = await res.json();
+              if (data.contacts && data.contacts.length > 0) {
+                foundContactId = data.contacts[0].id;
+                console.log(`[GHL API SYNC] Found contact by phone ${pv}: ${foundContactId}`);
+                break;
+              }
+            }
+          } catch (err) {
+            console.warn('[GHL API SYNC] Search by phone failed:', err);
+          }
+        }
+      }
+
+      if (!foundContactId && customerName) {
+        try {
+          const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(customerName)}`, { headers });
+          if (res.ok) {
+            const data: any = await res.json();
+            if (data.contacts && data.contacts.length > 0) {
+              foundContactId = data.contacts[0].id;
+              console.log(`[GHL API SYNC] Found contact by query/name: ${foundContactId}`);
+            }
+          }
+        } catch (err) {
+          console.warn('[GHL API SYNC] Search by name failed:', err);
+        }
+      }
+
+      if (foundContactId) {
+        ghlContactId = foundContactId;
+        // Save back to Firestore
+        await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+      }
+    }
+
+    // 4. Create contact if still missing
+    if (!ghlContactId) {
+      console.log(`[GHL API SYNC] No contact found in GHL. Creating a new one...`);
+      const createBody: any = {
+        locationId,
+        firstName: firstName || customerName.split(' ')[0] || 'Unknown',
+        lastName: lastName || customerName.split(' ').slice(1).join(' ') || 'Customer',
+        name: customerName || 'New CRM Contact',
+        email: email || undefined,
+        phone: phone || undefined,
+        address1: address || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        postalCode: zip || undefined,
+        tags: ['customer-created']
+      };
+
+      try {
+        const res = await fetch(`https://services.leadconnectorhq.com/contacts/`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(createBody)
+        });
+        if (res.ok) {
+          const data: any = await res.json();
+          ghlContactId = data.contact?.id || data.id;
+          console.log(`[GHL API SYNC] Successfully created new GHL Contact: ${ghlContactId}`);
+          await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+        } else {
+          const errText = await res.text();
+          throw new Error(`Create contact returned HTTP ${res.status}: ${errText}`);
+        }
+      } catch (err: any) {
+        console.error('[GHL API SYNC] Contact creation failed:', err);
+        const errorLog = {
+          id: logId,
+          timestamp: nowIso,
+          eventType,
+          ghlContactId: null,
+          ghlOpportunityId: null,
+          success: false,
+          error: `Contact creation failed: ${err.message || err}`
+        };
+        await saveGhlSyncLogLocal(estimate?.id, customer?.id, errorLog);
+        return { success: false, error: `CRM contact creation failed: ${err.message}` };
+      }
+    }
+
+    // 5. Update custom fields and tag contact
+    // Determine the Tag of the event
+    let eventTag = '';
+    if (eventType === 'customer_created') eventTag = 'customer-created';
+    else if (eventType === 'customer_estimator_submitted') eventTag = 'customer-estimator-submitted';
+    else if (eventType === 'estimate_scheduled') eventTag = 'estimate-scheduled';
+    else if (eventType === 'manual_estimate_sent') eventTag = 'estimate-sent';
+    else if (eventType === 'estimate_accepted') eventTag = 'estimate-accepted';
+    else if (eventType === 'estimate_declined') eventTag = 'estimate-declined';
+    else if (eventType === 'job_scheduled') eventTag = 'job-scheduled';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed') eventTag = 'job-completed';
+    else if (eventType === 'archived') eventTag = 'estimate-archived';
+
+    // Map the human-readable job status
+    let currentJobStatus = status || 'Interested';
+    if (eventType === 'customer_estimator_submitted') currentJobStatus = 'Interested';
+    else if (eventType === 'manual_estimate_sent') currentJobStatus = 'Proposed';
+    else if (eventType === 'estimate_accepted') currentJobStatus = 'Accepted';
+    else if (eventType === 'estimate_declined') currentJobStatus = 'Declined';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed') currentJobStatus = 'Completed';
+    else if (eventType === 'archived') currentJobStatus = 'Archived';
+
+    // Form Custom Fields array
+    const customFieldsPayload: { id: string; value: any }[] = [];
+    const gcf = settings.ghlCustomFields;
+    
+    if (gcf) {
+      const addCf = (key: string, val: any) => {
+        const fieldId = gcf[key];
+        if (fieldId && val !== undefined && val !== null && val !== '') {
+          customFieldsPayload.push({ id: fieldId, value: val });
+        }
+      };
+
+      if (estimate) {
+        addCf('estimateId', estimate.id || '');
+        addCf('estimateNumber', estimate.estimateNumber || '');
+        const finalEstimateLink = `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${estimate.id}&versionId=${estimate.latestContractVersionId || ''}`;
+        addCf('estimateLink', finalEstimateLink);
+        addCf('estimatedPrice', Number(estimate.totalCost || estimate.manualGrandTotal || 0));
+        addCf('fenceType', estimate.fenceMaterial || estimate.woodType || estimate.fenceType || '');
+        addCf('linearFeet', Number(estimate.linearFeet || 0));
+      }
+
+      addCf('jobStatus', currentJobStatus);
+
+      if (eventType === 'customer_estimator_submitted') {
+        addCf('customerEstimatorSubmittedAt', nowIso);
+      }
+      if (eventType === 'manual_estimate_sent') {
+        addCf('lastEstimateSentAt', nowIso);
+      }
+      if (eventType === 'estimate_accepted') {
+        addCf('acceptedAt', nowIso);
+      }
+      if (eventType === 'estimate_declined') {
+        addCf('declinedAt', nowIso);
+      }
+      if (eventType === 'estimate_scheduled' || eventType === 'job_scheduled') {
+        addCf('scheduledStartDate', scheduleDate || nowIso);
+      }
+      if (eventType === 'estimate_completed' || eventType === 'job_completed') {
+        addCf('completedAt', nowIso);
+      }
+    }
+
+    // Call update tags and fields on contact
+    try {
+      console.log(`[GHL API SYNC] Updating GHL Contact details: ${ghlContactId}`);
+      const updateRes = await fetch(`https://services.leadconnectorhq.com/contacts/${ghlContactId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          tags: eventTag ? [eventTag] : undefined,
+          customFields: customFieldsPayload.length > 0 ? customFieldsPayload : undefined
+        })
+      });
+      if (!updateRes.ok) {
+        const errText = await updateRes.text();
+        console.warn(`[GHL API SYNC] Contact update response: HTTP ${updateRes.status}: ${errText}`);
+      }
+    } catch (err) {
+      console.error('[GHL API SYNC] Contact updates failed:', err);
+    }
+
+    // 6. Manage CRM Pipelines / Opportunities
+    let ghlOpportunityId = '';
+    let stageName = '';
+    let pipelineId = settings.ghlPipelineId;
+    let stageId = '';
+
+    // Map Event types to stage labels
+    let mappedStageLabel = '';
+    if (eventType === 'customer_created') mappedStageLabel = 'Interested';
+    else if (eventType === 'customer_estimator_submitted') mappedStageLabel = 'Appointment Requested';
+    else if (eventType === 'estimate_scheduled') mappedStageLabel = 'Estimate Scheduled';
+    else if (eventType === 'manual_estimate_sent') mappedStageLabel = 'Estimate Sent';
+    else if (eventType === 'estimate_accepted') mappedStageLabel = 'Accepted';
+    else if (eventType === 'estimate_declined') mappedStageLabel = 'Declined';
+    else if (eventType === 'job_scheduled') mappedStageLabel = 'Scheduled';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed') mappedStageLabel = 'Completed';
+    else if (eventType === 'archived') mappedStageLabel = 'Archived';
+
+    if (pipelineId && mappedStageLabel && settings.ghlOpportunityStages) {
+      stageId = settings.ghlOpportunityStages[mappedStageLabel];
+      stageName = mappedStageLabel;
+    }
+
+    if (pipelineId && stageId) {
+      console.log(`[GHL API SYNC] Pipeline opportunity mapped. Stage: ${stageName} (${stageId})`);
+      
+      // Map opportunity open/won/lost status based on state
+      let oppStatus = 'open';
+      if (eventType === 'estimate_accepted') oppStatus = 'open';
+      else if (eventType === 'estimate_declined') oppStatus = 'lost';
+      else if (eventType === 'estimate_completed' || eventType === 'job_completed') oppStatus = 'won';
+      else if (eventType === 'archived') oppStatus = 'abandoned';
+
+      const monetaryValue = Number(estimate?.totalCost || estimate?.manualGrandTotal || 0);
+      const opportunityName = `${customerName} - ${estimate?.fenceMaterial || estimate?.woodType || 'Fence Estimate'}`;
+
+      // Search for open/matching opportunities for this contact in the pipeline
+      let existingOppId = '';
+      try {
+        console.log(`[GHL API SYNC] Searching for existing opportunities...`);
+        const oppSearch = await fetch(`https://services.leadconnectorhq.com/opportunities/search?locationId=${locationId}&contactId=${ghlContactId}`, {headers});
+        if (oppSearch.ok) {
+          const oppData: any = await oppSearch.json();
+          const opps = oppData.opportunities || [];
+          const match = opps.find((o: any) => o.pipelineId === pipelineId);
+          if (match) {
+            existingOppId = match.id;
+            console.log(`[GHL API SYNC] Found matching opportunity: ${existingOppId}`);
+          }
+        }
+      } catch (err) {
+        console.warn('[GHL API SYNC] Search opportunity failed:', err);
+      }
+
+      if (existingOppId) {
+        // Update existing opportunity
+        try {
+          console.log(`[GHL API SYNC] Updating GHL Opportunity: ${existingOppId}`);
+          const oppRes = await fetch(`https://services.leadconnectorhq.com/opportunities/${existingOppId}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({
+              pipelineId,
+              stageId,
+              status: oppStatus,
+              monetaryValue: monetaryValue || undefined
+            })
+          });
+          if (oppRes.ok) {
+            ghlOpportunityId = existingOppId;
+          } else {
+            const errText = await oppRes.text();
+            console.warn(`[GHL API SYNC] Update opportunity failed: HTTP ${oppRes.status}: ${errText}`);
+          }
+        } catch (err) {
+          console.error('[GHL API SYNC] Opportunity update endpoint failed:', err);
+        }
+      } else {
+        // Create new opportunity
+        try {
+          console.log(`[GHL API SYNC] Creating GHL Opportunity...`);
+          const oppRes = await fetch(`https://services.leadconnectorhq.com/opportunities/`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              pipelineId,
+              locationId,
+              contactId: ghlContactId,
+              stageId,
+              name: opportunityName,
+              status: oppStatus,
+              monetaryValue: monetaryValue || undefined
+            })
+          });
+          if (oppRes.ok) {
+            const oppData: any = await oppRes.json();
+            ghlOpportunityId = oppData.opportunity?.id || oppData.id;
+            console.log(`[GHL API SYNC] Successfully created new GHL Opportunity: ${ghlOpportunityId}`);
+          } else {
+            const errText = await oppRes.text();
+            console.warn(`[GHL API SYNC] Create opportunity failed: HTTP ${oppRes.status}: ${errText}`);
+          }
+        } catch (err) {
+          console.error('[GHL API SYNC] Opportunity creation endpoint failed:', err);
+        }
+      }
+    }
+
+    // 7. Write Logging entry and complete
+    const successLog = {
+      id: logId,
+      timestamp: nowIso,
+      eventType,
+      ghlContactId: ghlContactId || null,
+      ghlOpportunityId: ghlOpportunityId || null,
+      success: true,
+      stageName: stageName || null,
+      stageId: stageId || null,
+      error: null
+    };
+    await saveGhlSyncLogLocal(estimate?.id, customer?.id, successLog);
+
+    return {
+      success: true,
+      ghlContactId,
+      ghlOpportunityId,
+      message: 'GoHighLevel sync successfully completed'
+    };
+
+  } catch (err: any) {
+    console.error(`[GHL API SYNC ERROR] outermost syncCustomerToGhl error:`, err);
+    const failureLog = {
+      id: logId,
+      timestamp: nowIso,
+      eventType,
+      ghlContactId: null,
+      ghlOpportunityId: null,
+      success: false,
+      error: err.message || String(err)
+    };
+    await saveGhlSyncLogLocal(estimate?.id, customer?.id, failureLog);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+async function saveCachedGhlContactId(estimateId?: string, customerId?: string, ghlContactId?: string) {
+  if (!ghlContactId) return;
+  const updateObj = { ghlContactId, updatedAt: new Date().toISOString() };
+
+  if (customerId) {
+    try {
+      await db.collection('customers').doc(String(customerId)).set(updateObj, { merge: true });
+    } catch (e) {
+      console.warn('Failed caching contact ID to customer:', e);
+    }
+  }
+
+  if (estimateId) {
+    try {
+      await db.collection('estimates').doc(String(estimateId)).set(updateObj, { merge: true });
+    } catch (e) {
+      console.warn('Failed caching contact ID to estimate:', e);
+    }
+    const estimateDoc = await db.collection('estimates').doc(String(estimateId)).get();
+    if (!estimateDoc.exists) {
+      const usersSnap = await db.collection('users').get();
+      for (const uDoc of usersSnap.docs) {
+        try {
+          const ref = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+          const snap = await ref.get();
+          if (snap.exists) {
+            await ref.set(updateObj, { merge: true });
+          }
+        } catch (e) {}
+      }
+    }
+  }
+}
+
+async function saveGhlSyncLogLocal(estimateId: string | undefined, customerId: string | undefined, logEntry: any) {
+  const nowIso = new Date().toISOString();
+
+  if (customerId) {
+    try {
+      const custRef = db.collection('customers').doc(String(customerId));
+      const snap = await custRef.get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        const oldLogs = data.ghlSyncLog || [];
+        const updatedLogs = [logEntry, ...oldLogs].slice(0, 50);
+        await custRef.set({ ghlSyncLog: updatedLogs, updatedAt: nowIso }, { merge: true });
+      }
+    } catch (e) {
+      console.warn('Failed appending sync log to customer:', e);
+    }
+  }
+
+  if (estimateId) {
+    try {
+      let isCachedMatched = false;
+      const estRef = db.collection('estimates').doc(String(estimateId));
+      let snap = await estRef.get();
+      if (snap.exists) {
+        isCachedMatched = true;
+        const data = snap.data() || {};
+        const oldLogs = data.ghlSyncLog || [];
+        const updatedLogs = [logEntry, ...oldLogs].slice(0, 50);
+        await estRef.set({ ghlSyncLog: updatedLogs, updatedAt: nowIso }, { merge: true });
+      }
+
+      if (!isCachedMatched) {
+        const usersSnap = await db.collection('users').get();
+        for (const uDoc of usersSnap.docs) {
+          const nestedRef = db.collection('users').doc(uDoc.id).collection('estimates').doc(String(estimateId));
+          snap = await nestedRef.get();
+          if (snap.exists) {
+            const data = snap.data() || {};
+            const oldLogs = data.ghlSyncLog || [];
+            const updatedLogs = [logEntry, ...oldLogs].slice(0, 50);
+            await nestedRef.set({ ghlSyncLog: updatedLogs, updatedAt: nowIso }, { merge: true });
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed appending sync log to estimate:', e);
+    }
   }
 }
 
@@ -1481,7 +1999,9 @@ export default async function handler(req: any, res: any) {
       }
 
       // If still no customerId, we should create a new customer record
+      let isBrandNewCustomer = false;
       if (!customerId) {
+        isBrandNewCustomer = true;
         try {
           const newCustomerRef = db.collection('customers').doc();
           customerId = newCustomerRef.id;
@@ -1996,6 +2516,26 @@ export default async function handler(req: any, res: any) {
         });
       } catch (logErr) {
         console.warn('Failed to update logs inside the output estimate document:', logErr);
+      }
+
+      // Trigger dynamic GHL API sync for newly created customer or submitted estimator
+      try {
+        if (isBrandNewCustomer) {
+          await syncCustomerToGhl({
+            eventType: 'customer_created',
+            estimate: { id: estId, ...estimateDocToSave },
+            status: 'Interested',
+            source: 'customer_portal'
+          });
+        }
+        await syncCustomerToGhl({
+          eventType: 'customer_estimator_submitted',
+          estimate: { id: estId, ...estimateDocToSave },
+          status: 'Interested',
+          source: 'customer_portal'
+        });
+      } catch (ghlSyncErr) {
+        console.error('Failed to run GHL API Sync for estimator submitted:', ghlSyncErr);
       }
 
       return res.status(200).json({
@@ -3052,6 +3592,29 @@ Lone Star Fence Works`;
         }
         eventData.userId = eventData.userId || decoded.uid;
         await db.collection('schedule_events').doc(String(id)).set(eventData);
+
+        // Trigger dynamic GHL CRM Sync for scheduling event
+        if (eventData.estimateId) {
+          try {
+            const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
+            if (estSnap.exists) {
+              const estData = estSnap.data() || {};
+              const eventType = (eventData.type === 'onsite_estimate' || String(eventData.title || '').toLowerCase().includes('estimate'))
+                ? 'estimate_scheduled'
+                : 'job_scheduled';
+              await syncCustomerToGhl({
+                eventType,
+                estimate: { id: estSnap.id, ...estData },
+                scheduleDate: eventData.start || eventData.startDate || new Date().toISOString(),
+                status: (eventType === 'estimate_scheduled' ? 'Scheduled' : 'Proposed'),
+                source: 'manual_admin'
+              });
+            }
+          } catch (syncErr) {
+            console.error('[GHL API SYNC] Failed GHL API Sync for scheduled event:', syncErr);
+          }
+        }
+
         return res.status(200).json(eventData);
       }
       if (req.body && req.body.action === 'send') {
@@ -3500,6 +4063,18 @@ Lone Star Fence Works`;
               sentAt: now
             };
             await sendGhlWorkflowWebhook('manual_estimate_sent', manualPayload, settingsData, db, String(estimateId));
+            
+            // Trigger dynamic GHL API Sync for manual_estimate_sent
+            try {
+              await syncCustomerToGhl({
+                eventType: 'manual_estimate_sent',
+                estimate: { id: estimateId, ...estimateData, ...updates, latestContractVersionId: newVersionId },
+                status: 'Proposed',
+                source: 'manual_admin'
+              });
+            } catch (syncErr) {
+              console.error("[GHL API SYNC] GHL API sync failed for manual estimate send:", syncErr);
+            }
           } catch (ghlError) {
             console.error("GHL webhook failed, continuing email send:", ghlError);
           }
@@ -3566,6 +4141,18 @@ Lone Star Fence Works`;
       } else {
         const docRef = await db.collection('estimates').add(estimateData);
         savedId = docRef.id;
+        
+        // Trigger customer_created dynamic GHL sync
+        try {
+          await syncCustomerToGhl({
+            eventType: 'customer_created',
+            estimate: { id: savedId, ...estimateData },
+            status: estimateData.jobStatus || 'Interested',
+            source: 'manual_admin'
+          });
+        } catch (syncErr) {
+          console.error("[GHL API SYNC] GHL API sync failing for manual created customer:", syncErr);
+        }
       }
 
       return res.status(200).json({
@@ -3581,6 +4168,33 @@ Lone Star Fence Works`;
           return res.status(400).json({ error: 'Event ID is required.' });
         }
         await db.collection('schedule_events').doc(String(id)).update(updates);
+
+        // Fetch the updated schedule event to run GHL sync
+        try {
+          const updatedEventSnap = await db.collection('schedule_events').doc(String(id)).get();
+          if (updatedEventSnap.exists) {
+            const eventData = updatedEventSnap.data() || {};
+            if (eventData.estimateId) {
+              const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
+              if (estSnap.exists) {
+                const estData = estSnap.data() || {};
+                const eventType = (eventData.type === 'onsite_estimate' || String(eventData.title || '').toLowerCase().includes('estimate'))
+                  ? 'estimate_scheduled'
+                  : 'job_scheduled';
+                await syncCustomerToGhl({
+                  eventType,
+                  estimate: { id: estSnap.id, ...estData },
+                  scheduleDate: eventData.start || eventData.startDate || new Date().toISOString(),
+                  status: (eventType === 'estimate_scheduled' ? 'Scheduled' : 'Proposed'),
+                  source: 'manual_admin'
+                });
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.error('[GHL API SYNC] Failed GHL API Sync for update-schedule-event:', syncErr);
+        }
+
         return res.status(200).json({ id, ...updates });
       }
 
@@ -3699,6 +4313,18 @@ Lone Star Fence Works`;
           } else if (mStatus === 'Archived') {
             updates.status = 'archived';
             updates.archivedAt = existingData.archivedAt || nowIso;
+
+            // Trigger dynamic GHL API Sync for archived
+            try {
+              await syncCustomerToGhl({
+                eventType: 'archived',
+                estimate: { id, ...existingData, ...updates },
+                status: 'Archived',
+                source: 'manual_admin'
+              });
+            } catch (syncErr) {
+              console.error('[GHL API SYNC] Failed archiving GHL Sync:', syncErr);
+            }
           }
 
           // Version history:
@@ -3893,6 +4519,18 @@ Lone Star Fence Works`;
 
               const existingGhlLogs = existingData.ghlWebhookLog || [];
               updates.ghlWebhookLog = [...existingGhlLogs, logEntryToSave];
+            }
+
+            // Trigger dynamic GHL API Sync for manual status change
+            try {
+              await syncCustomerToGhl({
+                eventType,
+                estimate: { id, ...existingData, ...updates },
+                status: mStatus,
+                source: 'manual_admin'
+              });
+            } catch (syncErr) {
+              console.error("[GHL API SYNC] manualStatusChange CRM API sync failing:", syncErr);
             }
           }
         }
