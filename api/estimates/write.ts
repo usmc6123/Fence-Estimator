@@ -599,7 +599,50 @@ async function syncCustomerToGhl({
           await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
         } else {
           const errText = await res.text();
-          throw new Error(`Create contact returned HTTP ${res.status}: ${errText}`);
+          let errJson: any = null;
+          try {
+            errJson = JSON.parse(errText);
+          } catch (e) {}
+
+          const duplicateContactId = errJson?.contact?.id || errJson?.id || errJson?.meta?.contactId || errJson?.meta?.id;
+          if (duplicateContactId) {
+            ghlContactId = duplicateContactId;
+            console.log(`[GHL API SYNC] Derived duplicate contact ID ${ghlContactId} from error payload.`);
+            await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+          } else {
+            // Aggressive fallback search by query
+            let foundByFallback = '';
+            if (email) {
+              try {
+                const fRes = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(email)}`, { headers });
+                if (fRes.ok) {
+                  const fData: any = await fRes.json();
+                  if (fData.contacts && fData.contacts.length > 0) {
+                    foundByFallback = fData.contacts[0].id;
+                  }
+                }
+              } catch (e) {}
+            }
+            if (!foundByFallback && phone) {
+              try {
+                const fRes = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(phone)}`, { headers });
+                if (fRes.ok) {
+                  const fData: any = await fRes.json();
+                  if (fData.contacts && fData.contacts.length > 0) {
+                    foundByFallback = fData.contacts[0].id;
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (foundByFallback) {
+              ghlContactId = foundByFallback;
+              console.log(`[GHL API SYNC] Fallback search matched duplicate contact ID: ${ghlContactId}`);
+              await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+            } else {
+              throw new Error(`Create contact returned HTTP ${res.status}: ${errText}`);
+            }
+          }
         }
       } catch (err: any) {
         console.error('[GHL API SYNC] Contact creation failed:', err);
@@ -4240,8 +4283,12 @@ Lone Star Fence Works`;
         if (docData.jobStatus === 'Completed') return 'Completed';
         if (docData.jobStatus === 'Declined') return 'Declined';
         if (docData.jobStatus === 'Accepted' || docData.jobStatus === 'Approved') return 'Accepted';
+        if (docData.jobStatus === 'Scheduled' || docData.jobStatus === 'In Progress') return 'Scheduled';
         if (docData.jobStatus === 'Estimate Sent') {
           if (!docData.customerEmailSent && !docData.customerEmailSentAt) {
+            if (docData.manualStatusOverride === true) {
+              return 'Estimate Sent';
+            }
             return 'Draft';
           }
           return 'Estimate Sent';
@@ -4274,6 +4321,9 @@ Lone Star Fence Works`;
             updates.completedAt = null;
             updates.declineReason = null;
             updates.customerDeclineReason = null;
+            updates.manualStatusOverride = false;
+            updates.manualStatusChangedAt = null;
+            updates.manualStatusChangedBy = null;
             if (existingData.status === 'archived' || existingData.status === 'completed') {
               updates.status = 'active';
             }
@@ -4286,6 +4336,9 @@ Lone Star Fence Works`;
             updates.declinedAt = null;
             updates.declineReason = null;
             updates.customerDeclineReason = null;
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
             if (existingData.status === 'archived') {
               updates.status = 'active';
             }
@@ -4294,6 +4347,9 @@ Lone Star Fence Works`;
             updates.customerDecision = 'accepted';
             updates.acceptedAt = existingData.acceptedAt || nowIso;
             updates.source = 'manual_admin';
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
             if (existingData.status === 'archived') {
               updates.status = 'active';
             }
@@ -4302,6 +4358,18 @@ Lone Star Fence Works`;
             updates.customerDecision = 'declined';
             updates.declinedAt = existingData.declinedAt || nowIso;
             updates.source = 'manual_admin';
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
+            if (existingData.status === 'archived') {
+              updates.status = 'active';
+            }
+          } else if (mStatus === 'Scheduled') {
+            updates.jobStatus = 'Scheduled';
+            updates.source = 'manual_admin';
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
             if (existingData.status === 'archived') {
               updates.status = 'active';
             }
@@ -4310,21 +4378,15 @@ Lone Star Fence Works`;
             updates.status = 'completed';
             updates.completedAt = existingData.completedAt || nowIso;
             updates.source = 'manual_admin';
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
           } else if (mStatus === 'Archived') {
             updates.status = 'archived';
             updates.archivedAt = existingData.archivedAt || nowIso;
-
-            // Trigger dynamic GHL API Sync for archived
-            try {
-              await syncCustomerToGhl({
-                eventType: 'archived',
-                estimate: { id, ...existingData, ...updates },
-                status: 'Archived',
-                source: 'manual_admin'
-              });
-            } catch (syncErr) {
-              console.error('[GHL API SYNC] Failed archiving GHL Sync:', syncErr);
-            }
+            updates.manualStatusOverride = true;
+            updates.manualStatusChangedAt = nowIso;
+            updates.manualStatusChangedBy = changedBy;
           }
 
           // Version history:
@@ -4370,6 +4432,9 @@ Lone Star Fence Works`;
               } else if (mStatus === 'Estimate Sent') {
                 targetDecision = 'pending';
                 targetStatusField = 'Sent';
+              } else if (mStatus === 'Scheduled') {
+                targetDecision = 'pending';
+                targetStatusField = 'Confirmed';
               } else if (mStatus === 'Archived') {
                 targetDecision = 'none';
                 targetStatusField = 'Archived';
@@ -4399,17 +4464,42 @@ Lone Star Fence Works`;
             }
           }
 
+          // Save pricing fields if missing in db but submitted in req.body (Issue 1)
+          const pricingFieldsToPreserve = [
+            'estimatedPrice',
+            'finalCustomerPrice',
+            'manualGrandTotal',
+            'grandTotal',
+            'totalInvestment',
+            'pricePerFoot',
+            'linearFeet',
+            'costSummaryRuns',
+            'runSectionTotals',
+            'selectedOptions',
+            'gateSummary',
+            'demoRemovalPrice',
+            'addOnSitePrepPrice',
+            'discountAmount'
+          ];
+          pricingFieldsToPreserve.forEach(field => {
+            if (existingData[field] === undefined || existingData[field] === null || existingData[field] === 0 || existingData[field] === '0') {
+              if (req.body[field] !== undefined && req.body[field] !== null) {
+                updates[field] = req.body[field];
+              }
+            }
+          });
+
           // Fire GHL webhooks if they match Accepted, Declined, or Completed:
           if (mStatus === 'Accepted' || mStatus === 'Declined' || mStatus === 'Completed') {
             const tempContractVer = updates.contractVersions || existingData.contractVersions;
             const matchedContractVersionObj = tempContractVer?.find((v: any) => v.versionId === (existingData.latestContractVersionId));
             const finalEstimateLink = matchedContractVersionObj?.estimateLink || `https://fence-estimator-eight.vercel.app/?portal=contract&estimateId=${id}&versionId=${existingData.latestContractVersionId || ''}`;
 
-            let eventType: 'estimate_accepted' | 'estimate_declined' | 'estimate_completed' = 'estimate_accepted';
+            let eventTypeLegacy: 'estimate_accepted' | 'estimate_declined' | 'estimate_completed' = 'estimate_accepted';
             let eventPayload: any = {};
 
             if (mStatus === 'Declined') {
-              eventType = 'estimate_declined';
+              eventTypeLegacy = 'estimate_declined';
               eventPayload = {
                 eventType: 'estimate_declined',
                 source: 'manual_admin',
@@ -4429,7 +4519,7 @@ Lone Star Fence Works`;
                 estimateLink: finalEstimateLink
               };
             } else if (mStatus === 'Accepted') {
-              eventType = 'estimate_accepted';
+              eventTypeLegacy = 'estimate_accepted';
               eventPayload = {
                 eventType: 'estimate_accepted',
                 source: 'manual_admin',
@@ -4450,7 +4540,7 @@ Lone Star Fence Works`;
                 estimateLink: finalEstimateLink
               };
             } else if (mStatus === 'Completed') {
-              eventType = 'estimate_completed';
+              eventTypeLegacy = 'estimate_completed';
               eventPayload = {
                 eventType: 'estimate_completed',
                 source: 'manual_admin',
@@ -4470,11 +4560,11 @@ Lone Star Fence Works`;
             }
 
             try {
-              const resGhl = await sendGhlWorkflowWebhook(eventType, eventPayload, null, db, String(id));
+              const resGhl = await sendGhlWorkflowWebhook(eventTypeLegacy, eventPayload, null, db, String(id));
               webhookSuccessResult = resGhl.success;
 
               const logEntryToSave = {
-                eventType,
+                eventType: eventTypeLegacy,
                 source: 'manual_admin',
                 sentAt: nowIso,
                 payloadPreview: eventPayload,
@@ -4483,13 +4573,13 @@ Lone Star Fence Works`;
                 error: resGhl.success ? null : (resGhl.error || 'Webhook returned non-OK status')
               };
 
-              updates.lastGhlWebhookEvent = eventType;
+              updates.lastGhlWebhookEvent = eventTypeLegacy;
               updates.lastGhlWebhookSentAt = nowIso;
-              if (eventType === 'estimate_declined') {
+              if (eventTypeLegacy === 'estimate_declined') {
                 updates.declinedWebhookSent = resGhl.success;
-              } else if (eventType === 'estimate_accepted') {
+              } else if (eventTypeLegacy === 'estimate_accepted') {
                 updates.acceptedWebhookSent = resGhl.success;
-              } else if (eventType === 'estimate_completed') {
+              } else if (eventTypeLegacy === 'estimate_completed') {
                 updates.completedWebhookSent = resGhl.success;
               }
 
@@ -4499,7 +4589,7 @@ Lone Star Fence Works`;
               console.error(`Error sending GHL webhook for status ${mStatus}:`, err);
               webhookSuccessResult = false;
               const logEntryToSave = {
-                eventType,
+                eventType: eventTypeLegacy,
                 source: 'manual_admin',
                 sentAt: nowIso,
                 payloadPreview: eventPayload,
@@ -4507,28 +4597,42 @@ Lone Star Fence Works`;
                 responseStatus: 500,
                 error: err.message || 'Error occurred during fetch dispatch'
               };
-              updates.lastGhlWebhookEvent = eventType;
+              updates.lastGhlWebhookEvent = eventTypeLegacy;
               updates.lastGhlWebhookSentAt = nowIso;
-              if (eventType === 'estimate_declined') {
+              if (eventTypeLegacy === 'estimate_declined') {
                 updates.declinedWebhookSent = false;
-              } else if (eventType === 'estimate_accepted') {
+              } else if (eventTypeLegacy === 'estimate_accepted') {
                 updates.acceptedWebhookSent = false;
-              } else if (eventType === 'estimate_completed') {
+              } else if (eventTypeLegacy === 'estimate_completed') {
                 updates.completedWebhookSent = false;
               }
 
               const existingGhlLogs = existingData.ghlWebhookLog || [];
               updates.ghlWebhookLog = [...existingGhlLogs, logEntryToSave];
             }
+          }
 
-            // Trigger dynamic GHL API Sync for manual status change
+          // Trigger continuous direct GHL API Sync for manual status changes (Issue 3 / Req 5)
+          const statusesToSyncDirect = ['Estimate Sent', 'Accepted', 'Declined', 'Completed', 'Scheduled', 'Archived'];
+          if (statusesToSyncDirect.includes(mStatus)) {
+            let directEventType = '';
+            if (mStatus === 'Estimate Sent') directEventType = 'manual_estimate_sent';
+            else if (mStatus === 'Accepted') directEventType = 'estimate_accepted';
+            else if (mStatus === 'Declined') directEventType = 'estimate_declined';
+            else if (mStatus === 'Completed') directEventType = 'estimate_completed';
+            else if (mStatus === 'Scheduled') directEventType = 'job_scheduled';
+            else if (mStatus === 'Archived') directEventType = 'estimate_archived';
+
             try {
-              await syncCustomerToGhl({
-                eventType,
+              const syncRes = await syncCustomerToGhl({
+                eventType: directEventType,
                 estimate: { id, ...existingData, ...updates },
                 status: mStatus,
                 source: 'manual_admin'
               });
+              if (syncRes && syncRes.success && syncRes.ghlContactId) {
+                updates.ghlContactId = syncRes.ghlContactId;
+              }
             } catch (syncErr) {
               console.error("[GHL API SYNC] manualStatusChange CRM API sync failing:", syncErr);
             }

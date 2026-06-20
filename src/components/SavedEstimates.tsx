@@ -31,8 +31,12 @@ const getEstimateDisplayStatus = (est: any) => {
   if (jobStatus === 'Completed') return 'Completed';
   if (jobStatus === 'Declined') return 'Declined';
   if (jobStatus === 'Accepted' || jobStatus === 'Approved') return 'Accepted';
+  if (jobStatus === 'Scheduled' || jobStatus === 'In Progress') return 'Scheduled';
   if (jobStatus === 'Estimate Sent') {
     if (!est.customerEmailSent && !est.customerEmailSentAt) {
+      if (est.manualStatusOverride === true) {
+        return 'Estimate Sent';
+      }
       return 'Draft';
     }
     return 'Estimate Sent';
@@ -885,6 +889,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                     <option value="Estimate Sent">Estimate Sent</option>
                                     <option value="Accepted">Accepted</option>
                                     <option value="Declined">Declined</option>
+                                    <option value="Scheduled">Scheduled</option>
                                     <option value="Completed">Completed</option>
                                     <option value="Archived">Archived</option>
                                   </select>

@@ -536,6 +536,87 @@ export default function Estimator({
 
     const isNewDraft = !isExisting || !estimate.jobStatus || estimate.jobStatus === 'Estimate Pending' || estimate.jobStatus === 'Estimate Sent';
 
+    // Pricing calculation
+    const pricingStrategy = estimate.pricingStrategy || 'best';
+    const selectedSupplier = estimate.selectedSupplier || '';
+
+    let resolvedMaterials = materials;
+    if (pricingStrategy === 'supplier' && selectedSupplier) {
+      const supplierQuotes = quotes
+        .filter(q => q.supplierName === selectedSupplier)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      resolvedMaterials = materials.map(m => {
+        let quotedPrice: number | undefined;
+        for (const quote of supplierQuotes) {
+          const item = quote.items.find(i => i.mappedMaterialId === m.id);
+          if (item) {
+            quotedPrice = item.unitPrice;
+            break;
+          }
+        }
+
+        if (quotedPrice !== undefined) {
+          return { ...m, cost: quotedPrice };
+        }
+        return m;
+      });
+    }
+
+    const recalculatedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates);
+    const pricing = recalculatedTakeOff.pricing;
+    const finalPrice = pricing.finalCustomerPrice || pricing.grandTotal || 0;
+
+    // Gate Summary construction
+    let gateCount = 0;
+    let singleGates = 0;
+    let doubleGates = 0;
+    const runsData = estimate.runs || [];
+    runsData.forEach((run: any) => {
+      const gatesList = run.gateDetails || run.gates || [];
+      gatesList.forEach((gate: any) => {
+        gateCount++;
+        if (String(gate.gateType || '').toLowerCase().includes('double') || String(gate.type || '').toLowerCase().includes('double')) {
+          doubleGates++;
+        } else {
+          singleGates++;
+        }
+      });
+    });
+    const gateSummary = gateCount > 0 
+      ? `${gateCount} Gate(s) (${singleGates} Single, ${doubleGates} Double)`
+      : 'None';
+
+    // Options construction
+    const options: string[] = [];
+    const estAny = estimate as any;
+    if (estAny.removeOldFence || estAny.demoRemoval) options.push("Remove old fence");
+    if (estAny.isPreStained || estAny.preStained) options.push("Pre-stained material");
+    if (estAny.reusePosts) options.push("Reuse existing posts");
+    if (estAny.hasTopCap) options.push("Top Cap");
+    if (estAny.hasCapAndTrim) options.push("Cap and Trim");
+    const selectedOptionsStr = options.join(', ') || 'None';
+
+    // Map costSummaryRuns and runBreakdown explicitly:
+    const costSummaryRuns = recalculatedTakeOff.runs.map((run: any, i: number) => {
+      const origRun: any = runsData[i] || {};
+      const pricingRun = (pricing.runsPricing?.[i] || {}) as any;
+      const finalFenceValue = pricingRun.finalFence !== undefined ? pricingRun.finalFence : (pricingRun.totalFenceCharge || run.totalFenceCharge || run.finalFence || 0);
+      const finalGateValue = pricingRun.finalGate !== undefined ? pricingRun.finalGate : (pricingRun.totalGateCharge || run.totalGateCharge || run.finalGate || 0);
+      const finalDemoValue = pricingRun.finalDemo !== undefined ? pricingRun.finalDemo : (pricingRun.demoCharge || run.demoCharge || run.finalDemo || 0);
+      return {
+        runName: run.runName || origRun.name || `Section ${i + 1}`,
+        fenceType: run.style || origRun.styleId || '',
+        height: run.height || 6,
+        linearFeet: run.netLF,
+        fenceRate: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
+        fenceTotal: finalFenceValue,
+        gatesTotal: finalGateValue,
+        demoTotal: finalDemoValue,
+        sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue)
+      };
+    });
+
     const estimateToSave = {
       ...estimate,
       linearFeet: actualLF,
@@ -548,7 +629,22 @@ export default function Estimator({
       jobStatus: (wasDecisionMade || isNewDraft) ? 'Draft' : estimate.jobStatus,
       customerDecision: (wasDecisionMade || isNewDraft) ? null : (estimate.customerDecision || null),
       userId: user.uid,
-      companyId: 'lonestarfence'
+      companyId: 'lonestarfence',
+
+      // Computed Pricing Fields
+      estimatedPrice: finalPrice,
+      finalCustomerPrice: finalPrice,
+      manualGrandTotal: estimate.manualGrandTotal !== undefined ? estimate.manualGrandTotal : null,
+      grandTotal: finalPrice,
+      totalInvestment: finalPrice,
+      pricePerFoot: pricing.pricePerFoot || 0,
+      costSummaryRuns: costSummaryRuns,
+      runSectionTotals: pricing.runsPricing?.map((r: any) => r.totalSection || 0) || [],
+      selectedOptions: selectedOptionsStr,
+      gateSummary: gateSummary,
+      demoRemovalPrice: pricing.demoRemovalPrice || 0,
+      addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
+      discountAmount: pricing.discountAmount || 0
     };
 
     if (wasDecisionMade || isNewDraft) {
