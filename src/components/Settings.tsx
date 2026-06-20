@@ -4,7 +4,7 @@ import {
   Save, Globe, Mail, Building2, Phone, MapPin, 
   Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2,
   ImageIcon, Server, Settings2, Send, AlertCircle,
-  Eye, EyeOff, Copy, Plus, Activity, Check, Database,
+  Eye, EyeOff, Copy, Plus, Activity, Check, Database, Sparkles,
   Calendar, Search, Lock, Key, CheckSquare, Square
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -243,6 +243,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     loadSettings();
   }, [adminToken]);
 
+  // Dynamic background loading for GoHighLevel dropdown values if credentials are setup
+  React.useEffect(() => {
+    if (formData.ghlLocationId && formData.ghlApiKey) {
+      handleLoadGhlData(true).catch(err => console.warn('Background GHL load skipped:', err));
+    }
+  }, [formData.ghlLocationId, formData.ghlApiKey]);
+
   // Handle SMTP preset change
   const handlePresetSelect = (presetKey: string) => {
     setSelectedPreset(presetKey);
@@ -422,6 +429,356 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   // GHL Connected API Sync Test suite
   const [isTestingApiSync, setIsTestingApiSync] = React.useState(false);
   const [testApiSyncResult, setTestApiSyncResult] = React.useState<any>(null);
+
+  // Loadable GHL lists and settings auto configure states
+  const [ghlPipelines, setGhlPipelines] = React.useState<any[]>([]);
+  const [ghlCustomFieldOptions, setGhlCustomFieldOptions] = React.useState<any[]>([]);
+  const [isLoadingGhlData, setIsLoadingGhlData] = React.useState(false);
+  const [ghlLoadError, setGhlLoadError] = React.useState<string | null>(null);
+  const [missingCustomFieldsList, setMissingCustomFieldsList] = React.useState<any[]>([]);
+  const [isCreatingFields, setIsCreatingFields] = React.useState(false);
+  const [isAutoConfiguring, setIsAutoConfiguring] = React.useState(false);
+  const [autoConfigSuccess, setAutoConfigSuccess] = React.useState<string | null>(null);
+
+  // Checks and maps retrieved custom fields dynamically
+  const checkMissingCustomFields = (retrievedFields: any[], currentMappings: any) => {
+    const REQUIRED_LIST = [
+      { key: 'estimateId', label: 'Estimate ID', dataType: 'TEXT' },
+      { key: 'estimateNumber', label: 'Estimate Number', dataType: 'TEXT' },
+      { key: 'estimateLink', label: 'Estimate Contract Link', dataType: 'TEXT' },
+      { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'NUMERIC' },
+      { key: 'fenceType', label: 'Fence Type', dataType: 'TEXT' },
+      { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERIC' },
+      { key: 'jobStatus', label: 'Job Status', dataType: 'TEXT' },
+      { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date', dataType: 'DATE' },
+      { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date', dataType: 'DATE' },
+      { key: 'acceptedAt', label: 'Contract Accepted Date', dataType: 'DATE' },
+      { key: 'declinedAt', label: 'Contract Declined Date', dataType: 'DATE' },
+      { key: 'scheduledStartDate', label: 'Project Scheduled Start Date', dataType: 'DATE' },
+      { key: 'completedAt', label: 'Project Completed Date', dataType: 'DATE' }
+    ];
+
+    const missing: any[] = [];
+    const updatedMappings = { ...currentMappings };
+    let mappingChanged = false;
+
+    REQUIRED_LIST.forEach((reqField) => {
+      // Find field in retrieved list by saved ID or by name
+      const existingById = reqField.key && updatedMappings[reqField.key] 
+        ? retrievedFields.find((f: any) => f.id === updatedMappings[reqField.key] || f.fieldKey === updatedMappings[reqField.key])
+        : null;
+
+      const existingByName = retrievedFields.find(
+        (f: any) => (f.name || '').trim().toLowerCase() === reqField.label.toLowerCase()
+      );
+
+      const resolvedField = existingById || existingByName;
+
+      if (resolvedField) {
+        // If it was not mapped or mapped differently, auto-assign it
+        if (updatedMappings[reqField.key] !== resolvedField.id) {
+          updatedMappings[reqField.key] = resolvedField.id;
+          mappingChanged = true;
+        }
+      } else {
+        missing.push(reqField);
+      }
+    });
+
+    if (mappingChanged) {
+      setFormData(prev => ({
+        ...prev,
+        ghlCustomFields: {
+          ...(prev.ghlCustomFields || {}),
+          ...updatedMappings
+        }
+      }));
+    }
+
+    setMissingCustomFieldsList(missing);
+    return { missing, updatedMappings };
+  };
+
+  const handleLoadGhlData = async (quiet = false) => {
+    setIsLoadingGhlData(true);
+    setGhlLoadError(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      
+      // Load pipelines
+      const pipeRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ghl-load-pipelines',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId
+        })
+      });
+      const pData = await pipeRes.json();
+      if (!pipeRes.ok || pData.success === false) {
+        throw new Error(pData.error || pData.message || 'Failed loading GHL pipelines.');
+      }
+      setGhlPipelines(pData.pipelines || []);
+
+      // Load custom fields
+      const cfRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ghl-load-custom-fields',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId
+        })
+      });
+      const cfData = await cfRes.json();
+      if (!cfRes.ok || cfData.success === false) {
+        throw new Error(cfData.error || cfData.message || 'Failed loading GHL custom fields.');
+      }
+      
+      const retrievedFields = cfData.customFields || [];
+      setGhlCustomFieldOptions(retrievedFields);
+
+      // Analyze missing fields
+      checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
+
+      if (!quiet) {
+        setAutoConfigSuccess('Success: Loaded pipelines and custom fields from GoHighLevel!');
+        setTimeout(() => setAutoConfigSuccess(null), 5000);
+      }
+    } catch (err: any) {
+      setGhlLoadError(err.message || String(err));
+    } finally {
+      setIsLoadingGhlData(false);
+    }
+  };
+
+  const handleCreateMissingFields = async () => {
+    if (missingCustomFieldsList.length === 0) return;
+    setIsCreatingFields(true);
+    setGhlLoadError(null);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      
+      for (const field of missingCustomFieldsList) {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'ghl-create-custom-field',
+            ghlApiKey: formData.ghlApiKey,
+            ghlLocationId: formData.ghlLocationId,
+            name: field.label,
+            dataType: field.dataType
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.success === false) {
+          throw new Error(data.error || `Failed creating field: ${field.label}`);
+        }
+      }
+
+      setAutoConfigSuccess(`Successfully created ${missingCustomFieldsList.length} custom fields!`);
+      setTimeout(() => setAutoConfigSuccess(null), 5000);
+
+      // Refetch GHL custom fields
+      await handleLoadGhlData(true);
+    } catch (err: any) {
+      setGhlLoadError(err.message || String(err));
+    } finally {
+      setIsCreatingFields(false);
+    }
+  };
+
+  const handleAutoConfigureGhl = async () => {
+    setIsAutoConfiguring(true);
+    setGhlLoadError(null);
+    setAutoConfigSuccess(null);
+    try {
+      if (!formData.ghlApiKey || !formData.ghlLocationId) {
+        throw new Error('Please enter a GoHighLevel API Key and Location ID first.');
+      }
+
+      const token = adminToken || localStorage.getItem('company_admin_token');
+
+      // 1. Fetch Pipelines
+      const pipeRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ghl-load-pipelines',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId
+        })
+      });
+      const pData = await pipeRes.json();
+      if (!pipeRes.ok || pData.success === false) {
+        throw new Error(`Pipeline loading failed: ${pData.error || 'Check status'}`);
+      }
+      
+      const retrievedPipelines = pData.pipelines || [];
+      setGhlPipelines(retrievedPipelines);
+
+      // Auto select first pipeline if not configured
+      let targetPipeline = formData.ghlPipelineId;
+      if (!targetPipeline && retrievedPipelines.length > 0) {
+        targetPipeline = retrievedPipelines[0].id;
+      }
+
+      // Check stages mapping
+      let currentStages: Record<string, string> = { ...(formData.ghlOpportunityStages || {}) };
+      if (targetPipeline) {
+        const matchedPip = retrievedPipelines.find((p: any) => p.id === targetPipeline);
+        if (matchedPip && matchedPip.stages && matchedPip.stages.length > 0) {
+          const firstStageId = matchedPip.stages[0].id;
+          
+          const statusKeys = [
+            'Interested', 'Appointment Requested', 'Estimate Scheduled', 'Estimate Sent',
+            'Accepted', 'Declined', 'Scheduled', 'Completed', 'Archived'
+          ];
+          
+          statusKeys.forEach((key) => {
+            if (!currentStages[key]) {
+              // Map by name approximation or fallback to first stage
+              const matchedStage = matchedPip.stages.find((s: any) => {
+                const sName = (s.name || '').toLowerCase().replace(/\s+/g, '');
+                const keyNorm = key.toLowerCase().replace(/\s+/g, '');
+                return sName.includes(keyNorm) || keyNorm.includes(sName);
+              });
+              currentStages[key] = matchedStage ? matchedStage.id : firstStageId;
+            }
+          });
+        }
+      }
+
+      // 2. Fetch Custom Fields
+      const cfRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'ghl-load-custom-fields',
+          ghlApiKey: formData.ghlApiKey,
+          ghlLocationId: formData.ghlLocationId
+        })
+      });
+      const cfData = await cfRes.json();
+      if (!cfRes.ok || cfData.success === false) {
+        throw new Error(`Custom Fields loading failed: ${cfData.error || 'Check status'}`);
+      }
+      
+      const retrievedFields = cfData.customFields || [];
+      setGhlCustomFieldOptions(retrievedFields);
+
+      // 3. Auto-detect & map existing fields
+      const { missing, updatedMappings } = checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
+
+      // 4. Create missing fields immediately
+      let finalCustomFields = { ...updatedMappings };
+      if (missing.length > 0) {
+        for (const field of missing) {
+          const createRes = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'ghl-create-custom-field',
+              ghlApiKey: formData.ghlApiKey,
+              ghlLocationId: formData.ghlLocationId,
+              name: field.label,
+              dataType: field.dataType
+            })
+          });
+          const createData = await createRes.json();
+          if (createRes.ok && createData.success !== false && createData.customField) {
+            finalCustomFields[field.key] = createData.customField.id;
+          }
+        }
+
+        // Fetch refreshed field options
+        const refetchRes = await fetch('/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'ghl-load-custom-fields',
+            ghlApiKey: formData.ghlApiKey,
+            ghlLocationId: formData.ghlLocationId
+          })
+        });
+        const refetchData = await refetchRes.json();
+        if (refetchRes.ok && refetchData.success) {
+          setGhlCustomFieldOptions(refetchData.customFields || []);
+        }
+        setMissingCustomFieldsList([]);
+      }
+
+      // 5. Update complete state
+      const nextFormData = {
+        ...formData,
+        ghlPipelineId: targetPipeline,
+        ghlOpportunityStages: currentStages as any,
+        ghlCustomFields: finalCustomFields
+      };
+      setFormData(nextFormData);
+
+      // 6. Save directly to Firestore settings document
+      const saveRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'save',
+          ...nextFormData
+        })
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok || saveData.success === false) {
+        throw new Error(saveData.error || 'Failed saving your configured settings.');
+      }
+
+      setAutoConfigSuccess('✓ GoHighLevel configuration completed successfully.');
+      setTimeout(() => setAutoConfigSuccess(null), 8000);
+
+      // Update external diagnostic counters
+      setIsTestingDiagnostic(true);
+      const diagRes = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'ghl-full-diagnostic' })
+      });
+      const diagData = await diagRes.json();
+      setDiagnosticResult(diagData);
+      setIsTestingDiagnostic(false);
+    } catch (err: any) {
+      setGhlLoadError(err.message || String(err));
+    } finally {
+      setIsAutoConfiguring(false);
+    }
+  };
 
   const handleRunApiSyncTest = async () => {
     setIsTestingApiSync(true);
@@ -979,6 +1336,68 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                     By bypassing loose webhooks and communicating directly with your CRM, the system creates/updates contacts, updates tags dynamically, maps system fields to GHL custom fields, and moves opportunities to exact pipeline stages securely.
                   </p>
 
+                  {/* Automation & Dynamic Setup Control Card */}
+                  <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-xl border border-[#E5E5E5]">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-xs font-bold text-slate-800">Automate GoHighLevel Setup</p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Clicking below automatically validates credentials, fetches pipelines, configures stages, creates missing contact custom fields, and saves settings.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 shrink-0 justify-center items-center">
+                      <button
+                        type="button"
+                        onClick={handleAutoConfigureGhl}
+                        disabled={isAutoConfiguring || !formData.ghlApiKey || !formData.ghlApiKey.trim() || !formData.ghlLocationId || !formData.ghlLocationId.trim()}
+                        className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 select-none shadow-sm cursor-pointer"
+                      >
+                        {isAutoConfiguring ? (
+                          <>
+                            <RefreshCw className="animate-spin" size={12} /> Configuring...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={12} /> Configure GoHighLevel Automatically
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleLoadGhlData(false)}
+                        disabled={isLoadingGhlData || !formData.ghlApiKey || !formData.ghlLocationId}
+                        className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-[#E5E5E5] text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 select-none cursor-pointer"
+                      >
+                        {isLoadingGhlData ? (
+                          <>
+                            <RefreshCw className="animate-spin" size={12} /> Loading...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={12} /> Load GoHighLevel Data
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {autoConfigSuccess && (
+                     <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                       <Check size={14} className="text-emerald-600" />
+                       {autoConfigSuccess}
+                     </div>
+                  )}
+
+                  {ghlLoadError && (
+                     <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex flex-col gap-1">
+                       <div className="flex items-center gap-2 font-bold">
+                         <AlertCircle size={14} className="text-rose-600" />
+                         <span>GoHighLevel Connection Issue</span>
+                       </div>
+                       <p className="font-mono text-[10px] text-rose-700">{ghlLoadError}</p>
+                     </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Toggle: Enable GHL API Sync */}
                     <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
@@ -1025,15 +1444,35 @@ export default function Settings({ user, adminToken }: SettingsProps) {
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">
-                      GHL Opportunity Pipeline ID
+                      GHL Opportunity Pipeline
                     </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. pL9nMb8R7qS3tYw2vXz0"
-                      value={formData.ghlPipelineId}
-                      onChange={(e) => setFormData({...formData, ghlPipelineId: e.target.value})}
-                      className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                    />
+                    {ghlPipelines && ghlPipelines.length > 0 ? (
+                      <select
+                        value={formData.ghlPipelineId}
+                        onChange={(e) => setFormData({...formData, ghlPipelineId: e.target.value})}
+                        className="w-full rounded-xl border border-[#E5E5E5] bg-white px-4 py-3 text-sm font-sans focus:border-american-blue focus:outline-none focus:bg-white transition-all cursor-pointer"
+                      >
+                        <option value="">-- Select GoHighLevel Pipeline --</option>
+                        {ghlPipelines.map((pipeline: any) => (
+                          <option key={pipeline.id} value={pipeline.id}>
+                            {pipeline.name} (ID: {pipeline.id})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="e.g. pL9nMb8R7qS3tYw2vXz0"
+                          value={formData.ghlPipelineId}
+                          onChange={(e) => setFormData({...formData, ghlPipelineId: e.target.value})}
+                          className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                        />
+                        <p className="text-[10px] text-amber-600 mt-1">
+                          No active GHL pipelines loaded. Click "Load GoHighLevel Data" or type custom ID manual mapping above.
+                        </p>
+                      </div>
+                    )}
                     <p className="text-[10px] text-[#999999]">Required to auto-create and move opportunities to correct pipeline stages during job transitions.</p>
                   </div>
 
@@ -1044,60 +1483,142 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                       <p className="text-[10px] text-[#666666] leading-relaxed mt-0.5">Map system statuses to their corresponding stage IDs in your GoHighLevel Pipeline.</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {Object.keys(formData.ghlOpportunityStages).map((stageKey) => (
-                        <div key={stageKey} className="space-y-1">
-                          <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{stageKey} Stage</label>
-                          <input 
-                            type="text" 
-                            placeholder="Stage ID"
-                            value={(formData.ghlOpportunityStages as any)[stageKey] || ''}
-                            onChange={(e) => {
-                              const updatedStages = { ...formData.ghlOpportunityStages, [stageKey]: e.target.value };
-                              setFormData({ ...formData, ghlOpportunityStages: updatedStages });
-                            }}
-                            className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
-                        </div>
-                      ))}
+                      {Object.keys(formData.ghlOpportunityStages).map((stageKey) => {
+                        // Find current selected pipeline's stages if any
+                        const selectedPip = ghlPipelines.find(p => p.id === formData.ghlPipelineId);
+                        const availableStages = selectedPip ? selectedPip.stages || [] : [];
+
+                        return (
+                          <div key={stageKey} className="space-y-1">
+                            <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{stageKey} Stage</label>
+                            {availableStages.length > 0 ? (
+                              <select
+                                value={(formData.ghlOpportunityStages as any)[stageKey] || ''}
+                                onChange={(e) => {
+                                  const updatedStages = { ...formData.ghlOpportunityStages, [stageKey]: e.target.value };
+                                  setFormData({ ...formData, ghlOpportunityStages: updatedStages });
+                                }}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-sans focus:border-american-blue focus:outline-none focus:bg-white transition-all cursor-pointer"
+                              >
+                                <option value="">-- Select Stage --</option>
+                                {availableStages.map((stage: any) => (
+                                  <option key={stage.id} value={stage.id}>
+                                    {stage.name} (ID: {stage.id})
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input 
+                                type="text" 
+                                placeholder="Stage ID"
+                                value={(formData.ghlOpportunityStages as any)[stageKey] || ''}
+                                onChange={(e) => {
+                                  const updatedStages = { ...formData.ghlOpportunityStages, [stageKey]: e.target.value };
+                                  setFormData({ ...formData, ghlOpportunityStages: updatedStages });
+                                }}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* Custom Field Mapping Grid */}
                   <div className="border-t border-[#F2F2F2] pt-4 space-y-4">
-                    <div>
-                      <h4 className="text-xs font-bold text-[#333333] uppercase tracking-wider">GoHighLevel Contact Custom Fields Mapping</h4>
-                      <p className="text-[10px] text-[#666666] leading-relaxed mt-0.5">Enter the precise GHL Custom Field API keys (e.g. <code>estimate_id</code> or <code>linear_feet</code>) to synchronize critical estimate metadata deep into contact profiles.</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-[#333333] uppercase tracking-wider">GoHighLevel Contact Custom Fields Mapping</h4>
+                        <p className="text-[10px] text-[#666666] leading-relaxed mt-0.5">
+                          Select the GHL Custom Field from the dropdown list. If a custom field is missing, you can create it below automatically.
+                        </p>
+                      </div>
+                      
+                      {missingCustomFieldsList.length > 0 && (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-900 leading-normal shrink-0">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <AlertCircle size={12} className="text-amber-600 animate-pulse" />
+                            <span>{missingCustomFieldsList.length} Fields Missing in GoHighLevel</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCreateMissingFields}
+                            disabled={isCreatingFields}
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded text-[9px] uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
+                          >
+                            {isCreatingFields ? (
+                              <>
+                                <RefreshCw className="animate-spin" size={10} /> Creating...
+                              </>
+                            ) : (
+                              'Create Missing Fields'
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {[
-                        { key: 'estimateId', label: 'Estimate ID Key' },
-                        { key: 'estimateNumber', label: 'Estimate Number Key' },
+                        { key: 'estimateId', label: 'Estimate ID' },
+                        { key: 'estimateNumber', label: 'Estimate Number' },
                         { key: 'estimateLink', label: 'Estimate Contract Link' },
-                        { key: 'estimatedPrice', label: 'Estimated Total Investment' },
-                        { key: 'fenceType', label: 'Fence Selected/Wood Type' },
-                        { key: 'linearFeet', label: 'Linear Feet Sum' },
-                        { key: 'jobStatus', label: 'Active Job Status' },
+                        { key: 'estimatedPrice', label: 'Estimated Total' },
+                        { key: 'fenceType', label: 'Fence Type' },
+                        { key: 'linearFeet', label: 'Linear Feet' },
+                        { key: 'jobStatus', label: 'Job Status' },
                         { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date' },
                         { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date' },
                         { key: 'acceptedAt', label: 'Contract Accepted Date' },
                         { key: 'declinedAt', label: 'Contract Declined Date' },
                         { key: 'scheduledStartDate', label: 'Project Scheduled Start Date' },
                         { key: 'completedAt', label: 'Project Completed Date' }
-                      ].map((mapping) => (
-                        <div key={mapping.key} className="space-y-1">
-                          <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{mapping.label}</label>
-                          <input 
-                            type="text" 
-                            placeholder="GHL Field Key"
-                            value={(formData.ghlCustomFields as any)[mapping.key] || ''}
-                            onChange={(e) => {
-                              const updatedFields = { ...formData.ghlCustomFields, [mapping.key]: e.target.value };
-                              setFormData({ ...formData, ghlCustomFields: updatedFields });
-                            }}
-                            className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
-                          />
-                        </div>
-                      ))}
+                      ].map((mapping) => {
+                        const isMissing = missingCustomFieldsList.some((item) => item.key === mapping.key);
+                        
+                        return (
+                          <div key={mapping.key} className="space-y-1">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <label className="text-[10px] font-bold text-[#666666] uppercase tracking-wide">{mapping.label}</label>
+                              {isMissing && (
+                                <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  ⚠ Missing in GoHighLevel
+                                </span>
+                              )}
+                            </div>
+                            
+                            {ghlCustomFieldOptions && ghlCustomFieldOptions.length > 0 ? (
+                              <select
+                                value={(formData.ghlCustomFields as any)[mapping.key] || ''}
+                                onChange={(e) => {
+                                  const updatedFields = { ...formData.ghlCustomFields, [mapping.key]: e.target.value };
+                                  setFormData({ ...formData, ghlCustomFields: updatedFields });
+                                }}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-white px-3 py-2 text-xs font-sans focus:border-american-blue focus:outline-none focus:bg-white transition-all cursor-pointer"
+                              >
+                                <option value="">-- Select custom field --</option>
+                                {ghlCustomFieldOptions.map((opt: any) => (
+                                  <option key={opt.id} value={opt.id}>
+                                    {opt.name} ({opt.dataType || opt.type || 'TEXT'})
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input 
+                                type="text" 
+                                placeholder="GHL Field ID or Key"
+                                value={(formData.ghlCustomFields as any)[mapping.key] || ''}
+                                onChange={(e) => {
+                                  const updatedFields = { ...formData.ghlCustomFields, [mapping.key]: e.target.value };
+                                  setFormData({ ...formData, ghlCustomFields: updatedFields });
+                                }}
+                                className="w-full rounded-lg border border-[#E5E5E5] bg-[#F9F9F9] px-3 py-2 text-xs font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

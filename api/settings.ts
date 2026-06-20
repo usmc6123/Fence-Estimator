@@ -32,6 +32,39 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+// Resolve clear credentials from database if masked in UI
+async function resolveGhlCredentials(uid: string, body: any) {
+  let apiKey = body.ghlApiKey || '';
+  let locationId = body.ghlLocationId || '';
+
+  if (!apiKey || apiKey === '••••••••' || !locationId) {
+    const settingsDoc = await db.collection('companySettings').doc(uid).get();
+    if (settingsDoc.exists) {
+      const sData = settingsDoc.data() || {};
+      if (!apiKey || apiKey === '••••••••') apiKey = sData.ghlApiKey || '';
+      if (!locationId) locationId = sData.ghlLocationId || '';
+    }
+  }
+  return { apiKey, locationId };
+}
+
+// Map key to label & GHL data types for automatically provisioning missing custom fields
+const REQUIRED_CUSTOM_FIELDS = [
+  { key: 'estimateId', label: 'Estimate ID', dataType: 'TEXT' },
+  { key: 'estimateNumber', label: 'Estimate Number', dataType: 'TEXT' },
+  { key: 'estimateLink', label: 'Estimate Contract Link', dataType: 'TEXT' },
+  { key: 'estimatedPrice', label: 'Estimated Total', dataType: 'NUMERIC' },
+  { key: 'fenceType', label: 'Fence Type', dataType: 'TEXT' },
+  { key: 'linearFeet', label: 'Linear Feet', dataType: 'NUMERIC' },
+  { key: 'jobStatus', label: 'Job Status', dataType: 'TEXT' },
+  { key: 'customerEstimatorSubmittedAt', label: 'Estimator Submitted Date', dataType: 'DATE' },
+  { key: 'lastEstimateSentAt', label: 'Last Estimate Sent Date', dataType: 'DATE' },
+  { key: 'acceptedAt', label: 'Contract Accepted Date', dataType: 'DATE' },
+  { key: 'declinedAt', label: 'Contract Declined Date', dataType: 'DATE' },
+  { key: 'scheduledStartDate', label: 'Project Scheduled Start Date', dataType: 'DATE' },
+  { key: 'completedAt', label: 'Project Completed Date', dataType: 'DATE' }
+];
+
 export default async function handler(req: any, res: any) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -965,6 +998,116 @@ export default async function handler(req: any, res: any) {
             error: err.message || String(err)
           });
         }
+      } else if (action === 'ghl-load-pipelines') {
+        const { ghlApiKey, ghlLocationId } = req.body;
+        const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
+        
+        if (!apiKey) return res.status(400).json({ success: false, error: 'GoHighLevel API Key is required.' });
+        if (!locationId) return res.status(400).json({ success: false, error: 'GoHighLevel Location ID is required.' });
+
+        try {
+          const response = await fetch(`https://services.leadconnectorhq.com/opportunities/pipelines?locationId=${locationId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.status === 401) {
+            return res.status(400).json({ success: false, error: 'Invalid GoHighLevel API Key. Please verify your credentials.' });
+          }
+          if (response.status === 403) {
+            return res.status(400).json({ success: false, error: 'No opportunity/pipeline permissions. Please grant access in your GoHighLevel account.' });
+          }
+          if (!response.ok) {
+            const text = await response.text();
+            return res.status(400).json({ success: false, error: `GHL API Error: ${text.substring(0, 200)}` });
+          }
+
+          const data: any = await response.json();
+          return res.status(200).json({ success: true, pipelines: data.pipelines || [] });
+        } catch (err: any) {
+          return res.status(400).json({ success: false, error: `Network error: ${err.message}` });
+        }
+
+      } else if (action === 'ghl-load-custom-fields') {
+        const { ghlApiKey, ghlLocationId } = req.body;
+        const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
+
+        if (!apiKey) return res.status(400).json({ success: false, error: 'GoHighLevel API Key is required.' });
+        if (!locationId) return res.status(400).json({ success: false, error: 'GoHighLevel Location ID is required.' });
+
+        try {
+          const response = await fetch(`https://services.leadconnectorhq.com/custom-fields/?locationId=${locationId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.status === 401) {
+            return res.status(400).json({ success: false, error: 'Invalid GoHighLevel API Key. Please verify your credentials.' });
+          }
+          if (response.status === 403) {
+            return res.status(400).json({ success: false, error: 'No custom field permissions. Please grant access in your GoHighLevel account.' });
+          }
+          if (!response.ok) {
+            const text = await response.text();
+            return res.status(400).json({ success: false, error: `GHL API Error: ${text.substring(0, 200)}` });
+          }
+
+          const data: any = await response.json();
+          return res.status(200).json({ success: true, customFields: data.customFields || [] });
+        } catch (err: any) {
+          return res.status(400).json({ success: false, error: `Network error: ${err.message}` });
+        }
+
+      } else if (action === 'ghl-create-custom-field') {
+        const { ghlApiKey, ghlLocationId, name, dataType } = req.body;
+        const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
+
+        if (!apiKey) return res.status(400).json({ success: false, error: 'GoHighLevel API Key is required.' });
+        if (!locationId) return res.status(400).json({ success: false, error: 'GoHighLevel Location ID is required.' });
+        if (!name) return res.status(400).json({ success: false, error: 'Field name is required.' });
+
+        try {
+          const response = await fetch('https://services.leadconnectorhq.com/custom-fields/', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name,
+              dataType: dataType || 'TEXT',
+              model: 'contact',
+              placeholder: `Enter ${name}`,
+              locationId
+            })
+          });
+
+          if (response.status === 401) {
+            return res.status(400).json({ success: false, error: 'Invalid GoHighLevel API Key. Please verify your credentials.' });
+          }
+          if (response.status === 403) {
+            return res.status(400).json({ success: false, error: 'No custom field permissions. Please grant access in your GoHighLevel account.' });
+          }
+          if (!response.ok) {
+            const text = await response.text();
+            return res.status(200).json({ success: false, error: `GHL API Error: ${text.substring(0, 200)}` });
+          }
+
+          const data: any = await response.json();
+          return res.status(200).json({ success: true, customField: data.customField });
+        } catch (err: any) {
+          return res.status(400).json({ success: false, error: `Network error: ${err.message}` });
+        }
+
       } else if (action === 'ghl-full-diagnostic') {
         const results = {
           settingsExist: false,
@@ -979,6 +1122,20 @@ export default async function handler(req: any, res: any) {
           prefillEndpointResponds: false
         };
 
+        // Retrieve GHL connection specific analysis
+        let connectedAccountName = 'N/A';
+        let locationName = 'N/A';
+        let pipelineName = 'N/A';
+        let selectedPipelineId = 'N/A';
+        let stagesCount = 0;
+        let customFieldsCount = 0;
+        let apiVersion = '2021-04-15';
+        let contactPermissions = 'Not Configured';
+        let opportunityPermissions = 'Not Configured';
+        let customFieldPermissions = 'Not Configured';
+        let lastSuccessfulSync = 'Never';
+        let lastFailedSync = 'None';
+
         try {
           const settingsSnap = await db.collection('companySettings').doc(uid).get();
           if (settingsSnap.exists) {
@@ -987,9 +1144,106 @@ export default async function handler(req: any, res: any) {
             if (s.ghlLocationId) results.locationIdExists = true;
             if (s.ghlApiKey) results.apiKeyExists = true;
             if (s.ghlInboundWebhookSecret) results.webhookSecretExists = true;
+            selectedPipelineId = s.ghlPipelineId || 'N/A';
           }
 
           results.webhookLoggingEnabled = results.webhookSecretExists;
+
+          try {
+            const statusSnap = await db.collection('ghlWebhookLogs').doc('status').get();
+            if (statusSnap.exists) {
+              const sData = statusSnap.data() || {};
+              lastSuccessfulSync = sData.lastSuccessfulSync ? new Date(sData.lastSuccessfulSync).toLocaleString() : 'Never';
+              lastFailedSync = sData.lastFailedSync ? new Date(sData.lastFailedSync).toLocaleString() : 'None';
+            }
+          } catch (pErr) {
+            console.warn('Diagnostic: failed loading sync dates:', pErr);
+          }
+
+          const { apiKey, locationId } = await resolveGhlCredentials(uid, {});
+
+          if (apiKey && locationId) {
+            const h = {
+              'Authorization': `Bearer ${apiKey}`,
+              'Version': '2021-04-15',
+              'Content-Type': 'application/json'
+            };
+
+            // 1. Fetch location details
+            try {
+              const locRes = await fetch(`https://services.leadconnectorhq.com/locations/${locationId}`, { headers: h });
+              if (locRes.ok) {
+                const locData: any = await locRes.json();
+                if (locData && locData.location) {
+                  locationName = locData.location.name || 'N/A';
+                  connectedAccountName = locData.location.companyName || locData.location.name || 'N/A';
+                }
+              } else if (locRes.status === 401) {
+                locationName = 'Unauthorized (Invalid API Key)';
+              } else if (locRes.status === 403) {
+                locationName = 'Forbidden (No Location Permission)';
+              } else {
+                locationName = `Error (HTTP ${locRes.status})`;
+              }
+            } catch (lErr) {
+              console.warn('Diagnostic: locRes check failed:', lErr);
+              locationName = 'Connection Timeout / Failure';
+            }
+
+            // 2. Fetch pipelines & stages
+            try {
+              const pipeRes = await fetch(`https://services.leadconnectorhq.com/opportunities/pipelines?locationId=${locationId}`, { headers: h });
+              if (pipeRes.ok) {
+                opportunityPermissions = 'Granted (Ready)';
+                const pipeData: any = await pipeRes.json();
+                const pList = pipeData.pipelines || [];
+                stagesCount = pList.reduce((acc: number, item: any) => acc + (item.stages || []).length, 0);
+                
+                if (selectedPipelineId !== 'N/A') {
+                  const matchedP = pList.find((p: any) => p.id === selectedPipelineId);
+                  pipelineName = matchedP ? matchedP.name : 'Pipeline ID not found in available list';
+                } else if (pList.length > 0) {
+                  pipelineName = `First Available: ${pList[0].name}`;
+                }
+              } else if (pipeRes.status === 403) {
+                opportunityPermissions = 'Forbidden (No Opportunity Permissions)';
+              } else {
+                opportunityPermissions = `Denied (HTTP ${pipeRes.status})`;
+              }
+            } catch (pErr) {
+              opportunityPermissions = 'Query Failure / Timeout';
+            }
+
+            // 3. Fetch custom fields permissions
+            try {
+              const cfRes = await fetch(`https://services.leadconnectorhq.com/custom-fields/?locationId=${locationId}`, { headers: h });
+              if (cfRes.ok) {
+                customFieldPermissions = 'Granted (Ready)';
+                const cfData: any = await cfRes.json();
+                customFieldsCount = (cfData.customFields || []).length;
+              } else if (cfRes.status === 403) {
+                customFieldPermissions = 'Forbidden (No Custom Field Permissions)';
+              } else {
+                customFieldPermissions = `Denied (HTTP ${cfRes.status})`;
+              }
+            } catch (cfErr) {
+              customFieldPermissions = 'Query Failure / Timeout';
+            }
+
+            // 4. Test contact permissions
+            try {
+              const contactRes = await fetch(`https://services.leadconnectorhq.com/contacts/search?locationId=${locationId}&limit=1`, { headers: h });
+              if (contactRes.ok) {
+                contactPermissions = 'Granted (Ready)';
+              } else if (contactRes.status === 403) {
+                contactPermissions = 'Forbidden (No Contact Permissions)';
+              } else {
+                contactPermissions = `Denied (HTTP ${contactRes.status})`;
+              }
+            } catch (cErr) {
+              contactPermissions = 'Query Failure / Timeout';
+            }
+          }
 
           try {
             const custCheck = await db.collection('customers').limit(1).get();
@@ -1036,7 +1290,22 @@ export default async function handler(req: any, res: any) {
             console.warn('Diagnostic: prefill checking failed:', e);
           }
 
-          return res.status(200).json({ success: true, results });
+          const ghlInfo = {
+            connectedAccountName,
+            locationName,
+            pipelineName,
+            selectedPipelineId,
+            stagesCount,
+            customFieldsCount,
+            apiVersion,
+            contactPermissions,
+            opportunityPermissions,
+            customFieldPermissions,
+            lastSuccessfulSync,
+            lastFailedSync
+          };
+
+          return res.status(200).json({ success: true, results, ghlInfo });
         } catch (err: any) {
           return res.status(500).json({ success: false, error: err.message || String(err) });
         }
