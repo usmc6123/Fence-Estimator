@@ -542,15 +542,25 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         throw new Error(cfData.error || cfData.message || 'Failed loading GHL custom fields.');
       }
       
-      const retrievedFields = cfData.customFields || [];
-      setGhlCustomFieldOptions(retrievedFields);
+      if (cfData.unsupported) {
+        setGhlLoadError('Automatic custom field loading is not currently supported by the GoHighLevel API.');
+        setGhlCustomFieldOptions([]);
+        setMissingCustomFieldsList([]);
+        if (!quiet) {
+          setAutoConfigSuccess('Success: Loaded pipelines from GoHighLevel! Note: Custom field loading unsupported.');
+          setTimeout(() => setAutoConfigSuccess(null), 5000);
+        }
+      } else {
+        const retrievedFields = cfData.customFields || [];
+        setGhlCustomFieldOptions(retrievedFields);
 
-      // Analyze missing fields
-      checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
+        // Analyze missing fields
+        checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
 
-      if (!quiet) {
-        setAutoConfigSuccess('Success: Loaded pipelines and custom fields from GoHighLevel!');
-        setTimeout(() => setAutoConfigSuccess(null), 5000);
+        if (!quiet) {
+          setAutoConfigSuccess('Success: Loaded pipelines and custom fields from GoHighLevel!');
+          setTimeout(() => setAutoConfigSuccess(null), 5000);
+        }
       }
     } catch (err: any) {
       setGhlLoadError(err.message || String(err));
@@ -681,54 +691,61 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         throw new Error(`Custom Fields loading failed: ${cfData.error || 'Check status'}`);
       }
       
-      const retrievedFields = cfData.customFields || [];
-      setGhlCustomFieldOptions(retrievedFields);
+      let finalCustomFields = { ...(formData.ghlCustomFields || {}) };
+      if (cfData.unsupported) {
+        setGhlLoadError('Automatic custom field loading is not currently supported by the GoHighLevel API.');
+        setGhlCustomFieldOptions([]);
+        setMissingCustomFieldsList([]);
+      } else {
+        const retrievedFields = cfData.customFields || [];
+        setGhlCustomFieldOptions(retrievedFields);
 
-      // 3. Auto-detect & map existing fields
-      const { missing, updatedMappings } = checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
+        // 3. Auto-detect & map existing fields
+        const { missing, updatedMappings } = checkMissingCustomFields(retrievedFields, formData.ghlCustomFields || {});
+        finalCustomFields = { ...updatedMappings };
 
-      // 4. Create missing fields immediately
-      let finalCustomFields = { ...updatedMappings };
-      if (missing.length > 0) {
-        for (const field of missing) {
-          const createRes = await fetch('/api/settings', {
+        // 4. Create missing fields immediately
+        if (missing.length > 0) {
+          for (const field of missing) {
+            const createRes = await fetch('/api/settings', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                action: 'ghl-create-custom-field',
+                ghlApiKey: formData.ghlApiKey,
+                ghlLocationId: formData.ghlLocationId,
+                name: field.label,
+                dataType: field.dataType
+              })
+            });
+            const createData = await createRes.json();
+            if (createRes.ok && createData.success !== false && createData.customField) {
+              finalCustomFields[field.key] = createData.customField.id;
+            }
+          }
+
+          // Fetch refreshed field options
+          const refetchRes = await fetch('/api/settings', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-              action: 'ghl-create-custom-field',
+              action: 'ghl-load-custom-fields',
               ghlApiKey: formData.ghlApiKey,
-              ghlLocationId: formData.ghlLocationId,
-              name: field.label,
-              dataType: field.dataType
+              ghlLocationId: formData.ghlLocationId
             })
           });
-          const createData = await createRes.json();
-          if (createRes.ok && createData.success !== false && createData.customField) {
-            finalCustomFields[field.key] = createData.customField.id;
+          const refetchData = await refetchRes.json();
+          if (refetchRes.ok && refetchData.success) {
+            setGhlCustomFieldOptions(refetchData.customFields || []);
           }
+          setMissingCustomFieldsList([]);
         }
-
-        // Fetch refreshed field options
-        const refetchRes = await fetch('/api/settings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            action: 'ghl-load-custom-fields',
-            ghlApiKey: formData.ghlApiKey,
-            ghlLocationId: formData.ghlLocationId
-          })
-        });
-        const refetchData = await refetchRes.json();
-        if (refetchRes.ok && refetchData.success) {
-          setGhlCustomFieldOptions(refetchData.customFields || []);
-        }
-        setMissingCustomFieldsList([]);
       }
 
       // 5. Update complete state
@@ -736,7 +753,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         ...formData,
         ghlPipelineId: targetPipeline,
         ghlOpportunityStages: currentStages as any,
-        ghlCustomFields: finalCustomFields
+        ghlCustomFields: finalCustomFields as any
       };
       setFormData(nextFormData);
 

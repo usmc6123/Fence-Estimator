@@ -1040,7 +1040,7 @@ export default async function handler(req: any, res: any) {
         if (!locationId) return res.status(400).json({ success: false, error: 'GoHighLevel Location ID is required.' });
 
         try {
-          const response = await fetch(`https://services.leadconnectorhq.com/custom-fields/?locationId=${locationId}`, {
+          const response = await fetch(`https://services.leadconnectorhq.com/locations/${locationId}/customFields`, {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -1048,6 +1048,15 @@ export default async function handler(req: any, res: any) {
               'Content-Type': 'application/json'
             }
           });
+
+          if (response.status === 404) {
+            return res.status(200).json({
+              success: true,
+              customFields: [],
+              unsupported: true,
+              error: 'Automatic custom field loading is not currently supported by the GoHighLevel API.'
+            });
+          }
 
           if (response.status === 401) {
             return res.status(400).json({ success: false, error: 'Invalid GoHighLevel API Key. Please verify your credentials.' });
@@ -1075,7 +1084,7 @@ export default async function handler(req: any, res: any) {
         if (!name) return res.status(400).json({ success: false, error: 'Field name is required.' });
 
         try {
-          const response = await fetch('https://services.leadconnectorhq.com/custom-fields/', {
+          const response = await fetch(`https://services.leadconnectorhq.com/locations/${locationId}/customFields`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -1090,6 +1099,14 @@ export default async function handler(req: any, res: any) {
               locationId
             })
           });
+
+          if (response.status === 404) {
+            return res.json({
+              success: false,
+              unsupported: true,
+              error: 'Automatic custom field loading is not currently supported by the GoHighLevel API.'
+            });
+          }
 
           if (response.status === 401) {
             return res.status(400).json({ success: false, error: 'Invalid GoHighLevel API Key. Please verify your credentials.' });
@@ -1216,11 +1233,13 @@ export default async function handler(req: any, res: any) {
 
             // 3. Fetch custom fields permissions
             try {
-              const cfRes = await fetch(`https://services.leadconnectorhq.com/custom-fields/?locationId=${locationId}`, { headers: h });
+              const cfRes = await fetch(`https://services.leadconnectorhq.com/locations/${locationId}/customFields`, { headers: h });
               if (cfRes.ok) {
                 customFieldPermissions = 'Granted (Ready)';
                 const cfData: any = await cfRes.json();
                 customFieldsCount = (cfData.customFields || []).length;
+              } else if (cfRes.status === 404) {
+                customFieldPermissions = 'Unsupported by GHL API';
               } else if (cfRes.status === 403) {
                 customFieldPermissions = 'Forbidden (No Custom Field Permissions)';
               } else {
