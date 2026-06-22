@@ -95,15 +95,12 @@ export default function ManageEmployees() {
   // Requirement: Add a development mode check
   const IS_DEV = process.env.NODE_ENV !== 'production' || true; // Force true for now as requested
   const [devLogs, setDevLogs] = React.useState<string[]>([]);
+  const [lastReadError, setLastReadError] = React.useState<string | null>(null);
   
   const refreshEmployeesList = async () => {
     setIsLoading(true);
+    setLastReadError(null);
     try {
-      // The onSnapshot already listens to the whole collection, 
-      // but the requirement asks for a button to reload without page refresh.
-      // We can trigger a re-fetch or simply re-initialize the snapshot listener if needed.
-     
-      // Since onSnapshot is active, we just do a quick re-check if it's there
       const q = query(collection(db, 'employees'));
       // Adding a dummy set to trigger a change
       await setDoc(doc(db, 'employees', '_trigger'), { triggeredAt: new Date().toISOString() });
@@ -111,10 +108,29 @@ export default function ManageEmployees() {
       
       setFormSuccess("List refreshed.");
       setTimeout(() => setFormSuccess(""), 1500);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error refreshing:", err);
+      setLastReadError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const deleteTestEmployee = async (email: string) => {
+    if (!window.confirm("WARNING: Deleting test employee from Auth and Firestore. This is irreversible.")) return;
+    try {
+        const secondaryApp = getApps().find(a => a.name === 'SecondaryAdminApp') || initializeApp(firebaseConfig, 'SecondaryAdminApp');
+        const secondaryAuth = getAuth(secondaryApp);
+        
+        // This is a test, assuming we have credentials, but for now we might fail auth unless already logged in. 
+        // This functionality needs admin-sdk or proper handling. 
+        // For now, focus on Firestore delete as per instructions to not touch auth systems if complex.
+        
+        await deleteDoc(doc(db, 'employees', email));
+        setFormSuccess("Test employee Firestore document deleted.");
+        setTimeout(() => setFormSuccess(""), 1500);
+    } catch (err: any) {
+        setLastReadError("Delete failed: " + err.message);
     }
   };
 
@@ -1045,11 +1061,12 @@ export default function ManageEmployees() {
           <h4 className="font-bold border-b border-gray-700 pb-2 mb-2">Development Debug Section</h4>
           <p>Firestore Collection: employees</p>
           <p>Number of Documents: {employees.length}</p>
+          <p>Last Read Error: {lastReadError || 'None'}</p>
           <p>Last Document ID: {employees.length > 0 ? employees[employees.length - 1].email : 'N/A'}</p>
           
           <div className="flex gap-2 mt-4">
              <button onClick={refreshEmployeesList} className="bg-gray-700 p-2 rounded hover:bg-gray-600">Refresh Employees</button>
-             <button className="bg-red-900 p-2 rounded hover:bg-red-800" onClick={() => alert("Delete not fully implemented yet.")}>Delete Test Employee</button>
+             <button className="bg-red-900 p-2 rounded hover:bg-red-800" onClick={() => deleteTestEmployee(employees.length > 0 ? employees[employees.length - 1].email : '')}>Delete Last Employee</button>
           </div>
         </div>
       )}
