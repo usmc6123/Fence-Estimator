@@ -500,6 +500,38 @@ export default async function handler(req: any, res: any) {
           sendCopyBccToAdmin: false // Prevent automatic BCC loop on explicit system tests unless necessary
         };
 
+        // Precompute expected metadata and diagnostics for fail-safe JSON responses
+        const expectedFromName = customSettingsData.fromName || 'Lone Star Fence Works';
+        const expectedFromEmail = customSettingsData.fromEmail || 'estimates@send.lonestarfenceworks.com';
+        const expectedFromHeader = `"${expectedFromName}" <${expectedFromEmail}>`;
+        
+        const isExcludedAddress = (email: string | undefined): boolean => {
+          if (!email) return true;
+          const clean = email.trim().toLowerCase();
+          return (
+            clean === 'estimates@send.lonestarfenceworks.com' ||
+            clean.endsWith('@send.lonestarfenceworks.com') ||
+            clean === 'office@yourcompany.com' ||
+            clean === expectedFromEmail.toLowerCase()
+          );
+        };
+
+        let expectedReplyTo = '';
+        if (customSettingsData.replyToEmail && customSettingsData.replyToEmail.trim()) {
+          const dbReply = customSettingsData.replyToEmail.trim();
+          if (!isExcludedAddress(dbReply)) {
+            expectedReplyTo = dbReply;
+          }
+        }
+        if (!expectedReplyTo && customSettingsData.adminNotificationEmail && customSettingsData.adminNotificationEmail.trim() && !isExcludedAddress(customSettingsData.adminNotificationEmail)) {
+          expectedReplyTo = customSettingsData.adminNotificationEmail.trim();
+        }
+        if (!expectedReplyTo) {
+          expectedReplyTo = expectedFromEmail;
+        }
+
+        const activeProviderVal = (customSettingsData.emailProvider === 'resend' && customSettingsData.resendApiKey) ? 'resend' : 'smtp';
+
         try {
           const sendResult = await sendAppEmail({
             to: recipientEmail,
@@ -512,7 +544,7 @@ export default async function handler(req: any, res: any) {
                 <p>This is an automated connection check message dispatched from your Lone Star Fence SaaS Admin Console Settings.</p>
                 <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
                   <strong>Provider:</strong> ${customSettingsData.emailProvider}<br/>
-                  <strong>Sender (From):</strong> "${customSettingsData.fromName || 'Lone Star Fence Works'}" &lt;${customSettingsData.fromEmail || 'estimates@send.lonestarfenceworks.com'}&gt;<br/>
+                  <strong>Sender (From):</strong> "${expectedFromName}" &lt;${expectedFromEmail}&gt;<br/>
                   <strong>Verified At:</strong> ${new Date().toLocaleString()}
                 </div>
                 <p>Your custom credentials and sender profile are correct and fully operational!</p>
@@ -529,19 +561,25 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: true,
             message: `Test email transmitted successfully via ${sendResult.provider === 'resend' ? 'Resend API' : 'SMTP'}!`,
-            debug: {
-              from: `"${sendResult.resolvedFromName}" <${sendResult.resolvedFromEmail}>`,
-              replyTo: sendResult.resolvedReplyToEmail,
-              provider: sendResult.provider,
-              resendMessageId: sendResult.resendMessageId || ''
-            }
+            provider: sendResult.provider,
+            from: `"${sendResult.resolvedFromName}" <${sendResult.resolvedFromEmail}>`,
+            replyTo: sendResult.resolvedReplyToEmail,
+            bcc: '',
+            resendMessageId: sendResult.resendMessageId || '',
+            category: 'test_email',
+            timestamp: new Date().toISOString()
           });
         } catch (err: any) {
           const errorMessage = err.message || String(err);
           console.warn('[EMAIL TEST DISPATCH FAILURE]:', err);
           return res.status(500).json({
             success: false,
-            error: `Email Dispatch Failed: ${errorMessage}`
+            provider: activeProviderVal,
+            error: `Email Dispatch Failed: ${errorMessage}`,
+            details: errorMessage,
+            from: expectedFromHeader,
+            replyTo: expectedReplyTo,
+            timestamp: new Date().toISOString()
           });
         }
       } else if (action === 'ghl-integration-status') {

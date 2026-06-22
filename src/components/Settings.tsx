@@ -1236,12 +1236,29 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         body: JSON.stringify(payload)
       });
 
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.error || 'SMTP Connection Test failed.');
+      // Avoid blindly calling response.json() on potential plain-text/HTML/Vercel server errors
+      const contentType = response.headers.get('content-type');
+      let resData: any = null;
+
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          resData = await response.json();
+        } catch (jsonErr) {
+          throw new Error('Server returned a non-JSON error. Check Vercel logs.');
+        }
+      } else {
+        throw new Error('Server returned a non-JSON error. Check Vercel logs.');
       }
 
-      setTestSuccess('Connected & verified! Validation test email dispatched successfully.');
+      if (!response.ok) {
+        if (resData && typeof resData === 'object') {
+          throw new Error(JSON.stringify(resData, null, 2));
+        }
+        throw new Error(resData?.error || 'SMTP Connection Test failed.');
+      }
+
+      // Display successfully verified JSON metadata cleanly
+      setTestSuccess(JSON.stringify(resData, null, 2));
     } catch (err: any) {
       setTestError(err.message || 'Fatal communications error with SMTP validation server.');
     } finally {
@@ -3225,10 +3242,19 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         initial={{ opacity: 0, y: -5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -5 }}
-                        className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-start gap-2 shadow-sm"
+                        className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-start gap-2.5 shadow-sm"
                       >
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-px" />
-                        <span>{testSuccess}</span>
+                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-emerald-900 mb-1">✓ Connection Verified Successfully!</p>
+                          {testSuccess.trim().startsWith('{') ? (
+                            <pre className="p-3 bg-white/60 border border-emerald-100 rounded-lg text-[10px] font-mono whitespace-pre-wrap select-all overflow-x-auto leading-relaxed text-emerald-950 mt-2 shadow-inner">
+                              {testSuccess}
+                            </pre>
+                          ) : (
+                            <span className="font-medium whitespace-pre-wrap">{testSuccess}</span>
+                          )}
+                        </div>
                       </motion.div>
                     )}
 
@@ -3237,10 +3263,19 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         initial={{ opacity: 0, y: -5 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -5 }}
-                        className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-bold flex items-start gap-2 shadow-sm"
+                        className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start gap-2.5 shadow-sm"
                       >
-                        <AlertCircle size={16} className="text-red-600 shrink-0 mt-px" />
-                        <span>{testError}</span>
+                        <AlertCircle size={16} className="text-red-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-red-900 mb-1">⚠️ Connection Test Failure Details</p>
+                          {testError.trim().startsWith('{') ? (
+                            <pre className="p-3 bg-white/60 border border-red-100 rounded-lg text-[10px] font-mono whitespace-pre-wrap select-all overflow-x-auto leading-relaxed text-red-950 mt-2 shadow-inner">
+                              {testError}
+                            </pre>
+                          ) : (
+                            <span className="font-medium whitespace-pre-wrap">{testError}</span>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
