@@ -3017,6 +3017,12 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                           className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
                           placeholder="bradens@lonestarfenceworks.com"
                         />
+                        {(!formData.emailProvider || formData.emailProvider === 'resend') && 
+                         (formData.fromEmail?.includes('send.lonestarfenceworks.com') || formData.replyToEmail?.includes('send.lonestarfenceworks.com')) && (
+                          <div id="reply-to-domain-warning" className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs font-semibold leading-relaxed mt-2 shadow-sm">
+                            ⚠️ Replies should go to a regular mailbox such as bradens@lonestarfenceworks.com. Do not use the sending subdomain address as Reply-To unless inbound receiving is configured.
+                          </div>
+                        )}
                       </div>
                     </div>
 

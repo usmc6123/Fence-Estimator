@@ -1008,6 +1008,7 @@ interface SendAppEmailParams {
   decoded?: any;
   estimateId?: string;
   customerId?: string;
+  customSettingsData?: any;
 }
 
 function parseEmailList(emailInput: string | string[] | undefined): string[] | undefined {
@@ -1029,7 +1030,8 @@ export async function sendAppEmail({
   estimateData,
   decoded,
   estimateId,
-  customerId
+  customerId,
+  customSettingsData
 }: SendAppEmailParams) {
   let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
   let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
@@ -1038,7 +1040,7 @@ export async function sendAppEmail({
   let resolvedSmtpPass = process.env.SMTP_PASS;
   let resolvedFromName = 'Lone Star Fence Works';
   let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'estimates@send.lonestarfenceworks.com';
-  let resolvedReplyToEmail = replyTo || resolvedFromEmail;
+  let resolvedReplyToEmail = '';
 
   // New Resend configurations and admin BCC options
   let emailProvider = 'resend'; // Default to Resend
@@ -1054,15 +1056,19 @@ export async function sendAppEmail({
   candidateUids.push('main');
 
   let settingsData: any = null;
-  for (const uidToTry of candidateUids) {
-    try {
-      const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
-      if (settingsSnap.exists) {
-        settingsData = settingsSnap.data() || {};
-        break; // break on the first found configuration
+  if (customSettingsData) {
+    settingsData = customSettingsData;
+  } else {
+    for (const uidToTry of candidateUids) {
+      try {
+        const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
+        if (settingsSnap.exists) {
+          settingsData = settingsSnap.data() || {};
+          break; // break on the first found configuration
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in sendAppEmail:`, err);
       }
-    } catch (err) {
-      console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in sendAppEmail:`, err);
     }
   }
 
@@ -1076,9 +1082,52 @@ export async function sendAppEmail({
     if (settingsData.smtpPassword) resolvedSmtpPass = settingsData.smtpPassword;
     if (settingsData.fromName) resolvedFromName = settingsData.fromName;
     if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
-    resolvedReplyToEmail = replyTo || settingsData.replyToEmail || resolvedFromEmail;
     if (settingsData.adminNotificationEmail) adminNotificationEmail = settingsData.adminNotificationEmail;
     if (settingsData.sendCopyBccToAdmin !== undefined) sendCopyBccToAdmin = settingsData.sendCopyBccToAdmin;
+  }
+
+  // Determine if a Reply-To is explicitly configured
+  let isReplyToConfigured = false;
+  let finalReplyTo = '';
+
+  // Helper to standardise checking of temporary or default sending options
+  const isExcludedReplyTo = (email: string | undefined): boolean => {
+    if (!email) return true;
+    const clean = email.trim().toLowerCase();
+    return (
+      clean === 'estimates@send.lonestarfenceworks.com' ||
+      clean.endsWith('@send.lonestarfenceworks.com') ||
+      clean === 'office@yourcompany.com' ||
+      clean === resolvedFromEmail.toLowerCase()
+    );
+  };
+
+  // 1. Check if we have explicitly configured database settings
+  if (settingsData && settingsData.replyToEmail && settingsData.replyToEmail.trim()) {
+    const dbReply = settingsData.replyToEmail.trim();
+    if (!isExcludedReplyTo(dbReply)) {
+      finalReplyTo = dbReply;
+      isReplyToConfigured = true;
+    }
+  }
+
+  // 2. Check if we have a non-default function argument
+  if (!isReplyToConfigured && replyTo && replyTo.trim()) {
+    const argReply = replyTo.trim();
+    if (!isExcludedReplyTo(argReply)) {
+      finalReplyTo = argReply;
+      isReplyToConfigured = true;
+    }
+  }
+
+  // 3. Apply the fallback order
+  if (isReplyToConfigured && finalReplyTo) {
+    resolvedReplyToEmail = finalReplyTo;
+  } else if (adminNotificationEmail && adminNotificationEmail.trim() && !isExcludedReplyTo(adminNotificationEmail)) {
+    resolvedReplyToEmail = adminNotificationEmail.trim();
+  } else {
+    // Ultimate fallback as from email
+    resolvedReplyToEmail = resolvedFromEmail;
   }
 
   // Setup final BCCs
