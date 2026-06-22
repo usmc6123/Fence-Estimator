@@ -109,19 +109,25 @@ export default async function handler(req: any, res: any) {
         // Return empty default state if not found
         return res.status(200).json({
           id: uid,
-          companyName: '',
-          companyEmail: '',
+          companyName: 'Lone Star Fence Works',
+          companyEmail: 'estimates@send.lonestarfenceworks.com',
           companyPhone: '',
-          companyWebsite: '',
+          companyWebsite: 'https://lonestarfenceworks.com',
           companyLogo: '',
+          emailProvider: 'resend',
+          resendApiKey: '',
           smtpHost: '',
           smtpPort: 465,
           smtpSecureType: 'SSL/TLS',
           smtpUsername: '',
           smtpPassword: '', // empty on start
-          fromEmail: '',
-          fromName: '',
-          replyToEmail: '',
+          fromEmail: 'estimates@send.lonestarfenceworks.com',
+          fromName: 'Lone Star Fence Works',
+          replyToEmail: 'bradens@lonestarfenceworks.com',
+          adminNotificationEmail: 'bradens@lonestarfenceworks.com',
+          sendCopyBccToAdmin: true,
+          enableEmailEventTracking: false,
+          enableResendWebhook: false,
           gohighlevelWebhookUrl: '',
           googleReviewLink: '',
           estimateEmailSubject: '',
@@ -181,6 +187,16 @@ export default async function handler(req: any, res: any) {
       const data = settingsDoc.data() || {};
       
       // Merge defaults for newer settings
+      if (data.emailProvider === undefined) data.emailProvider = 'resend';
+      if (data.resendApiKey === undefined) data.resendApiKey = '';
+      if (data.fromEmail === undefined || data.fromEmail === '') data.fromEmail = 'estimates@send.lonestarfenceworks.com';
+      if (data.fromName === undefined || data.fromName === '') data.fromName = 'Lone Star Fence Works';
+      if (data.replyToEmail === undefined || data.replyToEmail === '') data.replyToEmail = 'bradens@lonestarfenceworks.com';
+      if (data.adminNotificationEmail === undefined || data.adminNotificationEmail === '') data.adminNotificationEmail = 'bradens@lonestarfenceworks.com';
+      if (data.sendCopyBccToAdmin === undefined) data.sendCopyBccToAdmin = true;
+      if (data.enableEmailEventTracking === undefined) data.enableEmailEventTracking = false;
+      if (data.enableResendWebhook === undefined) data.enableResendWebhook = false;
+
       if (data.enableInstantEstimateWebhook === undefined) data.enableInstantEstimateWebhook = true;
       if (data.suppressInstantEstimateWorkflowExisting === undefined) data.suppressInstantEstimateWorkflowExisting = true;
       if (data.suppressIfEstimateScheduled === undefined) data.suppressIfEstimateScheduled = true;
@@ -226,6 +242,9 @@ export default async function handler(req: any, res: any) {
       if (data.smtpPassword) {
         data.smtpPassword = '••••••••';
       }
+      if (data.resendApiKey) {
+        data.resendApiKey = '••••••••';
+      }
       if (data.ghlApiKey) {
         data.ghlApiKey = '••••••••';
       }
@@ -243,6 +262,8 @@ export default async function handler(req: any, res: any) {
           companyPhone,
           companyWebsite,
           companyLogo,
+          emailProvider,
+          resendApiKey,
           smtpHost,
           smtpPort,
           smtpSecureType,
@@ -251,6 +272,10 @@ export default async function handler(req: any, res: any) {
           fromEmail,
           fromName,
           replyToEmail,
+          adminNotificationEmail,
+          sendCopyBccToAdmin,
+          enableEmailEventTracking,
+          enableResendWebhook,
           gohighlevelWebhookUrl,
           googleReviewLink,
           estimateEmailSubject,
@@ -291,33 +316,46 @@ export default async function handler(req: any, res: any) {
           return res.status(400).json({ error: 'Invalid Company Email format.' });
         }
 
-        // SMTP Host check
-        if (!smtpHost) {
-          return res.status(400).json({ error: 'SMTP Host cannot be blank.' });
+        // Conditional SMTP validations
+        if (emailProvider === 'smtp') {
+          if (!smtpHost) {
+            return res.status(400).json({ error: 'SMTP Host cannot be blank.' });
+          }
+          const numericPort = Number(smtpPort);
+          if (!smtpPort || isNaN(numericPort)) {
+            return res.status(400).json({ error: 'Numeric SMTP Port is required.' });
+          }
+          if (!smtpUsername) {
+            return res.status(400).json({ error: 'SMTP Username is required.' });
+          }
         }
 
-        // SMTP Port check
-        const numericPort = Number(smtpPort);
-        if (!smtpPort || isNaN(numericPort)) {
-          return res.status(400).json({ error: 'Numeric SMTP Port is required.' });
-        }
-
-        // SMTP Username check
-        if (!smtpUsername) {
-          return res.status(400).json({ error: 'SMTP Username is required.' });
-        }
-
-        // Check existing document to retain existing password if masked is sent
+        // Check existing document to retain existing password/APIs if masked are sent
         const settingsDocRef = db.collection('companySettings').doc(uid);
         const existingDoc = await settingsDocRef.get();
         const existingData = existingDoc.exists ? existingDoc.data() : {};
 
         let finalPassword = smtpPassword;
-        if (smtpPassword === '••••••••' || !smtpPassword) {
-          if (existingData && existingData.smtpPassword) {
-            finalPassword = existingData.smtpPassword;
+        if (emailProvider === 'smtp') {
+          if (smtpPassword === '••••••••' || !smtpPassword) {
+            if (existingData && existingData.smtpPassword) {
+              finalPassword = existingData.smtpPassword;
+            } else {
+              return res.status(400).json({ error: 'SMTP Password is required for initial setup.' });
+            }
+          }
+        } else {
+          finalPassword = smtpPassword || '';
+        }
+
+        let finalResendApiKey = resendApiKey;
+        if (resendApiKey === '••••••••' || !resendApiKey) {
+          if (existingData && existingData.resendApiKey) {
+            finalResendApiKey = existingData.resendApiKey;
+          } else if (emailProvider === 'resend') {
+            return res.status(400).json({ error: 'Resend API Key is required when Resend is selected.' });
           } else {
-            return res.status(400).json({ error: 'SMTP Password is required for initial setup.' });
+            finalResendApiKey = '';
           }
         }
 
@@ -337,14 +375,20 @@ export default async function handler(req: any, res: any) {
           companyPhone: companyPhone || '',
           companyWebsite: companyWebsite || '',
           companyLogo: companyLogo || '',
-          smtpHost: smtpHost,
-          smtpPort: numericPort,
+          emailProvider: emailProvider || 'resend',
+          resendApiKey: finalResendApiKey || '',
+          smtpHost: smtpHost || '',
+          smtpPort: smtpPort ? Number(smtpPort) : 465,
           smtpSecureType: smtpSecureType || 'SSL/TLS',
-          smtpUsername: smtpUsername,
-          smtpPassword: finalPassword,
+          smtpUsername: smtpUsername || '',
+          smtpPassword: finalPassword || '',
           fromEmail: fromEmail || '',
           fromName: fromName || '',
           replyToEmail: replyToEmail || '',
+          adminNotificationEmail: adminNotificationEmail || 'bradens@lonestarfenceworks.com',
+          sendCopyBccToAdmin: sendCopyBccToAdmin !== undefined ? !!sendCopyBccToAdmin : true,
+          enableEmailEventTracking: enableEmailEventTracking !== undefined ? !!enableEmailEventTracking : false,
+          enableResendWebhook: enableResendWebhook !== undefined ? !!enableResendWebhook : false,
           gohighlevelWebhookUrl: gohighlevelWebhookUrl || '',
           ghlWebhookUrl: gohighlevelWebhookUrl || '', // Maintain compatibility for both forms
           googleReviewLink: googleReviewLink || '',
@@ -407,6 +451,8 @@ export default async function handler(req: any, res: any) {
 
       } else if (action === 'test-email') {
         const {
+          emailProvider,
+          resendApiKey,
           smtpHost,
           smtpPort,
           smtpSecureType,
@@ -417,87 +463,148 @@ export default async function handler(req: any, res: any) {
           recipientEmail
         } = req.body;
 
-        if (!smtpHost || !smtpPort || !smtpUsername) {
-          return res.status(400).json({ error: 'SMTP host, SMTP port, and SMTP username are required.' });
-        }
-
         if (!recipientEmail) {
           return res.status(400).json({ error: 'Recipient Email address is required to dispatch the test message.' });
         }
 
-        // Resolve final password if masked is submitted
-        let finalPassword = smtpPassword;
-        if (smtpPassword === '••••••••' || !smtpPassword) {
-          const settingsDocSnap = await db.collection('companySettings').doc(uid).get();
-          if (settingsDocSnap.exists && settingsDocSnap.data()?.smtpPassword) {
-            finalPassword = settingsDocSnap.data()?.smtpPassword;
-          } else {
-            return res.status(400).json({ error: 'SMTP Password is required for test email dispatch.' });
+        const activeProvider = emailProvider || 'resend';
+
+        if (activeProvider === 'resend') {
+          // Resolve final resend api key if masked is submitted
+          let finalResendApiKey = resendApiKey;
+          if (resendApiKey === '••••••••' || !resendApiKey) {
+            const settingsDocSnap = await db.collection('companySettings').doc(uid).get();
+            if (settingsDocSnap.exists && settingsDocSnap.data()?.resendApiKey) {
+              finalResendApiKey = settingsDocSnap.data()?.resendApiKey;
+            } else {
+              return res.status(400).json({ error: 'Resend API Key is required for test email dispatch.' });
+            }
           }
-        }
 
-        // Direct SSL/TLS check (secure: true) for port 465
-        const isPort465 = Number(smtpPort) === 465 || smtpSecureType === 'SSL/TLS';
+          try {
+            const resolvedFromName = fromName || 'Lone Star Fence Works';
+            const resolvedFromEmail = fromEmail || 'estimates@send.lonestarfenceworks.com';
+            const resendRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${finalResendApiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+                to: [recipientEmail],
+                subject: `[SYSTEM TEST] Resend Dispatch Verified!`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
+                    <h2 style="color: #10b981; margin-top: 0;">✓ Resend Dispatch Verified!</h2>
+                    <p>Hello,</p>
+                    <p>This is an automated connection check message dispatched from your Lone Star Fence SaaS Admin Console Settings.</p>
+                    <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
+                      <strong>Service:</strong> Resend API Delivery<br/>
+                      <strong>Sender:</strong> "${resolvedFromName}" &lt;${resolvedFromEmail}&gt;<br/>
+                      <strong>Verified At:</strong> ${new Date().toLocaleString()}
+                    </div>
+                    <p>Your custom Resend API Key and sender profile are correct and fully operational!</p>
+                    <p style="color: #64748b; font-size: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+                      Lone Star Fence Works - Multi-tenant SaaS Node
+                    </p>
+                  </div>
+                `,
+                text: `Resend Dispatch Verified! Your API key is functioning correctly. Verified at: ${new Date().toLocaleString()}`
+              })
+            });
 
-        const transportConfig: any = {
-          host: smtpHost,
-          port: Number(smtpPort),
-          secure: isPort465,
-          auth: {
-            user: smtpUsername,
-            pass: finalPassword
-          },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 10000
-        };
+            if (!resendRes.ok) {
+              const errBody = await resendRes.text();
+              throw new Error(`Resend API returned status ${resendRes.status}: ${errBody}`);
+            }
 
-        if (isPort465) {
-          transportConfig.tls = {
-            rejectUnauthorized: false
+            return res.status(200).json({ success: true, message: 'Test email transmitted successfully via Resend API!' });
+          } catch (err: any) {
+            const errorMessage = err.message || String(err);
+            console.warn('[RESEND TEST EMAIL FAILURE]:', err);
+            return res.status(500).json({ success: false, error: `Resend Send Failed: ${errorMessage}` });
+          }
+        } else {
+          // SMTP Mail server testing
+          if (!smtpHost || !smtpPort || !smtpUsername) {
+            return res.status(400).json({ error: 'SMTP host, SMTP port, and SMTP username are required for SMTP testing.' });
+          }
+
+          // Resolve final password if masked is submitted
+          let finalPassword = smtpPassword;
+          if (smtpPassword === '••••••••' || !smtpPassword) {
+            const settingsDocSnap = await db.collection('companySettings').doc(uid).get();
+            if (settingsDocSnap.exists && settingsDocSnap.data()?.smtpPassword) {
+              finalPassword = settingsDocSnap.data()?.smtpPassword;
+            } else {
+              return res.status(400).json({ error: 'SMTP Password is required for test email dispatch.' });
+            }
+          }
+
+          // Direct SSL/TLS check (secure: true) for port 465
+          const isPort465 = Number(smtpPort) === 465 || smtpSecureType === 'SSL/TLS';
+
+          const transportConfig: any = {
+            host: smtpHost,
+            port: Number(smtpPort),
+            secure: isPort465,
+            auth: {
+              user: smtpUsername,
+              pass: finalPassword
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000
           };
-        }
 
-        const transporter = nodemailer.createTransport(transportConfig);
-
-        try {
-          await transporter.sendMail({
-            from: `"${fromName || 'Lone Star Test'}" <${fromEmail || smtpUsername}>`,
-            to: recipientEmail,
-            subject: `[SYSTEM TEST] Secure SMTP Connection Verified!`,
-            text: `Hello!\n\nThis is a secure system authentication check sent from your Lone Star Fence SaaS Admin Console Settings.\n\nYour current connection profile and credentials have been verified successfully on port ${smtpPort}.\n\nTime of verification: ${new Date().toLocaleString()}\nHost: ${smtpHost}\nUsername: ${smtpUsername}\n\nHave a great day!\nSystem Engineering Department`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-                <h2 style="color: #10b981; margin-top: 0;">✓ Connection Verified Successfully!</h2>
-                <p>Hello,</p>
-                <p>This is an automated connection check message dispatched from your Lone Star Fence SaaS Admin Console Settings.</p>
-                <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
-                  <strong>Host:</strong> ${smtpHost}<br/>
-                  <strong>Port:</strong> ${smtpPort}<br/>
-                  <strong>Username:</strong> ${smtpUsername}<br/>
-                  <strong>Verified At:</strong> ${new Date().toLocaleString()}
-                </div>
-                <p>Your custom SMTP authentication credentials and server pathways are clear and fully operational!</p>
-                <p style="color: #64748b; font-size: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
-                  Lone Star Fence Works - Multi-tenant SaaS Node
-                </p>
-              </div>
-            `
-          });
-
-          return res.status(200).json({ success: true, message: 'Test email transmitted successfully!' });
-        } catch (err: any) {
-          const errorMessage = err.message || String(err);
-          console.warn('[SMTP TEST EMAIL FAILURE]:', err);
-          let clientMsg = '';
-          if (err.code === 'EAUTH' || errorMessage.toLowerCase().includes('auth')) {
-            clientMsg = 'SMTP Connection was established, but authentication was rejected. Please verify your SMTP Username and Password.';
-          } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEOUT' || err.code === 'ENOTFOUND') {
-            clientMsg = `Could not connect to the SMTP mail server at ${smtpHost}:${smtpPort}. Verify the host name, port, and security type configuration.`;
-          } else {
-            clientMsg = `SMTP Send Failed: ${errorMessage}`;
+          if (isPort465) {
+            transportConfig.tls = {
+              rejectUnauthorized: false
+            };
           }
-          return res.status(500).json({ success: false, error: clientMsg });
+
+          const transporter = nodemailer.createTransport(transportConfig);
+
+          try {
+            await transporter.sendMail({
+              from: `"${fromName || 'Lone Star Test'}" <${fromEmail || smtpUsername}>`,
+              to: recipientEmail,
+              subject: `[SYSTEM TEST] Secure SMTP Connection Verified!`,
+              text: `Hello!\n\nThis is a secure system authentication check sent from your Lone Star Fence SaaS Admin Console Settings.\n\nYour current connection profile and credentials have been verified successfully on port ${smtpPort}.\n\nTime of verification: ${new Date().toLocaleString()}\nHost: ${smtpHost}\nUsername: ${smtpUsername}\n\nHave a great day!\nSystem Engineering Department`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
+                  <h2 style="color: #10b981; margin-top: 0;">✓ Connection Verified Successfully!</h2>
+                  <p>Hello,</p>
+                  <p>This is an automated connection check message dispatched from your Lone Star Fence SaaS Admin Console Settings.</p>
+                  <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px;">
+                    <strong>Host:</strong> ${smtpHost}<br/>
+                    <strong>Port:</strong> ${smtpPort}<br/>
+                    <strong>Username:</strong> ${smtpUsername}<br/>
+                    <strong>Verified At:</strong> ${new Date().toLocaleString()}
+                  </div>
+                  <p>Your custom SMTP authentication credentials and server pathways are clear and fully operational!</p>
+                  <p style="color: #64748b; font-size: 12px; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+                    Lone Star Fence Works - Multi-tenant SaaS Node
+                  </p>
+                </div>
+              `
+            });
+
+            return res.status(200).json({ success: true, message: 'Test email transmitted successfully via SMTP!' });
+          } catch (err: any) {
+            const errorMessage = err.message || String(err);
+            console.warn('[SMTP TEST EMAIL FAILURE]:', err);
+            let clientMsg = '';
+            if (err.code === 'EAUTH' || errorMessage.toLowerCase().includes('auth')) {
+              clientMsg = 'SMTP Connection was established, but authentication was rejected. Please verify your SMTP Username and Password.';
+            } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEOUT' || err.code === 'ENOTFOUND') {
+              clientMsg = `Could not connect to the SMTP mail server at ${smtpHost}:${smtpPort}. Verify the host name, port, and security type configuration.`;
+            } else {
+              clientMsg = `SMTP Send Failed: ${errorMessage}`;
+            }
+            return res.status(500).json({ success: false, error: clientMsg });
+          }
         }
       } else if (action === 'ghl-integration-status') {
         try {

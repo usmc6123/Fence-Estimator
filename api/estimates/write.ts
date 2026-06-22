@@ -1000,24 +1000,57 @@ interface SendAppEmailParams {
   text: string;
   html: string;
   replyTo?: string;
-  estimateData: any;
-  decoded: any;
+  cc?: string | string[];
+  bcc?: string | string[];
+  metadata?: any;
+  category?: string;
+  estimateData?: any;
+  decoded?: any;
+  estimateId?: string;
+  customerId?: string;
 }
 
-async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, decoded }: SendAppEmailParams) {
+function parseEmailList(emailInput: string | string[] | undefined): string[] | undefined {
+  if (!emailInput) return undefined;
+  if (Array.isArray(emailInput)) return emailInput.map(e => e.trim());
+  return emailInput.split(',').map(e => e.trim()).filter(Boolean);
+}
+
+export async function sendAppEmail({
+  to,
+  subject,
+  text,
+  html,
+  replyTo,
+  cc,
+  bcc,
+  metadata,
+  category,
+  estimateData,
+  decoded,
+  estimateId,
+  customerId
+}: SendAppEmailParams) {
   let resolvedSmtpHost = process.env.SMTP_HOST || 'mail.b.hostedemail.com';
   let resolvedSmtpPort = Number(process.env.SMTP_PORT) || 465;
   let resolvedSmtpSecureType = 'SSL/TLS';
   let resolvedSmtpUser = process.env.SMTP_USER;
   let resolvedSmtpPass = process.env.SMTP_PASS;
   let resolvedFromName = 'Lone Star Fence Works';
-  let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'BradenS@LoneStarFenceWorks.com';
+  let resolvedFromEmail = process.env.FROM_EMAIL || resolvedSmtpUser || 'estimates@send.lonestarfenceworks.com';
   let resolvedReplyToEmail = replyTo || resolvedFromEmail;
+
+  // New Resend configurations and admin BCC options
+  let emailProvider = 'resend'; // Default to Resend
+  let resendApiKey = process.env.RESEND_API_KEY || '';
+  let adminNotificationEmail = 'bradens@lonestarfenceworks.com';
+  let sendCopyBccToAdmin = true;
 
   const ownerUid = estimateData?.userId || estimateData?.uid || estimateData?.ownerId;
   const candidateUids = [];
   if (decoded && decoded.uid) candidateUids.push(decoded.uid);
   if (ownerUid && !candidateUids.includes(ownerUid)) candidateUids.push(ownerUid);
+  candidateUids.push('braden-lonestar-uid');
   candidateUids.push('main');
 
   let settingsData: any = null;
@@ -1025,12 +1058,8 @@ async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, de
     try {
       const settingsSnap = await db.collection('companySettings').doc(uidToTry).get();
       if (settingsSnap.exists) {
-        const possibleSettings = settingsSnap.data() || {};
-        if (possibleSettings.smtpHost && possibleSettings.smtpUsername) {
-          settingsData = possibleSettings;
-          console.log(`[SMTP TENANT LOG] Loaded active SMTP settings from candidate '${uidToTry}' for sendAppEmail`);
-          break;
-        }
+        settingsData = settingsSnap.data() || {};
+        break; // break on the first found configuration
       }
     } catch (err) {
       console.warn(`Failed to fetch companySettings for candidate '${uidToTry}' in sendAppEmail:`, err);
@@ -1038,6 +1067,8 @@ async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, de
   }
 
   if (settingsData) {
+    if (settingsData.emailProvider) emailProvider = settingsData.emailProvider;
+    if (settingsData.resendApiKey) resendApiKey = settingsData.resendApiKey;
     if (settingsData.smtpHost) resolvedSmtpHost = settingsData.smtpHost;
     if (settingsData.smtpPort) resolvedSmtpPort = Number(settingsData.smtpPort);
     if (settingsData.smtpSecureType) resolvedSmtpSecureType = settingsData.smtpSecureType;
@@ -1046,63 +1077,183 @@ async function sendAppEmail({ to, subject, text, html, replyTo, estimateData, de
     if (settingsData.fromName) resolvedFromName = settingsData.fromName;
     if (settingsData.fromEmail) resolvedFromEmail = settingsData.fromEmail;
     resolvedReplyToEmail = replyTo || settingsData.replyToEmail || resolvedFromEmail;
+    if (settingsData.adminNotificationEmail) adminNotificationEmail = settingsData.adminNotificationEmail;
+    if (settingsData.sendCopyBccToAdmin !== undefined) sendCopyBccToAdmin = settingsData.sendCopyBccToAdmin;
   }
 
-  const missingVars: string[] = [];
-  if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
-  if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
-  if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
-
-  if (missingVars.length > 0) {
-    throw {
-      message: `Missing SMTP configurations: [${missingVars.join(', ')}]`,
-      code: 'MISSING_ENVIRONMENT_VARIABLE'
-    };
+  // Setup final BCCs
+  let finalBccs: string[] = [];
+  if (bcc) {
+    const list = parseEmailList(bcc);
+    if (list) finalBccs.push(...list);
   }
-
-  const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
-  const transporterConfig = {
-    host: resolvedSmtpHost,
-    port: resolvedSmtpPort,
-    secure: isPort465,
-    auth: {
-      user: resolvedSmtpUser,
-      pass: resolvedSmtpPass
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 15000,
-    tls: {
-      rejectUnauthorized: false
+  if (sendCopyBccToAdmin && adminNotificationEmail) {
+    const adminEmails = parseEmailList(adminNotificationEmail);
+    if (adminEmails) {
+      adminEmails.forEach(ae => {
+        if (!finalBccs.includes(ae)) finalBccs.push(ae);
+      });
     }
+  }
+
+  const estId = estimateId || estimateData?.id || estimateData?.estimateId || '';
+  const custId = customerId || estimateData?.customerId || estimateData?.customer?.id || '';
+  const activeProvider = (emailProvider === 'resend' && resendApiKey) ? 'resend' : 'smtp';
+
+  console.log(`[sendAppEmail] Dispatching using active provider: ${activeProvider}`);
+
+  let success = false;
+  let activeError: string | null = null;
+  let resendMessageId = '';
+  let smtpInfo: any = null;
+
+  if (activeProvider === 'resend') {
+    try {
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          to: parseEmailList(to),
+          reply_to: parseEmailList(resolvedReplyToEmail),
+          subject,
+          html,
+          text: text || html.replace(/<[^>]*>/g, ''),
+          bcc: finalBccs.length > 0 ? finalBccs : undefined,
+          cc: cc ? parseEmailList(cc) : undefined
+        })
+      });
+
+      if (!resendRes.ok) {
+        const errBody = await resendRes.text();
+        throw new Error(`Resend API returned status ${resendRes.status}: ${errBody}`);
+      }
+
+      const resendData = await resendRes.json();
+      resendMessageId = resendData.id || '';
+      success = true;
+    } catch (err: any) {
+      activeError = `Resend email failed: ${err.message || String(err)}`;
+      console.error('[sendAppEmail Resend Error]', err);
+    }
+  } else {
+    // Falls back to SMTP
+    const missingVars: string[] = [];
+    if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
+    if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
+    if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
+
+    if (missingVars.length > 0) {
+      activeError = `Missing SMTP configurations: [${missingVars.join(', ')}]`;
+    } else {
+      const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
+      const transporterConfig = {
+        host: resolvedSmtpHost,
+        port: resolvedSmtpPort,
+        secure: isPort465,
+        auth: {
+          user: resolvedSmtpUser,
+          pass: resolvedSmtpPass
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
+        tls: {
+          rejectUnauthorized: false
+        }
+      };
+
+      try {
+        const transporter = nodemailer.createTransport(transporterConfig);
+        smtpInfo = await transporter.sendMail({
+          from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          to,
+          replyTo: resolvedReplyToEmail,
+          bcc: finalBccs.length > 0 ? finalBccs.join(', ') : undefined,
+          cc: cc ? (typeof cc === 'string' ? cc : cc.join(', ')) : undefined,
+          subject,
+          text,
+          html
+        });
+        success = true;
+      } catch (err: any) {
+        activeError = `SMTP email failed: ${err.message || String(err)}`;
+        console.error('[sendAppEmail SMTP Error]', err);
+      }
+    }
+  }
+
+  // Define logging entry
+  const logEntry = {
+    provider: activeProvider,
+    category: category || 'unknown',
+    to,
+    from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+    replyTo: resolvedReplyToEmail || '',
+    bcc: finalBccs.length > 0 ? finalBccs.join(', ') : '',
+    subject,
+    sentAt: new Date().toISOString(),
+    resendMessageId: resendMessageId || '',
+    success,
+    error: activeError,
+    estimateId: estId || '',
+    customerId: custId || ''
   };
 
-  console.log(`[SMTP SEND_APP_EMAIL] Sending mail to ${to} subject: "${subject}" using host: ${resolvedSmtpHost}`);
+  // 1. Write standalone log entry in root collection emailLogs
   try {
-    const transporter = nodemailer.createTransport(transporterConfig);
-    const info = await transporter.sendMail({
-      from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
-      to,
-      replyTo: resolvedReplyToEmail,
-      subject,
-      text,
-      html
-    });
-
-    return {
-      info,
-      resolvedFromName,
-      resolvedFromEmail,
-      resolvedReplyToEmail
-    };
-  } catch (err: any) {
-    if (err && typeof err === 'object') {
-      err.resolvedFromName = resolvedFromName;
-      err.resolvedFromEmail = resolvedFromEmail;
-      err.resolvedReplyToEmail = resolvedReplyToEmail;
-    }
-    throw err;
+    await db.collection('emailLogs').add(logEntry);
+  } catch (ignoreLogErr) {
+    console.warn("Could not write email log to root collection:", ignoreLogErr);
   }
+
+  // 2. Append log to estimate document if estimateId resolves
+  if (estId) {
+    try {
+      await db.collection('estimates').doc(String(estId)).update({
+        emailLogs: admin.firestore.FieldValue.arrayUnion(logEntry)
+      });
+    } catch (ignoreEstLogErr) {
+      console.warn(`Could not append email log to estimate ${estId}:`, ignoreEstLogErr);
+    }
+  }
+
+  // 3. Append log to customer document if customerId resolves
+  if (custId) {
+    try {
+      await db.collection('customers').doc(String(custId)).update({
+        emailLogs: admin.firestore.FieldValue.arrayUnion(logEntry)
+      });
+    } catch (ignoreCustLogErr) {
+      console.warn(`Could not append email log to customer ${custId}:`, ignoreCustLogErr);
+    }
+  }
+
+  // Throw if there is an error to satisfy "If Resend send fails: Show clear error, do not silently mark as sent"
+  if (!success) {
+    throw new Error(activeError || 'Failed to dispatch email.');
+  }
+
+  // Formulate mock info compatibility object
+  const info = smtpInfo || {
+    messageId: resendMessageId,
+    accepted: parseEmailList(to),
+    response: 'api::resend::ok',
+    envelope: { from: resolvedFromEmail, to: parseEmailList(to) }
+  };
+
+  return {
+    success: true,
+    provider: activeProvider,
+    resendMessageId,
+    info,
+    resolvedFromName,
+    resolvedFromEmail,
+    resolvedReplyToEmail
+  };
 }
 
 export default async function handler(req: any, res: any) {
@@ -1914,6 +2065,41 @@ export default async function handler(req: any, res: any) {
             error: webhookErr.message || 'Error occurred during fetch dispatch'
           };
         }
+
+        // Dispatch admin billing/contract notification
+        try {
+          const sSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+          const sData = sSnap.exists ? sSnap.data() || {} : {};
+          const adminEmail = sData.adminNotificationEmail || 'bradens@lonestarfenceworks.com';
+
+          const mailSubject = `[LSFW Contract Declined] - ${data.customerName || 'Customer'}`;
+          const mailHtml = `
+            <h3>Contract Declined Notice</h3>
+            <p>An estimate contract has been declined by the customer.</p>
+            <ul>
+              <li><strong>Customer Name:</strong> ${data.customerName || 'N/A'}</li>
+              <li><strong>Customer Email:</strong> ${customerEmail || data.customerEmail || 'N/A'}</li>
+              <li><strong>Description:</strong> ${data.estimateNumber ? `Estimate #${data.estimateNumber}` : ''}</li>
+              <li><strong>Decline Reason:</strong> ${declineReason || 'Not specified'}</li>
+              <li><strong>Time:</strong> ${now}</li>
+            </ul>
+            <p><a href="${finalEstimateLink}">View Estimate Contract Details</a></p>
+          `;
+          const mailText = `Contract Declined Notice\n\nCustomer: ${data.customerName || 'N/A'}\nEmail: ${customerEmail || data.customerEmail || 'N/A'}\nDecline Reason: ${declineReason || 'Not specified'}\nTime: ${now}\nLink: ${finalEstimateLink}`;
+
+          await sendAppEmail({
+            to: adminEmail,
+            subject: mailSubject,
+            html: mailHtml,
+            text: mailText,
+            category: 'estimate_declined_admin_notice',
+            estimateId,
+            customerId: data.customerId || '',
+            estimateData: data
+          });
+        } catch (mailNoticeErr) {
+          console.error("Failed to send admin decline notification email:", mailNoticeErr);
+        }
       } else if (shouldTriggerAccepted) {
         // Send estimate_accepted webhook
         const eventPayload = {
@@ -1936,6 +2122,42 @@ export default async function handler(req: any, res: any) {
           await sendGhlWorkflowWebhook('estimate_accepted', eventPayload, null, db, String(estimateId));
         } catch (webhookErr) {
           console.error('Failed to trigger accepted webhook:', webhookErr);
+        }
+
+        // Dispatch admin billing/contract notification
+        try {
+          const sSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+          const sData = sSnap.exists ? sSnap.data() || {} : {};
+          const adminEmail = sData.adminNotificationEmail || 'bradens@lonestarfenceworks.com';
+
+          const mailSubject = `[LSFW Contract Accepted] - ${data.customerName || 'Customer'}`;
+          const mailHtml = `
+            <h3>Contract Accepted Notice</h3>
+            <p>An estimate contract has been accepted and digitally signed by the customer.</p>
+            <ul>
+              <li><strong>Customer Name:</strong> ${data.customerName || 'N/A'}</li>
+              <li><strong>Customer Email:</strong> ${customerEmail || data.customerEmail || 'N/A'}</li>
+              <li><strong>Description:</strong> ${data.estimateNumber ? `Estimate #${data.estimateNumber}` : ''}</li>
+              <li><strong>Signature Name:</strong> ${signature || 'Digitally Signed'}</li>
+              <li><strong>Total Price:</strong> ${(data.totalCost || data.manualGrandTotal || 0).toLocaleString()}</li>
+              <li><strong>Time:</strong> ${now}</li>
+            </ul>
+            <p><a href="${finalEstimateLink}">View Signed Estimate Contract Details</a></p>
+          `;
+          const mailText = `Contract Accepted Notice\n\nCustomer: ${data.customerName || 'N/A'}\nEmail: ${customerEmail || data.customerEmail || 'N/A'}\nSignature: ${signature || 'Digitally Signed'}\nTotal Price: ${data.totalCost || data.manualGrandTotal || 0}\nTime: ${now}\nLink: ${finalEstimateLink}`;
+
+          await sendAppEmail({
+            to: adminEmail,
+            subject: mailSubject,
+            html: mailHtml,
+            text: mailText,
+            category: 'estimate_accepted_admin_notice',
+            estimateId,
+            customerId: data.customerId || '',
+            estimateData: data
+          });
+        } catch (mailNoticeErr) {
+          console.error("Failed to send admin accept notification email:", mailNoticeErr);
         }
       }
 
@@ -2198,27 +2420,7 @@ export default async function handler(req: any, res: any) {
       let emailSentAt: string | null = null;
       let emailLog = 'Ready to send';
 
-      if (resolvedSmtpHost && resolvedSmtpUser && resolvedSmtpPass) {
-        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
-        const transporterConfig = {
-          host: resolvedSmtpHost,
-          port: resolvedSmtpPort,
-          secure: isPort465,
-          auth: {
-            user: resolvedSmtpUser,
-            pass: resolvedSmtpPass
-          },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 15000,
-          tls: {
-            rejectUnauthorized: false
-          }
-        };
-
         try {
-          const transporter = nodemailer.createTransport(transporterConfig);
-          
           let bookingUrl = 'https://lonestarfenceworks.com/contact';
           if (resolvedCompanyWebsite) {
             let cleanWeb = resolvedCompanyWebsite.trim();
@@ -2399,24 +2601,24 @@ export default async function handler(req: any, res: any) {
           sanitizedHtml = sanitizedHtml.replaceAll('undefined', 'Not Provided');
           sanitizedHtml = sanitizedHtml.replaceAll('null', 'Not Provided');
 
-          await transporter.sendMail({
-            from: `"${resolvedFromName}" <${resolvedFromEmail}>`,
+          const sendRes = await sendAppEmail({
             to: email,
-            replyTo: resolvedReplyToEmail,
             subject: 'Your Lone Star Fence Works Instant Fence Estimate',
-            html: sanitizedHtml
+            html: sanitizedHtml,
+            text: sanitizedHtml.replace(/<[^>]*>/g, ''),
+            category: 'customer_estimator_results',
+            estimateId: String(estId),
+            customerId: String(customerId || ''),
+            estimateData: { id: estId, ...estimateDocToSave }
           });
 
           emailSent = true;
           emailSentAt = new Date().toISOString();
-          emailLog = 'Email sent successfully via NodeMailer SMTP';
+          emailLog = `Email sent successfully via ${sendRes.provider || 'Resend/SMTP'}`;
         } catch (mErr: any) {
           console.error('Customer Estimator mail send failed:', mErr);
-          emailLog = `Nodemailer SMTP failed: ${mErr.message || mErr}`;
+          emailLog = `Mail send failed: ${mErr.message || mErr}`;
         }
-      } else {
-        emailLog = 'Skipped: SMTP settings not configured or missing username/password in database.';
-      }
 
       // 4. TRIGGER GHL WEBHOOK
       let webhookTriggered = false;
@@ -3892,57 +4094,12 @@ Lone Star Fence Works`;
         mailSubject = replacePlaceholders(mailSubject);
         mailMessage = replacePlaceholders(mailMessage);
 
-        console.log(`[SMTP SERVERLESS COMPLIANCE CHECK - MULTI-TENANT]`);
-        console.log(`- SMTP_HOST is present: ${!!resolvedSmtpHost} (${resolvedSmtpHost})`);
-        console.log(`- SMTP_PORT is present: ${!!resolvedSmtpPort} (${resolvedSmtpPort})`);
-        console.log(`- SMTP_USER is present: ${!!resolvedSmtpUser} (${resolvedSmtpUser || 'Not Configured'})`);
-        console.log(`- FROM_EMAIL is present: ${!!resolvedFromEmail} (${resolvedFromEmail || 'Not Configured'})`);
-        console.log(`- SMTP_PASS is present: ${!!resolvedSmtpPass}`);
-        console.log(`- Resolved sending from address: '${resolvedFromEmail}'`);
-
-        const missingVars: string[] = [];
-        if (!resolvedSmtpHost) missingVars.push('SMTP_HOST');
-        if (!resolvedSmtpUser) missingVars.push('SMTP_USER');
-        if (!resolvedSmtpPass) missingVars.push('SMTP_PASS');
-
-        if (missingVars.length > 0) {
-          return res.status(500).json({
-            success: false,
-            error: `Missing SMTP environment or saved settings configurations: [${missingVars.join(', ')}]`,
-            errorType: 'MISSING_ENVIRONMENT_VARIABLE'
-          });
-        }
-
-        const isPort465 = resolvedSmtpPort === 465 || resolvedSmtpSecureType === 'SSL/TLS';
-
-        const transporterConfig: any = {
-          host: resolvedSmtpHost,
-          port: resolvedSmtpPort,
-          secure: isPort465,
-          auth: {
-            user: resolvedSmtpUser,
-            pass: resolvedSmtpPass
-          },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 15000,
-          tls: {
-            rejectUnauthorized: false
-          }
-        };
-
-        if (isPort465) {
-          console.log(`[SMTP SERVERLESS SECURITY] Direct SSL/TLS session configured on port ${resolvedSmtpPort} (secure: true).`);
-        } else {
-          console.log(`[SMTP SERVERLESS SECURITY] Standard STARTTLS session configured on port ${resolvedSmtpPort}.`);
-        }
-
         let mailSent = false;
         let mailError = null;
         let errorType = 'UNKNOWN';
 
         try {
-          await sendAppEmail({
+          const sendRes = await sendAppEmail({
             to: customerEmail,
             subject: mailSubject,
             text: mailMessage,
@@ -3982,6 +4139,9 @@ Lone Star Fence Works`;
               </div>
             `,
             replyTo: resolvedReplyToEmail,
+            category: 'manual_estimate_sent',
+            estimateId,
+            customerId: mergedEstimateData.customerId || '',
             estimateData,
             decoded
           });
@@ -3989,23 +4149,9 @@ Lone Star Fence Works`;
           console.log(`Email successfully routed in serverless handler to ${customerEmail}`);
         } catch (err: any) {
           const errorMessage = err.message || String(err);
-          const errCode = err.code || '';
-          
-          console.error(`[SERVERLESS SMTP TRACE] Failure sending mail:`, err);
-          
-          if (errCode === 'EAUTH' || errorMessage.toLowerCase().includes('auth') || err.responseCode === 535) {
-            errorType = 'AUTHENTICATION_ERROR';
-            mailError = `SMTP Authentication rejected. Verify SMTP Username and Password. [${errorMessage}]`;
-          } else if (errCode === 'ECONNREFUSED' || errCode === 'ETIMEOUT' || errCode === 'ENOTFOUND' || errorMessage.toLowerCase().includes('connect')) {
-            errorType = 'CONNECTION_ERROR';
-            mailError = `Unable to connect to SMTP server at ${resolvedSmtpHost}:${resolvedSmtpPort}. [${errorMessage}]`;
-          } else if (errorMessage.toLowerCase().includes('tls') || errorMessage.toLowerCase().includes('ssl') || errCode === 'ESOCKET') {
-            errorType = 'TLS_SSL_ERROR';
-            mailError = `SSL/TLS protocol negotiation failure. Port 465 requires secure direct connection. [${errorMessage}]`;
-          } else {
-            errorType = 'SMTP_TRANSMISSION_ERROR';
-            mailError = `SMTP dispatch error: ${errorMessage}`;
-          }
+          console.error(`[SERVERLESS SMTP/RESEND TRACE] Failure sending mail:`, err);
+          errorType = 'EMAIL_DISPATCH_FAILURE';
+          mailError = errorMessage;
         }
 
         // Record the status back in Firestore

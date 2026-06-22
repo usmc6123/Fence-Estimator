@@ -88,6 +88,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       'completedAt': ''
     },
     
+    // Email dispatch (Resend vs SMTP)
+    emailProvider: 'resend' as 'resend' | 'smtp',
+    resendApiKey: '',
+    adminNotificationEmail: 'bradens@lonestarfenceworks.com',
+    sendCopyBccToAdmin: true,
+    enableEmailEventTracking: false,
+    enableResendWebhook: false,
+    
     // SMTP Configurations
     smtpHost: '',
     smtpPort: '465',
@@ -166,6 +174,12 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           website: apiData.companyWebsite || apiData.website || firebaseData.website || firebaseData.companyWebsite || COMPANY_INFO.website,
           address: apiData.address || firebaseData.address || COMPANY_INFO.address,
           companyLogo: apiData.companyLogo || firebaseData.companyLogo || COMPANY_INFO.logo || '',
+          emailProvider: apiData.emailProvider || firebaseData.emailProvider || 'resend',
+          resendApiKey: apiData.resendApiKey || firebaseData.resendApiKey || '',
+          adminNotificationEmail: apiData.adminNotificationEmail || firebaseData.adminNotificationEmail || 'bradens@lonestarfenceworks.com',
+          sendCopyBccToAdmin: apiData.sendCopyBccToAdmin !== undefined ? apiData.sendCopyBccToAdmin : (firebaseData.sendCopyBccToAdmin !== undefined ? firebaseData.sendCopyBccToAdmin : true),
+          enableEmailEventTracking: apiData.enableEmailEventTracking !== undefined ? apiData.enableEmailEventTracking : (firebaseData.enableEmailEventTracking !== undefined ? firebaseData.enableEmailEventTracking : false),
+          enableResendWebhook: apiData.enableResendWebhook !== undefined ? apiData.enableResendWebhook : (firebaseData.enableResendWebhook !== undefined ? firebaseData.enableResendWebhook : false),
           ghlWebhookUrl: apiData.gohighlevelWebhookUrl || apiData.ghlWebhookUrl || firebaseData.ghlWebhookUrl || firebaseData.gohighlevelWebhookUrl || '',
           ghlWebhookInstantEstimateSubmitted: apiData.ghlWebhookInstantEstimateSubmitted || firebaseData.ghlWebhookInstantEstimateSubmitted || '',
           ghlWebhookManualEstimateSent: apiData.ghlWebhookManualEstimateSent || firebaseData.ghlWebhookManualEstimateSent || '',
@@ -277,6 +291,12 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         website: formData.website,
         address: formData.address,
         companyLogo: formData.companyLogo,
+        emailProvider: formData.emailProvider,
+        resendApiKey: formData.resendApiKey,
+        adminNotificationEmail: formData.adminNotificationEmail,
+        sendCopyBccToAdmin: formData.sendCopyBccToAdmin,
+        enableEmailEventTracking: formData.enableEmailEventTracking,
+        enableResendWebhook: formData.enableResendWebhook,
         ghlWebhookUrl: formData.ghlWebhookUrl,
         gohighlevelWebhookUrl: formData.ghlWebhookUrl,
         ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
@@ -334,6 +354,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           companyPhone: formData.phoneNumber,
           companyWebsite: formData.website,
           companyLogo: formData.companyLogo,
+          
+          emailProvider: formData.emailProvider,
+          resendApiKey: formData.resendApiKey,
+          adminNotificationEmail: formData.adminNotificationEmail,
+          sendCopyBccToAdmin: formData.sendCopyBccToAdmin,
+          enableEmailEventTracking: formData.enableEmailEventTracking,
+          enableResendWebhook: formData.enableResendWebhook,
           
           smtpHost: formData.smtpHost,
           smtpPort: Number(formData.smtpPort),
@@ -1188,6 +1215,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
 
       const payload = {
         action: 'test-email',
+        emailProvider: formData.emailProvider,
+        resendApiKey: formData.resendApiKey,
         smtpHost: formData.smtpHost,
         smtpPort: Number(formData.smtpPort),
         smtpSecureType: formData.smtpSecureType,
@@ -2898,130 +2927,255 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                   <Server className="text-american-blue" size={18} />
                   <h3 className="text-sm font-bold text-american-blue uppercase tracking-widest">
-                    SMTP Mail Server Configuration
+                    Email Routing & Dispatch Configuration
                   </h3>
                 </div>
 
-                {/* Presets selectors */}
-                <div className="space-y-3">
+                {/* Email Service Choice */}
+                <div className="space-y-3 bg-[#f8fafc] p-4 rounded-xl border border-[#e2e8f0]">
                   <label className="block text-xs font-bold uppercase text-[#666666] tracking-widest">
-                    Email Network Presets
+                    Active Email Dispatcher
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                    {Object.keys(smtpPresets).map((pKey) => (
-                      <button
-                        key={pKey}
-                        type="button"
-                        onClick={() => handlePresetSelect(pKey)}
-                        className={`px-3 py-2 border text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all ${
-                          selectedPreset === pKey 
-                            ? 'border-american-blue bg-american-blue text-white shadow-sm' 
-                            : 'border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-50 text-[#1A1A1A] hover:border-slate-400'
-                        }`}
-                      >
-                        {pKey === 'zenbusiness' ? 'ZenBusiness' : 
-                         pKey === 'gmail' ? 'Google Workspace' : 
-                         pKey === 'outlook' ? 'Outlook' : 
-                         pKey === 'godaddy' ? 'GoDaddy' : 'Custom'}
-                      </button>
-                    ))}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1a1a1a]">
+                      <input
+                        type="radio"
+                        name="emailProvider"
+                        value="resend"
+                        checked={formData.emailProvider === 'resend'}
+                        onChange={() => setFormData({ ...formData, emailProvider: 'resend' })}
+                        className="text-american-blue focus:ring-american-blue"
+                      />
+                      <span>Resend Delivery Service (Highly Recommended & Default)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1a1a1a]">
+                      <input
+                        type="radio"
+                        name="emailProvider"
+                        value="smtp"
+                        checked={formData.emailProvider === 'smtp'}
+                        onChange={() => setFormData({ ...formData, emailProvider: 'smtp' })}
+                        className="text-american-blue focus:ring-american-blue"
+                      />
+                      <span>Self-hosted Standard SMTP Server</span>
+                    </label>
                   </div>
                 </div>
 
-                {/* Parameters inputs */}
-                <div className="grid gap-6 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Host Address</label>
-                    <input 
-                      type="text" 
-                      value={formData.smtpHost}
-                      onChange={(e) => {
-                        setFormData({...formData, smtpHost: e.target.value});
-                        setSelectedPreset('custom');
-                      }}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="smtp.example.com"
-                    />
+                {formData.emailProvider === 'resend' ? (
+                  <div className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Resend API Key</label>
+                        <input 
+                          type="password" 
+                          value={formData.resendApiKey}
+                          onChange={(e) => setFormData({...formData, resendApiKey: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder={formData.resendApiKey ? "••••••••" : "re_123456789..."}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Admin Notification Email(s)</label>
+                        <input 
+                          type="text" 
+                          value={formData.adminNotificationEmail}
+                          onChange={(e) => setFormData({...formData, adminNotificationEmail: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="bradens@lonestarfenceworks.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Friendly Sender Name</label>
+                        <input 
+                          type="text" 
+                          value={formData.fromName}
+                          onChange={(e) => setFormData({...formData, fromName: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="Lone Star Fence Works"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">From Email Address</label>
+                        <input 
+                          type="text" 
+                          value={formData.fromEmail}
+                          onChange={(e) => setFormData({...formData, fromEmail: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="estimates@send.lonestarfenceworks.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Reply-To Address</label>
+                        <input 
+                          type="text" 
+                          value={formData.replyToEmail}
+                          onChange={(e) => setFormData({...formData, replyToEmail: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="bradens@lonestarfenceworks.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3 bg-[#FAF9F6] p-4 rounded-xl border border-[#EBEAE4]">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1a1a1a]">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.sendCopyBccToAdmin}
+                          onChange={(e) => setFormData({ ...formData, sendCopyBccToAdmin: e.target.checked })}
+                          className="rounded border-[#D5D5D5] text-american-blue focus:ring-american-blue"
+                        />
+                        <span>BCC copy to Braden (Admin)</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1a1a1a]">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.enableEmailEventTracking}
+                          onChange={(e) => setFormData({ ...formData, enableEmailEventTracking: e.target.checked })}
+                          className="rounded border-[#D5D5D5] text-american-blue focus:ring-american-blue"
+                        />
+                        <span>Enable Event Tracking</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1a1a1a]">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.enableResendWebhook}
+                          onChange={(e) => setFormData({ ...formData, enableResendWebhook: e.target.checked })}
+                          className="rounded border-[#D5D5D5] text-american-blue focus:ring-american-blue"
+                        />
+                        <span>Enable Resend Webhook Feedback</span>
+                      </label>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Port</label>
-                    <input 
-                      type="text" 
-                      value={formData.smtpPort}
-                      onChange={(e) => {
-                        setFormData({...formData, smtpPort: e.target.value});
-                        setSelectedPreset('custom');
-                      }}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="465"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Secure Type</label>
-                    <select
-                      value={formData.smtpSecureType}
-                      onChange={(e) => {
-                        setFormData({...formData, smtpSecureType: e.target.value as any});
-                        setSelectedPreset('custom');
-                      }}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                    >
-                      <option value="SSL/TLS">SSL/TLS (Port 465)</option>
-                      <option value="STARTTLS">STARTTLS (Port 587)</option>
-                      <option value="None">None (Unsecured)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Username</label>
-                    <input 
-                      type="text" 
-                      value={formData.smtpUsername}
-                      onChange={(e) => setFormData({...formData, smtpUsername: e.target.value})}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="sender@brand.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Password</label>
-                    <input 
-                      type="password" 
-                      value={formData.smtpPassword}
-                      onChange={(e) => setFormData({...formData, smtpPassword: e.target.value})}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Friendly Sender Name</label>
-                    <input 
-                      type="text" 
-                      value={formData.fromName}
-                      onChange={(e) => setFormData({...formData, fromName: e.target.value})}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="Lone Star Fence Estimator"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">From Email Address</label>
-                    <input 
-                      type="text" 
-                      value={formData.fromEmail}
-                      onChange={(e) => setFormData({...formData, fromEmail: e.target.value})}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="office@yourcompany.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Reply-To Address</label>
-                    <input 
-                      type="text" 
-                      value={formData.replyToEmail}
-                      onChange={(e) => setFormData({...formData, replyToEmail: e.target.value})}
-                      className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
-                      placeholder="office@yourcompany.com"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    {/* Presets selectors */}
+                    <div className="space-y-3">
+                      <label className="block text-xs font-bold uppercase text-[#666666] tracking-widest">
+                        Email Network Presets
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                        {Object.keys(smtpPresets).map((pKey) => (
+                          <button
+                            key={pKey}
+                            type="button"
+                            onClick={() => handlePresetSelect(pKey)}
+                            className={`px-3 py-2 border text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all ${
+                              selectedPreset === pKey 
+                                ? 'border-american-blue bg-american-blue text-white shadow-sm' 
+                                : 'border-[#D5D5D5] bg-[#F9F9F9] hover:bg-slate-50 text-[#1A1A1A] hover:border-slate-400'
+                            }`}
+                          >
+                            {pKey === 'zenbusiness' ? 'ZenBusiness' : 
+                             pKey === 'gmail' ? 'Google Workspace' : 
+                             pKey === 'outlook' ? 'Outlook' : 
+                             pKey === 'godaddy' ? 'GoDaddy' : 'Custom'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Parameters inputs */}
+                    <div className="grid gap-6 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Host Address</label>
+                        <input 
+                          type="text" 
+                          value={formData.smtpHost}
+                          onChange={(e) => {
+                            setFormData({...formData, smtpHost: e.target.value});
+                            setSelectedPreset('custom');
+                          }}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="smtp.example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Port</label>
+                        <input 
+                          type="text" 
+                          value={formData.smtpPort}
+                          onChange={(e) => {
+                            setFormData({...formData, smtpPort: e.target.value});
+                            setSelectedPreset('custom');
+                          }}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="465"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Secure Type</label>
+                        <select
+                          value={formData.smtpSecureType}
+                          onChange={(e) => {
+                            setFormData({...formData, smtpSecureType: e.target.value as any});
+                            setSelectedPreset('custom');
+                          }}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                        >
+                          <option value="SSL/TLS">SSL/TLS (Port 465)</option>
+                          <option value="STARTTLS">STARTTLS (Port 587)</option>
+                          <option value="None">None (Unsecured)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Username</label>
+                        <input 
+                          type="text" 
+                          value={formData.smtpUsername}
+                          onChange={(e) => setFormData({...formData, smtpUsername: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="sender@brand.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">SMTP Password</label>
+                        <input 
+                          type="password" 
+                          value={formData.smtpPassword}
+                          onChange={(e) => setFormData({...formData, smtpPassword: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="••••••••"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Friendly Sender Name</label>
+                        <input 
+                          type="text" 
+                          value={formData.fromName}
+                          onChange={(e) => setFormData({...formData, fromName: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="Lone Star Fence Estimator"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">From Email Address</label>
+                        <input 
+                          type="text" 
+                          value={formData.fromEmail}
+                          onChange={(e) => setFormData({...formData, fromEmail: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="office@yourcompany.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-[#666666] tracking-wider">Reply-To Address</label>
+                        <input 
+                          type="text" 
+                          value={formData.replyToEmail}
+                          onChange={(e) => setFormData({...formData, replyToEmail: e.target.value})}
+                          className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
+                          placeholder="office@yourcompany.com"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Connection verification checker */}
                 <div className="p-6 bg-[#FAF9F6] rounded-2xl border border-[#EBEAE4] space-y-4">
