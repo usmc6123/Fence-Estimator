@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import nodemailer from 'nodemailer';
 import jwt from 'jsonwebtoken';
-import { sendAppEmail } from './lib/email';
+import { sendAppEmail } from '../src/lib/email';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
