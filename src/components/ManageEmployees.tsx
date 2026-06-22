@@ -114,40 +114,47 @@ export default function ManageEmployees() {
     }
 
     try {
-      // Primary Crew Contact logic: If checked, unset previous primary contacts
-      if (isPrimaryCrewContact) {
-        const updates = employees
-          .filter(e => e.isPrimaryCrewContact && e.email !== targetEmail)
-          .map(async (e) => {
-            const docRef = doc(db, 'employees', e.email);
-            await setDoc(docRef, { isPrimaryCrewContact: false }, { merge: true });
-          });
-        await Promise.all(updates);
-      }
+      const adminToken = localStorage.getItem('company_admin_token') || '';
 
-      // 1. Create standard Auth User on secondary App instance
-      const secondaryApp = getApps().find(a => a.name === 'SecondaryAdminApp') || initializeApp(firebaseConfig, 'SecondaryAdminApp');
-      const secondaryAuth = getAuth(secondaryApp);
-      
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, targetEmail, targetPassword);
-      await signOut(secondaryAuth); // Sign out right away
-
-      // 2. Save employee record to Firestore (with email as document ID)
-      const empDocRef = doc(db, 'employees', targetEmail);
-      await setDoc(empDocRef, {
+      const payload = {
+        action: 'create-employee',
         email: targetEmail,
-        permission: permission,
-        password: targetPassword, // Stored securely in database for easy recall / reset sync
+        password: targetPassword,
         name: name.trim(),
         phone: phone.trim(),
         role: role.trim(),
+        permission: permission, // 'View Only' | 'Can Edit'
+        permissionLevel: permission,
+        active: isActive,
         isActive: isActive,
         canReceiveCrewDispatch: canReceiveCrewDispatch,
+        canReceiveCrewDispatchEmails: canReceiveCrewDispatch,
         isPrimaryCrewContact: isPrimaryCrewContact,
-        createdAt: new Date().toISOString()
+        primaryCrewContact: isPrimaryCrewContact
+      };
+
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Admin-Token': adminToken
+        },
+        body: JSON.stringify(payload)
       });
 
-      setFormSuccess(`Employee ${targetEmail} added successfully! Go to the embed page to login.`);
+      const resData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to create employee profile.');
+      }
+
+      if (resData.repaired) {
+        setFormSuccess("Existing Auth user repaired with employee profile.");
+      } else {
+        setFormSuccess(`Employee ${targetEmail} added successfully! Go to the embed page to login.`);
+      }
+
       setEmail('');
       setPassword('');
       setPermission('View Only');
@@ -159,40 +166,7 @@ export default function ManageEmployees() {
       setIsPrimaryCrewContact(false);
     } catch (err: any) {
       console.error("Failed to create employee:", err);
-      if (err?.code === 'auth/email-already-in-use') {
-        // If email is already in Auth but maybe not in employees collection:
-        try {
-          const empDocRef = doc(db, 'employees', targetEmail);
-          await setDoc(empDocRef, {
-            email: targetEmail,
-            permission: permission,
-            password: targetPassword,
-            name: name.trim(),
-            phone: phone.trim(),
-            role: role.trim(),
-            isActive: isActive,
-            canReceiveCrewDispatch: canReceiveCrewDispatch,
-            isPrimaryCrewContact: isPrimaryCrewContact,
-            createdAt: new Date().toISOString()
-          });
-          setFormSuccess(`Employee record updated for existing account.`);
-          setEmail('');
-          setPassword('');
-          setName('');
-          setPhone('');
-          setRole('');
-          setIsActive(true);
-          setCanReceiveCrewDispatch(true);
-          setIsPrimaryCrewContact(false);
-          return;
-        } catch (dbErr) {
-          setFormError("Email is already in use by another user.");
-        }
-      } else if (err?.code === 'auth/operation-not-allowed') {
-        setFormError("Firebase Email/Password login is not enabled. Please enable 'Email/Password' in your Firebase console under Authentication -> Sign-in Method.");
-      } else {
-        setFormError(err instanceof Error ? err.message : "Error creating employee account.");
-      }
+      setFormError(err.message || "Error creating employee account.");
     } finally {
       setIsSubmitting(false);
     }

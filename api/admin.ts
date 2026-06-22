@@ -32,6 +32,43 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+function verifyAdminToken(req: any): { email: string; uid: string } | null {
+  const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
+  const tokenBody = req.body?.adminToken;
+  
+  let tokenStr = '';
+  if (authHeader) {
+    const authStr = typeof authHeader === 'string' ? authHeader : String(authHeader);
+    tokenStr = authStr.toLowerCase().startsWith('bearer ')
+      ? authStr.substring(7).trim()
+      : authStr.trim();
+  } else if (tokenBody) {
+    tokenStr = String(tokenBody).trim();
+  }
+
+  if (!tokenStr || tokenStr === 'null' || tokenStr === 'undefined') {
+    return null;
+  }
+
+  try {
+    const activeSecret = process.env.JWT_SECRET || 'lone-star-fence-secret';
+    const decoded: any = jwt.verify(tokenStr, activeSecret);
+    if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
+      return { email: decoded.email, uid: decoded.uid };
+    }
+  } catch (err) {
+    try {
+      const decoded: any = jwt.verify(tokenStr, 'lone-star-fence-secret');
+      if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
+        return { email: decoded.email, uid: decoded.uid };
+      }
+    } catch (err2) {
+      return null;
+    }
+  }
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   // CORS setup
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -239,6 +276,184 @@ export default async function handler(req: any, res: any) {
         valid: false,
         error: 'Access denied. Account is not an administrator.'
       });
+
+    } else if (action === 'create-employee') {
+      const issuer = verifyAdminToken(req);
+      if (!issuer) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid or missing.' });
+      }
+
+      const {
+        email,
+        password,
+        name,
+        phone,
+        role,
+        permission,
+        permissionLevel,
+        active,
+        isActive,
+        canReceiveCrewDispatch,
+        canReceiveCrewDispatchEmails,
+        isPrimaryCrewContact,
+        primaryCrewContact
+      } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const targetEmail = email.toLowerCase().trim();
+      const targetPassword = password.trim();
+      const nameVal = (name || '').trim();
+      const phoneVal = (phone || '').trim();
+      const roleVal = (role || '').trim();
+      const permissionVal = permissionLevel || permission || 'View Only';
+
+      const activeVal = active !== undefined ? active : (isActive !== undefined ? isActive : true);
+      const canReceiveVal = canReceiveCrewDispatchEmails !== undefined ? canReceiveCrewDispatchEmails : (canReceiveCrewDispatch !== undefined ? canReceiveCrewDispatch : true);
+      const isPrimaryVal = primaryCrewContact !== undefined ? primaryCrewContact : (isPrimaryCrewContact !== undefined ? isPrimaryCrewContact : false);
+
+      const empDocRef = db.collection('employees').doc(targetEmail);
+      const empDocSnap = await empDocRef.get();
+
+      // Check if standard Auth user already exists
+      let authUserExists = false;
+      let existingAuthUser: any = null;
+      try {
+        existingAuthUser = await admin.auth().getUserByEmail(targetEmail);
+        authUserExists = true;
+      } catch (authLookErr: any) {
+        if (authLookErr.code !== 'auth/user-not-found') {
+          throw authLookErr;
+        }
+      }
+
+      // If document already exists:
+      if (empDocSnap.exists) {
+        return res.status(400).json({ error: 'Email already belongs to an employee.' });
+      }
+
+      // If Auth user already exists but document does NOT:
+      if (authUserExists && !empDocSnap.exists) {
+        try {
+          // Unset any previous primary contacts if this is checked as primary
+          if (isPrimaryVal) {
+            const primarySnap = await db.collection('employees').where('isPrimaryCrewContact', '==', true).get();
+            const batch = db.batch();
+            primarySnap.forEach((doc: any) => {
+              if (doc.id !== targetEmail) {
+                batch.update(doc.ref, {
+                  isPrimaryCrewContact: false,
+                  primaryCrewContact: false,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            });
+            await batch.commit();
+          }
+
+          // Update password and display name of the existing Auth user to match input
+          if (existingAuthUser) {
+            await admin.auth().updateUser(existingAuthUser.uid, {
+              password: targetPassword,
+              displayName: nameVal
+            });
+          }
+
+          await empDocRef.set({
+            email: targetEmail,
+            name: nameVal,
+            phone: phoneVal,
+            role: roleVal,
+            password: targetPassword,
+            permission: permissionVal,
+            permissionLevel: permissionVal,
+            isActive: activeVal,
+            active: activeVal,
+            canReceiveCrewDispatch: canReceiveVal,
+            canReceiveCrewDispatchEmails: canReceiveVal,
+            isPrimaryCrewContact: isPrimaryVal,
+            primaryCrewContact: isPrimaryVal,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+
+          return res.status(200).json({
+            success: true,
+            repaired: true,
+            message: 'Existing Auth user repaired with employee profile.'
+          });
+        } catch (dbErr: any) {
+          return res.status(500).json({ error: `Permission denied creating employee profile: ${dbErr.message || dbErr}` });
+        }
+      }
+
+      // Both do not exist: Create Auth user first
+      let newAuthUser: any = null;
+      try {
+        newAuthUser = await admin.auth().createUser({
+          email: targetEmail,
+          password: targetPassword,
+          displayName: nameVal
+        });
+      } catch (authErr: any) {
+        return res.status(400).json({ error: authErr.message || 'Failed to create authentication user.' });
+      }
+
+      // Now create Firestore document
+      try {
+        if (isPrimaryVal) {
+          const primarySnap = await db.collection('employees').where('isPrimaryCrewContact', '==', true).get();
+          const batch = db.batch();
+          primarySnap.forEach((doc: any) => {
+            if (doc.id !== targetEmail) {
+              batch.update(doc.ref, {
+                isPrimaryCrewContact: false,
+                primaryCrewContact: false,
+                updatedAt: new Date().toISOString()
+              });
+            }
+          });
+          await batch.commit();
+        }
+
+        await empDocRef.set({
+          email: targetEmail,
+          name: nameVal,
+          phone: phoneVal,
+          role: roleVal,
+          password: targetPassword,
+          permission: permissionVal,
+          permissionLevel: permissionVal,
+          isActive: activeVal,
+          active: activeVal,
+          canReceiveCrewDispatch: canReceiveVal,
+          canReceiveCrewDispatchEmails: canReceiveVal,
+          isPrimaryCrewContact: isPrimaryVal,
+          primaryCrewContact: isPrimaryVal,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        return res.status(200).json({
+          success: true,
+          repaired: false,
+          message: `Employee ${targetEmail} added successfully!`
+        });
+      } catch (dbErr: any) {
+        // Rollback creation of auth user
+        if (newAuthUser) {
+          try {
+            await admin.auth().deleteUser(newAuthUser.uid);
+          } catch (delErr) {
+            console.error('[ROLLBACK FAIL] Failed to clean up Auth user during failed employee registration:', delErr);
+          }
+        }
+        return res.status(403).json({
+          error: 'Auth user created but employee profile failed: Permission denied creating employee profile.'
+        });
+      }
 
     } else {
       return res.status(400).json({ error: `Action '${action}' is not supported.` });
