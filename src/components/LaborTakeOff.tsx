@@ -71,7 +71,11 @@ export default function LaborTakeOff({
         const snap = await getDocs(q);
         const list: any[] = [];
         snap.forEach(doc => {
-          list.push({ id: doc.id, ...doc.data() });
+          const empData = doc.data() || {};
+          // Only pull crew recipients from Manage Employees where Active == true and Can Receive Emails == true
+          if (empData.isActive !== false && empData.canReceiveCrewDispatch !== false) {
+            list.push({ id: doc.id, ...empData });
+          }
         });
         setEmployees(list);
         if (list.length > 0) {

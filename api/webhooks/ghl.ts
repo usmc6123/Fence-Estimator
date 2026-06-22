@@ -526,6 +526,56 @@ function splitName(fullName: string | null | undefined) {
   };
 }
 
+async function resolveCrewRecipient(data: any, activeSettings: any, dbInstance: any): Promise<{ email: string; source: 'estimate_specific' | 'primary_crew_contact' | 'admin_fallback' | 'hardcoded_fallback' }> {
+  // 1st: estimate.crewEmailRecipient if set
+  if (data?.crewEmailRecipient && data.crewEmailRecipient.trim()) {
+    return {
+      email: data.crewEmailRecipient.trim(),
+      source: 'estimate_specific'
+    };
+  }
+
+  // 2nd: Primary Crew Contact email from Manage Employees
+  try {
+    const employeesSnap = await dbInstance.collection('employees').where('isPrimaryCrewContact', '==', true).get();
+    if (employeesSnap && !employeesSnap.empty) {
+      let primaryContact: any = null;
+      employeesSnap.forEach((doc: any) => {
+        const emp = doc.data() || {};
+        const email = (emp.email || '').trim();
+        const isActive = emp.isActive !== false;
+        if (email && isActive) {
+          primaryContact = emp;
+        }
+      });
+
+      if (primaryContact) {
+        return {
+          email: primaryContact.email.trim(),
+          source: 'primary_crew_contact'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[resolveCrewRecipient] Failed to query primary crew contact:', err);
+  }
+
+  // 3rd: company replyToEmail/adminNotificationEmail fallback
+  const adminEmail = activeSettings?.replyToEmail || activeSettings?.adminNotificationEmail;
+  if (adminEmail && adminEmail.trim()) {
+    return {
+      email: adminEmail.trim(),
+      source: 'admin_fallback'
+    };
+  }
+
+  // 4th: hardcoded fallback
+  return {
+    email: 'bradens@lonestarfenceworks.com',
+    source: 'hardcoded_fallback'
+  };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -799,7 +849,10 @@ export default async function handler(req: any, res: any) {
           // If crew has already been notified, dispatch cancellation email
           const crewNotified = !!(data.crewEmailRecipient && (data.installStatus === 'Pending Crew Confirmation' || data.installStatus === 'Scheduled'));
           if (crewNotified) {
-            const recipientEmail = data.crewEmailRecipient || activeSettings.replyToEmail || 'bradens@lonestarfenceworks.com';
+            const resolvedInfo = await resolveCrewRecipient(data, activeSettings, db);
+            const recipientEmail = resolvedInfo.email;
+            const recipientSource = resolvedInfo.source;
+            console.info(`[CREW CANCELLATION DISPATCH] Resolved recipient to ${recipientEmail} via source: ${recipientSource}`);
             const customerNameVal = data.customerName || customerName || 'Valued Client';
             const jobAddressVal = data.customerAddress || data.address || 'N/A';
             const eNo = data.estimateNumber || estimateNumber || '';
@@ -947,7 +1000,10 @@ export default async function handler(req: any, res: any) {
 
         const shouldSendCrewEmail = activeSettings.sendCrewEmailAfterGhlInstallBooking === true;
         if (shouldSendCrewEmail) {
-          const recipientEmail = data.crewEmailRecipient || activeSettings.replyToEmail || 'bradens@lonestarfenceworks.com';
+          const resolvedInfo = await resolveCrewRecipient(data, activeSettings, db);
+          const recipientEmail = resolvedInfo.email;
+          const recipientSource = resolvedInfo.source;
+          console.info(`[CREW DISPATCH] Resolved crew email recipient to ${recipientEmail} via source: ${recipientSource}`);
           const snapshot = data.laborContractSnapshot || null;
 
           const customerNameVal = data.customerName || customerName || 'Valued Client';
@@ -1252,6 +1308,7 @@ export default async function handler(req: any, res: any) {
 
           crewEmailDetails = {
             recipientEmail,
+            recipientSource: recipientSource,
             emailDispatched,
             payoutLiabilityCalculated: laborTotalAmount,
             crewScheduleLink

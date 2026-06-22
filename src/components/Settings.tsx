@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface SettingsProps {
@@ -136,6 +136,28 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     godaddy: { host: 'smtpout.secureserver.net', port: '465', secure: 'SSL/TLS' },
     custom: { host: '', port: '465', secure: 'SSL/TLS' }
   };
+
+  const [primaryCrewEmail, setPrimaryCrewEmail] = React.useState<string | null>(null);
+  const [primaryCrewName, setPrimaryCrewName] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    async function fetchPrimaryCrew() {
+      try {
+        const q = query(collection(db, 'employees'), where('isPrimaryCrewContact', '==', true));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const emp = snap.docs[0].data();
+          if (emp && emp.isActive !== false) {
+            setPrimaryCrewEmail(emp.email || null);
+            setPrimaryCrewName(emp.name || null);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch primary crew contact in Settings:", err);
+      }
+    }
+    fetchPrimaryCrew();
+  }, []);
 
   // Load settings on mount
   React.useEffect(() => {
@@ -2044,24 +2066,48 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                     </div>
 
                     {/* Toggle: sendCrewEmailAfterGhlInstallBooking */}
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
-                      <div className="space-y-0.5 pr-2">
-                        <label className="text-xs font-bold text-gray-800">Send Crew Email After GHL Booking</label>
-                        <p className="text-[10px] text-gray-500">Automatically dispatch job parameters & crew payouts once GHL registers booking.</p>
+                    <div className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100 justify-between">
+                      <div className="flex items-center justify-between w-full">
+                        <div className="space-y-0.5 pr-2">
+                          <label className="text-xs font-bold text-gray-800">Send Crew Email After GHL Booking</label>
+                          <p className="text-[10px] text-gray-500">Automatically dispatch job parameters & crew payouts once GHL registers booking.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({...formData, sendCrewEmailAfterGhlInstallBooking: !formData.sendCrewEmailAfterGhlInstallBooking})}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                            formData.sendCrewEmailAfterGhlInstallBooking ? "bg-emerald-600" : "bg-gray-200"
+                          )}
+                        >
+                          <span className={cn(
+                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                            formData.sendCrewEmailAfterGhlInstallBooking ? "translate-x-5" : "translate-x-0"
+                          )} />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, sendCrewEmailAfterGhlInstallBooking: !formData.sendCrewEmailAfterGhlInstallBooking})}
-                        className={cn(
-                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
-                          formData.sendCrewEmailAfterGhlInstallBooking ? "bg-emerald-600" : "bg-gray-200"
-                        )}
-                      >
-                        <span className={cn(
-                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                          formData.sendCrewEmailAfterGhlInstallBooking ? "translate-x-5" : "translate-x-0"
-                        )} />
-                      </button>
+
+                      {formData.sendCrewEmailAfterGhlInstallBooking && !primaryCrewEmail && (
+                        <div className="rounded-lg bg-amber-50 p-3 border border-amber-200 text-[10px] font-semibold text-amber-800 flex items-start gap-1.5 mt-1">
+                          <span className="text-xs">🚨</span>
+                          <div>
+                            <p className="leading-snug">
+                              <strong>Primary Contact Warning:</strong> Automated Crew Dispatch is enabled, but no Primary Crew Contact is configured in <strong>Manage Employees</strong>. Messages will fall back to admin email.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {formData.sendCrewEmailAfterGhlInstallBooking && primaryCrewEmail && (
+                        <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-100 text-[10px] font-bold text-emerald-800 flex items-start gap-1.5 mt-1">
+                          <span className="text-xs">★</span>
+                          <div>
+                            <p className="leading-snug">
+                              Primary Crew Contact: <strong>{primaryCrewName || 'Unnamed Crew'}</strong> ({primaryCrewEmail}). System will auto-dispatch to this address.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Toggle: sendAdminBackupEmail */}

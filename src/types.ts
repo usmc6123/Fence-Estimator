@@ -348,6 +348,12 @@ export interface Employee {
   permission: 'View Only' | 'Can Edit';
   createdAt: string;
   password?: string;
+  name?: string;
+  phone?: string;
+  role?: string;
+  isActive?: boolean;
+  canReceiveCrewDispatch?: boolean;
+  isPrimaryCrewContact?: boolean;
 }
 
 export interface CompanyInfo {
