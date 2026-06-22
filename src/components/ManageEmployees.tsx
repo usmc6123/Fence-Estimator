@@ -92,6 +92,32 @@ export default function ManageEmployees() {
     };
   }, []);
 
+  // Requirement: Add a development mode check
+  const IS_DEV = process.env.NODE_ENV !== 'production' || true; // Force true for now as requested
+  const [devLogs, setDevLogs] = React.useState<string[]>([]);
+  
+  const refreshEmployeesList = async () => {
+    setIsLoading(true);
+    try {
+      // The onSnapshot already listens to the whole collection, 
+      // but the requirement asks for a button to reload without page refresh.
+      // We can trigger a re-fetch or simply re-initialize the snapshot listener if needed.
+     
+      // Since onSnapshot is active, we just do a quick re-check if it's there
+      const q = query(collection(db, 'employees'));
+      // Adding a dummy set to trigger a change
+      await setDoc(doc(db, 'employees', '_trigger'), { triggeredAt: new Date().toISOString() });
+      await deleteDoc(doc(db, 'employees', '_trigger'));
+      
+      setFormSuccess("List refreshed.");
+      setTimeout(() => setFormSuccess(""), 1500);
+    } catch (err) {
+      console.error("Error refreshing:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -149,12 +175,16 @@ export default function ManageEmployees() {
         throw new Error(resData.error || 'Failed to create employee profile.');
       }
 
-      if (resData.repaired) {
-        setFormSuccess("Existing Auth user repaired with employee profile.");
-      } else {
-        setFormSuccess(`Employee ${targetEmail} added successfully! Go to the embed page to login.`);
+      // Requirement: Immediately after creating an employee, perform a verification read
+      const docRefEmp = firestoreDoc(db, 'employees', targetEmail);
+      const snapshot = await getDoc(docRefEmp);
+      
+      if (!snapshot.exists()) {
+          throw new Error("Employee profile verification failed after creation.");
       }
 
+      // Requirement: Reset every input field
+      setFormSuccess(`Employee ${targetEmail} added successfully!`);
       setEmail('');
       setPassword('');
       setPermission('View Only');
@@ -616,9 +646,12 @@ export default function ManageEmployees() {
         <div className="space-y-6 lg:col-span-8">
           <div className="rounded-2xl border border-[#E5E5E5] bg-white p-6 shadow-sm">
             
-            <h2 className="mb-4 text-xs font-black uppercase tracking-widest text-american-blue flex items-center gap-2 border-b pb-2">
-              <Users size={16} className="text-american-red" />
-              Active System Users ({employees.length})
+            <h2 className="mb-4 text-xs font-black uppercase tracking-widest text-american-blue flex items-center justify-between gap-2 border-b pb-2">
+              <div className="flex items-center gap-2">
+                <Users size={16} className="text-american-red" />
+                Active System Users ({employees.length})
+              </div>
+              <button onClick={refreshEmployeesList} className="text-[10px] font-bold text-american-blue bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 italic">Refresh List</button>
             </h2>
 
             {/* Validation warning banners (Requirement 7) */}
@@ -1002,6 +1035,21 @@ export default function ManageEmployees() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Development Debug Section */}
+      {IS_DEV && (
+        <div className="mt-8 rounded-xl bg-gray-900 text-white p-4 font-mono text-xs shadow-xl">
+          <h4 className="font-bold border-b border-gray-700 pb-2 mb-2">Development Debug Section</h4>
+          <p>Firestore Collection: employees</p>
+          <p>Number of Documents: {employees.length}</p>
+          <p>Last Document ID: {employees.length > 0 ? employees[employees.length - 1].email : 'N/A'}</p>
+          
+          <div className="flex gap-2 mt-4">
+             <button onClick={refreshEmployeesList} className="bg-gray-700 p-2 rounded hover:bg-gray-600">Refresh Employees</button>
+             <button className="bg-red-900 p-2 rounded hover:bg-red-800" onClick={() => alert("Delete not fully implemented yet.")}>Delete Test Employee</button>
           </div>
         </div>
       )}
