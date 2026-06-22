@@ -22,6 +22,12 @@ export default function CrewSchedulePortal() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'manifest' | 'breakdown' | 'scope' | 'drawing'>('manifest');
 
+  // Crew Confirmation Workflow States
+  const [crewNotes, setCrewNotes] = useState('');
+  const [proposingNewDate, setProposingNewDate] = useState(false);
+  const [alternateStartDate, setAlternateStartDate] = useState('');
+  const [alternateDuration, setAlternateDuration] = useState('1');
+
   // Load URL credentials
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -122,6 +128,79 @@ export default function CrewSchedulePortal() {
       setTimeout(() => {
         setSubmitSuccess(false);
       }, 5000);
+    } catch (err: any) {
+      setSubmitError(err?.message || String(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmInstall = async () => {
+    setIsSubmitting(true);
+    setSubmitError('');
+    setSubmitSuccess(false);
+
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'crew-confirm-install',
+          estimateId,
+          token,
+          notes: crewNotes
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to confirm installation date.');
+      }
+
+      setSubmitSuccess(true);
+      await fetchSchedulePortal(estimateId, token);
+    } catch (err: any) {
+      setSubmitError(err?.message || String(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRequestAlternateDate = async () => {
+    if (!alternateStartDate) {
+      setSubmitError('Please specify an alternate slot start date.');
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError('');
+    setSubmitSuccess(false);
+
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'crew-request-alternative-date',
+          estimateId,
+          token,
+          requestedStartDate: alternateStartDate,
+          duration: Number(alternateDuration),
+          notes: crewNotes
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to submit date proposal.');
+      }
+
+      setSubmitSuccess(true);
+      setProposingNewDate(false);
+      await fetchSchedulePortal(estimateId, token);
     } catch (err: any) {
       setSubmitError(err?.message || String(err));
     } finally {
@@ -399,6 +478,105 @@ export default function CrewSchedulePortal() {
                 You have requested {scheduleData.crewRequestedStartDate} for {scheduleData.crewRequestedDuration} days. The admin team has been notified and will approve shortly.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Pending Crew Confirmation Card */}
+        {scheduleData.installStatus === 'Pending Crew Confirmation' && scheduleData.preferredInstallDate && (
+          <div className="bg-[#11241E]/90 border-2 border-emerald-500/40 text-emerald-300 p-6 rounded-[32px] space-y-4">
+            <div className="flex items-start gap-4">
+              <ShieldCheck className="text-emerald-400 shrink-0 mt-1" size={24} />
+              <div className="space-y-1">
+                <p className="text-sm font-black uppercase tracking-wider text-emerald-100">CONFIRMATION REQUIRED: Preferred Install Slot Set</p>
+                <p className="text-xs text-slate-300">
+                  The client has booked their preferred installation key for <strong>{new Date(scheduleData.preferredInstallDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>. Please confirm your crew availability or submit a request for an alternate date.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-300">
+                Crew Confirmation or Alternatives Notes (Optional)
+              </label>
+              <textarea
+                value={crewNotes}
+                onChange={(e) => setCrewNotes(e.target.value)}
+                placeholder="Include access info, crew size, or alternate slot reasoning..."
+                className="w-full bg-[#0A1424] border border-emerald-500/20 text-white rounded-2xl p-3 text-xs focus:ring-1 focus:ring-emerald-400 focus:outline-none"
+                rows={2}
+              />
+            </div>
+
+            {!proposingNewDate ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleConfirmInstall}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-[#0c1a30] font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Confirming...' : 'Yes, Confirm Scheduled Date'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProposingNewDate(true);
+                    if (!alternateStartDate) {
+                      setAlternateStartDate(scheduleData.preferredInstallDate);
+                    }
+                  }}
+                  className="px-6 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Propose Alternate Date
+                </button>
+              </div>
+            ) : (
+              <div className="bg-[#1A1A10] p-4 rounded-2xl border border-amber-500/20 space-y-4">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-200">Propose Alternative Schedule Slot</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] uppercase font-bold text-slate-400">Proposed Start Date</label>
+                    <input
+                      type="date"
+                      value={alternateStartDate}
+                      onChange={(e) => setAlternateStartDate(e.target.value)}
+                      className="w-full bg-[#0A1424] border border-slate-700 text-white p-2.5 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] uppercase font-bold text-slate-400">Duration (Days)</label>
+                    <select
+                      value={alternateDuration}
+                      onChange={(e) => setAlternateDuration(e.target.value)}
+                      className="w-full bg-[#0A1424] border border-slate-700 text-white p-2.5 rounded-lg text-xs"
+                    >
+                      <option value="1">1 Day</option>
+                      <option value="2">2 Days</option>
+                      <option value="3">3 Days</option>
+                      <option value="4">4 Days</option>
+                      <option value="5">5 Days</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleRequestAlternateDate}
+                    className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                  >
+                    {isSubmitting ? 'Submitting proposal...' : 'Submit Proposed Date'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProposingNewDate(false)}
+                    className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

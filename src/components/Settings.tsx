@@ -87,6 +87,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       'scheduledStartDate': '',
       'completedAt': ''
     },
+    enableGhlCalendarPrimaryScheduler: false,
+    sendCrewEmailAfterGhlInstallBooking: true,
+    sendAdminBackupEmail: true,
+    requireEstimateIdMatching: false,
+    allowFallbackMatching: true,
+    ghlInstallCalendarId: '',
+    minimumInstallLeadDays: 4,
     
     // Email dispatch (Resend vs SMTP)
     emailProvider: 'resend' as 'resend' | 'smtp',
@@ -229,8 +236,18 @@ export default function Settings({ user, adminToken }: SettingsProps) {
             'acceptedAt': '',
             'declinedAt': '',
             'scheduledStartDate': '',
-            'completedAt': ''
-          }
+            'completedAt': '',
+            'minimumInstallDate': '',
+            'customerName': '',
+            'address': ''
+          },
+          enableGhlCalendarPrimaryScheduler: apiData.enableGhlCalendarPrimaryScheduler !== undefined ? apiData.enableGhlCalendarPrimaryScheduler : (firebaseData.enableGhlCalendarPrimaryScheduler !== undefined ? firebaseData.enableGhlCalendarPrimaryScheduler : false),
+          sendCrewEmailAfterGhlInstallBooking: apiData.sendCrewEmailAfterGhlInstallBooking !== undefined ? apiData.sendCrewEmailAfterGhlInstallBooking : (firebaseData.sendCrewEmailAfterGhlInstallBooking !== undefined ? firebaseData.sendCrewEmailAfterGhlInstallBooking : true),
+          sendAdminBackupEmail: apiData.sendAdminBackupEmail !== undefined ? apiData.sendAdminBackupEmail : (firebaseData.sendAdminBackupEmail !== undefined ? firebaseData.sendAdminBackupEmail : true),
+          requireEstimateIdMatching: apiData.requireEstimateIdMatching !== undefined ? apiData.requireEstimateIdMatching : (firebaseData.requireEstimateIdMatching !== undefined ? firebaseData.requireEstimateIdMatching : false),
+          allowFallbackMatching: apiData.allowFallbackMatching !== undefined ? apiData.allowFallbackMatching : (firebaseData.allowFallbackMatching !== undefined ? firebaseData.allowFallbackMatching : true),
+          ghlInstallCalendarId: apiData.ghlInstallCalendarId || firebaseData.ghlInstallCalendarId || '',
+          minimumInstallLeadDays: apiData.minimumInstallLeadDays !== undefined ? apiData.minimumInstallLeadDays : (firebaseData.minimumInstallLeadDays !== undefined ? firebaseData.minimumInstallLeadDays : 4)
         };
 
         setFormData(merged);
@@ -328,6 +345,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         ghlPipelineId: formData.ghlPipelineId,
         ghlOpportunityStages: formData.ghlOpportunityStages,
         ghlCustomFields: formData.ghlCustomFields,
+        enableGhlCalendarPrimaryScheduler: formData.enableGhlCalendarPrimaryScheduler,
+        sendCrewEmailAfterGhlInstallBooking: formData.sendCrewEmailAfterGhlInstallBooking,
+        sendAdminBackupEmail: formData.sendAdminBackupEmail,
+        requireEstimateIdMatching: formData.requireEstimateIdMatching,
+        allowFallbackMatching: formData.allowFallbackMatching,
+        ghlInstallCalendarId: formData.ghlInstallCalendarId,
+        minimumInstallLeadDays: formData.minimumInstallLeadDays,
         
         // Include templates inside main doc so embed widgets can pull acceptance screens
         estimateEmailSubject: formData.estimateEmailSubject,
@@ -403,6 +427,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
           ghlPipelineId: formData.ghlPipelineId,
           ghlOpportunityStages: formData.ghlOpportunityStages,
           ghlCustomFields: formData.ghlCustomFields,
+          enableGhlCalendarPrimaryScheduler: formData.enableGhlCalendarPrimaryScheduler,
+          sendCrewEmailAfterGhlInstallBooking: formData.sendCrewEmailAfterGhlInstallBooking,
+          sendAdminBackupEmail: formData.sendAdminBackupEmail,
+          requireEstimateIdMatching: formData.requireEstimateIdMatching,
+          allowFallbackMatching: formData.allowFallbackMatching,
+          ghlInstallCalendarId: formData.ghlInstallCalendarId,
+          minimumInstallLeadDays: formData.minimumInstallLeadDays,
         };
 
         const response = await fetch('/api/settings', {
@@ -1916,7 +1947,10 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         { key: 'acceptedAt', label: 'Contract Accepted Date' },
                         { key: 'declinedAt', label: 'Contract Declined Date' },
                         { key: 'scheduledStartDate', label: 'Project Scheduled Start Date' },
-                        { key: 'completedAt', label: 'Project Completed Date' }
+                        { key: 'completedAt', label: 'Project Completed Date' },
+                        { key: 'minimumInstallDate', label: 'Minimum Install Lead Date' },
+                        { key: 'customerName', label: 'Customer Name (Custom Field)' },
+                        { key: 'address', label: 'Customer Address (Custom Field)' }
                       ].map((mapping) => {
                         const isMissing = missingCustomFieldsList.some((item) => item.key === mapping.key);
                         
@@ -1962,6 +1996,173 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2.5: GoHighLevel Calendar & Installation Scheduler Integration */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Installation Calendar & Scheduler</h4>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-600 leading-relaxed space-y-2">
+                    <p>
+                      GoHighLevel serves as the primary system of record for installation booking and customer reminders.
+                      When a customer accepts an estimate, they are tagged with <code className="bg-slate-100 px-1 py-0.5 rounded text-[#ef4444] font-bold">estimate-accepted</code>.
+                      You can trigger a GHL automation workflow to present them with your scheduler calendar.
+                    </p>
+                    <p>
+                      Once the customer selects an appointment slot, GHL fires a webhook back to this app at the target inbound URL,
+                      and the system automatically updates the internal estimate status, records history logging, and triggers crew dispatches.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Toggle: enableGhlCalendarPrimaryScheduler */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Enable GHL Calendar as Primary Scheduler</label>
+                        <p className="text-[10px] text-gray-500">Bypass local scheduling and route customers entirely to GHL Booking Form.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, enableGhlCalendarPrimaryScheduler: !formData.enableGhlCalendarPrimaryScheduler})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.enableGhlCalendarPrimaryScheduler ? "bg-emerald-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.enableGhlCalendarPrimaryScheduler ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Toggle: sendCrewEmailAfterGhlInstallBooking */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Send Crew Email After GHL Booking</label>
+                        <p className="text-[10px] text-gray-500">Automatically dispatch job parameters & crew payouts once GHL registers booking.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, sendCrewEmailAfterGhlInstallBooking: !formData.sendCrewEmailAfterGhlInstallBooking})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.sendCrewEmailAfterGhlInstallBooking ? "bg-emerald-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.sendCrewEmailAfterGhlInstallBooking ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Toggle: sendAdminBackupEmail */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Send Admin Backup Email</label>
+                        <p className="text-[10px] text-gray-500">Send a backup CC copy of the crew installation dispatch to the admin notification email address.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, sendAdminBackupEmail: !formData.sendAdminBackupEmail})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.sendAdminBackupEmail ? "bg-emerald-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.sendAdminBackupEmail ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Toggle: requireEstimateIdMatching */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Require estimateId matching</label>
+                        <p className="text-[10px] text-gray-500">Strict mode: Webhooks without a valid `estimateId` will trigger a matching failure block.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, requireEstimateIdMatching: !formData.requireEstimateIdMatching})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.requireEstimateIdMatching ? "bg-amber-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.requireEstimateIdMatching ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {/* Toggle: allowFallbackMatching */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="space-y-0.5 pr-2">
+                        <label className="text-xs font-bold text-gray-800">Allow fallback matching by email/phone</label>
+                        <p className="text-[10px] text-gray-500">Fallback mode: Search matching estimates by GHL Contact ID, Email address, or Phone numbers.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, allowFallbackMatching: !formData.allowFallbackMatching})}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                          formData.allowFallbackMatching ? "bg-emerald-600" : "bg-gray-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          formData.allowFallbackMatching ? "translate-x-5" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Input: ghlInstallCalendarId */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">
+                        GHL Install Calendar ID
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-[#999999]" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="e.g. ghl_calendar_12345"
+                          value={formData.ghlInstallCalendarId || ''}
+                          onChange={(e) => setFormData({...formData, ghlInstallCalendarId: e.target.value})}
+                          className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-12 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                        />
+                      </div>
+                      <p className="text-[10px] text-[#999999]">Optional calendar target tag to track inside schedule logs mapping details.</p>
+                    </div>
+
+                    {/* Input: minimumInstallLeadDays */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">
+                        Minimum Install Lead Days
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          min="1"
+                          max="30"
+                          value={formData.minimumInstallLeadDays || 4}
+                          onChange={(e) => setFormData({...formData, minimumInstallLeadDays: Number(e.target.value)})}
+                          className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm font-mono focus:border-american-blue focus:outline-none focus:bg-white transition-all" 
+                        />
+                      </div>
+                      <p className="text-[10px] text-[#999999]">Used to restrict lead time mapping window boundaries for custom automation tags. Recommended default is 4.</p>
                     </div>
                   </div>
                 </div>

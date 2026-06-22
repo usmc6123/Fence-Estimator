@@ -314,6 +314,10 @@ export interface ScheduleEvent {
   isAllDay?: boolean;
   startTime?: string; // HH:mm
   endTime?: string; // HH:mm
+  source?: string;
+  appointmentId?: string;
+  ghlAppointmentId?: string;
+  syncedAt?: string;
 }
 
 export interface SchedulerConfig {

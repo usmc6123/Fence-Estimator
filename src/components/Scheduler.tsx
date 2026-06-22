@@ -2081,6 +2081,30 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                              </p>
                                          </div>
                                     </div>
+
+                                    {/* GHL Integration metadata sync badges */}
+                                    {(selectedEvent.source === 'GHL Calendar' || selectedEvent.appointmentId || selectedEvent.ghlAppointmentId) && (
+                                        <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 mt-4 space-y-2">
+                                            <div className="flex items-center gap-1.5 text-emerald-800">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                <p className="text-[10px] font-black uppercase tracking-wider">Source: GHL Calendar Sync</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                                <div>
+                                                    <span className="text-slate-500 block">Appointment ID</span>
+                                                    <span className="font-mono text-slate-800 break-all select-all font-semibold">
+                                                        {selectedEvent.appointmentId || selectedEvent.ghlAppointmentId || 'N/A'}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500 block">Synced At</span>
+                                                    <span className="text-slate-800 font-semibold">
+                                                        {selectedEvent.syncedAt ? format(new Date(selectedEvent.syncedAt), 'MMM d, h:mm a') : 'Recently'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Action Buttons */}

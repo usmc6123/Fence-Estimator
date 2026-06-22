@@ -1013,6 +1013,8 @@ async function syncCustomerToGhl({
         addCf('estimatedPrice', Number(estimate.totalCost || estimate.manualGrandTotal || 0));
         addCf('fenceType', estimate.fenceMaterial || estimate.woodType || estimate.fenceType || '');
         addCf('linearFeet', Number(estimate.linearFeet || 0));
+        addCf('customerName', estimate.customerName || (customer ? customer.customerName : ''));
+        addCf('address', estimate.customerAddress || estimate.address || (customer ? (customer.address || customer.streetAddress) : ''));
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -1025,6 +1027,11 @@ async function syncCustomerToGhl({
       }
       if (eventType === 'estimate_accepted') {
         addCf('acceptedAt', nowIso);
+        const targetMinDate = new Date();
+        const leadDays = settings.minimumInstallLeadDays !== undefined ? Number(settings.minimumInstallLeadDays) : 4;
+        targetMinDate.setDate(targetMinDate.getDate() + leadDays);
+        const minInstallStr = targetMinDate.toISOString().split('T')[0];
+        addCf('minimumInstallDate', minInstallStr);
       }
       if (eventType === 'estimate_declined') {
         addCf('declinedAt', nowIso);
@@ -1543,6 +1550,8 @@ export default async function handler(req: any, res: any) {
         installDuration: estimateData.installDuration || 1,
         scheduledStartDate: estimateData.scheduledStartDate || null,
         scheduledEndDate: estimateData.scheduledEndDate || null,
+        preferredInstallDate: estimateData.preferredInstallDate || null,
+        installStatus: estimateData.installStatus || 'Pending',
         allowCrewDirectSchedule: !!estimateData.allowCrewDirectSchedule,
         events: eventsList,
         crewScheduleRequestPending: !!estimateData.crewScheduleRequestPending,
@@ -1684,6 +1693,305 @@ export default async function handler(req: any, res: any) {
         scheduledStartDate: proposedStartStr,
         scheduledEndDate: proposedEndStr,
         installDuration: Number(installDuration)
+      });
+    }
+
+    if (action === 'crew-confirm-install') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const token = req.query?.token || req.body?.token;
+      const notes = (req.body?.notes || '').trim();
+
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+      if (!token) {
+        return res.status(400).json({ error: 'Security token is required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data() || {};
+      if (!estimateData.crewScheduleAccessEnabled) {
+        return res.status(403).json({ error: 'Crew scheduling access is disabled.' });
+      }
+      if (estimateData.crewScheduleToken !== token) {
+        return res.status(403).json({ error: 'Invalid security token.' });
+      }
+
+      const preferredDate = estimateData.preferredInstallDate || estimateData.scheduledStartDate || '';
+      if (!preferredDate) {
+        return res.status(400).json({ error: 'No preferred installation date found on this estimate to confirm.' });
+      }
+
+      const nowIso = new Date().toISOString();
+      const crewEmail = estimateData.crewEmailRecipient || 'Subcontractor Crew';
+
+      const historyEntry = {
+        action: 'Crew confirmed',
+        source: 'Crew Portal',
+        actor: 'Crew',
+        oldValue: 'Pending Crew Confirmation',
+        newValue: 'Scheduled',
+        notes: `Crew confirmed preferred date: ${preferredDate}.${notes ? ' Crew Notes: ' + notes : ''}`,
+        timestamp: nowIso
+      };
+
+      const updates: any = {
+        installStatus: 'Scheduled',
+        jobStatus: 'Scheduled',
+        confirmedInstallDate: preferredDate,
+        crewConfirmedAt: nowIso,
+        crewConfirmedBy: crewEmail,
+        crewConfirmationNotes: notes,
+        crewScheduleRequestPending: false,
+        updatedAt: nowIso
+      };
+
+      // Add to scheduleHistory
+      updates.scheduleHistory = admin.firestore.FieldValue.arrayUnion(historyEntry);
+
+      await docRef.update(updates);
+
+      // Create/Update schedule_event reflecting confirmed status
+      const eventId = estimateData.ghlInstallCalendarEventId || `install-${estimateId}`;
+      const startD = new Date(preferredDate);
+      const endD = new Date(preferredDate);
+      const duration = Number(estimateData.installDuration || 1);
+      endD.setDate(endD.getDate() + duration);
+
+      const eventPayload = {
+        id: eventId,
+        estimateId: estimateId,
+        title: `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.customerAddress || estimateData.address || ''}`,
+        start: preferredDate,
+        end: endD.toISOString().split('T')[0],
+        allDay: true,
+        type: 'installation',
+        eventType: 'install',
+        status: 'Scheduled',
+        appointmentStatus: 'Confirmed',
+        userId: estimateData.userId || 'braden-lonestar-uid',
+        notes: `Schedule confirmed via Crew Portal. Notes: ${notes}`
+      };
+
+      await db.collection('schedule_events').doc(eventId).set(eventPayload, { merge: true });
+
+      // Load company settings for replyTo and matching rules
+      const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+      const activeSettings = settingsSnap.exists ? settingsSnap.data() : {};
+
+      const adminEmail = activeSettings?.replyToEmail || 'bradens@lonestarfenceworks.com';
+      const customerEmail = estimateData.customerEmail || estimateData.email || '';
+      const customerNameVal = estimateData.customerName || 'Valued Client';
+      const eNo = estimateData.estimateNumber || '';
+
+      // NOTIFY CUSTOMER (Only after crew confirmation, custom message)
+      if (customerEmail) {
+        const customerSubject = `Installation Confirmed - Lone Star Fence Works`;
+        const customerHtml = `
+          <div style="font-family: sans-serif; max-width: 650px; margin: 0 auto; color: #1a202c; line-height: 1.6;">
+            <div style="background-color: #0c1a30; color: #ffffff; padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h2 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Lone Star Fence Works</h2>
+              <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.9;">Installation Confirmed</p>
+            </div>
+            <div style="padding: 32px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; background-color: #ffffff; font-size: 15px;">
+              <p>Dear ${customerNameVal},</p>
+              <p>Your installation has been confirmed for <strong>${new Date(preferredDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>.</p>
+              <p>Our professional crew is scheduled to begin installation on this date. If weather or unforeseen circumstances require a change, we will contact you as soon as possible.</p>
+              <p>Thank you for choosing Lone Star Fence Works. We look forward to delivering your premium new fence!</p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+              <p style="font-size: 13px; color: #718096; text-align: center; margin-bottom: 0;">
+                If you have any questions or need to reach our office, reply directly to this email or call us at ${activeSettings?.companyPhone || 'our office'}.
+              </p>
+            </div>
+          </div>
+        `;
+
+        await sendAppEmail({
+          to: customerEmail,
+          subject: customerSubject,
+          html: customerHtml,
+          text: `Your installation has been confirmed for ${preferredDate}. If weather or unforeseen circumstances require a change, we will contact you as soon as possible. Thank you for choosing Lone Star Fence Works.`,
+          category: 'customer_install_confirmed',
+          estimateId: estimateId,
+          customSettingsData: activeSettings
+        }).catch((err) => {
+          console.error('[CREW CONFIRM] Failed to send email notification to customer:', err);
+        });
+      }
+
+      // NOTIFY ADMIN
+      const adminSubject = `[Admin Alert] Crew Confirmed Install for Est #${eNo}`;
+      const adminHtml = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h3>Crew Confirmation Received</h3>
+          <p>Subcontractor Crew <strong>${crewEmail}</strong> has confirmed the scheduled installation date for <strong>Est #${eNo}</strong> (${customerNameVal}).</p>
+          <ul>
+            <li><strong>Confirmed Install Date:</strong> ${preferredDate}</li>
+            <li><strong>Duration:</strong> ${duration} day(s)</li>
+            <li><strong>Crew Notes:</strong> ${notes || 'None'}</li>
+          </ul>
+          <p>CRM and Calendar states have automatically transitioned to Scheduled.</p>
+        </div>
+      `;
+
+      await sendAppEmail({
+        to: adminEmail,
+        subject: adminSubject,
+        html: adminHtml,
+        text: `Crew ${crewEmail} has confirmed installation for Est #${eNo} on ${preferredDate}.`,
+        category: 'admin_notification_crew_confirmed',
+        estimateId: estimateId,
+        customSettingsData: activeSettings
+      }).catch((err) => {
+        console.error('[CREW CONFIRM] Failed to send admin alert email:', err);
+      });
+
+      // NOTIFY GHL (Add tag and update pipeline stage)
+      try {
+        const fullEstimateSnap = await docRef.get();
+        const fullEstimateData = { id: estimateId, ...fullEstimateSnap.data() };
+        await syncCustomerToGhl({
+          eventType: 'job_scheduled',
+          estimate: fullEstimateData,
+          scheduleDate: preferredDate
+        });
+        console.info(`[CREW CONFIRM] Successfully triggered GHL GHL sync and Opportunity status update.`);
+      } catch (ghlErr) {
+        console.error('[CREW CONFIRM] GHL CRM sync failed during crew confirmation:', ghlErr);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Installation schedule confirmed and published successfully.',
+        confirmedInstallDate: preferredDate
+      });
+    }
+
+    if (action === 'crew-request-alternative-date') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const token = req.query?.token || req.body?.token;
+      const { requestedStartDate, duration, notes } = req.body || {};
+
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+      if (!token) {
+        return res.status(400).json({ error: 'Security token is required.' });
+      }
+      if (!requestedStartDate) {
+        return res.status(400).json({ error: 'Proposed alternative date is required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data() || {};
+      if (!estimateData.crewScheduleAccessEnabled) {
+        return res.status(403).json({ error: 'Crew scheduling access is disabled.' });
+      }
+      if (estimateData.crewScheduleToken !== token) {
+        return res.status(403).json({ error: 'Invalid security token.' });
+      }
+
+      const nowIso = new Date().toISOString();
+      const crewEmail = estimateData.crewEmailRecipient || 'Subcontractor Crew';
+
+      const historyEntry = {
+        action: 'Crew requested different date',
+        source: 'Crew Portal',
+        actor: 'Crew',
+        oldValue: estimateData.preferredInstallDate || 'Unscheduled',
+        newValue: requestedStartDate,
+        notes: `Crew requested alternative date: ${requestedStartDate} for ${duration || 1} day(s). Crew Notes: ${notes}`,
+        timestamp: nowIso
+      };
+
+      const BlackoutD = new Date(requestedStartDate);
+      const endD = new Date(requestedStartDate);
+      endD.setDate(endD.getDate() + Number(duration || 1));
+
+      const updatesByCrew = {
+        crewScheduleRequestPending: true,
+        crewRequestedStartDate: requestedStartDate,
+        crewRequestedDuration: Number(duration || 1),
+        crewAlternativeNotes: notes,
+        crewScheduleRequestedAt: nowIso,
+        updatedAt: nowIso,
+        installStatus: 'Pending Crew Confirmation',
+        jobStatus: 'Pending Crew Confirmation'
+      };
+
+      // Wait, we add schedule_event representing alternative proposal
+      const eventId = estimateData.ghlInstallCalendarEventId || `install-${estimateId}`;
+
+      const eventPayload = {
+        id: eventId,
+        estimateId: estimateId,
+        title: `[CREW PROPOSED] Install - ${estimateData.customerName || 'Customer'}`,
+        start: requestedStartDate,
+        end: endD.toISOString().split('T')[0],
+        allDay: true,
+        type: 'installation',
+        eventType: 'install',
+        status: 'Pending Crew Confirmation',
+        appointmentStatus: 'Pending',
+        userId: estimateData.userId || 'braden-lonestar-uid',
+        notes: `Crew proposed alternative date: ${requestedStartDate}. Notes: ${notes}`
+      };
+
+      await db.collection('schedule_events').doc(eventId).set(eventPayload, { merge: true });
+
+      // Add to scheduleHistory
+      await docRef.update({
+        ...updatesByCrew,
+        scheduleHistory: admin.firestore.FieldValue.arrayUnion(historyEntry)
+      });
+
+      // Notify Admin ONLY
+      const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+      const activeSettings = settingsSnap.exists ? settingsSnap.data() : {};
+      const adminEmail = activeSettings?.replyToEmail || 'bradens@lonestarfenceworks.com';
+      const customerNameVal = estimateData.customerName || 'Valued Client';
+      const eNo = estimateData.estimateNumber || '';
+
+      const adminSubject = `[Admin Alert] Crew Requested Alternate Date for Est #${eNo}`;
+      const adminHtml = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h3>Alternate Date Proposal from Crew</h3>
+          <p>Subcontractor Crew <strong>${crewEmail}</strong> has requested a different install date for <strong>Est #${eNo}</strong> (${customerNameVal}).</p>
+          <p>No automatic notification has been sent to the customer yet. Please review the proposal and update GHL or contact the crew to confirm.</p>
+          <ul>
+            <li><strong>Originally Proposed:</strong> ${estimateData.preferredInstallDate || 'Unscheduled'}</li>
+            <li><strong>Crew Requested Date:</strong> ${requestedStartDate}</li>
+            <li><strong>Crew Requested Duration:</strong> ${duration || 1} day(s)</li>
+            <li><strong>Crew Notes:</strong> ${notes || 'None'}</li>
+          </ul>
+        </div>
+      `;
+
+      await sendAppEmail({
+        to: adminEmail,
+        subject: adminSubject,
+        html: adminHtml,
+        text: `Crew requested alternative date ${requestedStartDate} for Est #${eNo}.`,
+        category: 'admin_notification_crew_requested_alt',
+        estimateId: estimateId,
+        customSettingsData: activeSettings
+      }).catch((err) => {
+        console.error('[CREW PROPOSED] Failed to send admin alert email:', err);
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Proposed date successfully submitted to admin.',
+        requestedStartDate,
+        requestedDuration: duration
       });
     }
 

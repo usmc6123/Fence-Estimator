@@ -518,6 +518,14 @@ export default async function handler(req: any, res: any) {
       if (data.enableGhlApiSync === undefined) data.enableGhlApiSync = false;
       if (data.keepGhlLegacyWebhooks === undefined) data.keepGhlLegacyWebhooks = true;
       if (data.ghlPipelineId === undefined) data.ghlPipelineId = '';
+      if (data.enableGhlCalendarPrimaryScheduler === undefined) data.enableGhlCalendarPrimaryScheduler = false;
+      if (data.ghlInstallCalendarId === undefined) data.ghlInstallCalendarId = '';
+      if (data.minimumInstallLeadDays === undefined) data.minimumInstallLeadDays = 4;
+      if (data.sendCrewEmailAfterGhlInstallBooking === undefined) data.sendCrewEmailAfterGhlInstallBooking = false;
+      if (data.sendAdminBackupEmail === undefined) data.sendAdminBackupEmail = false;
+      if (data.requireEstimateIdMatching === undefined) data.requireEstimateIdMatching = false;
+      if (data.allowFallbackMatching === undefined) data.allowFallbackMatching = true;
+
       if (!data.ghlOpportunityStages) {
         data.ghlOpportunityStages = {
           Interested: '',
@@ -545,8 +553,15 @@ export default async function handler(req: any, res: any) {
           acceptedAt: '',
           declinedAt: '',
           scheduledStartDate: '',
-          completedAt: ''
+          completedAt: '',
+          minimumInstallDate: '',
+          customerName: '',
+          address: ''
         };
+      } else {
+        if (data.ghlCustomFields.minimumInstallDate === undefined) data.ghlCustomFields.minimumInstallDate = '';
+        if (data.ghlCustomFields.customerName === undefined) data.ghlCustomFields.customerName = '';
+        if (data.ghlCustomFields.address === undefined) data.ghlCustomFields.address = '';
       }
       
       // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval
@@ -615,7 +630,14 @@ export default async function handler(req: any, res: any) {
           keepGhlLegacyWebhooks,
           ghlPipelineId,
           ghlOpportunityStages,
-          ghlCustomFields
+          ghlCustomFields,
+          enableGhlCalendarPrimaryScheduler,
+          ghlInstallCalendarId,
+          minimumInstallLeadDays,
+          sendCrewEmailAfterGhlInstallBooking,
+          sendAdminBackupEmail,
+          requireEstimateIdMatching,
+          allowFallbackMatching
         } = incomingFields;
 
         // Validate email format
@@ -728,6 +750,13 @@ export default async function handler(req: any, res: any) {
           enableGhlApiSync: enableGhlApiSync !== undefined ? !!enableGhlApiSync : false,
           keepGhlLegacyWebhooks: keepGhlLegacyWebhooks !== undefined ? !!keepGhlLegacyWebhooks : true,
           ghlPipelineId: ghlPipelineId || '',
+          enableGhlCalendarPrimaryScheduler: enableGhlCalendarPrimaryScheduler !== undefined ? !!enableGhlCalendarPrimaryScheduler : false,
+          ghlInstallCalendarId: ghlInstallCalendarId || '',
+          minimumInstallLeadDays: minimumInstallLeadDays !== undefined ? Number(minimumInstallLeadDays) : 4,
+          sendCrewEmailAfterGhlInstallBooking: sendCrewEmailAfterGhlInstallBooking !== undefined ? !!sendCrewEmailAfterGhlInstallBooking : false,
+          sendAdminBackupEmail: sendAdminBackupEmail !== undefined ? !!sendAdminBackupEmail : false,
+          requireEstimateIdMatching: requireEstimateIdMatching !== undefined ? !!requireEstimateIdMatching : false,
+          allowFallbackMatching: allowFallbackMatching !== undefined ? !!allowFallbackMatching : true,
           ghlOpportunityStages: ghlOpportunityStages || {
             Interested: '',
             'Appointment Requested': '',
@@ -752,7 +781,10 @@ export default async function handler(req: any, res: any) {
             acceptedAt: '',
             declinedAt: '',
             scheduledStartDate: '',
-            completedAt: ''
+            completedAt: '',
+            minimumInstallDate: '',
+            customerName: '',
+            address: ''
           },
           updatedAt: new Date().toISOString()
         };
