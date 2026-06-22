@@ -103,8 +103,8 @@ service cloud.firestore {
     }
 
     function isValidEmployee(data) {
-      return data.email is string
-        && data.permission in ['View Only', 'Can Edit'];
+      return (data.email == null || data.email is string)
+        && (data.permission == null || data.permission in ['View Only', 'Can Edit']);
     }
 
     function isValidUserProfile(data) {

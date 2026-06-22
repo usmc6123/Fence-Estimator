@@ -352,8 +352,13 @@ export interface Employee {
   phone?: string;
   role?: string;
   isActive?: boolean;
+  active?: boolean;
   canReceiveCrewDispatch?: boolean;
+  canReceiveCrewDispatchEmails?: boolean;
   isPrimaryCrewContact?: boolean;
+  primaryCrewContact?: boolean;
+  permissionLevel?: string;
+  updatedAt?: string;
 }
 
 export interface CompanyInfo {

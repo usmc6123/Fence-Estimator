@@ -230,10 +230,14 @@ export default function ManageEmployees() {
       // Primary Crew Contact logic inside Edit Modal
       if (editIsPrimaryCrewContact) {
         const updates = employees
-          .filter(e => e.isPrimaryCrewContact && e.email !== targetEmail)
+          .filter(e => (e.isPrimaryCrewContact || e.primaryCrewContact) && e.email !== targetEmail)
           .map(async (e) => {
             const docRef = doc(db, 'employees', e.email);
-            await setDoc(docRef, { isPrimaryCrewContact: false }, { merge: true });
+            await setDoc(docRef, { 
+              isPrimaryCrewContact: false,
+              primaryCrewContact: false,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
           });
         await Promise.all(updates);
       }
@@ -243,9 +247,14 @@ export default function ManageEmployees() {
         phone: editPhone.trim(),
         role: editRole.trim(),
         isActive: editIsActive,
+        active: editIsActive,
         canReceiveCrewDispatch: editCanReceiveCrewDispatch,
+        canReceiveCrewDispatchEmails: editCanReceiveCrewDispatch,
         isPrimaryCrewContact: editIsPrimaryCrewContact,
-        permission: editPermission
+        primaryCrewContact: editIsPrimaryCrewContact,
+        permission: editPermission,
+        permissionLevel: editPermission,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
 
       alert(`Employee details updated successfully for "${targetEmail}".`);
