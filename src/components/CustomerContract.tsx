@@ -516,39 +516,174 @@ export default function CustomerContract({
   const handleGenerateAIScope = async () => {
     setIsGenerating(true);
     try {
+      const totalLinearFeet = projectBreakdown.reduce((sum, r) => sum + r.netLF, 0).toFixed(1);
+      const totalGatesCount = projectBreakdown.reduce((sum, r) => sum + (r.gates?.length || 0), 0);
+      const companyInfoText = `Company Name: ${COMPANY_INFO.name}\nAddress: ${COMPANY_INFO.address}\nPhone: ${COMPANY_INFO.phone}\nEmail: ${COMPANY_INFO.email}`;
+      const customerInfoText = `Customer Name: ${resolvedClientName}\nAddress: ${resolvedMetaSource.customerAddress || 'N/A'}\nPhone: ${resolvedMetaSource.customerPhone || 'N/A'}\nEmail: ${resolvedClientEmail || 'N/A'}`;
+      
+      const sitePrepText = `
+        Has Site Prep: ${estimate.hasSitePrep ? 'Yes' : 'No'}
+        Needs Clearing: ${estimate.needsClearing ? 'Yes' : 'No'}
+        Needs Marking: ${estimate.needsMarking ? 'Yes' : 'No'}
+        Obstacle Removal: ${estimate.obstacleRemoval ? 'Yes' : 'No'}
+      `.trim();
+
+      const globalSpecsText = `
+        Default Fence Height: ${estimate.height || estimate.defaultHeight || 'N/A'} ft
+        Total Linear Footage: ${totalLinearFeet} LF
+        Total Gate Count: ${totalGatesCount} gates
+        Wood Type Option: ${estimate.woodType || 'N/A'}
+        Iron Option (Rails): ${estimate.ironRails || 'N/A'}
+        Iron Top Style: ${estimate.ironTop || 'N/A'}
+        Iron Install Type: ${estimate.ironInstallType || 'N/A'}
+        Iron Panel Type: ${estimate.ironPanelType || 'N/A'}
+        Post Cap ID / Type: ${estimate.postCapId || 'N/A'}
+        Has Cap and Trim: ${estimate.hasCapAndTrim ? 'Yes' : 'No'}
+        Has Double Trim: ${estimate.hasDoubleTrim ? 'Yes' : 'No'}
+        Has Top Cap: ${estimate.hasTopCap ? 'Yes' : 'No'}
+        Has Rot Board: ${estimate.hasRotBoard ? 'Yes' : 'No'}
+        Concrete Type: ${estimate.concreteType || 'N/A'}
+        Footing Type: ${estimate.footingType || 'N/A'}
+        Include Stain: ${estimate.includeStain ? 'Yes' : 'No'}
+        Pre-Stained Style: ${estimate.isPreStained ? 'Yes' : 'No'}
+        Stain Color: ${estimate.defaultColor || 'N/A'}
+        Total Contract Price: $${(data.pricing.finalCustomerPrice || 0).toFixed(2)}
+        Demolition Removal Price: $${(data.pricing.demoRemovalPrice || 0).toFixed(2)}
+      `.trim();
+
+      const sectionsSpecsText = data.runs.map((run, index) => {
+        const originalRun = estimate.runs?.[index];
+        const runGates = originalRun?.gateDetails || [];
+        const gatesListText = runGates.map((gate, gIdx) => 
+          `- Gate #${gIdx + 1}: ${gate.type} Gate, Width ${gate.width} ft, Construction: ${gate.construction || 'N/A'}`
+        ).join('\n') || 'None';
+
+        const demoInfo = originalRun?.hasDemolition 
+          ? `Included (Length: ${originalRun.demoLinearFeet || run.linearFeet} LF, Type: ${originalRun.demoType || 'N/A'})` 
+          : 'Excluded';
+
+        return `
+        ========================================
+        SECTION #${index + 1}: ${run.runName || run.runId}
+        Style Name/Id: ${run.styleName} (${run.styleType || 'N/A'})
+        Linear Footage: ${run.linearFeet} LF (Net LF: ${run.netLF} LF)
+        Height: ${run.height}' (feet)
+        Status: ${originalRun?.isExistingFence ? 'STAINING / RESTORATION on Existing Fence' : 'NEW INSTALLATION'}
+        Picket Style / Top Style: ${run.picketStyle || run.topStyle || 'N/A'}
+        Rot Board: ${run.hasRotBoard ? 'Yes' : 'No'}
+        Cap & Trim: ${run.hasTopCap || run.hasTrim ? 'Yes' : 'No'}
+        Wood Type: ${run.woodType || estimate.woodType || 'N/A'}
+        Staining Required: ${originalRun?.needsStain ? 'Yes' : 'No'} (Sides: ${originalRun?.stainSides || 'N/A'})
+        Stain / Coating Color: ${originalRun?.color || estimate.defaultColor || 'N/A'}
+        Is Pre-Stained / Factory Stained: ${originalRun?.isPreStained ? 'Yes' : 'No'}
+        Post Installation Method: ${originalRun?.pipeInstallType || 'Set in Concrete'}
+        Reusing Existing Posts: ${originalRun?.reusePosts ? 'Yes' : 'No'}
+        Demolition Scope: ${demoInfo}
+        Gates in this Section:
+        ${gatesListText}
+        Concrete Selection: ${originalRun?.concreteType || estimate.concreteType || 'Set in Concrete'}
+        Rail Count: ${run.railCount || 'N/A'}
+        Iron Rails: ${originalRun?.ironRails || estimate.ironRails || 'N/A'}
+        Iron Top Style: ${originalRun?.ironTop || estimate.ironTop || 'N/A'}
+        Iron Install Type: ${originalRun?.ironInstallType || estimate.ironInstallType || 'N/A'}
+        Iron Panel Type: ${originalRun?.ironPanelType || estimate.ironPanelType || 'N/A'}
+        Chain Link Grade/Option: ${originalRun?.chainLinkGrade || estimate.defaultChainLinkGrade || 'N/A'}
+        `;
+      }).join('\n\n');
+
+      const calculationMaterialsText = data.summary.map(item => `- ${item.name}: ${item.qty} ${item.unit}`).join('\n') || 'None';
+
       const prompt = `
-        You are a professional estimator for Lone Star Fence Works, a premium fence contractor in Texas. 
-        Your tone is professional, confident, and direct. No fluff. 
-        Generate a detailed, contractor-grade Scope of Work that protects the contractor legally.
-        
-        Customer: ${resolvedClientName}
-        
-        Project Sections & Details:
-        ${data.runs.map((run, index) => {
-          const originalRun = estimate.runs?.[index];
-          return `
-          Section Name: ${run.runName}
-          Specs: ${run.height}' ${run.styleName}
-          Length: ${run.linearFeet} LF
-          Status: ${originalRun?.isExistingFence ? 'Existing Fence' : 'New Installation'}
-          Needs Staining: ${originalRun?.needsStain ? 'Yes' : 'No'}
-          Reuse Posts: ${originalRun?.reusePosts ? 'Yes' : 'No'}
-          Post Installation Option: ${originalRun?.pipeInstallType || 'Set in Concrete'}
-          
-          Generate a detailed Scope of Work for this specific section.
-          If this section is for staining only on existing fence, DO NOT describe it as a new installation. 
-          Focus on preparation, staining application, and inherent limitations (variations in wood, weather dependency, etc.).
-          
-          If this section indicates reusing posts (reusePosts: true), you MUST include: 
-          "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts."
-        `}).join('\n')}
+You are a senior project manager and estimator for Lone Star Fence Works, a premium fence contractor in Texas.
+Your tone is professional, confident, clear, and legally protective. No fluff. Write a cohesive and complete contract-grade Scope of Work.
+This document is a contract Scope of Work that reads as if it was written specifically for this customer's project. The customer must understand exactly what will be built without referring back to an estimate sheet.
 
-        Structure the final Scope of Work with Markdown bold headers to cover the entire project. Ensure the document clearly separates instructions and disclaimers for different sections (e.g., New Install vs Staining/Restoration). Clearly define warranty differences for new vs existing components.
+CRITICAL INSTRUCTIONS (FORBIDDEN VOCABULARY & RULES):
+1. NEVER say "Refer to estimate", "See estimate", or "Per contract selections".
+2. NEVER use the phrase "As selected" or "As specified".
+3. NEVER use the word "Typically" or "Or equivalent".
+4. NEVER say "Metal or wood posts". You MUST explicitly state the precise post type being installed based on the section specs.
+5. If the information exists in the estimate facts below, state it explicitly. Do not leaves choices open.
+6. Under "Reused Posts (Warranty)": If any section says "Reusing Existing Posts: Yes", you MUST include this exact disclaimer verbatim:
+   "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts."
+7. DAMP LUMBER BRANDING: Do not use premium self-promoting terminology such as "#1 Grade" or similar quality marketing slogans for lumber. Use the exact wood species/types as configured in the estimate (e.g. Japanese Cedar, Western Red Cedar, or Pressure-Treated Pine).
+8. SECTION DISTINCTIVENESS: Clearly differentiate between "New Installation" and "Staining/Restoration" sections in the output document. Staining/Restoration work on existing fences MUST NOT be described as a new installation. Focus staining on: surface prep, application method, and limitations (natural tone variations, age/moisture absorption, weather-dependency).
 
-        ADDITIONAL INSTRUCTIONS:
-        ${customInstructions}
+LONE STAR FENCE WORKS COMPANY SPECIFICATIONS & DEFAULTS:
+Use these specific standard specifications when writing:
+- STEEL POSTS: "Schedule 20 galvanized steel posts" installed approximately 36" deep, wet-set in concrete. Post hole diameter minimum 8-10 inches, utilizing wet-mixed concrete. Post spacing set approximately 8 feet on center.
+- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" installed approximately 36" deep, wet-set in concrete.
+- RAILS:
+  - For 6' (foot) tall fences: 3 nominal 2x4 rails.
+  - For 8' (foot) tall fences: 4 nominal 2x4 rails.
+- PICKETS: Exact width (e.g., 6 inches wide) and material (Western Red Cedar, Japanese Cedar, or Pressure-Treated Pine). Style: Board-on-Board, Side-by-Side, Shadowbox, Horizontal, etc.
+- FASTENERS: Ring-shank hot-dipped galvanized coil nails (preventing rust streaks).
+- IRON FENCES:
+  - Post size: 14-gauge square steel posts (2"x2" dimensions) or customize if requested.
+  - Rail Configuration: 2 rail for 4'-5' height, or 3 rail for 6' height.
+  - Finish: Durable satin-black powder-coated finish.
+  - Gate hardware: Heavy-duty gravity latches, self-closing premium spring hinges.
+  - Post footing: Dug minimum 36 inches deep, wet-set in concrete.
+  - Puppy panels: Specify if configured (18" tall pickets with maximum 1.5" bottom gap).
+- CHAIN LINK FENCES:
+  - Fabric Gauge: heavy duty 9-gauge fabric or residential 11.5-gauge fabric based on selection.
+  - Terminal Post size: 2-3/8" diameter Schedule 20 steel posts.
+  - Line Post size: 1-7/8" diameter Schedule 20 steel posts.
+  - Top Rail: 1-5/8" diameter top rails.
+  - Bottom Tension Wire: 6-gauge galvanized steel tension wire.
+  - Coating type: Galvanized steel or Black vinyl coated.
+  - Privacy Slats: Mention if included.
+- PIPE FENCES:
+  - Pipe size: 2-3/8" structural tubing.
+  - Rails: 2, 3, or 4 rails.
+  - Mesh/Wire: 2"x4" no-climb woven wire fabric or welded utility wire.
+  - Gate type: Premium welded pipe matching frames.
+  - Footer depth: 36 inches deep.
+- STAINING & RESTORATION:
+  - Product: Wood Defender Commercial Grade Stain and Sealer (Semi-Transparent or Transparent).
+  - Coating application: 1 heavy flood coat saturating wood to refusal.
+  - Preparations: Pressurewash/clean off mildew/grime, allow full drying (moisture <= 12%) before high-volume low-pressure (HVLP) spray application with backbrushing.
+- DEMOLITION & HAUL OFF: State whether demolition debris haul-off is included (e.g. if demolition price > $0 or demo scope is configured, it is included and hauled away) or excluded.
+
+AI VALIDATION & DISCLOSURES:
+Before writing the final contractual narrative, perform and detail an internal validation against the raw estimate fields.
+You must verify:
+✓ Total Linear Footage: ${totalLinearFeet} LF
+✓ Gate Count: ${totalGatesCount} gates
+✓ Fence Height
+✓ Fence Style
+✓ Material specified
+✓ Stain selection
+✓ Post type
+✓ Demolition scope
+Compare what was calculated / specified in the sections against the company standards. If any required value is missing, write a professional warning/assumption alert block at the top of the Scope of Work titled "I. Project Variables & Assumptions" explaining that you used the company default values (e.g. 36" depth, Schedule 20, 3-rail configuration, etc.) rather than generic placeholder words. If everything is fully specified, note "✓ All estimated parameters verified & locked".
+
+ESTIMATE DATA AND FACTS SHEET:
+--- ESTIMATOR SOURCE OF TRUTH ---
+
+CUSTOMER:
+${customerInfoText}
+
+CONTRACTOR:
+${companyInfoText}
+
+GLOBAL SPECIFICATIONS:
+${globalSpecsText}
+
+SITE PREPARATION:
+${sitePrepText}
+
+SECTION BY SECTION ESTIMATE SPECS:
+${sectionsSpecsText}
+
+CALCULATED MATERIALS:
+${calculationMaterialsText}
+
+ADDITIONAL REQUESTS:
+${customInstructions}
+
+Please structure the contract narrative with professional Markdown bold headers (using Roman Numerals I, II, III etc. except keep "I. Specifications & Assumptions" if warnings exist). Ensure clean spacing, and do not use clinical AI-like intro text (e.g., "Certainly, here is the..."). Dive right into the contract.
       `;
-
 
       const result = await generateAIScope(prompt);
       setAiContractScope(result);
