@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { getEstimateFinalPrice } from '../../src/lib/utils';
 import { randomBytes } from 'crypto';
-import { sendAppEmail, SendAppEmailParams } from '../../src/lib/email';
+import { sendAppEmail, SendAppEmailParams } from '../../server/email';
 
 function generateSecureToken(): string {
   try {
