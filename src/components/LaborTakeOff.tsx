@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image, Send, Calendar, Clock } from 'lucide-react';
+import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image, Send, Calendar, Clock, RefreshCw } from 'lucide-react';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Employee } from '../types';
@@ -805,6 +805,32 @@ export default function LaborTakeOff({
                 )}>
                   {estimate.ghlCalendarSyncStatus === 'synced' ? 'Synced to CRM' : estimate.ghlCalendarSyncStatus === 'failed' ? 'Sync Failed' : 'No Sync Active'}
                 </span>
+
+                {estimate.ghlCalendarSyncStatus === 'failed' && (
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem('company_admin_token');
+                      try {
+                        const res = await fetch('/api/estimates/write', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || ''}` },
+                          body: JSON.stringify({ action: 'resync-ghl-calendar', estimateId: estimate.id })
+                        });
+                        if (res.ok) {
+                          alert('Resync successful!');
+                          window.location.reload();
+                        } else {
+                          alert('Resync failed: ' + await res.text());
+                        }
+                      } catch (e) {
+                        alert('Resync error: ' + e);
+                      }
+                    }}
+                    className="mt-2 text-[10px] font-black uppercase tracking-widest text-american-blue hover:underline flex items-center gap-1"
+                  >
+                    <RefreshCw size={10} /> Resync GHL Calendar
+                  </button>
+                )}
                 {estimate.ghlCalendarLastSyncedAt && (
                   <span className="block text-[8px] text-slate-400 mt-1 font-normal">
                     Synced: {new Date(estimate.ghlCalendarLastSyncedAt).toLocaleString()}

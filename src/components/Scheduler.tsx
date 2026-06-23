@@ -294,7 +294,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
           body: JSON.stringify({
-            action: 'schedule-event',
+            action: 'create-schedule-event',
             ...newEvent
           })
         });
@@ -425,17 +425,18 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     try {
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({
-          id: estimateId,
-          scheduledStartDate: startDateStr,
-          scheduledEndDate: endDateStr,
-          scheduledDuration: duration,
-          jobStatus: 'In Progress' as JobStatus
+          action: 'reschedule-job',
+          estimateId: estimateId,
+          startDate: startDateStr,
+          duration: duration,
+          assignedCrew: estimate.assignedCrew || 'Crew',
+          notes: ''
         })
       });
       if (!response.ok) {
@@ -461,16 +462,17 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({
-          id: estimateId,
-          scheduledStartDate: newDateStr,
-          scheduledEndDate: endStr,
-          scheduledDuration: newDuration
+          action: 'reschedule-job',
+          estimateId: estimateId,
+          startDate: newDateStr,
+          duration: newDuration,
+          notes: 'Rescheduled via calendar'
         })
       });
       if (!response.ok) {
@@ -488,7 +490,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     try {
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
-        method: 'PUT',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -534,7 +536,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
           body: JSON.stringify({
-            action: 'schedule-event',
+            action: 'create-schedule-event',
             ...newEvent
           })
         });
@@ -574,7 +576,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
           body: JSON.stringify({
-            action: 'schedule-event',
+            action: 'create-schedule-event',
             ...newEvent
           })
         });
@@ -593,7 +595,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
-          method: 'DELETE',
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -610,16 +612,14 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     } else {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
-          method: 'PUT',
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token || ''}`
           },
           body: JSON.stringify({
-            id,
-            scheduledStartDate: null,
-            scheduledEndDate: null,
-            jobStatus: 'Accepted' as JobStatus
+            action: 'delete-schedule-event',
+            id: `install-${id}` // For jobs, we use the install- prefix in schedule_events
           })
         });
         if (!response.ok) {

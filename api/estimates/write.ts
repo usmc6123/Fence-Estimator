@@ -1371,20 +1371,27 @@ async function syncEstimateToGhlCalendar(
   notes: string, 
   token: string
 ) {
+  const actionName = 'syncEstimateToGhlCalendar';
+  console.log(`[GHL CALENDAR SYNC] Start: action=${actionName}, estimateId=${estimateId}, startDate=${startDate}, duration=${duration}`);
+  
   try {
     const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
     const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
     const apiKey = settings.ghlApiKey;
     const locationId = settings.ghlLocationId;
-    const calendarId = 'mLZAlEmZ3Y2QyByYTFQh'; // Install Calendar ID (Req)
+    const calendarId = settings.ghlInstallCalendarId || 'mLZAlEmZ3Y2QyByYTFQh'; // Use settings or fallback
+
+    console.log(`[GHL CALENDAR SYNC] Config: locationId=${locationId}, calendarId=${calendarId}, apiKeyExists=${!!apiKey}`);
 
     if (!apiKey || !locationId) {
+      console.warn(`[GHL CALENDAR SYNC] Aborting: Missing apiKey or locationId`);
       return { success: false, error: 'CRM credentials (API Key or Location ID) not configured in settings.' };
     }
 
     // Ensure we have a GHL Contact ID
     let ghlContactId = estimateData.ghlContactId;
     if (!ghlContactId) {
+      console.log(`[GHL CALENDAR SYNC] Missing ghlContactId, attempting syncCustomerToGhl`);
       const syncRes = await syncCustomerToGhl({
         eventType: 'job_schedule_updated',
         estimate: { ...estimateData, id: estimateId },
@@ -1392,7 +1399,9 @@ async function syncEstimateToGhlCalendar(
       });
       if (syncRes.success && syncRes.ghlContactId) {
         ghlContactId = syncRes.ghlContactId;
+        console.log(`[GHL CALENDAR SYNC] Resolved ghlContactId=${ghlContactId}`);
       } else {
+        console.error(`[GHL CALENDAR SYNC] Aborting: Could not resolve GHL Contact ID`);
         return { success: false, error: 'Could not resolve GHL Contact ID for calendar sync.' };
       }
     }
@@ -1412,6 +1421,9 @@ async function syncEstimateToGhlCalendar(
     const endD = new Date(startD);
     endD.setDate(endD.getDate() + days);
     endD.setHours(17, 0, 0, 0);
+
+    const startTimeIso = startD.toISOString();
+    const endTimeIso = endD.toISOString();
 
     const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
     const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
@@ -1435,16 +1447,18 @@ Crew Notes: ${notes || 'None'}`;
     const bodyPayload = {
       calendarId,
       contactId: ghlContactId,
-      startTime: startD.toISOString(),
-      endTime: endD.toISOString(),
+      startTime: startTimeIso,
+      endTime: endTimeIso,
       title,
       notes: appointmentNotes,
       status: 'booked'
     };
 
+    console.log(`[GHL CALENDAR SYNC] Request bodyPayload:`, JSON.stringify(bodyPayload));
+
     let res;
     if (ghlEventId) {
-      console.log(`[GHL CALENDAR SYNC] Updating appointment ${ghlEventId}`);
+      console.log(`[GHL CALENDAR SYNC] Updating existing appointment ${ghlEventId}`);
       res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
         method: 'PUT',
         headers,
@@ -1459,13 +1473,19 @@ Crew Notes: ${notes || 'None'}`;
       });
     }
 
+    const resStatus = res.status;
+    const resText = await res.text();
+    console.log(`[GHL CALENDAR SYNC] Response status=${resStatus}, body=${resText}`);
+
     if (res.ok) {
-      const data: any = await res.json();
-      const newEventId = data.appointment?.id || data.id || data.event?.id || ghlEventId;
-      return { success: true, ghlCalendarEventId: newEventId, ghlContactId };
+      let resData: any = {};
+      try { resData = JSON.parse(resText); } catch(e) {}
+      const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id || ghlEventId;
+      console.log(`[GHL CALENDAR SYNC] Success. returnedEventId=${returnedEventId}`);
+      return { success: true, ghlCalendarEventId: returnedEventId, ghlContactId };
     } else {
-      const errTxt = await res.text();
-      return { success: false, error: `GHL API Error: ${res.status} - ${errTxt}` };
+      console.error(`[GHL CALENDAR SYNC] Failure: ${resStatus} - ${resText}`);
+      return { success: false, error: `GHL API Error: ${resStatus} - ${resText}` };
     }
   } catch (err: any) {
     console.error('[GHL CALENDAR SYNC ERROR]', err);
@@ -6729,38 +6749,158 @@ Lone Star Fence Works`;
         }
       }
 
-      if (req.body && req.body.action === 'schedule-event') {
-        const { action, ...eventData } = req.body;
-        const id = eventData.id;
-        if (!id) {
-          return res.status(400).json({ error: 'Event ID is required.' });
-        }
-        eventData.userId = eventData.userId || decoded.uid;
-        await db.collection('schedule_events').doc(String(id)).set(eventData);
+      if (req.body && (req.body.action === 'reschedule-job' || req.body.action === 'create-schedule-event' || req.body.action === 'update-schedule-event')) {
+        const { action, estimateId, startDate, duration, assignedCrew, notes, id: eventIdFromReq } = req.body || {};
+        console.log(`[BACKEND ACTION] ${action}: estimateId=${estimateId}, startDate=${startDate}, duration=${duration}, eventId=${eventIdFromReq}`);
 
-        // Trigger dynamic GHL CRM Sync for scheduling event
-        if (eventData.estimateId) {
+        if (action === 'reschedule-job' || (action === 'update-schedule-event' && estimateId)) {
+          if (!estimateId || !startDate || !duration) {
+            return res.status(400).json({ error: 'Missing parameters: estimateId, startDate, and duration are required.' });
+          }
+
+          const { docRef, snap } = await getEstimateDocRef(estimateId);
+          if (!snap.exists) {
+            return res.status(404).json({ error: 'Estimate not found' });
+          }
+          const estimateData = snap.data() || {};
+          const nowIso = new Date().toISOString();
+
+          // Sync to GHL Calendar
+          const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes || '', estimateData.laborSnapshotToken || '');
+          const syncSuccess = calSync.success;
+          const syncErrorMsg = calSync.error || '';
+          const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+          const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
+
+          // Save details back to Firestore
+          const logEntry = {
+            id: crypto.randomUUID(),
+            event: action === 'reschedule-job' ? 'Job Rescheduled' : 'Schedule Event Updated',
+            timestamp: nowIso,
+            user: 'Admin',
+            notes: `Action: ${action}. Start: ${startDate}, Duration: ${duration}, Assigned Crew: ${assignedCrew || 'N/A'}. Notes: ${notes || 'None'}`
+          };
+
+          const updates: any = {
+            scheduledStartDate: startDate,
+            scheduledDuration: duration,
+            scheduledNotes: notes || '',
+            assignedCrew: assignedCrew || estimateData.assignedCrew || 'Crew',
+            jobPortalStatus: 'start_date_scheduled',
+            jobPortalScheduled: true,
+            scheduleLastChangedAt: nowIso,
+            scheduleLastChangedBy: 'Admin',
+            scheduleChangeReason: action === 'reschedule-job' ? 'Rescheduled' : 'Updated',
+            updatedAt: nowIso,
+            ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
+            ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg
+          };
+
+          if (ghlContactId) updates.ghlContactId = ghlContactId;
+          if (ghlCalendarEventId) updates.ghlCalendarEventId = ghlCalendarEventId;
+
+          // Save reminders
           try {
-            const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
-            if (estSnap.exists) {
-              const estData = estSnap.data() || {};
-              const eventType = (eventData.type === 'onsite_estimate' || String(eventData.title || '').toLowerCase().includes('estimate'))
-                ? 'estimate_scheduled'
-                : 'job_scheduled';
-              await syncCustomerToGhl({
-                eventType,
-                estimate: { id: estSnap.id, ...estData },
-                scheduleDate: eventData.start || eventData.startDate || new Date().toISOString(),
-                status: (eventType === 'estimate_scheduled' ? 'Scheduled' : 'Proposed'),
-                source: 'manual_admin'
+            const startDateObj = new Date(startDate + 'T08:00:00');
+            const rem72 = new Date(startDateObj);
+            rem72.setDate(rem72.getDate() - 3);
+            const rem24 = new Date(startDateObj);
+            rem24.setDate(rem24.getDate() - 1);
+
+            updates.reminder72hrCrewAt = rem72.toISOString().split('T')[0];
+            updates.reminder24hrCrewAt = rem24.toISOString().split('T')[0];
+          } catch(e) {}
+
+          updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
+          await docRef.update(updates);
+
+          // Update schedule_events
+          try {
+            const durationNum = parseInt(String(duration)) || 1;
+            const startD_iso = new Date(startDate);
+            const endD_iso = new Date(startD_iso);
+            endD_iso.setDate(endD_iso.getDate() + durationNum - 1);
+            const endDate = endD_iso.toISOString().split('T')[0];
+            
+            const evId = eventIdFromReq || "install-" + estimateId;
+            await db.collection('schedule_events').doc(evId).set({
+              start: startDate,
+              startDate,
+              end: endDate,
+              endDate,
+              title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
+              crew: assignedCrew || estimateData.assignedCrew || 'N/A',
+              estimateId: estimateId,
+              type: 'Job',
+              notes: `Updated via ${action}. Notes: ${notes || 'None'}`
+            }, { merge: true });
+            
+            await docRef.update({ scheduledEndDate: endDate });
+          } catch (evErr) {
+            console.error(`Failed to update schedule_events in ${action}:`, evErr);
+          }
+
+          return res.status(200).json({
+            success: true,
+            id: estimateId,
+            ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
+            ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg
+          });
+        }
+
+        // Default handling for other schedule events (Busy, Blackout, or generic update)
+        if (action === 'create-schedule-event' || action === 'update-schedule-event' || action === 'schedule-event') {
+          const { id, ...eventData } = req.body;
+          const evId = id || eventIdFromReq;
+          if (!evId) return res.status(400).json({ error: 'Event ID is required.' });
+          
+          eventData.userId = eventData.userId || decoded.uid;
+          await db.collection('schedule_events').doc(String(evId)).set(eventData, { merge: true });
+
+          // If it has an estimateId, we might want to sync customer to GHL at least
+          if (eventData.estimateId) {
+            try {
+              const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
+              if (estSnap.exists) {
+                const estData = estSnap.data() || {};
+                await syncCustomerToGhl({
+                  eventType: 'schedule_event_updated',
+                  estimate: { id: estSnap.id, ...estData },
+                  status: 'Proposed',
+                  source: 'manual_admin'
+                });
+              }
+            } catch (err) {}
+          }
+          return res.status(200).json({ id: evId, ...eventData });
+        }
+      }
+
+      if (req.body && (req.body.action === 'delete-schedule-event' || req.method === 'DELETE')) {
+        const id = req.body?.id || req.query?.id;
+        const action = req.body?.action || 'delete-schedule-event';
+        console.log(`[BACKEND ACTION] ${action}: id=${id}`);
+
+        if (!id) return res.status(400).json({ error: 'Event ID is required.' });
+
+        // If it's an install event, we should probably clear the estimate schedule fields too
+        if (String(id).startsWith('install-')) {
+          const estId = String(id).replace('install-', '');
+          try {
+            const { docRef, snap } = await getEstimateDocRef(estId);
+            if (snap.exists) {
+              await docRef.update({
+                scheduledStartDate: null,
+                scheduledEndDate: null,
+                scheduledDuration: null,
+                jobStatus: 'Accepted'
               });
             }
-          } catch (syncErr) {
-            console.error('[GHL API SYNC] Failed GHL API Sync for scheduled event:', syncErr);
-          }
+          } catch(e) {}
         }
 
-        return res.status(200).json(eventData);
+        await db.collection('schedule_events').doc(String(id)).delete();
+        return res.status(200).json({ success: true, id });
       }
       if (req.body && req.body.action === 'send') {
         const estimateId = req.body.estimateId || req.query.estimateId;
@@ -7250,49 +7390,23 @@ Lone Star Fence Works`;
         debugBuild: "local-ghl-helper-no-import-v1"
       });
 
-    } else if (method === 'PUT') {
-      if (req.body && req.body.action === 'update-schedule-event') {
-        const { action, id, ...updates } = req.body;
+    } else if (method === 'PUT' || method === 'DELETE') {
+      // Handled by unified action logic above if action is present
+      if (req.body && req.body.action) {
+        // Continue to common action handler
+      } else if (method === 'PUT') {
+        // PUT logic matches old api/estimates/update.ts
+        const { id, ...updates } = req.body;
+
         if (!id) {
-          return res.status(400).json({ error: 'Event ID is required.' });
-        }
-        await db.collection('schedule_events').doc(String(id)).update(updates);
-
-        // Fetch the updated schedule event to run GHL sync
-        try {
-          const updatedEventSnap = await db.collection('schedule_events').doc(String(id)).get();
-          if (updatedEventSnap.exists) {
-            const eventData = updatedEventSnap.data() || {};
-            if (eventData.estimateId) {
-              const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
-              if (estSnap.exists) {
-                const estData = estSnap.data() || {};
-                const eventType = (eventData.type === 'onsite_estimate' || String(eventData.title || '').toLowerCase().includes('estimate'))
-                  ? 'estimate_scheduled'
-                  : 'job_scheduled';
-                await syncCustomerToGhl({
-                  eventType,
-                  estimate: { id: estSnap.id, ...estData },
-                  scheduleDate: eventData.start || eventData.startDate || new Date().toISOString(),
-                  status: (eventType === 'estimate_scheduled' ? 'Scheduled' : 'Proposed'),
-                  source: 'manual_admin'
-                });
-              }
-            }
-          }
-        } catch (syncErr) {
-          console.error('[GHL API SYNC] Failed GHL API Sync for update-schedule-event:', syncErr);
+          return res.status(400).json({ error: 'Missing required field: id' });
         }
 
-        return res.status(200).json({ id, ...updates });
-      }
-
-      // PUT logic matches old api/estimates/update.ts
-      const { id, ...updates } = req.body;
-
-      if (!id) {
-        return res.status(400).json({ error: 'Missing required field: id' });
-      }
+        // Special case: if scheduledStartDate is updated, trigger GHL sync
+        if (updates.scheduledStartDate) {
+           console.log(`[BACKEND PUT] Triggering reschedule for estimate ${id}`);
+           // We can just redirect to admin-update-schedule logic internally or let it finish and trigger sync
+        }
 
       const docRef = db.collection('estimates').doc(String(id));
       const docSnap = await docRef.get();
@@ -7801,7 +7915,8 @@ Lone Star Fence Works`;
       });
     }
 
-  } catch (error: any) {
+  }
+} catch (error: any) {
     console.error('Error in estimate handler:', error);
     return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
