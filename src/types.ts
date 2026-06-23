@@ -310,6 +310,9 @@ export interface Estimate {
   jobPortalStatus?: string;
   jobPortalHistory?: any[];
   vendorDocuments?: any[];
+  salesOrders?: VendorSalesOrder[];
+  manualCharges?: ManualJobCharge[];
+  financialSummary?: JobFinancialSummary;
   materialConfirmation?: any;
   laborSnapshotToken?: string;
   crewScheduleToken?: string;
@@ -365,6 +368,59 @@ export interface JobDiagram {
   updatedAt: string;
   createdBy?: string;
   visibleToCrew: boolean;
+}
+
+export interface SalesOrderItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  lineTotal: number;
+  taxable: boolean;
+  notes?: string;
+}
+
+export interface VendorSalesOrder {
+  id: string;
+  vendorName: string;
+  salesOrderNumber: string;
+  orderDate: string;
+  pickupLocation?: string;
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  otherFees: number;
+  totalCost: number;
+  paymentStatus: 'Pending' | 'Paid' | 'Partially Paid';
+  notes?: string;
+  visibleToCrew: boolean;
+  items?: SalesOrderItem[];
+  fileUrl?: string;
+  fileName?: string;
+  storagePath?: string;
+}
+
+export interface ManualJobCharge {
+  id: string;
+  amount: number;
+  category: 'Manual Material Cost' | 'Manual Labor Adjustment' | 'Equipment Rental' | 'Disposal/Dump Fee' | 'Delivery/Fuel' | 'Permit Fee' | 'Subcontractor Cost' | 'Warranty/Repair Cost' | 'Other Cost' | 'Credit/Refund' | 'Owner Adjustment';
+  description: string;
+  date: string;
+  enteredBy: string;
+  notes?: string;
+}
+
+export interface JobFinancialSummary {
+  materialCostFromSalesOrders: number;
+  manualMaterialCost: number;
+  laborCostFromBreakdown: number;
+  manualLaborCostAdjustments: number;
+  otherManualCosts: number;
+  totalJobCost: number;
+  jobRevenue: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  lastRecalculatedAt: string;
 }
 
 export interface SavedEstimate extends Estimate {

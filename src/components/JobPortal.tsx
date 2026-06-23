@@ -29,7 +29,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [jobData, setJobData] = useState<any>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'labor' | 'materials' | 'checklists' | 'reports' | 'history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'labor' | 'materials' | 'checklists' | 'reports' | 'history' | 'financials'>('overview');
 
   // Interactive site drawing zoom state
   const [zoomDrawing, setZoomDrawing] = useState(false);
@@ -62,17 +62,40 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [newSalesOrderNumber, setNewSalesOrderNumber] = useState('');
   const [newPickupLocation, setNewPickupLocation] = useState('');
   const [newPickupDateTime, setNewPickupDateTime] = useState('');
+  const [newOrderDate, setNewOrderDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newSubtotal, setNewSubtotal] = useState(0);
+  const [newTax, setNewTax] = useState(0);
+  const [newDeliveryFee, setNewDeliveryFee] = useState(0);
+  const [newOtherFees, setNewOtherFees] = useState(0);
+  const [newTotalCost, setNewTotalCost] = useState(0);
+  const [newPaymentStatus, setNewPaymentStatus] = useState<'Pending' | 'Paid' | 'Partially Paid'>('Pending');
   const [newNotes, setNewNotes] = useState('');
   const [newVisibleToCrew, setNewVisibleToCrew] = useState(true);
   const [newDocFilename, setNewDocFilename] = useState('');
   const [newDocBase64, setNewDocBase64] = useState('');
   const [newDocMimeType, setNewDocMimeType] = useState('');
-  const [newDocLineItems, setNewDocLineItems] = useState<{ id: string; description: string; qty: number }[]>([]);
+  const [newDocLineItems, setNewDocLineItems] = useState<any[]>([]);
   const [newLineItemDesc, setNewLineItemDesc] = useState('');
   const [newLineItemQty, setNewLineItemQty] = useState(1);
+  const [newLineItemUnit, setNewLineItemUnit] = useState('each');
+  const [newLineItemCost, setNewLineItemCost] = useState(0);
+  const [newLineItemTaxable, setNewLineItemTaxable] = useState(true);
   const [isUploadingVendorDoc, setIsUploadingVendorDoc] = useState(false);
   const [uploadDocError, setUploadDocError] = useState('');
   const [uploadDocSuccess, setUploadDocSuccess] = useState('');
+
+  // Manual Charges States
+  const [showManualChargePanel, setShowManualChargePanel] = useState(false);
+  const [mcCategory, setMcCategory] = useState<string>('Manual Material Cost');
+  const [mcAmount, setMcAmount] = useState(0);
+  const [mcDescription, setMcDescription] = useState('');
+  const [mcDate, setMcDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isSavingManualCharge, setIsSavingManualCharge] = useState(false);
+  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
+
+  // Financial Recalculation States
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [isRefreshingLabor, setIsRefreshingLabor] = useState(false);
 
   // Office Override Action Modal States
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -163,15 +186,30 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     const newItem = {
       id: crypto.randomUUID(),
       description: newLineItemDesc,
-      qty: newLineItemQty
+      qty: newLineItemQty,
+      unit: newLineItemUnit,
+      unitCost: newLineItemCost,
+      lineTotal: newLineItemQty * newLineItemCost,
+      taxable: newLineItemTaxable
     };
     setNewDocLineItems(prev => [...prev, newItem]);
+    
+    // Auto-update subtotal
+    const newSub = [...newDocLineItems, newItem].reduce((sum, item) => sum + item.lineTotal, 0);
+    setNewSubtotal(newSub);
+    setNewTotalCost(newSub + newTax + newDeliveryFee + newOtherFees);
+
     setNewLineItemDesc('');
     setNewLineItemQty(1);
+    setNewLineItemCost(0);
   };
 
   const handleRemoveLineItemFromNewDoc = (id: string) => {
-    setNewDocLineItems(prev => prev.filter(item => item.id !== id));
+    const updated = newDocLineItems.filter(item => item.id !== id);
+    setNewDocLineItems(updated);
+    const newSub = updated.reduce((sum, item) => sum + item.lineTotal, 0);
+    setNewSubtotal(newSub);
+    setNewTotalCost(newSub + newTax + newDeliveryFee + newOtherFees);
   };
 
   const handleUpdateLineItemStatus = (itemId: string, status: string) => {
@@ -223,6 +261,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           salesOrderNumber: newSalesOrderNumber,
           pickupLocation: newPickupLocation,
           pickupDateTime: newPickupDateTime,
+          orderDate: newOrderDate,
+          subtotal: newSubtotal,
+          tax: newTax,
+          deliveryFee: newDeliveryFee,
+          otherFees: newOtherFees,
+          totalCost: newTotalCost,
+          paymentStatus: newPaymentStatus,
           notes: newNotes,
           visibleToCrew: newVisibleToCrew,
           filename: newDocFilename,
@@ -243,11 +288,20 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setNewSalesOrderNumber('');
       setNewPickupLocation('');
       setNewPickupDateTime('');
+      setNewOrderDate(new Date().toISOString().split('T')[0]);
+      setNewSubtotal(0);
+      setNewTax(0);
+      setNewDeliveryFee(0);
+      setNewOtherFees(0);
+      setNewTotalCost(0);
       setNewNotes('');
       setNewDocFilename('');
       setNewDocBase64('');
       setNewDocMimeType('');
       setNewDocLineItems([]);
+      
+      // Auto-recalculate financials
+      await handleRecalculateFinancials();
       
       // Refresh estimate data
       fetchJobDetails(estimateId, token);
@@ -255,6 +309,123 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setUploadDocError(err.message || String(err));
     } finally {
       setIsUploadingVendorDoc(false);
+    }
+  };
+
+  const handleRecalculateFinancials = async () => {
+    setIsRecalculating(true);
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'recalculate-job-financials',
+          estimateId
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        fetchJobDetails(estimateId, token);
+      }
+    } catch (err) {
+      console.error('Recalculation error:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
+  const handleSaveManualCharge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingManualCharge(true);
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'save-manual-charge',
+          estimateId,
+          charge: {
+            id: editingChargeId,
+            category: mcCategory,
+            amount: mcAmount,
+            description: mcDescription,
+            date: mcDate
+          }
+        })
+      });
+      if (response.ok) {
+        setShowManualChargePanel(false);
+        setMcAmount(0);
+        setMcDescription('');
+        setEditingChargeId(null);
+        await handleRecalculateFinancials();
+      }
+    } catch (err) {
+      console.error('Save charge error:', err);
+    } finally {
+      setIsSavingManualCharge(false);
+    }
+  };
+
+  const handleDeleteManualCharge = async (chargeId: string) => {
+    if (!window.confirm('Delete this charge?')) return;
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'delete-manual-charge',
+          estimateId,
+          chargeId
+        })
+      });
+      if (response.ok) {
+        await handleRecalculateFinancials();
+      }
+    } catch (err) {
+      console.error('Delete charge error:', err);
+    }
+  };
+
+  const handleRefreshLaborCost = async () => {
+    setIsRefreshingLabor(true);
+    try {
+      // Calculate current labor cost from the data
+      const takeoff = calculateDetailedTakeOff(jobData, materials, laborRates);
+      const laborCost = takeoff.summary.reduce((sum, item) => item.category === 'Labor' ? sum + item.total : sum, 0);
+
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'refresh-labor-cost',
+          estimateId,
+          laborCost
+        })
+      });
+      if (response.ok) {
+        await handleRecalculateFinancials();
+      }
+    } catch (err) {
+      console.error('Refresh labor error:', err);
+    } finally {
+      setIsRefreshingLabor(false);
     }
   };
 
@@ -1336,6 +1507,18 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             <MessageSquare size={14} className="inline mr-1.5" /> Incident & Shortage Reports
           </button>
 
+          {localStorage.getItem('company_admin_token') && (
+            <button
+              onClick={() => setActiveTab('financials')}
+              className={cn(
+                "px-4 py-2.5 text-xs font-black uppercase tracking-wider shrink-0 transition-all border-b-2",
+                activeTab === 'financials' ? "text-[#E63946] border-[#E63946]" : "text-slate-400 border-transparent hover:text-slate-200"
+              )}
+            >
+              Financials
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('history')}
             className={cn(
@@ -1618,10 +1801,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 </div>
 
                 {/* Admin upload form */}
-                {user && showUploadDocPanel && (
+                {localStorage.getItem('company_admin_token') && showUploadDocPanel && (
                   <form onSubmit={handleUploadVendorDoc} className="bg-[#0A1120] border border-blue-900/20 p-5 rounded-2xl space-y-4">
-                    <h4 className="text-xs font-black uppercase text-white tracking-wider border-b border-blue-900/15 pb-2">
-                      Upload New Vendor Sales Order / Pickup Document
+                    <h4 className="text-xs font-black uppercase text-white tracking-wider border-b border-blue-900/15 pb-2 flex justify-between items-center">
+                      <span>Upload New Vendor Sales Order / Pickup Document</span>
+                      <button type="button" onClick={() => setShowUploadDocPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </h4>
                     
                     {uploadDocError && (
@@ -1635,7 +1819,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
                         <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Vendor Name *</label>
                         <input
@@ -1649,13 +1833,24 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Sales Order / Pickup Ticket Number *</label>
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">SO / Ticket Number *</label>
                         <input
                           type="text"
                           required
                           value={newSalesOrderNumber}
                           onChange={(e) => setNewSalesOrderNumber(e.target.value)}
                           placeholder="e.g. SO-98421"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Order Date *</label>
+                        <input
+                          type="date"
+                          required
+                          value={newOrderDate}
+                          onChange={(e) => setNewOrderDate(e.target.value)}
                           className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         />
                       </div>
@@ -1681,14 +1876,83 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                           className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         />
                       </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Payment Status</label>
+                        <select
+                          value={newPaymentStatus}
+                          onChange={(e: any) => setNewPaymentStatus(e.target.value)}
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Paid">Paid</option>
+                          <option value="Partially Paid">Partially Paid</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#111A2E]/50 rounded-xl border border-blue-900/10">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Subtotal ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newSubtotal}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setNewSubtotal(val);
+                            setNewTotalCost(val + newTax + newDeliveryFee + newOtherFees);
+                          }}
+                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Sales Tax ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newTax}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setNewTax(val);
+                            setNewTotalCost(newSubtotal + val + newDeliveryFee + newOtherFees);
+                          }}
+                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Delivery Fee ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newDeliveryFee}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setNewDeliveryFee(val);
+                            setNewTotalCost(newSubtotal + newTax + val + newOtherFees);
+                          }}
+                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-rose-400 tracking-wider">Grand Total ($) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={newTotalCost}
+                          onChange={(e) => setNewTotalCost(Number(e.target.value))}
+                          className="w-full text-xs font-mono bg-[#070D19] text-rose-400 border-2 border-rose-900/20 rounded-lg px-3 py-2 focus:outline-none"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes for Crew</label>
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Internal Office Notes</label>
                       <textarea
                         value={newNotes}
                         onChange={(e) => setNewNotes(e.target.value)}
-                        placeholder="e.g. Pick up the premium rails first, check for splitting..."
+                        placeholder="e.g. Sales order totals after delivery..."
                         className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         rows={2}
                       />
@@ -1718,33 +1982,52 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     </div>
 
                     {/* Manual line items editor */}
-                    <div className="space-y-3 pt-2 border-t border-blue-900/10">
+                    <div className="space-y-3 pt-4 border-t border-blue-900/10">
                       <span className="block text-[10px] font-black uppercase text-slate-300 tracking-wider">
-                        Document Line Items for Crew Audit (Manual Entry)
+                        Detailed Item Breakdown (Optional - For Crew Confirmation)
                       </span>
                       
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newLineItemDesc}
-                          onChange={(e) => setNewLineItemDesc(e.target.value)}
-                          placeholder="e.g. Japanese Cedar Pickett 1x6x6"
-                          className="flex-1 text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
-                        />
-                        <input
-                          type="number"
-                          value={newLineItemQty}
-                          onChange={(e) => setNewLineItemQty(Number(e.target.value))}
-                          placeholder="Qty"
-                          className="w-20 text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddLineItemToNewDoc}
-                          className="px-4 bg-blue-900 hover:bg-blue-800 text-white font-black text-xs uppercase tracking-wider rounded-xl"
-                        >
-                          Add Item
-                        </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <div className="sm:col-span-5">
+                          <input
+                            type="text"
+                            value={newLineItemDesc}
+                            onChange={(e) => setNewLineItemDesc(e.target.value)}
+                            placeholder="Description"
+                            className="w-full text-xs bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <input
+                            type="number"
+                            value={newLineItemQty}
+                            onChange={(e) => setNewLineItemQty(Number(e.target.value))}
+                            placeholder="Qty"
+                            className="w-full text-xs bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={newLineItemCost}
+                              onChange={(e) => setNewLineItemCost(Number(e.target.value))}
+                              placeholder="Unit Cost"
+                              className="w-full text-xs pl-6 bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="button"
+                            onClick={handleAddLineItemToNewDoc}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all"
+                          >
+                            Add
+                          </button>
+                        </div>
                       </div>
 
                       {newDocLineItems.length > 0 ? (
@@ -1752,17 +2035,21 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="bg-blue-950/20 text-[9px] text-slate-400 font-extrabold uppercase tracking-wider border-b border-blue-900/10">
-                                <th className="p-2.5">Item Description</th>
-                                <th className="p-2.5 w-24">Required Qty</th>
-                                <th className="p-2.5 w-16 text-center">Action</th>
+                                <th className="p-3">Item Description</th>
+                                <th className="p-3 w-20 text-center">Qty</th>
+                                <th className="p-3 w-28 text-right">Cost</th>
+                                <th className="p-3 w-28 text-right">Total</th>
+                                <th className="p-3 w-16 text-center">Action</th>
                               </tr>
                             </thead>
                             <tbody>
                               {newDocLineItems.map((item) => (
                                 <tr key={item.id} className="border-b border-blue-900/5 text-xs">
-                                  <td className="p-2.5 font-bold text-slate-200">{item.description}</td>
-                                  <td className="p-2.5 font-mono text-amber-400">{item.qty} pcs</td>
-                                  <td className="p-2.5 text-center">
+                                  <td className="p-3 font-bold text-slate-200">{item.description}</td>
+                                  <td className="p-3 text-center font-mono text-slate-300">{item.qty}</td>
+                                  <td className="p-3 text-right font-mono text-slate-400">${Number(item.unitCost).toFixed(2)}</td>
+                                  <td className="p-3 text-right font-black text-white font-mono">${Number(item.lineTotal).toFixed(2)}</td>
+                                  <td className="p-3 text-center">
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveLineItemFromNewDoc(item.id)}
@@ -1777,28 +2064,28 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                           </table>
                         </div>
                       ) : (
-                        <p className="text-[10px] text-slate-500 italic">No line items added yet. Add at least one material line item so the crew can audit it.</p>
+                        <p className="text-[10px] text-slate-500 italic px-1">Optional itemized breakdown for accurate material audit by crew.</p>
                       )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-4">
                       <button
                         type="submit"
                         disabled={isUploadingVendorDoc || !newDocFilename}
                         className={cn(
-                          "w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2",
+                          "w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2",
                           (isUploadingVendorDoc || !newDocFilename) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {isUploadingVendorDoc ? (
                           <>
                             <Loader2 size={16} className="animate-spin" />
-                            Uploading Document & Saving...
+                            Processing Document...
                           </>
                         ) : (
                           <>
                             <Send size={14} />
-                            Save & Upload Vendor Document
+                            Save & Upload Sales Order
                           </>
                         )}
                       </button>
@@ -2549,6 +2836,249 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             </div>
           )}
 
+          {/* TAB: FINANCIALS (ADMIN ONLY) */}
+          {activeTab === 'financials' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Financial Summary Dashboard */}
+              <div className="bg-[#0A1120] rounded-[24px] border border-blue-900/20 p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+                  <div>
+                    <h3 className="text-xl font-black uppercase text-white tracking-tight">Job Financial Summary</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                      Profit & Cost analysis {jobData.financialSummary?.lastRecalculatedAt && `• Last updated ${new Date(jobData.financialSummary.lastRecalculatedAt).toLocaleString()}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleRefreshLaborCost}
+                      disabled={isRefreshingLabor}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#1D3557] hover:bg-[#1D3557]/80 text-blue-400 text-[10px] font-black uppercase rounded-xl transition-all border border-blue-900/30"
+                    >
+                      {isRefreshingLabor ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Refresh Labor
+                    </button>
+                    <button
+                      onClick={handleRecalculateFinancials}
+                      disabled={isRecalculating}
+                      className="flex items-center gap-2 px-6 py-2 bg-[#E63946] hover:bg-[#E63946]/90 text-white text-[10px] font-black uppercase rounded-xl shadow-lg shadow-red-950/20 transition-all"
+                    >
+                      {isRecalculating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Recalculate
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-[#111A2E] p-6 rounded-2xl border border-blue-900/10">
+                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-2">Total Revenue</span>
+                    <span className="text-2xl font-black text-white font-mono">${(jobData.financialSummary?.jobRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <div className="mt-2 text-[10px] text-slate-400 font-bold uppercase">Customer Contract Total</div>
+                  </div>
+                  
+                  <div className="bg-[#111A2E] p-6 rounded-2xl border border-blue-900/10">
+                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-2">Total Job Cost</span>
+                    <span className="text-2xl font-black text-rose-400 font-mono">${(jobData.financialSummary?.totalJobCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <div className="mt-2 text-[10px] text-slate-400 font-bold uppercase">All Materials & Labor</div>
+                  </div>
+
+                  <div className="bg-[#111A2E] p-6 rounded-2xl border border-blue-900/10">
+                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-2">Gross Profit</span>
+                    <span className={cn(
+                      "text-2xl font-black font-mono",
+                      (jobData.financialSummary?.grossProfit || 0) >= 0 ? "text-emerald-400" : "text-rose-500"
+                    )}>
+                      ${(jobData.financialSummary?.grossProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                    <div className="mt-2 text-[10px] text-slate-400 font-bold uppercase">Estimated Earnings</div>
+                  </div>
+
+                  <div className="bg-[#111A2E] p-6 rounded-2xl border border-blue-900/10">
+                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block mb-2">Profit Margin</span>
+                    <span className={cn(
+                      "text-2xl font-black font-mono",
+                      (jobData.financialSummary?.grossMarginPercent || 0) >= 40 ? "text-emerald-400" : 
+                      (jobData.financialSummary?.grossMarginPercent || 0) >= 25 ? "text-amber-400" : "text-rose-500"
+                    )}>
+                      {(jobData.financialSummary?.grossMarginPercent || 0).toFixed(1)}%
+                    </span>
+                    <div className="mt-2 text-[10px] text-slate-400 font-bold uppercase">Return on Revenue</div>
+                  </div>
+                </div>
+
+                <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black uppercase text-blue-400 tracking-widest">Cost Breakdown</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Materials (Sales Orders)</span>
+                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.materialCostFromSalesOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Manual Material Costs</span>
+                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.manualMaterialCost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Labor (Snapshot)</span>
+                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.laborCostFromBreakdown || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Labor Adjustments</span>
+                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.manualLaborCostAdjustments || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Other Misc Costs</span>
+                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.otherManualCosts || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase text-blue-400 tracking-widest">Manual Job Charges</h4>
+                      <button
+                        onClick={() => {
+                          setEditingChargeId(null);
+                          setMcAmount(0);
+                          setMcDescription('');
+                          setShowManualChargePanel(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded-lg transition-all"
+                      >
+                        <Plus size={14} /> Add Charge
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                      {(!jobData.manualCharges || jobData.manualCharges.length === 0) ? (
+                        <div className="p-8 text-center bg-[#111A2E] rounded-2xl border border-dashed border-blue-900/10 text-slate-500">
+                          <p className="text-[10px] font-black uppercase tracking-widest">No manual charges recorded</p>
+                        </div>
+                      ) : (
+                        jobData.manualCharges.map((charge: any) => (
+                          <div key={charge.id} className="p-4 bg-[#111A2E] rounded-xl border border-blue-900/5 group hover:border-blue-900/30 transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block">{charge.category}</span>
+                                <span className="text-xs font-bold text-white line-clamp-1">{charge.description}</span>
+                              </div>
+                              <span className="text-sm font-black text-rose-400 font-mono">${Number(charge.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase">
+                              <span>{new Date(charge.date).toLocaleDateString()} • {charge.enteredBy}</span>
+                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={() => {
+                                    setEditingChargeId(charge.id);
+                                    setMcCategory(charge.category);
+                                    setMcAmount(charge.amount);
+                                    setMcDescription(charge.description);
+                                    setMcDate(charge.date.split('T')[0]);
+                                    setShowManualChargePanel(true);
+                                  }}
+                                  className="text-blue-400 hover:text-blue-300"
+                                >
+                                  Edit
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteManualCharge(charge.id)}
+                                  className="text-rose-400 hover:text-rose-300"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vendor Sales Orders Cost Tracking */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black uppercase text-white tracking-tight">Material Sales Orders</h3>
+                  <button
+                    onClick={() => setShowUploadDocPanel(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg shadow-emerald-950/20"
+                  >
+                    <Plus size={14} /> New Sales Order
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {(!jobData.vendorDocuments || jobData.vendorDocuments.length === 0) ? (
+                    <div className="col-span-full p-12 bg-[#0A1120] rounded-[32px] border-2 border-dashed border-blue-900/10 text-center">
+                      <Package className="mx-auto text-slate-700 mb-4" size={48} />
+                      <p className="text-xs font-black uppercase text-slate-500 tracking-[0.2em]">No Sales Orders Uploaded Yet</p>
+                    </div>
+                  ) : (
+                    jobData.vendorDocuments.map((doc: any) => (
+                      <div key={doc.id} className="bg-[#0A1120] rounded-3xl border border-blue-900/10 overflow-hidden group hover:border-blue-900/30 transition-all flex flex-col">
+                        <div className="p-5 border-b border-blue-900/10 bg-gradient-to-br from-[#111A2E] to-[#0A1120]">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="p-2.5 bg-blue-950/40 rounded-xl text-blue-400">
+                              <FileText size={20} />
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] text-slate-500 uppercase font-black block tracking-widest">Total Cost</span>
+                              <span className="text-lg font-black text-white font-mono">${(Number(doc.totalCost) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-tight truncate">{doc.vendorName}</h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">SO #{doc.salesOrderNumber}</p>
+                        </div>
+
+                        <div className="p-5 space-y-4 flex-grow">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Order Date</span>
+                              <span className="text-[10px] text-slate-200 font-bold">{new Date(doc.orderDate || doc.uploadedAt).toLocaleDateString()}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Status</span>
+                              <span className={cn(
+                                "text-[9px] font-black uppercase px-2 py-0.5 rounded",
+                                doc.paymentStatus === 'Paid' ? "bg-emerald-950/40 text-emerald-400" : "bg-amber-950/40 text-amber-400"
+                              )}>
+                                {doc.paymentStatus || 'Pending'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {doc.notes && (
+                            <div>
+                              <span className="text-[9px] text-slate-500 uppercase font-black block mb-1">Notes</span>
+                              <p className="text-[10px] text-slate-400 italic line-clamp-2">{doc.notes}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-4 bg-[#080E1A] flex items-center gap-2">
+                           <a 
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[#111A2E] hover:bg-blue-900/20 text-blue-400 text-[10px] font-black uppercase rounded-xl transition-all border border-blue-900/20"
+                          >
+                            <ExternalLink size={12} /> View File
+                          </a>
+                          <button 
+                            onClick={() => handleDeleteVendorDoc(doc.id)}
+                            className="p-2 text-rose-500/40 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 6: JOB HISTORY TIMELINE */}
           {activeTab === 'history' && (
             <div className="space-y-6">
@@ -3144,6 +3674,119 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* Manual Job Charge Panel Modal */}
+      <AnimatePresence>
+        {showManualChargePanel && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-[#0A1120]/90 backdrop-blur-sm"
+              onClick={() => setShowManualChargePanel(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-[#111A2E] rounded-[32px] border border-blue-900/30 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-blue-900/15 flex justify-between items-center bg-gradient-to-r from-blue-950/20 to-transparent">
+                <h3 className="text-sm font-black uppercase text-white tracking-widest flex items-center gap-2">
+                  <Package size={18} className="text-blue-400" />
+                  {editingChargeId ? 'Edit Manual Job Charge' : 'Add Manual Job Charge'}
+                </h3>
+                <button onClick={() => setShowManualChargePanel(false)} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveManualCharge} className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Charge Category</label>
+                  <select
+                    value={mcCategory}
+                    onChange={(e) => setMcCategory(e.target.value)}
+                    className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                  >
+                    <option value="Manual Material Cost">Manual Material Cost</option>
+                    <option value="Manual Labor Adjustment">Manual Labor Adjustment</option>
+                    <option value="Equipment Rental">Equipment Rental</option>
+                    <option value="Disposal/Dump Fee">Disposal/Dump Fee</option>
+                    <option value="Delivery/Fuel">Delivery/Fuel</option>
+                    <option value="Permit Fee">Permit Fee</option>
+                    <option value="Subcontractor Cost">Subcontractor Cost</option>
+                    <option value="Warranty/Repair Cost">Warranty/Repair Cost</option>
+                    <option value="Other Cost">Other Cost</option>
+                    <option value="Credit/Refund">Credit/Refund</option>
+                    <option value="Owner Adjustment">Owner Adjustment</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Amount ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={mcAmount}
+                      onChange={(e) => setMcAmount(Number(e.target.value))}
+                      className="w-full text-xs font-mono bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Charge Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={mcDate}
+                      onChange={(e) => setMcDate(e.target.value)}
+                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Description / Reasoning</label>
+                  <textarea
+                    required
+                    value={mcDescription}
+                    onChange={(e) => setMcDescription(e.target.value)}
+                    placeholder="Brief explanation for this financial adjustment..."
+                    className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={isSavingManualCharge}
+                    className={cn(
+                      "w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2",
+                      isSavingManualCharge && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    {isSavingManualCharge ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Saving Charge...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} />
+                        {editingChargeId ? 'Update Job Charge' : 'Apply Job Charge'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

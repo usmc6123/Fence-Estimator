@@ -3772,6 +3772,13 @@ export default async function handler(req: any, res: any) {
           salesOrderNumber, 
           pickupLocation, 
           pickupDateTime, 
+          orderDate,
+          subtotal,
+          tax,
+          deliveryFee,
+          otherFees,
+          totalCost,
+          paymentStatus,
           notes, 
           visibleToCrew, 
           filename, 
@@ -3819,6 +3826,13 @@ export default async function handler(req: any, res: any) {
           salesOrderNumber,
           pickupLocation: pickupLocation || '',
           pickupDateTime: pickupDateTime || '',
+          orderDate: orderDate || pickupDateTime || new Date().toISOString().split('T')[0],
+          subtotal: Number(subtotal) || 0,
+          tax: Number(tax) || 0,
+          deliveryFee: Number(deliveryFee) || 0,
+          otherFees: Number(otherFees) || 0,
+          totalCost: Number(totalCost) || 0,
+          paymentStatus: paymentStatus || 'Pending',
           notes: notes || '',
           visibleToCrew: !!visibleToCrew,
           fileUrl: downloadUrl,
@@ -3955,6 +3969,240 @@ export default async function handler(req: any, res: any) {
 
         await docRef.update({
           vendorDocuments: updatedDocs,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'edit-sales-order') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { estimateId, salesOrder } = req.body || {};
+        if (!estimateId || !salesOrder || !salesOrder.id) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+        const estimateData = snap.data() || {};
+
+        const vendorDocs = Array.isArray(estimateData.vendorDocuments) ? estimateData.vendorDocuments : [];
+        const updatedDocs = vendorDocs.map((doc: any) => doc.id === salesOrder.id ? { ...doc, ...salesOrder } : doc);
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Sales Order Edited',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office',
+          notes: `Edited sales order #${salesOrder.salesOrderNumber} for vendor "${salesOrder.vendorName}". Total: $${Number(salesOrder.totalCost).toFixed(2)}`
+        };
+
+        await docRef.update({
+          vendorDocuments: updatedDocs,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'save-manual-charge') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { estimateId, charge } = req.body || {};
+        if (!estimateId || !charge) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+        const estimateData = snap.data() || {};
+
+        const manualCharges = Array.isArray(estimateData.manualCharges) ? estimateData.manualCharges : [];
+        let updatedCharges;
+        let eventNotes = '';
+
+        if (charge.id) {
+          // Update
+          updatedCharges = manualCharges.map((c: any) => c.id === charge.id ? { ...charge, date: charge.date || new Date().toISOString() } : c);
+          eventNotes = `Edited manual charge: ${charge.category} - $${charge.amount}`;
+        } else {
+          // Add
+          const newCharge = {
+            ...charge,
+            id: crypto.randomUUID(),
+            date: charge.date || new Date().toISOString(),
+            enteredBy: decoded.email || 'Office'
+          };
+          updatedCharges = [...manualCharges, newCharge];
+          eventNotes = `Added manual charge: ${charge.category} - $${charge.amount}`;
+        }
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: charge.id ? 'Manual Charge Edited' : 'Manual Charge Added',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office',
+          notes: eventNotes
+        };
+
+        await docRef.update({
+          manualCharges: updatedCharges,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'delete-manual-charge') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { estimateId, chargeId } = req.body || {};
+        if (!estimateId || !chargeId) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+        const estimateData = snap.data() || {};
+
+        const manualCharges = Array.isArray(estimateData.manualCharges) ? estimateData.manualCharges : [];
+        const chargeToDelete = manualCharges.find((c: any) => c.id === chargeId);
+        const updatedCharges = manualCharges.filter((c: any) => c.id !== chargeId);
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Manual Charge Deleted',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office',
+          notes: `Deleted manual charge: ${chargeToDelete?.category || 'Unknown'} - $${chargeToDelete?.amount || 0}`
+        };
+
+        await docRef.update({
+          manualCharges: updatedCharges,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'recalculate-job-financials') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { estimateId } = req.body || {};
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+        const estimateData = snap.data() || {};
+
+        const vendorDocs = Array.isArray(estimateData.vendorDocuments) ? estimateData.vendorDocuments : [];
+        const manualCharges = Array.isArray(estimateData.manualCharges) ? estimateData.manualCharges : [];
+        
+        const materialCostFromSalesOrders = vendorDocs.reduce((sum: number, doc: any) => sum + (Number(doc.totalCost) || 0), 0);
+        
+        const manualMaterialCost = manualCharges
+          .filter((c: any) => c.category === 'Manual Material Cost')
+          .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          
+        const laborCostFromBreakdown = Number(estimateData.laborCostFromBreakdown) || 0;
+        
+        const manualLaborCostAdjustments = manualCharges
+          .filter((c: any) => c.category === 'Manual Labor Adjustment')
+          .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          
+        const otherManualCosts = manualCharges
+          .filter((c: any) => !['Manual Material Cost', 'Manual Labor Adjustment'].includes(c.category))
+          .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          
+        const totalJobCost = materialCostFromSalesOrders + manualMaterialCost + laborCostFromBreakdown + manualLaborCostAdjustments + otherManualCosts;
+        
+        const jobRevenue = Number(estimateData.totalInvestment) || Number(estimateData.finalCustomerPrice) || Number(estimateData.grandTotal) || 0;
+        
+        const grossProfit = jobRevenue - totalJobCost;
+        const grossMarginPercent = jobRevenue > 0 ? (grossProfit / jobRevenue) * 100 : 0;
+
+        const financialSummary = {
+          materialCostFromSalesOrders,
+          manualMaterialCost,
+          laborCostFromBreakdown,
+          manualLaborCostAdjustments,
+          otherManualCosts,
+          totalJobCost,
+          jobRevenue,
+          grossProfit,
+          grossMarginPercent,
+          lastRecalculatedAt: new Date().toISOString()
+        };
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Financials Recalculated',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office',
+          notes: `Job profit recalculated: $${grossProfit.toFixed(2)} (${grossMarginPercent.toFixed(1)}%)`
+        };
+
+        await docRef.update({
+          financialSummary,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Optional GHL Sync
+        try {
+          await syncCustomerToGhl({
+            eventType: 'financials_updated',
+            estimate: {
+              ...estimateData,
+              ...financialSummary
+            }
+          });
+        } catch (ghlErr) {
+          console.error('Failed to sync financials to GHL:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true, financialSummary });
+      }
+
+      if (req.body && req.body.action === 'refresh-labor-cost') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        
+        const { estimateId, laborCost } = req.body || {};
+        if (!estimateId) return res.status(400).json({ error: 'Missing estimateId' });
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Labor Cost Refreshed',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office',
+          notes: `Refreshed labor snapshot cost to $${Number(laborCost).toFixed(2)}`
+        };
+
+        await docRef.update({
+          laborCostFromBreakdown: Number(laborCost),
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
 
