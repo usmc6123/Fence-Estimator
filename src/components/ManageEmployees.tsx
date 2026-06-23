@@ -60,19 +60,37 @@ export default function ManageEmployees() {
   const [resetSuccess, setResetSuccess] = React.useState('');
   const [isResetting, setIsResetting] = React.useState(false);
 
+  // Fetch employees list via API
+  const [lastReadError, setLastReadError] = React.useState<string | null>(null);
+
+  const fetchEmployees = async () => {
+    setIsLoading(true);
+    setLastReadError(null);
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || '';
+      const response = await fetch('/api/admin/users?type=employees', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Admin-Token': adminToken
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned error ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setEmployees(data);
+    } catch (err: any) {
+      console.error("Error loading employees via API:", err);
+      setLastReadError(err.message || String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Sync employees list & company settings
   React.useEffect(() => {
-    const q = query(collection(db, 'employees'));
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        setEmployees(snapshot.docs.map(d => d.data() as Employee));
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error("Error loading employees:", error);
-        setIsLoading(false);
-      }
-    );
+    fetchEmployees();
 
     // Grab company settings to check if automated dispatch is enabled in real-time
     const unsubscribeSettings = onSnapshot(doc(db, 'companySettings', 'main'),
@@ -87,7 +105,6 @@ export default function ManageEmployees() {
     );
 
     return () => {
-      unsubscribe();
       unsubscribeSettings();
     };
   }, []);
@@ -95,26 +112,6 @@ export default function ManageEmployees() {
   // Requirement: Add a development mode check
   const IS_DEV = process.env.NODE_ENV !== 'production' || true; // Force true for now as requested
   const [devLogs, setDevLogs] = React.useState<string[]>([]);
-  const [lastReadError, setLastReadError] = React.useState<string | null>(null);
-  
-  const refreshEmployeesList = async () => {
-    setIsLoading(true);
-    setLastReadError(null);
-    try {
-      const q = query(collection(db, 'employees'));
-      // Adding a dummy set to trigger a change
-      await setDoc(doc(db, 'employees', '_trigger'), { triggeredAt: new Date().toISOString() });
-      await deleteDoc(doc(db, 'employees', '_trigger'));
-      
-      setFormSuccess("List refreshed.");
-      setTimeout(() => setFormSuccess(""), 1500);
-    } catch (err: any) {
-      console.error("Error refreshing:", err);
-      setLastReadError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const deleteTestEmployee = async (email: string) => {
     if (!window.confirm("WARNING: Deleting test employee from Auth and Firestore. This is irreversible.")) return;
@@ -127,6 +124,7 @@ export default function ManageEmployees() {
         // For now, focus on Firestore delete as per instructions to not touch auth systems if complex.
         
         await deleteDoc(doc(db, 'employees', email));
+        await fetchEmployees();
         setFormSuccess("Test employee Firestore document deleted.");
         setTimeout(() => setFormSuccess(""), 1500);
     } catch (err: any) {
@@ -210,6 +208,8 @@ export default function ManageEmployees() {
       setIsActive(true);
       setCanReceiveCrewDispatch(true);
       setIsPrimaryCrewContact(false);
+
+      await fetchEmployees();
     } catch (err: any) {
       console.error("Failed to create employee:", err);
       setFormError(err.message || "Error creating employee account.");
@@ -239,6 +239,7 @@ export default function ManageEmployees() {
 
       // 2. Delete firestore document
       await deleteDoc(doc(db, 'employees', emp.email));
+      await fetchEmployees();
       alert(`Employee "${emp.email}" was removed successfully.`);
     } catch (err: any) {
       console.error("Error removing employee:", err);
@@ -303,6 +304,7 @@ export default function ManageEmployees() {
         updatedAt: new Date().toISOString()
       }, { merge: true });
 
+      await fetchEmployees();
       alert(`Employee details updated successfully for "${targetEmail}".`);
       setEditingEmployee(null);
     } catch (err: any) {
@@ -353,6 +355,7 @@ export default function ManageEmployees() {
         password: resetNewPassword.trim()
       }, { merge: true });
 
+      await fetchEmployees();
       setResetSuccess("Password reset successfully!");
       setTimeout(() => {
         setShowResetModal(false);
@@ -667,7 +670,7 @@ export default function ManageEmployees() {
                 <Users size={16} className="text-american-red" />
                 Active System Users ({employees.length})
               </div>
-              <button onClick={refreshEmployeesList} className="text-[10px] font-bold text-american-blue bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 italic">Refresh List</button>
+              <button onClick={fetchEmployees} className="text-[10px] font-bold text-american-blue bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 italic">Refresh List</button>
             </h2>
 
             {/* Validation warning banners (Requirement 7) */}
@@ -1065,7 +1068,7 @@ export default function ManageEmployees() {
           <p>Last Document ID: {employees.length > 0 ? employees[employees.length - 1].email : 'N/A'}</p>
           
           <div className="flex gap-2 mt-4">
-             <button onClick={refreshEmployeesList} className="bg-gray-700 p-2 rounded hover:bg-gray-600">Refresh Employees</button>
+             <button onClick={fetchEmployees} className="bg-gray-700 p-2 rounded hover:bg-gray-600">Refresh Employees</button>
              <button className="bg-red-900 p-2 rounded hover:bg-red-800" onClick={() => deleteTestEmployee(employees.length > 0 ? employees[employees.length - 1].email : '')}>Delete Last Employee</button>
           </div>
         </div>

@@ -100,6 +100,36 @@ function authenticateAdminToken(req: any) {
 // GET all users/admins
 export async function listUsers(req: any, res: any) {
   try {
+    const isEmployeesReq = req.query?.type === 'employees' || req.query?.role === 'employee';
+    if (isEmployeesReq) {
+      const employeesSnap = await db.collection('employees').get();
+      const employeesList: any[] = [];
+      employeesSnap.forEach(doc => {
+        const data = doc.data();
+        if (doc.id !== '_trigger') {
+          employeesList.push({
+            email: data.email || doc.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            role: data.role || '',
+            password: data.password || '',
+            permission: data.permission || data.permissionLevel || 'View Only',
+            permissionLevel: data.permissionLevel || data.permission || 'View Only',
+            isActive: data.isActive !== false,
+            active: data.active !== false,
+            canReceiveCrewDispatch: data.canReceiveCrewDispatch !== false,
+            canReceiveCrewDispatchEmails: data.canReceiveCrewDispatchEmails !== false,
+            isPrimaryCrewContact: !!data.isPrimaryCrewContact,
+            primaryCrewContact: !!data.primaryCrewContact,
+            createdAt: cleanTimestamp(data.createdAt),
+            updatedAt: cleanTimestamp(data.updatedAt)
+          });
+        }
+      });
+      employeesList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return res.status(200).json(employeesList);
+    }
+
     const adminsList: any[] = [];
     const adminsSnap = await db.collection('admins').get();
     adminsSnap.forEach(doc => {

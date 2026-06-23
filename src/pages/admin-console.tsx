@@ -220,9 +220,9 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       {/* Console Header */}
       <div id="admin_console_nav_header" className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E5E5E5] shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="h-20 w-20 rounded-lg overflow-hidden border border-[#E5E5E5] bg-white flex items-center justify-center shadow-md shrink-0">
+          <div className="h-12 w-12 rounded-lg overflow-hidden border border-[#E5E5E5] bg-white flex items-center justify-center shadow-sm shrink-0">
             <img 
-              src="https://github.com/usmc6123/Fence-Estimator/blob/main/src/assets/images/3dlogobare.jpg?raw=true" 
+              src="https://github.com/usmc6123/images/blob/main/3dlogo1.jpg?raw=true" 
               alt="Lone Star Fence Works Logo" 
               className="h-full w-full object-contain p-0.5"
               referrerPolicy="no-referrer"
