@@ -1186,7 +1186,23 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   // Calculate Materials takeoff list if jobData exists
   const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
-  const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => {
+  
+  // Combine multiple material sources as requested:
+  // 1. Calculated takeoff summary (standard fence materials)
+  // 2. Manual/Custom material additions (manually added quantities)
+  // 3. Vendor Sales Order line items (from attached documents)
+  const materialsList = [
+    ...(calculatedTakeoff?.summary || []),
+    ...(calculatedTakeoff?.manualSummary || []),
+    ...((jobData.vendorDocuments || [])
+      .filter((d: any) => d.visibleToCrew)
+      .flatMap((doc: any) => (doc.lineItems || []).map((li: any) => ({
+        ...li,
+        name: li.description || li.name,
+        category: 'Vendor Order'
+      })))
+    )
+  ].filter((item: any) => {
     // Only include items that are NOT categorized as Labor or derived from the labor breakdown
     // Standard material categories are: 'Lumber', 'Hardware', 'Pickets', 'Posts', 'Other Material', 'Finishing', 'Structure', 'Infill'
     // Labor-related categories from the calculation engine are: 'Labor', 'Demolition', 'SitePrep'
@@ -1196,7 +1212,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     const laborRelatedCategories = ['Labor', 'Demolition', 'SitePrep'];
     if (laborRelatedCategories.includes(itemCategory)) return false;
     
-    // Include everything else from the summary (which represents the material takeoff)
+    // Additional safety check: exclude common labor/financial keywords to keep the checklist clean
+    const lowerName = (item.name || item.description || '').toLowerCase();
+    const laborKeywords = ['labor payout', 'install labor', 'demo labor', 'removal labor', 'installation charge', 'labor breakdown'];
+    const financialKeywords = ['tax', 'fee', 'discount', 'markup', 'profit', 'total investment', 'customer pricing'];
+    
+    if (laborKeywords.some(kw => lowerName.includes(kw))) return false;
+    if (financialKeywords.some(kw => lowerName.includes(kw))) return false;
+
     return true;
   });
 
