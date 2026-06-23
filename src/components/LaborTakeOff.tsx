@@ -67,22 +67,30 @@ export default function LaborTakeOff({
   React.useEffect(() => {
     const fetchEmployees = async () => {
       try {
-        const q = query(collection(db, 'employees'));
-        const snap = await getDocs(q);
-        const list: any[] = [];
-        snap.forEach(doc => {
-          const empData = doc.data() || {};
-          // Only pull crew recipients from Manage Employees where Active == true and Can Receive Emails == true
-          if (empData.isActive !== false && empData.canReceiveCrewDispatch !== false) {
-            list.push({ id: doc.id, ...empData });
-          }
+        const adminToken = localStorage.getItem('company_admin_token') || '';
+        const response = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`,
+            'X-Admin-Token': adminToken
+          },
+          body: JSON.stringify({ action: 'list-crew-recipients' })
         });
-        setEmployees(list);
-        if (list.length > 0) {
-          setSelectedRecipient(list[0].email);
-          const name = list[0].name || list[0].email.split('@')[0];
-          setCrewName(name);
-          setEmailMessage(getDefaultMessage(name));
+        const resData = await response.json();
+        if (response.ok && resData.success && Array.isArray(resData.employees)) {
+          const list = resData.employees;
+          setEmployees(list);
+          if (list.length > 0) {
+            setSelectedRecipient(list[0].email);
+            const name = list[0].name || list[0].email.split('@')[0];
+            setCrewName(name);
+            setEmailMessage(getDefaultMessage(name));
+          } else {
+            setSelectedRecipient('custom');
+          }
+        } else {
+          console.warn("Failed to load employees via api/admin:", resData.error);
         }
       } catch (err) {
         console.warn("Failed to load employees for dropdown:", err);
@@ -999,11 +1007,16 @@ export default function LaborTakeOff({
                       >
                         {employees.map(emp => (
                           <option key={emp.id || emp.email} value={emp.email}>
-                            {emp.name || emp.email.split('@')[0]} ({emp.email})
+                            {emp.isPrimaryCrewContact ? `Primary Crew Contact: ${emp.name || emp.email.split('@')[0]} (${emp.email})` : `${emp.name || emp.email.split('@')[0]} (${emp.email})`}
                           </option>
                         ))}
                         <option value="custom">Custom Email Address...</option>
                       </select>
+                      {employees.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-1 font-semibold">
+                          ⚠️ No active crew recipients found. Add one under Manage Employees or use Custom Email Address.
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">

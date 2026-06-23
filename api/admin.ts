@@ -625,6 +625,41 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({ success: true, message: 'Employee password updated.' });
 
+    } else if (action === 'list-crew-recipients') {
+      const issuer = verifyAdminToken(req);
+      if (!issuer) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid or missing.' });
+      }
+
+      const snap = await db.collection('employees').get();
+      const list: any[] = [];
+      snap.forEach(doc => {
+        const empData = doc.data() || {};
+        const email = empData.email || doc.id;
+        const active = empData.active !== undefined ? empData.active : (empData.isActive !== undefined ? empData.isActive : true);
+        const canReceive = empData.canReceiveCrewDispatchEmails !== undefined ? empData.canReceiveCrewDispatchEmails : (empData.canReceiveCrewDispatch !== undefined ? empData.canReceiveCrewDispatch : true);
+        const isPrimary = empData.isPrimaryCrewContact === true || empData.primaryCrewContact === true;
+
+        if (active && canReceive && email && email.includes('@')) {
+          list.push({
+            id: doc.id,
+            email: email.trim(),
+            name: empData.name || '',
+            isPrimaryCrewContact: isPrimary,
+          });
+        }
+      });
+
+      // Sort: show Primary Crew Contact first
+      list.sort((a, b) => {
+        const aPrimary = a.isPrimaryCrewContact ? 1 : 0;
+        const bPrimary = b.isPrimaryCrewContact ? 1 : 0;
+        return bPrimary - aPrimary;
+      });
+
+      console.log(`[list-crew-recipients] Loaded ${list.length} active crew recipients.`);
+      return res.status(200).json({ success: true, employees: list });
+
     } else {
       return res.status(400).json({ error: `Action '${action}' is not supported.` });
     }
