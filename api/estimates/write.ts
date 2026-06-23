@@ -1057,6 +1057,8 @@ async function syncCustomerToGhl({
 
         // Add new scheduling details
         addCf('jobStartDate', estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || '');
+        addCf('jobScheduledDuration', estimate.scheduledDuration || estimate.jobDuration || '');
+        addCf('installDays', estimate.scheduledDuration || estimate.jobDuration || '');
         addCf('jobDuration', estimate.scheduledDuration || estimate.jobDuration || '');
         addCf('crewName', estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || '');
         addCf('jobPortalScheduled', estimate.jobPortalScheduled === true || estimate.jobPortalScheduled === 'true' || false);
@@ -1875,6 +1877,67 @@ export default async function handler(req: any, res: any) {
         });
       } catch (err) {
         console.error('GHL Sync failed during reschedule:', err);
+      }
+
+      // Notify office if changed by crew
+      if (!isAdmin) {
+        try {
+          const host = req.headers.host || 'ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app';
+          const portalUrl = `https://${host}/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
+          const adminUrl = `https://${host}/admin/estimates?id=${estimateId}`;
+          
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject: `[SCHEDULE CHANGE] ${estimateData.customerName} - ${estimateData.jobStatus || 'Job'}`,
+            text: `Install schedule changed for ${estimateData.customerName}. New start: ${startDate} (${duration}). Reason: ${reason}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; border: 1px solid #eee; padding: 20px;">
+                <h2 style="color: #E63946;">Install Schedule Changed</h2>
+                <p>The crew has updated the install schedule for <strong>${estimateData.customerName}</strong>.</p>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 8px 0; color: #666; width: 140px;"><strong>Customer:</strong></td>
+                    <td style="padding: 8px 0;">${estimateData.customerName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>Address:</strong></td>
+                    <td style="padding: 8px 0;">${estimateData.customerAddress || estimateData.address || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>Crew:</strong></td>
+                    <td style="padding: 8px 0;">${estimateData.assignedCrew || 'N/A'}</td>
+                  </tr>
+                  <tr><td colspan="2"><hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;" /></td></tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>Old Schedule:</strong></td>
+                    <td style="padding: 8px 0;">${prevStartDate} (${prevDuration})</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>New Schedule:</strong></td>
+                    <td style="padding: 8px 0;">${startDate} (${duration})</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>Reason:</strong></td>
+                    <td style="padding: 8px 0;">${reason}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; color: #666;"><strong>Notes:</strong></td>
+                    <td style="padding: 8px 0;">${notes || 'None'}</td>
+                  </tr>
+                </table>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                  <a href="${portalUrl}" style="background: #E63946; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-right: 10px;">View Job Portal</a>
+                  <a href="${adminUrl}" style="background: #111A2E; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Admin View</a>
+                </div>
+              </div>
+            `,
+            estimateData,
+            estimateId
+          });
+        } catch (emailErr) {
+          console.error('Failed to notify office of schedule change:', emailErr);
+        }
       }
 
       return res.json({ success: true });
@@ -4930,7 +4993,7 @@ export default async function handler(req: any, res: any) {
       }
 
       if (req.body && req.body.action === 'schedule-job-start') {
-        const { estimateId, token, startDate, duration, notes } = req.body || {};
+        const { estimateId, token, startDate, duration, notes, reason } = req.body || {};
         if (!estimateId || !token || !startDate || !duration) {
           return res.status(400).json({ error: 'Missing parameters: estimateId, token, startDate, and duration are required.' });
         }
@@ -5086,6 +5149,9 @@ Crew Notes: ${notes || 'None'}`;
           scheduledNotes: notes || '',
           jobPortalStatus: 'start_date_scheduled',
           jobPortalScheduled: true,
+          scheduleLastChangedAt: nowIso,
+          scheduleLastChangedBy: 'Crew',
+          scheduleChangeReason: reason || 'Initial Schedule',
           updatedAt: nowIso
         };
 
@@ -5123,6 +5189,29 @@ Crew Notes: ${notes || 'None'}`;
         }
 
         await docRef.update(updates);
+
+        // Update schedule_events
+        try {
+          const durationNum = parseInt(String(duration)) || 1;
+          const startD_iso = new Date(startDate);
+          const endD_iso = new Date(startD_iso);
+          endD_iso.setDate(endD_iso.getDate() + durationNum - 1);
+          const endDate = endD_iso.toISOString().split('T')[0];
+          
+          const eventId = "install-" + estimateId;
+          await db.collection('schedule_events').doc(eventId).set({
+            start: startDate,
+            end: endDate,
+            title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
+            crew: estimateData.assignedCrew || 'N/A',
+            estimateId: estimateId,
+            notes: `Scheduled via Job Portal. Notes: ${notes || 'None'}`
+          }, { merge: true });
+          
+          await docRef.update({ scheduledEndDate: endDate });
+        } catch (evErr) {
+          console.error('Failed to update schedule_events in schedule-job-start:', evErr);
+        }
 
         // 6. Send email notification to office
         try {
@@ -5295,6 +5384,9 @@ Admin Notes: ${notes || 'None'}`;
           assignedCrew,
           jobPortalStatus: 'start_date_scheduled',
           jobPortalScheduled: true,
+          scheduleLastChangedAt: nowIso,
+          scheduleLastChangedBy: 'Admin',
+          scheduleChangeReason: 'Admin Adjustment',
           updatedAt: nowIso
         };
 
@@ -5332,6 +5424,29 @@ Admin Notes: ${notes || 'None'}`;
         }
 
         await docRef.update(updates);
+
+        // Update schedule_events
+        try {
+          const durationNum = parseInt(String(duration)) || 1;
+          const startD_iso = new Date(startDate);
+          const endD_iso = new Date(startD_iso);
+          endD_iso.setDate(endD_iso.getDate() + durationNum - 1);
+          const endDate = endD_iso.toISOString().split('T')[0];
+          
+          const eventId = "install-" + estimateId;
+          await db.collection('schedule_events').doc(eventId).set({
+            start: startDate,
+            end: endDate,
+            title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
+            crew: assignedCrew || 'N/A',
+            estimateId: estimateId,
+            notes: `Updated by Admin. Notes: ${notes || 'None'}`
+          }, { merge: true });
+          
+          await docRef.update({ scheduledEndDate: endDate });
+        } catch (evErr) {
+          console.error('Failed to update schedule_events in admin-update-schedule:', evErr);
+        }
 
         return res.status(200).json({
           success: true,

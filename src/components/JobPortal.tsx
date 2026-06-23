@@ -221,12 +221,12 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          action: 'update-job-schedule',
+          action: jobData?.scheduledStartDate ? 'update-job-schedule' : 'schedule-job-start',
           estimateId,
           token,
           startDate: newScheduleStartDate,
           duration: newScheduleDuration,
-          reason: newScheduleReason,
+          reason: newScheduleReason || 'Initial Schedule',
           notes: newScheduleNotes,
           changedBy: isAdmin ? 'Admin' : (jobData?.assignedCrew || 'Crew')
         })
@@ -244,6 +244,24 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     } finally {
       setRescheduleSubmitting(false);
     }
+  };
+
+  const handleCalendarDayClick = (day: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
+    minDateLimit.setHours(0, 0, 0, 0);
+
+    if (day.getTime() < minDateLimit.getTime()) {
+      setScheduleError(`The soonest start date allowed is 4 calendar days from today (${minDateLimit.toISOString().split('T')[0]}).`);
+      return;
+    }
+
+    setNewScheduleStartDate(format(day, 'yyyy-MM-dd'));
+    const currentDuration = jobData?.scheduledDuration || jobData?.installDuration || 1;
+    setNewScheduleDuration(String(currentDuration) + ' day' + (Number(currentDuration) > 1 ? 's' : ''));
+    setScheduleError('');
+    setShowRescheduleModal(true);
   };
 
   const fetchCrewJobs = async () => {
@@ -3362,23 +3380,32 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                       const isToday = isSameDay(day, new Date());
                       const isCurrentMonth = isSameMonth(day, currentCalendarDate);
+                      
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
+                      minDateLimit.setHours(0,0,0,0);
+                      const isPast = day.getTime() < minDateLimit.getTime();
 
                       return (
                         <div 
                           key={dateKey} 
+                          onClick={() => !isPast && handleCalendarDayClick(day)}
                           className={cn(
-                            "min-h-[120px] p-2 border-r border-b border-blue-900/5 last:border-r-0 transition-colors",
+                            "min-h-[120px] p-2 border-r border-b border-blue-900/5 last:border-r-0 transition-colors relative",
                             !isCurrentMonth && "opacity-20",
-                            isToday && "bg-blue-900/5"
+                            isToday && "bg-blue-900/5",
+                            isPast ? "bg-slate-900/10 cursor-not-allowed" : "cursor-pointer hover:bg-blue-600/5"
                           )}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <span className={cn(
                               "text-[10px] font-mono font-bold",
-                              isToday ? "text-[#E63946]" : "text-slate-500"
+                              isToday ? "text-[#E63946]" : isPast ? "text-slate-700" : "text-slate-500"
                             )}>
                               {format(day, 'd')}
                             </span>
+                            {isPast && !isToday && <Clock size={10} className="text-slate-700" />}
                           </div>
 
                           <div className="space-y-1">
@@ -3507,68 +3534,109 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
               </div>
             </div>
 
-            {/* Schedule Form */}
-            <form onSubmit={handleScheduleJobStart} className="space-y-4">
+            {/* Monthly Calendar View for Scheduling */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-4 rounded-2xl border border-blue-900/15">
+                <div className="flex items-center gap-3">
+                  <CalendarIcon className="text-blue-400" size={20} />
+                  <div>
+                    <h3 className="text-xs font-black text-white uppercase tracking-tight">Select Install Start Date</h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Click an available date below (min 4 days out)</p>
+                  </div>
+                </div>
+                <div className="flex items-center bg-[#070D19] p-1 rounded-xl border border-blue-900/10 scale-90">
+                  <button 
+                    onClick={() => setCurrentCalendarDate(subMonths(currentCalendarDate, 1))}
+                    className="p-1.5 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="px-3 text-[9px] font-black uppercase tracking-widest text-blue-400">
+                    {format(currentCalendarDate, 'MMM yyyy')}
+                  </span>
+                  <button 
+                    onClick={() => setCurrentCalendarDate(addMonths(currentCalendarDate, 1))}
+                    className="p-1.5 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+
               {scheduleError && (
-                <div className="p-4 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs font-bold">
-                  {scheduleError}
+                <div className="p-3 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2">
+                  <AlertCircle size={14} /> {scheduleError}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Proposed Start Date</label>
-                  <input
-                    type="date"
-                    min={getMinDateString()}
-                    value={scheduleStartDate}
-                    onChange={(e) => setScheduleStartDate(e.target.value)}
-                    className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-[#E63946]"
-                    required
-                  />
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide mt-1">
-                    Earliest allowed: {new Date(new Date().getTime() + 4 * 24 * 60 * 60 * 1000).toLocaleDateString()} (4 calendar days from today)
-                  </p>
+              <div className="bg-[#0A1120] rounded-2xl border border-blue-900/15 overflow-hidden">
+                <div className="grid grid-cols-7 border-b border-blue-900/10 bg-[#070D19]/50">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
+                    <div key={day} className="py-2 text-center text-[8px] font-black uppercase text-slate-500 tracking-widest">
+                      {day}
+                    </div>
+                  ))}
                 </div>
+                <div className="grid grid-cols-7">
+                  {calendarDays.map((day, i) => {
+                    const dateKey = format(day, 'yyyy-MM-dd');
+                    const dayJobs = crewJobs.filter(job => {
+                      if (!job.scheduledStartDate) return false;
+                      const duration = parseInt(String(job.scheduledDuration || 1)) || 1;
+                      const startDate = parseISO(job.scheduledStartDate);
+                      const endDate = addDays(startDate, duration - 1);
+                      return isWithinInterval(day, { start: startDate, end: endDate });
+                    });
 
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Duration</label>
-                  <select
-                    value={scheduleDuration}
-                    onChange={(e) => setScheduleDuration(e.target.value)}
-                    className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#E63946]"
-                    required
-                  >
-                    <option value="1 day">1 day</option>
-                    <option value="2 days">2 days</option>
-                    <option value="3 days">3 days</option>
-                    <option value="4 days">4 days</option>
-                    <option value="5+ days">5+ days</option>
-                  </select>
+                    const isToday = isSameDay(day, new Date());
+                    const isCurrentMonth = isSameMonth(day, currentCalendarDate);
+                    
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
+                    minDateLimit.setHours(0,0,0,0);
+                    const isPast = day.getTime() < minDateLimit.getTime();
+
+                    return (
+                      <button 
+                        key={dateKey} 
+                        type="button"
+                        onClick={() => !isPast && handleCalendarDayClick(day)}
+                        disabled={isPast}
+                        className={cn(
+                          "min-h-[70px] p-1 border-r border-b border-blue-900/5 last:border-r-0 transition-all text-left relative",
+                          !isCurrentMonth && "opacity-20",
+                          isToday && "bg-blue-900/5",
+                          isPast ? "cursor-not-allowed bg-slate-900/20" : "hover:bg-blue-600/5"
+                        )}
+                      >
+                        <span className={cn(
+                          "text-[9px] font-mono font-bold mb-1 block",
+                          isToday ? "text-[#E63946]" : isPast ? "text-slate-700" : "text-slate-500"
+                        )}>
+                          {format(day, 'd')}
+                        </span>
+                        <div className="space-y-0.5">
+                          {dayJobs.map(job => (
+                            <div 
+                              key={job.id}
+                              className={cn(
+                                "h-1.5 w-full rounded-sm",
+                                job.id === estimateId ? "bg-[#E63946]" : "bg-blue-600/30"
+                              )}
+                              title={job.customerName}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Crew Schedule Notes</label>
-                <textarea
-                  placeholder="Include any schedule details, planned daily goals, or coordination notes for the office..."
-                  value={scheduleNotes}
-                  onChange={(e) => setScheduleNotes(e.target.value)}
-                  className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl p-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#E63946]"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={scheduleSubmitting}
-                  className="px-6 py-3 bg-[#E63946] hover:bg-[#E63946]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#E63946]/20 disabled:opacity-50"
-                >
-                  {scheduleSubmitting ? 'Scheduling...' : 'Schedule Job Start & Continue'}
-                </button>
-              </div>
-            </form>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest text-center">
+                Earliest start date: <span className="text-slate-300">{format(new Date(new Date().getTime() + 4 * 24 * 60 * 60 * 1000), 'MMMM do, yyyy')}</span>
+              </p>
+            </div>
           </div>
         )}
 
@@ -4184,7 +4252,9 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     <Clock size={18} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-tight">Adjust Install Schedule</h3>
+                    <h3 className="text-sm font-black text-white uppercase tracking-tight">
+                      {jobData?.scheduledStartDate ? 'Adjust Install Schedule' : 'Schedule Install Job'}
+                    </h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estimate #{jobData?.estimateNumber}</p>
                   </div>
                 </div>
@@ -4226,36 +4296,33 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       <option value="2 days">2 Days</option>
                       <option value="3 days">3 Days</option>
                       <option value="4 days">4 Days</option>
-                      <option value="5 days">5 Days</option>
-                      <option value="6 days">6 Days</option>
-                      <option value="7 days">7 Days</option>
-                      <option value="8 days">8 Days</option>
-                      <option value="9 days">9 Days</option>
-                      <option value="10 days">10 Days</option>
+                      <option value="5+ days">5+ Days</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Reason for Adjustment</label>
-                  <select
-                    value={newScheduleReason}
-                    onChange={(e) => setNewScheduleReason(e.target.value)}
-                    className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all"
-                    required
-                  >
-                    <option value="">Select a reason...</option>
-                    <option value="Weather Delay">Weather Delay</option>
-                    <option value="Material Delay">Material Delay</option>
-                    <option value="Labor/Crew Shortage">Labor/Crew Shortage</option>
-                    <option value="Previous Job Run Over">Previous Job Run Over</option>
-                    <option value="Customer Request">Customer Request</option>
-                    <option value="Utility Issue">Utility Issue</option>
-                    <option value="Permit Issue">Permit Issue</option>
-                    <option value="Equipment Failure">Equipment Failure</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
+                {jobData?.scheduledStartDate && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Reason for Adjustment</label>
+                    <select
+                      value={newScheduleReason}
+                      onChange={(e) => setNewScheduleReason(e.target.value)}
+                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                      required={!!jobData?.scheduledStartDate}
+                    >
+                      <option value="">Select a reason...</option>
+                      <option value="Weather Delay">Weather Delay</option>
+                      <option value="Material Delay">Material Delay</option>
+                      <option value="Labor/Crew Shortage">Labor/Crew Shortage</option>
+                      <option value="Previous Job Run Over">Previous Job Run Over</option>
+                      <option value="Customer Request">Customer Request</option>
+                      <option value="Utility Issue">Utility Issue</option>
+                      <option value="Permit Issue">Permit Issue</option>
+                      <option value="Equipment Failure">Equipment Failure</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Additional Notes</label>
