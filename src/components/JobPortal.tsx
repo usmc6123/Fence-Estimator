@@ -97,6 +97,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isRefreshingLabor, setIsRefreshingLabor] = useState(false);
 
+  // Job Step Reset States
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetStep, setResetStep] = useState<'Material' | 'Pre-Build' | 'Completion' | null>(null);
+  const [resetReason, setResetReason] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [isAnalyzingSO, setIsAnalyzingSO] = useState(false);
+
   // Office Override Action Modal States
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideDecision, setOverrideDecision] = useState<'approve_anyway' | 'return_to_crew'>('approve_anyway');
@@ -234,6 +241,73 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   const handleRemoveGeneralPhoto = (index: number) => {
     setPickupGeneralPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAnalyzeSalesOrder = async () => {
+    if (!newDocBase64 || !newDocMimeType) {
+      alert('Please select a file first.');
+      return;
+    }
+    setIsAnalyzingSO(true);
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('company_admin_token') || localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          action: 'analyze-sales-order',
+          base64Data: newDocBase64,
+          mimeType: newDocMimeType
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setNewVendorName(data.result.vendorName);
+        setNewSalesOrderNumber(data.result.salesOrderNumber);
+        setNewTotalCost(data.result.totalAmount);
+      } else {
+        alert(data.error || 'AI analysis failed.');
+      }
+    } catch (err) {
+      console.error('AI Analysis Error:', err);
+    } finally {
+      setIsAnalyzingSO(false);
+    }
+  };
+
+  const handleResetStep = async () => {
+    if (!resetStep || !resetReason.trim()) return;
+    setIsResetting(true);
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('company_admin_token') || localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          action: 'reset-job-step',
+          estimateId,
+          step: resetStep,
+          reason: resetReason
+        })
+      });
+      if (response.ok) {
+        setShowResetModal(false);
+        setResetReason('');
+        setResetStep(null);
+        fetchJobDetails(estimateId, token);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Reset failed');
+      }
+    } catch (err) {
+      console.error('Reset Error:', err);
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   const handleUploadVendorDoc = async (e: React.FormEvent) => {
@@ -1112,7 +1186,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   // Calculate Materials takeoff list if jobData exists
   const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
-  const materialsList = calculatedTakeoff?.summary || [];
+  const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => 
+    item.category === 'Lumber' || 
+    item.category === 'Posts' || 
+    item.category === 'Hardware' || 
+    item.category === 'Pickets' ||
+    item.isMaterialItem === true
+  );
 
   // Determine current job status label and color
   const statusLabels: Record<string, { label: string, color: string, bg: string }> = {
@@ -1136,12 +1216,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const currentStatusKey = jobData.jobPortalStatus || 'dispatched';
   const statusInfo = statusLabels[currentStatusKey] || { label: 'Active Job', color: 'text-blue-400 border-blue-500', bg: 'bg-blue-500/10' };
 
+  // Admin access check
+  const isAdmin = !!user && user.isAdmin;
+
   // Sequential Workflow Helper Variables
   const isScheduled = !!jobData?.scheduledStartDate;
-  const hasVendorDocs = Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0;
-  const isMaterialsConfirmed = !hasVendorDocs || (!!jobData.materialConfirmation || currentStatusKey === 'materials_confirmed' || currentStatusKey === 'start_approved_with_material_issue' || currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
-  const isPreBuildComplete = !!jobData.preBuildChecklist || (currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
-  const isCompletionComplete = currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed';
+  const isMaterialsConfirmed = !!jobData?.materialCheckInSubmitted;
+  const isPreBuildComplete = !!jobData?.preBuildSubmitted;
+  const isCompletionComplete = !!jobData?.completionSubmitted;
   const isOfficeApproved = currentStatusKey === 'completed';
 
   return (
@@ -1170,6 +1252,34 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 Request 24h Confirm
               </button>
               
+              {/* Backward/Reset Controls */}
+              <div className="flex items-center gap-2 px-3 border-l border-blue-900/30 ml-2">
+                {isMaterialsConfirmed && (
+                  <button
+                    onClick={() => { setResetStep('Material'); setShowResetModal(true); }}
+                    className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all"
+                  >
+                    Reset Materials
+                  </button>
+                )}
+                {isPreBuildComplete && (
+                  <button
+                    onClick={() => { setResetStep('Pre-Build'); setShowResetModal(true); }}
+                    className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all"
+                  >
+                    Reset Pre-Build
+                  </button>
+                )}
+                {isCompletionComplete && (
+                  <button
+                    onClick={() => { setResetStep('Completion'); setShowResetModal(true); }}
+                    className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all"
+                  >
+                    Reset Completion
+                  </button>
+                )}
+              </div>
+
               {currentStatusKey === 'completion_submitted' && (
                 <>
                   <button
@@ -1507,7 +1617,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             <MessageSquare size={14} className="inline mr-1.5" /> Incident & Shortage Reports
           </button>
 
-          {localStorage.getItem('company_admin_token') && (
+          {isAdmin && (
             <button
               onClick={() => setActiveTab('financials')}
               className={cn(
@@ -1515,7 +1625,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 activeTab === 'financials' ? "text-[#E63946] border-[#E63946]" : "text-slate-400 border-transparent hover:text-slate-200"
               )}
             >
-              Financials
+              <DollarSign size={14} className="inline mr-1.5" /> Financials
             </button>
           )}
 
@@ -1686,7 +1796,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     <tr className="bg-[#0A1120]/80 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-blue-900/10">
                       <th className="px-5 py-4">Operation / Task Name</th>
                       <th className="px-5 py-4 text-center">Volume</th>
-                      <th className="px-5 py-4 text-right">Crew Net Payout</th>
+                      {isAdmin && <th className="px-5 py-4 text-right">Crew Net Payout</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-blue-900/5">
@@ -1702,9 +1812,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                               {item.qty} {item.unit}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-right font-bold text-[#E63946] font-mono">
-                            ${Number(item.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </td>
+                          {isAdmin && (
+                            <td className="px-5 py-4 text-right font-bold text-[#E63946] font-mono">
+                              ${Number(item.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                          )}
                         </tr>
                       ))
                     ) : (
@@ -1715,14 +1827,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </tr>
                     )}
                   </tbody>
-                  <tfoot>
-                    <tr className="bg-[#1D3557]/20 border-t-2 border-blue-900/30">
-                      <td colSpan={2} className="px-5 py-4 text-right font-black uppercase tracking-widest text-[10px] text-slate-300">Total Direct Labor Payout</td>
-                      <td className="px-5 py-4 text-right font-black text-[#E63946] text-base font-mono">
-                        ${Number(snapshot.totalDirectLaborPayout || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  </tfoot>
+                  {isAdmin && (
+                    <tfoot>
+                      <tr className="bg-[#1D3557]/20 border-t-2 border-blue-900/30">
+                        <td colSpan={2} className="px-5 py-4 text-right font-black uppercase tracking-widest text-[10px] text-slate-300">Total Direct Labor Payout</td>
+                        <td className="px-5 py-4 text-right font-black text-[#E63946] text-base font-mono">
+                          ${Number(snapshot.totalDirectLaborPayout || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 
@@ -1856,22 +1970,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Location *</label>
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Date (Defaults to Job Start) *</label>
                         <input
-                          type="text"
+                          type="date"
                           required
-                          value={newPickupLocation}
-                          onChange={(e) => setNewPickupLocation(e.target.value)}
-                          placeholder="e.g. 104 Main St, Austin TX"
-                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Date/Time (Optional)</label>
-                        <input
-                          type="datetime-local"
-                          value={newPickupDateTime}
+                          value={newPickupDateTime || jobData.scheduledStartDate || ''}
                           onChange={(e) => setNewPickupDateTime(e.target.value)}
                           className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         />
@@ -1884,75 +1987,33 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                           onChange={(e: any) => setNewPaymentStatus(e.target.value)}
                           className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         >
-                          <option value="Pending">Pending</option>
+                          <option value="Not Paid">Not Paid</option>
                           <option value="Paid">Paid</option>
-                          <option value="Partially Paid">Partially Paid</option>
+                          <option value="To Be Paid at Pickup">To Be Paid at Pickup</option>
+                          <option value="Charged to Account">Charged to Account</option>
+                          <option value="Unknown">Unknown</option>
                         </select>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#111A2E]/50 rounded-xl border border-blue-900/10">
                       <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Subtotal ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={newSubtotal}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setNewSubtotal(val);
-                            setNewTotalCost(val + newTax + newDeliveryFee + newOtherFees);
-                          }}
-                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Sales Tax ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={newTax}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setNewTax(val);
-                            setNewTotalCost(newSubtotal + val + newDeliveryFee + newOtherFees);
-                          }}
-                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Delivery Fee ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={newDeliveryFee}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setNewDeliveryFee(val);
-                            setNewTotalCost(newSubtotal + newTax + val + newOtherFees);
-                          }}
-                          className="w-full text-xs font-mono bg-[#070D19] text-white border border-blue-900/20 rounded-lg px-3 py-2 focus:outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-rose-400 tracking-wider">Grand Total ($) *</label>
+                        <label className="block text-[9px] font-black uppercase text-[#E63946] tracking-wider">Grand Total ($) *</label>
                         <input
                           type="number"
                           step="0.01"
                           required
                           value={newTotalCost}
                           onChange={(e) => setNewTotalCost(Number(e.target.value))}
-                          className="w-full text-xs font-mono bg-[#070D19] text-rose-400 border-2 border-rose-900/20 rounded-lg px-3 py-2 focus:outline-none"
+                          className="w-full text-xs font-mono bg-[#070D19] text-[#E63946] border-2 border-[#E63946]/20 rounded-xl px-4 py-3 focus:outline-none"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Internal Office Notes</label>
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes for Crew (Visibility Defaulted to True)</label>
                       <textarea
                         value={newNotes}
                         onChange={(e) => setNewNotes(e.target.value)}
-                        placeholder="e.g. Sales order totals after delivery..."
+                        placeholder="Include pickup codes, yard instructions, or contact info..."
                         className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
                         rows={2}
                       />
@@ -1960,25 +2021,26 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                       <div className="space-y-1.5">
-                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Upload Document File (PDF/JPG/PNG/WEBP/DOC/DOCX) *</label>
-                        <input
-                          type="file"
-                          required
-                          onChange={handleVendorDocFileChange}
-                          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                          className="w-full text-xs text-slate-300 bg-[#070D19] border-2 border-blue-900/10 rounded-xl p-2.5 cursor-pointer"
-                        />
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Upload Document File *</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="file"
+                            required
+                            onChange={handleVendorDocFileChange}
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            className="flex-1 text-xs text-slate-300 bg-[#070D19] border-2 border-blue-900/10 rounded-xl p-2.5 cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            disabled={isAnalyzingSO || !newDocBase64}
+                            onClick={handleAnalyzeSalesOrder}
+                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                          >
+                            {isAnalyzingSO ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                            AI Analyze
+                          </button>
+                        </div>
                       </div>
-
-                      <label className="flex items-center gap-2 select-none cursor-pointer mt-4">
-                        <input
-                          type="checkbox"
-                          checked={newVisibleToCrew}
-                          onChange={(e) => setNewVisibleToCrew(e.target.checked)}
-                          className="h-4 w-4 rounded bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
-                        />
-                        <span className="text-xs font-bold text-slate-200">Visible to Crew in Job Portal</span>
-                      </label>
                     </div>
 
                     {/* Manual line items editor */}
@@ -2837,7 +2899,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           )}
 
           {/* TAB: FINANCIALS (ADMIN ONLY) */}
-          {activeTab === 'financials' && (
+          {isAdmin && activeTab === 'financials' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Financial Summary Dashboard */}
               <div className="bg-[#0A1120] rounded-[24px] border border-blue-900/20 p-6 sm:p-8">
@@ -3390,6 +3452,66 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 <button
                   type="button"
                   onClick={() => setShowReturnModal(false)}
+                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADMIN MODAL: RESET JOB STEP */}
+      <AnimatePresence>
+        {showResetModal && (
+          <div className="fixed inset-0 bg-black/80 z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#111A2E] border border-amber-500/20 p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl"
+            >
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2 text-amber-400">
+                  <History size={20} />
+                  <h3 className="text-base font-black uppercase tracking-tight">Reset Job Progression</h3>
+                </div>
+                <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-white"><X size={18} /></button>
+              </div>
+              
+              <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl">
+                <p className="text-[11px] text-amber-200/80 leading-relaxed font-bold">
+                  You are about to reset the <strong className="text-white uppercase tracking-widest bg-amber-500/20 px-1.5 rounded">{resetStep}</strong> stage. 
+                  This will move the job status backward and may lock subsequent crew actions. Files and history will be preserved.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Reason for Reset (Required for Audit Log) *</label>
+                <textarea
+                  required
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
+                  placeholder="Explain why this step is being reset (e.g. yard error, crew requested correction, missing info)..."
+                  className="w-full bg-[#0A1120] text-xs text-white border border-blue-900/10 focus:border-amber-500 rounded-xl p-3 focus:outline-none transition-all"
+                  rows={4}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isResetting || !resetReason.trim()}
+                  onClick={handleResetStep}
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-950/20 flex items-center justify-center gap-2"
+                >
+                  {isResetting ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Confirm Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
                   className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all"
                 >
                   Cancel

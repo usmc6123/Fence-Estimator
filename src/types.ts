@@ -16,6 +16,7 @@ export interface MaterialItem {
   supplierAlias?: string;
   supplierPartNumber?: string;
   supplierItemName?: string;
+  isMaterialItem?: boolean; // Flag to show on crew checklist
 }
 
 export interface FenceStyle {
@@ -308,12 +309,19 @@ export interface Estimate {
 
   // Job Portal & Material Pickup
   jobPortalStatus?: string;
-  jobPortalHistory?: any[];
+  jobPortalHistory?: JobHistoryEntry[];
   vendorDocuments?: any[];
   salesOrders?: VendorSalesOrder[];
   manualCharges?: ManualJobCharge[];
   financialSummary?: JobFinancialSummary;
   materialConfirmation?: any;
+  materialCheckInSubmitted?: boolean;
+  materialCheckInSubmittedAt?: string;
+  materialCheckInBy?: string;
+  preBuildSubmitted?: boolean;
+  preBuildSubmittedAt?: string;
+  completionSubmitted?: boolean;
+  completionSubmittedAt?: string;
   laborSnapshotToken?: string;
   crewScheduleToken?: string;
   laborSnapshotLink?: string;
@@ -391,7 +399,7 @@ export interface VendorSalesOrder {
   deliveryFee: number;
   otherFees: number;
   totalCost: number;
-  paymentStatus: 'Pending' | 'Paid' | 'Partially Paid';
+  paymentStatus: 'Not Paid' | 'Paid' | 'To Be Paid at Pickup' | 'Charged to Account' | 'Unknown';
   notes?: string;
   visibleToCrew: boolean;
   items?: SalesOrderItem[];
@@ -421,6 +429,17 @@ export interface JobFinancialSummary {
   grossProfit: number;
   grossMarginPercent: number;
   lastRecalculatedAt: string;
+}
+
+export interface JobHistoryEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  actorName: string;
+  note?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  resetStep?: 'Material' | 'Pre-Build' | 'Completion';
 }
 
 export interface SavedEstimate extends Estimate {

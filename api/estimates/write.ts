@@ -3832,9 +3832,9 @@ export default async function handler(req: any, res: any) {
           deliveryFee: Number(deliveryFee) || 0,
           otherFees: Number(otherFees) || 0,
           totalCost: Number(totalCost) || 0,
-          paymentStatus: paymentStatus || 'Pending',
+          paymentStatus: paymentStatus || 'Unknown',
           notes: notes || '',
-          visibleToCrew: !!visibleToCrew,
+          visibleToCrew: true, // Default to true for simplified form
           fileUrl: downloadUrl,
           fileName: filename,
           storagePath,
@@ -4101,6 +4101,113 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ success: true });
       }
 
+      if (req.body && req.body.action === 'analyze-sales-order') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const { base64Data, mimeType } = req.body || {};
+        if (!base64Data || !mimeType) {
+          return res.status(400).json({ error: 'Missing image data' });
+        }
+
+        try {
+          const { GoogleGenAI, Type } = await import("@google/genai");
+          const ai = new GoogleGenAI({
+            apiKey: process.env.GEMINI_API_KEY,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
+
+          let cleanBase64 = base64Data;
+          if (cleanBase64.includes(';base64,')) {
+            cleanBase64 = cleanBase64.split(';base64,')[1];
+          }
+
+          const response = await ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: {
+              parts: [
+                { text: "Analyze this Sales Order / Pickup Document. Extract the Vendor Name, Sales Order / Ticket Number, and the Grand Total Amount. Return as JSON." },
+                { inlineData: { data: cleanBase64, mimeType } }
+              ]
+            },
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  vendorName: { type: Type.STRING },
+                  salesOrderNumber: { type: Type.STRING },
+                  totalAmount: { type: Type.NUMBER }
+                },
+                required: ["vendorName", "salesOrderNumber", "totalAmount"]
+              }
+            }
+          });
+
+          const result = JSON.parse(response.text);
+          return res.status(200).json({ success: true, result });
+        } catch (aiErr) {
+          console.error('AI Analysis Error:', aiErr);
+          return res.status(500).json({ error: 'AI Analysis failed' });
+        }
+      }
+
+      if (req.body && req.body.action === 'reset-job-step') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { estimateId, step, reason } = req.body || {};
+        if (!estimateId || !step || !reason) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+        const estimateData = snap.data() || {};
+
+        const nowIso = new Date().toISOString();
+        const updateData: any = {};
+        let logEvent = `Job Portal Step Reset: ${step}`;
+        let logNotes = `Admin reset ${step} step. Reason: ${reason}`;
+
+        if (step === 'Material') {
+          updateData.materialCheckInSubmitted = false;
+          updateData.materialConfirmation = null;
+          updateData.jobPortalStatus = 'Materials Pending';
+          // Lock subsequent
+          updateData.preBuildSubmitted = false;
+          updateData.completionSubmitted = false;
+        } else if (step === 'Pre-Build') {
+          updateData.preBuildSubmitted = false;
+          updateData.jobPortalStatus = 'Pre-Build Pending';
+          // Lock subsequent
+          updateData.completionSubmitted = false;
+        } else if (step === 'Completion') {
+          updateData.completionSubmitted = false;
+          updateData.jobPortalStatus = 'Pre-Build Complete'; // or Completion Pending
+        }
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: logEvent,
+          timestamp: nowIso,
+          user: decoded.email || 'Office',
+          notes: logNotes,
+          resetStep: step
+        };
+
+        await docRef.update({
+          ...updateData,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
       if (req.body && req.body.action === 'recalculate-job-financials') {
         if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
           return res.status(401).json({ error: 'Unauthorized' });
@@ -4252,6 +4359,9 @@ export default async function handler(req: any, res: any) {
 
         await docRef.update({
           materialConfirmation: confirmationData,
+          materialCheckInSubmitted: true,
+          materialCheckInSubmittedAt: nowIso,
+          materialCheckInBy: crewLeaderName,
           jobPortalStatus: newStatus,
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
