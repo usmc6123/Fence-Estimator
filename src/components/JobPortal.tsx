@@ -1187,23 +1187,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   // Calculate Materials takeoff list if jobData exists
   const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
   const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => {
-    const lowerDesc = (item.description || '').toLowerCase();
-    const lowerCategory = (item.category || '').toLowerCase();
-
-    // 1. Specifically exclude "Demo Labor" as requested
-    if (lowerDesc.includes('demo labor')) return false;
-
-    // 2. Exclude other service/financial items (Labor, Install, Fees, etc.)
-    const exclusions = ['install charge', 'labor payout', 'tax', 'fee', 'discount', 'markup', 'credit'];
-    const isExcluded = exclusions.some(ex => lowerDesc.includes(ex) || lowerCategory.includes(ex));
-
-    // 3. If it's marked as a material item, always keep it
-    if (item.isMaterialItem === true) return true;
-
-    // 4. If it's an excluded service/financial item, remove it
-    if (isExcluded) return false;
-
-    // 5. Default: Keep all other items (materials)
+    // Only include items that are NOT categorized as Labor or derived from the labor breakdown
+    // Standard material categories are: 'Lumber', 'Hardware', 'Pickets', 'Posts', 'Other Material', 'Finishing', 'Structure', 'Infill'
+    // Labor-related categories from the calculation engine are: 'Labor', 'Demolition', 'SitePrep'
+    const itemCategory = (item.category || '').trim();
+    
+    // Explicitly exclude any item from the Labor, Demolition, or SitePrep categories
+    const laborRelatedCategories = ['Labor', 'Demolition', 'SitePrep'];
+    if (laborRelatedCategories.includes(itemCategory)) return false;
+    
+    // Include everything else from the summary (which represents the material takeoff)
     return true;
   });
 
