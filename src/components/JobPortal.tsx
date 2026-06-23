@@ -1,5 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay, 
+  addMonths, 
+  subMonths,
+  addDays,
+  isWithinInterval,
+  parseISO
+} from 'date-fns';
 import { 
   Calendar as CalendarIcon, Clock, MapPin, Hammer, AlertTriangle, 
   Check, Loader2, RefreshCw, Eye, ShieldCheck, ChevronLeft, ChevronRight,
@@ -29,7 +44,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [jobData, setJobData] = useState<any>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
   const [settings, setSettings] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'labor' | 'materials' | 'checklists' | 'reports' | 'history' | 'financials'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'labor' | 'materials' | 'checklists' | 'reports' | 'history' | 'financials' | 'schedule'>('overview');
 
   // Interactive site drawing zoom state
   const [zoomDrawing, setZoomDrawing] = useState(false);
@@ -45,8 +60,6 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [activeDocForConfirmation, setActiveDocForConfirmation] = useState<any>(null);
   const [pickupLeaderName, setPickupLeaderName] = useState('');
-  const [pickupLocationState, setPickupLocationState] = useState('');
-  const [pickupDateTimeState, setPickupDateTimeState] = useState('');
   const [pickupGeneralNotes, setPickupGeneralNotes] = useState('');
   const [pickupGeneralPhotos, setPickupGeneralPhotos] = useState<string[]>([]);
   const [isUploadingPickupPhoto, setIsUploadingPickupPhoto] = useState(false);
@@ -118,6 +131,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
 
+  // Rescheduling states
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [newScheduleStartDate, setNewScheduleStartDate] = useState('');
+  const [newScheduleDuration, setNewScheduleDuration] = useState('1 day');
+  const [newScheduleReason, setNewScheduleReason] = useState('');
+  const [newScheduleNotes, setNewScheduleNotes] = useState('');
+  const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
+
+  // Crew Monthly Calendar View states
+  const [crewJobs, setCrewJobs] = useState<any[]>([]);
+  const [loadingCrewJobs, setLoadingCrewJobs] = useState(false);
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(currentCalendarDate));
+    const end = endOfWeek(endOfMonth(currentCalendarDate));
+    return eachDayOfInterval({ start, end });
+  }, [currentCalendarDate]);
+
   const getMinDateString = () => {
     const minDate = new Date();
     minDate.setDate(minDate.getDate() + 4);
@@ -172,6 +204,69 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setScheduleSubmitting(false);
     }
   };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newScheduleStartDate || !newScheduleDuration) {
+      setScheduleError('Please fill out all required fields.');
+      return;
+    }
+
+    setRescheduleSubmitting(true);
+    setScheduleError('');
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'update-job-schedule',
+          estimateId,
+          token,
+          startDate: newScheduleStartDate,
+          duration: newScheduleDuration,
+          reason: newScheduleReason,
+          notes: newScheduleNotes,
+          changedBy: isAdmin ? 'Admin' : (jobData?.assignedCrew || 'Crew')
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to update schedule.');
+      }
+
+      setShowRescheduleModal(false);
+      await fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      setScheduleError(err.message || String(err));
+    } finally {
+      setRescheduleSubmitting(false);
+    }
+  };
+
+  const fetchCrewJobs = async () => {
+    if (!jobData?.assignedCrew) return;
+    setLoadingCrewJobs(true);
+    try {
+      const response = await fetch(`/api/estimates/write?action=get-crew-jobs&estimateId=${estimateId}&token=${token}`);
+      const data = await response.json();
+      if (response.ok) {
+        setCrewJobs(data.jobs || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch crew jobs:', err);
+    } finally {
+      setLoadingCrewJobs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      fetchCrewJobs();
+    }
+  }, [activeTab, jobData?.assignedCrew]);
 
   // Helper functions for Materials & Vendor Docs
   const handleVendorDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -643,24 +738,29 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     setConfirmSubmitting(true);
 
     try {
-      const lineItems = activeDocForConfirmation?.lineItems || [];
+      const lineItems = materialsList;
       let hasIssues = false;
       const problemList: string[] = [];
 
-      for (const item of lineItems) {
-        const itemState = lineItemStatuses[item.id];
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = lineItems[i];
+        const itemId = item.id || `mat-${i}-${item.name}`;
+        const itemState = lineItemStatuses[itemId];
+        
+        const itemDesc = item.name || 'Unknown Item';
+
         if (!itemState || !itemState.status) {
-          throw new Error(`Please complete the status selection for "${item.description}"`);
+          throw new Error(`Please complete the status selection for "${itemDesc}"`);
         }
         if (itemState.status !== 'Confirmed') {
           hasIssues = true;
           if (!itemState.notes || !itemState.notes.trim()) {
-            throw new Error(`Notes are required for item "${item.description}" because it is marked as ${itemState.status}.`);
+            throw new Error(`Notes are required for item "${itemDesc}" because it is marked as ${itemState.status}.`);
           }
           if (!itemState.photoUrl) {
-            throw new Error(`A photo is required for item "${item.description}" because it is marked as ${itemState.status}.`);
+            throw new Error(`A photo is required for item "${itemDesc}" because it is marked as ${itemState.status}.`);
           }
-          problemList.push(`${item.description}: ${itemState.status} - Notes: ${itemState.notes}`);
+          problemList.push(`${itemDesc}: ${itemState.status} - Notes: ${itemState.notes}`);
         }
       }
 
@@ -680,7 +780,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           estimateId,
           token,
           crewLeaderName: pickupLeaderName,
-          pickupLocation: pickupLocationState,
+          pickupDate: new Date().toISOString(),
           notes: pickupGeneralNotes,
           photos: pickupGeneralPhotos,
           lineItemsStatus: lineItemStatuses,
@@ -1193,15 +1293,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   // 3. Vendor Sales Order line items (from attached documents)
   const materialsList = [
     ...(calculatedTakeoff?.summary || []),
-    ...(calculatedTakeoff?.manualSummary || []),
-    ...((jobData.vendorDocuments || [])
-      .filter((d: any) => d.visibleToCrew)
-      .flatMap((doc: any) => (doc.lineItems || []).map((li: any) => ({
-        ...li,
-        name: li.description || li.name,
-        category: 'Vendor Order'
-      })))
-    )
+    ...(calculatedTakeoff?.manualSummary || [])
   ].filter((item: any) => {
     // Only include items that are NOT categorized as Labor or derived from the labor breakdown
     // Standard material categories are: 'Lumber', 'Hardware', 'Pickets', 'Posts', 'Other Material', 'Finishing', 'Structure', 'Infill'
@@ -1215,7 +1307,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     // Additional safety check: exclude common labor/financial keywords to keep the checklist clean
     const lowerName = (item.name || item.description || '').toLowerCase();
     const laborKeywords = ['labor payout', 'install labor', 'demo labor', 'removal labor', 'installation charge', 'labor breakdown'];
-    const financialKeywords = ['tax', 'fee', 'discount', 'markup', 'profit', 'total investment', 'customer pricing'];
+    const financialKeywords = ['tax', 'fee', 'discount', 'markup', 'profit', 'total investment', 'customer pricing', 'delivery'];
     
     if (laborKeywords.some(kw => lowerName.includes(kw))) return false;
     if (financialKeywords.some(kw => lowerName.includes(kw))) return false;
@@ -1659,6 +1751,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           )}
 
           <button
+            onClick={() => setActiveTab('schedule')}
+            className={cn(
+              "px-4 py-2.5 text-xs font-black uppercase tracking-wider shrink-0 transition-all border-b-2",
+              activeTab === 'schedule' ? "text-[#E63946] border-[#E63946]" : "text-slate-400 border-transparent hover:text-slate-200"
+            )}
+          >
+            <CalendarIcon size={14} className="inline mr-1.5" /> My Schedule
+          </button>
+
+          <button
             onClick={() => setActiveTab('history')}
             className={cn(
               "px-4 py-2.5 text-xs font-black uppercase tracking-wider shrink-0 transition-all border-b-2",
@@ -1696,7 +1798,35 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                   </div>
                   <div className="bg-[#0A1120] p-4 rounded-xl border border-blue-900/15">
                     <span className="text-[9px] text-slate-500 uppercase block font-extrabold tracking-wider">Planned Duration</span>
-                    <span className="text-xs font-black text-slate-200 font-mono">{jobData.installDuration || 1} Day(s)</span>
+                    <span className="text-xs font-black text-slate-200 font-mono">
+                      {jobData.scheduledDuration || jobData.installDuration || 1} Day(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* SCHEDULE MANAGEMENT BUTTONS */}
+                <div className="bg-[#0A1120] p-5 rounded-2xl border border-amber-900/20 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-900/20 rounded-lg text-amber-500">
+                      <CalendarIcon size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider">Schedule Management</h4>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Adjust dates or report delays</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        setNewScheduleStartDate(jobData.scheduledStartDate || '');
+                        setNewScheduleDuration(String(jobData.scheduledDuration || jobData.installDuration || 1) + ' day' + (Number(jobData.scheduledDuration || jobData.installDuration || 1) > 1 ? 's' : ''));
+                        setShowRescheduleModal(true);
+                      }}
+                      className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-900/20"
+                    >
+                      <Clock size={14} /> Adjust Schedule / Delay
+                    </button>
                   </div>
                 </div>
 
@@ -2352,15 +2482,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                     onClick={() => {
                                       setActiveDocForConfirmation(doc);
                                       setPickupLeaderName(crewLeaderName || '');
-                                      setPickupLocationState(doc.pickupLocation || '');
-                                      setPickupDateTimeState(doc.pickupDateTime || '');
                                       setPickupGeneralNotes('');
                                       setPickupGeneralPhotos([]);
                                       
-                                      // Initialize statuses to 'Confirmed'
+                                      // Initialize statuses to 'Confirmed' for ALL materials in the job
                                       const initialStatuses: any = {};
-                                      (doc.lineItems || []).forEach((item: any) => {
-                                        initialStatuses[item.id] = { status: 'Confirmed', notes: '' };
+                                      materialsList.forEach((item: any, idx: number) => {
+                                        const itemId = item.id || `mat-${idx}-${item.name}`;
+                                        initialStatuses[itemId] = { status: 'Confirmed', notes: '' };
                                       });
                                       setLineItemStatuses(initialStatuses);
                                       
@@ -3167,6 +3296,128 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           )}
 
           {/* TAB 6: JOB HISTORY TIMELINE */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-6 rounded-3xl border border-blue-900/15 shadow-2xl">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-500">
+                    <CalendarIcon size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Crew Schedule</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Viewing all jobs for {jobData?.assignedCrew || 'Assigned Crew'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center bg-[#070D19] p-1 rounded-xl border border-blue-900/10">
+                  <button 
+                    onClick={() => setCurrentCalendarDate(subMonths(currentCalendarDate, 1))}
+                    className="p-2 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button 
+                    onClick={() => setCurrentCalendarDate(new Date())}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-all"
+                  >
+                    {format(currentCalendarDate, 'MMMM yyyy')}
+                  </button>
+                  <button 
+                    onClick={() => setCurrentCalendarDate(addMonths(currentCalendarDate, 1))}
+                    className="p-2 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {loadingCrewJobs ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-[#0A1120] rounded-3xl border border-blue-900/15">
+                  <Loader2 className="animate-spin text-[#E63946] mb-4" size={32} />
+                  <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Loading crew schedule...</p>
+                </div>
+              ) : (
+                <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl">
+                  {/* Day headers */}
+                  <div className="grid grid-cols-7 border-b border-blue-900/10 bg-[#070D19]/50">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="py-3 text-center text-[9px] font-black uppercase text-slate-500 tracking-widest border-r border-blue-900/5 last:border-r-0">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7">
+                    {calendarDays.map((day, i) => {
+                      const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayJobs = crewJobs.filter(job => {
+                        if (!job.scheduledStartDate) return false;
+                        const start = job.scheduledStartDate;
+                        const durationStr = String(job.scheduledDuration || 1);
+                        const duration = parseInt(durationStr) || 1;
+                        const startDate = parseISO(start);
+                        const endDate = addDays(startDate, duration - 1);
+                        return isWithinInterval(day, { start: startDate, end: endDate });
+                      });
+
+                      const isToday = isSameDay(day, new Date());
+                      const isCurrentMonth = isSameMonth(day, currentCalendarDate);
+
+                      return (
+                        <div 
+                          key={dateKey} 
+                          className={cn(
+                            "min-h-[120px] p-2 border-r border-b border-blue-900/5 last:border-r-0 transition-colors",
+                            !isCurrentMonth && "opacity-20",
+                            isToday && "bg-blue-900/5"
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={cn(
+                              "text-[10px] font-mono font-bold",
+                              isToday ? "text-[#E63946]" : "text-slate-500"
+                            )}>
+                              {format(day, 'd')}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            {dayJobs.map(job => (
+                              <button
+                                key={job.id}
+                                onClick={() => {
+                                  if (job.id === estimateId) {
+                                    setActiveTab('overview');
+                                  } else {
+                                    window.open(`/?portal=job-portal&estimateId=${job.id}&token=${job.laborSnapshotToken || job.crewScheduleToken}`, '_blank');
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full text-left p-1.5 rounded-lg text-[9px] font-bold transition-all truncate group relative",
+                                  job.id === estimateId ? "bg-[#E63946] text-white" : "bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 shadow-sm"
+                                )}
+                              >
+                                {job.customerName}
+                                <div className="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-[#070D19] border border-blue-900/20 p-3 rounded-2xl shadow-2xl mb-2 pointer-events-none">
+                                  <p className="text-[10px] text-white font-black uppercase mb-1">{job.customerName}</p>
+                                  <p className="text-[8px] text-slate-400 uppercase font-bold">{job.customerAddress || job.address || 'Location N/A'}</p>
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-blue-900/10">
+                                    <span className="text-[8px] text-amber-500 font-bold uppercase">{job.scheduledDuration || 1} Days</span>
+                                    <span className="text-[8px] text-slate-500 uppercase font-black">{job.jobStatus || 'Scheduled'}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'history' && (
             <div className="space-y-6">
               <div className="border-b border-blue-900/10 pb-4">
@@ -3591,7 +3842,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 )}
 
                 {/* Audit metadata */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Crew Leader Name *</label>
                     <input
@@ -3603,29 +3854,6 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Location *</label>
-                    <input
-                      type="text"
-                      required
-                      value={pickupLocationState}
-                      onChange={(e) => setPickupLocationState(e.target.value)}
-                      placeholder="Vendor yard address"
-                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Actual Pickup Date/Time *</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={pickupDateTimeState}
-                      onChange={(e) => setPickupDateTimeState(e.target.value)}
-                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
-                    />
-                  </div>
                 </div>
 
                 {/* Manifest Line Items Verification table */}
@@ -3634,17 +3862,18 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     Line Item Quality & Quantity Audit
                   </span>
                   
-                  {Array.isArray(activeDocForConfirmation.lineItems) && activeDocForConfirmation.lineItems.length > 0 ? (
+                  {materialsList.length > 0 ? (
                     <div className="space-y-4">
-                      {activeDocForConfirmation.lineItems.map((item: any) => {
-                        const statusObj = lineItemStatuses[item.id] || { status: 'Confirmed', notes: '', photoUrl: '' };
+                      {materialsList.map((item: any, idx: number) => {
+                        const itemId = item.id || `mat-${idx}-${item.name}`;
+                        const statusObj = lineItemStatuses[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' };
                         
                         return (
-                          <div key={item.id} className="p-4 bg-[#070D19] border border-blue-900/10 rounded-2xl space-y-3">
+                          <div key={itemId} className="p-4 bg-[#070D19] border border-blue-900/10 rounded-2xl space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-900/5 pb-2">
                               <div>
-                                <span className="text-xs font-black text-slate-100 uppercase">{item.description}</span>
-                                <span className="text-[10px] font-mono text-amber-500 font-bold block">Required Quantity: {item.qty} pcs</span>
+                                <span className="text-xs font-black text-slate-100 uppercase">{item.name}</span>
+                                <span className="text-[10px] font-mono text-amber-500 font-bold block">Required Quantity: {item.qty} {item.unit || 'pcs'}</span>
                               </div>
                               
                               <div className="flex flex-wrap gap-1">
@@ -3652,7 +3881,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                   <button
                                     key={st}
                                     type="button"
-                                    onClick={() => handleUpdateLineItemStatus(item.id, st)}
+                                    onClick={() => handleUpdateLineItemStatus(itemId, st)}
                                     className={cn(
                                       "px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded border transition-all",
                                       statusObj.status === st
@@ -3680,7 +3909,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                   <textarea
                                     required
                                     value={statusObj.notes || ''}
-                                    onChange={(e) => handleUpdateLineItemField(item.id, 'notes', e.target.value)}
+                                    onChange={(e) => handleUpdateLineItemField(itemId, 'notes', e.target.value)}
                                     placeholder={`Explain why this is ${statusObj.status.toLowerCase()}...`}
                                     className="w-full text-xs bg-[#0c1322] text-white border border-rose-500/20 focus:border-rose-500 rounded-xl px-3 py-2 focus:outline-none"
                                     rows={2}
@@ -3697,10 +3926,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                       <input
                                         type="file"
                                         accept="image/*"
-                                        onChange={(e) => handleUploadLineItemPhoto(item.id, e)}
+                                        onChange={(e) => handleUploadLineItemPhoto(itemId, e)}
                                         className="absolute inset-0 opacity-0 cursor-pointer"
                                       />
-                                      {uploadingLineItemPhotoId === item.id ? (
+                                      {uploadingLineItemPhotoId === itemId ? (
                                         <div className="flex items-center gap-1 text-[9px] font-bold text-rose-400">
                                           <Loader2 size={12} className="animate-spin" /> Uploading...
                                         </div>
@@ -3728,7 +3957,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500 italic">No checklist items defined for this sales order.</p>
+                    <p className="text-xs text-slate-500 italic">No checklist items defined for this job.</p>
                   )}
                 </div>
 
@@ -3930,6 +4159,133 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         <Check size={14} />
                         {editingChargeId ? 'Update Job Charge' : 'Apply Job Charge'}
                       </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* RESCHEDULE MODAL */}
+      <AnimatePresence>
+        {showRescheduleModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#0A1120] w-full max-w-lg rounded-3xl border border-blue-900/20 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-blue-900/10 flex items-center justify-between bg-[#070D19]/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-900/20 rounded-lg text-amber-500">
+                    <Clock size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-tight">Adjust Install Schedule</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estimate #{jobData?.estimateNumber}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowRescheduleModal(false)}
+                  className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-5">
+                {scheduleError && (
+                  <div className="p-3 bg-red-900/20 border border-red-900/30 rounded-xl flex items-center gap-2 text-red-400 text-[10px] font-bold uppercase">
+                    <AlertTriangle size={14} /> {scheduleError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Proposed Start Date</label>
+                    <input
+                      type="date"
+                      value={newScheduleStartDate}
+                      onChange={(e) => setNewScheduleStartDate(e.target.value)}
+                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Expected Duration</label>
+                    <select
+                      value={newScheduleDuration}
+                      onChange={(e) => setNewScheduleDuration(e.target.value)}
+                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                      required
+                    >
+                      <option value="1 day">1 Day</option>
+                      <option value="2 days">2 Days</option>
+                      <option value="3 days">3 Days</option>
+                      <option value="4 days">4 Days</option>
+                      <option value="5 days">5 Days</option>
+                      <option value="6 days">6 Days</option>
+                      <option value="7 days">7 Days</option>
+                      <option value="8 days">8 Days</option>
+                      <option value="9 days">9 Days</option>
+                      <option value="10 days">10 Days</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Reason for Adjustment</label>
+                  <select
+                    value={newScheduleReason}
+                    onChange={(e) => setNewScheduleReason(e.target.value)}
+                    className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                    required
+                  >
+                    <option value="">Select a reason...</option>
+                    <option value="Weather Delay">Weather Delay</option>
+                    <option value="Material Delay">Material Delay</option>
+                    <option value="Labor/Crew Shortage">Labor/Crew Shortage</option>
+                    <option value="Previous Job Run Over">Previous Job Run Over</option>
+                    <option value="Customer Request">Customer Request</option>
+                    <option value="Utility Issue">Utility Issue</option>
+                    <option value="Permit Issue">Permit Issue</option>
+                    <option value="Equipment Failure">Equipment Failure</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Additional Notes</label>
+                  <textarea
+                    value={newScheduleNotes}
+                    onChange={(e) => setNewScheduleNotes(e.target.value)}
+                    placeholder="Provide specific details about the schedule change..."
+                    className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all min-h-[100px] resize-none"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowRescheduleModal(false)}
+                    className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rescheduleSubmitting}
+                    className="flex-[2] px-4 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+                  >
+                    {rescheduleSubmitting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Updating...
+                      </>
+                    ) : (
+                      'Update Schedule'
                     )}
                   </button>
                 </div>

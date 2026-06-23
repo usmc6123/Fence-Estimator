@@ -995,6 +995,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'material_issue_reported') eventTag = 'LSFW - Material Issue Reported';
     else if (eventType === 'start_approved_with_material_issue') eventTag = 'LSFW - Start Approved With Material Issue';
     else if (eventType === 'job_start_scheduled') eventTag = 'LSFW - Job Start Scheduled';
+    else if (eventType === 'job_schedule_updated') eventTag = 'LSFW - Install Schedule Updated';
 
     // Map the human-readable job status
     let currentJobStatus = status || 'Interested';
@@ -1059,6 +1060,10 @@ async function syncCustomerToGhl({
         addCf('jobDuration', estimate.scheduledDuration || estimate.jobDuration || '');
         addCf('crewName', estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || '');
         addCf('jobPortalScheduled', estimate.jobPortalScheduled === true || estimate.jobPortalScheduled === 'true' || false);
+        addCf('scheduleLastChangedAt', estimate.scheduleLastChangedAt || '');
+        addCf('scheduleLastChangedBy', estimate.scheduleLastChangedBy || '');
+        addCf('scheduleChangeReason', estimate.scheduleChangeReason || '');
+        addCf('scheduleChangeNotes', estimate.scheduleChangeNotes || '');
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -1754,6 +1759,125 @@ export default async function handler(req: any, res: any) {
         scheduledEndDate: proposedEndStr,
         installDuration: Number(installDuration)
       });
+    }
+
+    if (action === 'get-crew-jobs') {
+      const estimateId = (req.query?.estimateId || req.body?.estimateId) as string;
+      const token = (req.query?.token || req.body?.token) as string;
+
+      if (!estimateId || !token) {
+        return res.status(400).json({ error: 'Estimate ID and token are required.' });
+      }
+
+      const { snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+      const estimateData = snap.data() || {};
+
+      const isValidToken = (estimateData.laborSnapshotToken === token || estimateData.crewScheduleToken === token);
+      if (!isValidToken) return res.status(403).json({ error: 'Invalid security token.' });
+
+      const assignedCrew = estimateData.assignedCrew;
+      if (!assignedCrew) return res.json({ jobs: [] });
+
+      const jobsSnap = await db.collection('estimates')
+        .where('assignedCrew', '==', assignedCrew)
+        .where('status', '!=', 'archived')
+        .get();
+
+      const jobs: any[] = [];
+      jobsSnap.forEach(d => {
+        const dData = d.data();
+        if (dData.scheduledStartDate) {
+           jobs.push({
+             id: d.id,
+             customerName: dData.customerName,
+             customerAddress: dData.customerAddress || dData.address,
+             city: dData.city,
+             scheduledStartDate: dData.scheduledStartDate,
+             scheduledDuration: dData.scheduledDuration || dData.installDuration || 1,
+             jobStatus: dData.jobStatus,
+             laborSnapshotToken: dData.laborSnapshotToken,
+             crewScheduleToken: dData.crewScheduleToken
+           });
+        }
+      });
+
+      return res.json({ jobs });
+    }
+
+    if (action === 'update-job-schedule') {
+      const { estimateId, token, startDate, duration, reason, notes, changedBy } = req.body;
+
+      if (!estimateId || !token) {
+        return res.status(400).json({ error: 'Estimate ID and token are required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+      const estimateData = snap.data() || {};
+
+      const authHeader = req.headers.authorization;
+      const isAdmin = !!authHeader && authHeader.startsWith('Bearer ');
+      const isValidCrew = (estimateData.laborSnapshotToken === token || estimateData.crewScheduleToken === token);
+      
+      if (!isAdmin && !isValidCrew) {
+        return res.status(403).json({ error: 'Unauthorized schedule adjustment.' });
+      }
+
+      const prevStartDate = estimateData.scheduledStartDate;
+      const prevDuration = estimateData.scheduledDuration || estimateData.installDuration || 1;
+
+      const updateData: any = {
+        scheduledStartDate: startDate,
+        scheduledDuration: duration,
+        scheduleLastChangedAt: new Date().toISOString(),
+        scheduleLastChangedBy: changedBy,
+        scheduleChangeReason: reason,
+        scheduleChangeNotes: notes || ''
+      };
+
+      const durationNum = parseInt(String(duration)) || 1;
+      const startD = new Date(startDate);
+      const endD = new Date(startD);
+      endD.setDate(endD.getDate() + durationNum - 1);
+      updateData.scheduledEndDate = endD.toISOString().split('T')[0];
+
+      await docRef.update(updateData);
+
+      // Also update the schedule event if it exists
+      const eventId = "install-" + estimateId;
+      await db.collection('schedule_events').doc(eventId).set({
+        start: updateData.scheduledStartDate,
+        end: updateData.scheduledEndDate,
+        notes: `Schedule adjusted by ${changedBy}. Reason: ${reason}. Notes: ${notes || ''}`
+      }, { merge: true });
+
+      const historyRef = docRef.collection('history').doc();
+      await historyRef.set({
+        timestamp: new Date().toISOString(),
+        action: 'SCHEDULE_UPDATED',
+        performedBy: changedBy,
+        details: `Schedule adjusted from ${prevStartDate} (${prevDuration} days) to ${startDate} (${duration} days). Reason: ${reason}. Notes: ${notes || 'None'}`
+      });
+
+      try {
+        await syncCustomerToGhl({
+          eventType: 'job_schedule_updated',
+          estimate: { 
+            id: estimateId, 
+            ...estimateData, 
+            ...updateData,
+            scheduleChangeReason: reason,
+            scheduleChangeNotes: notes
+          },
+          status: estimateData.jobStatus,
+          scheduleDate: startDate
+        });
+      } catch (err) {
+        console.error('GHL Sync failed during reschedule:', err);
+      }
+
+      return res.json({ success: true });
     }
 
     if (action === 'crew-confirm-install') {
