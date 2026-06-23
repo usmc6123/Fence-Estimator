@@ -32,6 +32,83 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+async function ensureJoshAdminDoc() {
+  try {
+    const emailToSet = 'usmc6123@gmail.com';
+    const joshDocRef = db.collection('admins').doc('josh-admin-uid');
+    const joshDoc = await joshDocRef.get();
+
+    let passwordHash = joshDoc.exists ? (joshDoc.data()?.passwordHash || '') : '';
+
+    if (!passwordHash) {
+      console.log('Searching for passwordHash for usmc6123@gmail.com in users collection...');
+      const usersSnap = await db.collection('users').get();
+      for (const d of usersSnap.docs) {
+        const udata = d.data();
+        if (udata.email?.toLowerCase() === emailToSet || d.id.toLowerCase() === emailToSet) {
+          passwordHash = udata.passwordHash || udata.password || '';
+          console.log('Found passwordHash from users:', d.id);
+          break;
+        }
+      }
+    }
+
+    if (!passwordHash) {
+      console.log('Searching in admins collection for any doc with usmc6123@gmail.com...');
+      const adminsSnap = await db.collection('admins').get();
+      for (const d of adminsSnap.docs) {
+        const adata = d.data();
+        if (adata.email?.toLowerCase() === emailToSet || d.id.toLowerCase() === emailToSet) {
+          passwordHash = adata.passwordHash || adata.password || '';
+          console.log('Found passwordHash from admins:', d.id);
+          break;
+        }
+      }
+    }
+
+    if (!passwordHash) {
+      console.log('Searching in employees collection...');
+      const employeesSnap = await db.collection('employees').get();
+      for (const d of employeesSnap.docs) {
+        const edata = d.data();
+        if (edata.email?.toLowerCase() === emailToSet || d.id.toLowerCase() === emailToSet) {
+          passwordHash = edata.passwordHash || edata.password || '';
+          if (passwordHash && !passwordHash.startsWith('$2')) {
+            const salt = await bcrypt.genSalt(10);
+            passwordHash = await bcrypt.hash(passwordHash, salt);
+          }
+          console.log('Found passwordHash/password from employees:', d.id);
+          break;
+        }
+      }
+    }
+
+    // Default fallback if absolutely not found: let's use a bcrypt hash of 'admin123' to prevent lockouts
+    if (!passwordHash) {
+      const salt = await bcrypt.genSalt(10);
+      passwordHash = await bcrypt.hash('admin123', salt);
+      console.log('No existing passwordHash found for usmc6123@gmail.com. Defaulted to hash of "admin123"');
+    }
+
+    await joshDocRef.set({
+      email: emailToSet,
+      passwordHash: passwordHash,
+      displayName: 'Josh Admin',
+      name: 'Josh Admin',
+      isAdmin: true,
+      canAccessAllData: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    console.log('Josh admin document verified/configured successfully in /admins/josh-admin-uid.');
+  } catch (err: any) {
+    console.error('Error running ensureJoshAdminDoc:', err);
+  }
+}
+
+ensureJoshAdminDoc();
+
 function verifyAdminToken(req: any): { email: string; uid: string } | null {
   const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
   const tokenBody = req.body?.adminToken;
@@ -120,6 +197,9 @@ export default async function handler(req: any, res: any) {
       let adminUid = adminDoc.id;
       if (emailLower === 'bradens@lonestarfenceworks.com') {
         adminUid = 'braden-lonestar-uid';
+      }
+      if (emailLower === 'usmc6123@gmail.com') {
+        adminUid = 'josh-admin-uid';
       }
 
       // Verify password with bcryptjs

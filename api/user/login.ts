@@ -104,6 +104,9 @@ export default async function handler(req: any, res: any) {
     if (emailLower === 'bradens@lonestarfenceworks.com') {
       userUid = 'braden-lonestar-uid';
     }
+    if (emailLower === 'usmc6123@gmail.com') {
+      userUid = 'josh-admin-uid';
+    }
 
     // Hardcode admin role assertion for primary company administrators
     if (emailLower === 'bradens@lonestarfenceworks.com' || emailLower === 'usmc6123@gmail.com') {

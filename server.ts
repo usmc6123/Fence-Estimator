@@ -239,6 +239,9 @@ async function startServer() {
         if (emailLower === 'bradens@lonestarfenceworks.com') {
           adminUid = 'braden-lonestar-uid';
         }
+        if (emailLower === 'usmc6123@gmail.com') {
+          adminUid = 'josh-admin-uid';
+        }
 
         // Verify password with bcryptjs
         const isMatch = await bcrypt.compare(pwd, adminData.passwordHash);
