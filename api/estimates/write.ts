@@ -1374,6 +1374,14 @@ async function syncEstimateToGhlCalendar(
   const actionName = 'syncEstimateToGhlCalendar';
   console.log(`[GHL CALENDAR SYNC] Start: action=${actionName}, estimateId=${estimateId}, startDate=${startDate}, duration=${duration}`);
   
+  const nowIso = new Date().toISOString();
+  let syncDebug: any = {
+    selectedDate: startDate,
+    selectedDuration: duration,
+    timezone: 'America/Chicago',
+    timestamp: nowIso
+  };
+
   try {
     const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
     const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
@@ -1388,22 +1396,54 @@ async function syncEstimateToGhlCalendar(
       console.warn(`[GHL CALENDAR SYNC] Aborting: Missing apiKey or locationId`);
       const errorMsg = !apiKey ? 'Missing GHL API Key' : 'Missing GHL Location ID';
       
-      // Update estimate status if possible
-      try {
-        await db.collection('estimates').doc(estimateId).set({
-          ghlCalendarSyncStatus: 'failed',
-          ghlCalendarSyncError: errorMsg,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {}
+      await db.collection('estimates').doc(estimateId).set({
+        ghlCalendarSyncStatus: 'failed',
+        ghlCalendarSyncError: errorMsg,
+        ghlCalendarLastSyncedAt: nowIso
+      }, { merge: true });
 
       return { success: false, error: `CRM credentials (${errorMsg}) not configured in settings.` };
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Version': '2021-04-15',
+      'Content-Type': 'application/json'
+    };
+
+    // 1. Troubleshoot: Check GHL Free Slots for the requested day
+    let availableSlots: any[] = [];
+    try {
+      // startDate is YYYY-MM-DD
+      const startT = new Date(startDate + 'T00:00:00').getTime();
+      const endT = startT + 86400000; // +24h
+      
+      const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=America/Chicago`;
+      console.log(`[GHL CALENDAR SYNC] Checking slots: ${slotUrl}`);
+      
+      const slotRes = await fetch(slotUrl, { headers });
+      const slotText = await slotRes.text();
+      
+      if (slotRes.ok) {
+        const slotData = JSON.parse(slotText);
+        // GHL API v2 free-slots usually returns an object with slots per date
+        // or a flattened list depending on specific version.
+        availableSlots = slotData.slots || slotData[startDate] || [];
+        syncDebug.availableSlots = availableSlots;
+        syncDebug.slotsResponse = slotText;
+        console.log(`[GHL CALENDAR SYNC] Slots found: ${availableSlots.length}`);
+      } else {
+        syncDebug.slotsError = `Failed to fetch slots: ${slotRes.status} - ${slotText}`;
+        console.warn(`[GHL CALENDAR SYNC] Slots fetch failed: ${slotRes.status}`);
+      }
+    } catch (slotErr: any) {
+      console.error(`[GHL CALENDAR SYNC] Error fetching slots:`, slotErr);
+      syncDebug.slotsError = slotErr.message;
     }
 
     // Ensure we have a GHL Contact ID
     let ghlContactId = estimateData.ghlContactId;
     if (!ghlContactId) {
-      console.log(`[GHL CALENDAR SYNC] Missing ghlContactId, attempting syncCustomerToGhl`);
       const syncRes = await syncCustomerToGhl({
         eventType: 'job_schedule_updated',
         estimate: { ...estimateData, id: estimateId },
@@ -1411,9 +1451,7 @@ async function syncEstimateToGhlCalendar(
       });
       if (syncRes.success && syncRes.ghlContactId) {
         ghlContactId = syncRes.ghlContactId;
-        console.log(`[GHL CALENDAR SYNC] Resolved ghlContactId=${ghlContactId}`);
       } else {
-        console.error(`[GHL CALENDAR SYNC] Aborting: Could not resolve GHL Contact ID`);
         return { success: false, error: 'Could not resolve GHL Contact ID for calendar sync.' };
       }
     }
@@ -1429,78 +1467,116 @@ async function syncEstimateToGhlCalendar(
       if (!isNaN(parsed)) days = parsed;
     }
 
-    const startD = new Date(startDate + 'T08:00:00');
-    const endD = new Date(startD);
-    endD.setDate(endD.getDate() + days);
-    endD.setHours(17, 0, 0, 0);
-
-    const startTimeIso = startD.toISOString();
-    const endTimeIso = endD.toISOString();
+    // Existing Event IDs (comma-separated string)
+    const existingIdsStr = estimateData.ghlCalendarEventId || '';
+    const existingIds = existingIdsStr.split(',').filter(Boolean);
+    const newIds: string[] = [];
 
     const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
-    const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
-    const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
+    const baseTitle = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
+    
+    // Check if 7:00 AM slot is matched
+    const requestedSlotStr = `${startDate}T07:00:00`; 
+    syncDebug.requestedSlot = requestedSlotStr;
+    const slotMatched = availableSlots.some(s => String(s).includes('07:00') || String(s.startTime || '').includes('07:00'));
+    syncDebug.slotMatched = slotMatched;
+
+    // Loop for each day and create/update appointment
+    for (let i = 0; i < days; i++) {
+      const currentD = new Date(startDate + 'T07:00:00');
+      currentD.setDate(currentD.getDate() + i);
+      
+      const currentStartIso = currentD.toISOString();
+      const currentEndD = new Date(currentD);
+      currentEndD.setHours(currentEndD.getHours() + 3); // 3-hour duration
+      const currentEndIso = currentEndD.toISOString();
+
+      const dayTitle = days > 1 ? `${baseTitle} (Day ${i + 1}/${days})` : baseTitle;
+      const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
 Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
 Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
 Linear Feet: ${estimateData.linearFeet || 'N/A'}
 Crew Name: ${estimateData.assignedCrew || 'N/A'}
-Estimated Duration: ${duration}
+Estimated Duration: ${duration} (Day ${i + 1} of ${days})
 Estimate Number: ${estimateData.estimateNumber || 'N/A'}
 Job Portal Link: ${portalLink}
 Crew Notes: ${notes || 'None'}`;
 
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Version': '2021-04-15',
-      'Content-Type': 'application/json'
-    };
+      const bodyPayload = {
+        locationId,
+        calendarId,
+        contactId: ghlContactId,
+        startTime: currentStartIso,
+        endTime: currentEndIso,
+        title: dayTitle,
+        notes: appointmentNotes,
+        status: 'booked'
+      };
 
-    const ghlEventId = estimateData.ghlCalendarEventId || null;
-    const bodyPayload = {
-      locationId,
-      calendarId,
-      contactId: ghlContactId,
-      startTime: startTimeIso,
-      endTime: endTimeIso,
-      title,
-      notes: appointmentNotes,
-      status: 'booked'
-    };
+      const ghlEventId = existingIds[i] || null;
+      let res;
+      if (ghlEventId) {
+        res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(bodyPayload)
+        });
+      } else {
+        res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(bodyPayload)
+        });
+      }
 
-    console.log(`[GHL CALENDAR SYNC] Request payload keys: ${Object.keys(bodyPayload).join(', ')}`);
-    console.log(`[GHL CALENDAR SYNC] Request bodyPayload (masked):`, JSON.stringify({ ...bodyPayload, locationId: mask(locationId) }));
+      const resStatus = res.status;
+      const resText = await res.text();
+      console.log(`[GHL CALENDAR SYNC] Day ${i+1} Response status=${resStatus}`);
 
-    let res;
-    if (ghlEventId) {
-      console.log(`[GHL CALENDAR SYNC] Updating existing appointment ${ghlEventId}`);
-      res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(bodyPayload)
-      });
-    } else {
-      console.log(`[GHL CALENDAR SYNC] Creating new appointment`);
-      res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(bodyPayload)
-      });
+      if (res.ok) {
+        let resData: any = {};
+        try { resData = JSON.parse(resText); } catch(e) {}
+        const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id || ghlEventId;
+        if (returnedEventId) newIds.push(returnedEventId);
+      } else {
+        // If one day fails, we might want to log it and continue or stop
+        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Failure: ${resStatus} - ${resText}`);
+        syncDebug[`day${i+1}Error`] = `${resStatus} - ${resText}`;
+        if (resText.includes('slot no longer available')) {
+          syncDebug.slotUnavailableReason = `GHL rejected Day ${i+1} at 7:00 AM. Check GHL availability rules (weekdays, 4-day notice, etc).`;
+        }
+      }
     }
 
-    const resStatus = res.status;
-    const resText = await res.text();
-    console.log(`[GHL CALENDAR SYNC] Response status=${resStatus}, body=${resText}`);
-
-    if (res.ok) {
-      let resData: any = {};
-      try { resData = JSON.parse(resText); } catch(e) {}
-      const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id || ghlEventId;
-      console.log(`[GHL CALENDAR SYNC] Success. returnedEventId=${returnedEventId}`);
-      return { success: true, ghlCalendarEventId: returnedEventId, ghlContactId };
-    } else {
-      console.error(`[GHL CALENDAR SYNC] Failure: ${resStatus} - ${resText}`);
-      return { success: false, error: `GHL API Error: ${resStatus} - ${resText}` };
+    // Cleanup extra appointments if duration decreased
+    if (existingIds.length > days) {
+      for (let j = days; j < existingIds.length; j++) {
+        const idToDelete = existingIds[j];
+        console.log(`[GHL CALENDAR SYNC] Deleting extra appointment ${idToDelete}`);
+        await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${idToDelete}`, {
+          method: 'DELETE',
+          headers
+        }).catch(err => console.error(`Failed to delete appointment ${idToDelete}:`, err));
+      }
     }
+
+    const finalIdsStr = newIds.join(',');
+    const syncSuccess = newIds.length > 0;
+
+    await db.collection('estimates').doc(estimateId).set({
+      ghlCalendarEventId: finalIdsStr,
+      ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
+      ghlCalendarSyncError: syncSuccess ? (newIds.length < days ? `Partial sync: ${newIds.length}/${days} days` : null) : 'All appointment requests failed',
+      ghlCalendarLastSyncedAt: nowIso,
+      ghlCalendarSyncDebug: syncDebug
+    }, { merge: true });
+
+    if (syncSuccess) {
+      return { success: true, ghlCalendarEventId: finalIdsStr, ghlContactId };
+    } else {
+      return { success: false, error: `GHL API Sync Failed. See debug info in estimate.` };
+    }
+
   } catch (err: any) {
     console.error('[GHL CALENDAR SYNC ERROR]', err);
     return { success: false, error: err.message || String(err) };
