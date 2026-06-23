@@ -1126,11 +1126,17 @@ async function syncCustomerToGhl({
             headers,
             body: JSON.stringify({
               pipelineId,
-              stageId,
+              pipelineStageId: stageId,
               status: oppStatus,
               monetaryValue: monetaryValue || undefined
             })
           });
+          console.log(`[GHL API SYNC] PUT Payload keys: ${Object.keys({
+            pipelineId,
+            pipelineStageId: stageId,
+            status: oppStatus,
+            monetaryValue: monetaryValue || undefined
+          }).join(', ')}`);
           if (oppRes.ok) {
             ghlOpportunityId = existingOppId;
           } else {
@@ -1151,12 +1157,21 @@ async function syncCustomerToGhl({
               pipelineId,
               locationId,
               contactId: ghlContactId,
-              stageId,
+              pipelineStageId: stageId,
               name: opportunityName,
               status: oppStatus,
               monetaryValue: monetaryValue || undefined
             })
           });
+          console.log(`[GHL API SYNC] POST Payload keys: ${Object.keys({
+            pipelineId,
+            locationId,
+            contactId: ghlContactId,
+            pipelineStageId: stageId,
+            name: opportunityName,
+            status: oppStatus,
+            monetaryValue: monetaryValue || undefined
+          }).join(', ')}`);
           if (oppRes.ok) {
             const oppData: any = await oppRes.json();
             ghlOpportunityId = oppData.opportunity?.id || oppData.id;

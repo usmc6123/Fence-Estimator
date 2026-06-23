@@ -1485,13 +1485,15 @@ export default async function handler(req: any, res: any) {
             
             const oppPayload = {
               pipelineId: ghlPipelineId,
-              stageId: targetStageId,
+              pipelineStageId: targetStageId,
               locationId,
               contactId: createdContactId,
               name: `Test Opportunity (LSFW Sync) - ${rand}`,
               status: 'open',
               monetaryValue: 1575.50
             };
+
+            console.log(`[GHL API SYNC TEST] POST Payload keys: ${Object.keys(oppPayload).join(', ')}`);
 
             const oppRes = await fetch('https://services.leadconnectorhq.com/opportunities/', {
               method: 'POST',
