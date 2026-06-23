@@ -269,9 +269,22 @@ export interface Estimate {
   scheduledEndDate?: string;
   scheduledDuration?: string | number; // Days or duration string e.g. "1 day"
   scheduledNotes?: string;
-  ghlCalendarSyncStatus?: string;
-  ghlCalendarSyncError?: string;
+  ghlCalendarSyncStatus?: 'synced' | 'failed' | 'pending';
+  ghlCalendarSyncError?: string | null;
   ghlCalendarEventId?: string;
+  ghlCalendarSyncDays?: Array<{
+    dayNumber: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+    status: 'synced' | 'failed';
+    ghlCalendarEventId: string | null;
+    error?: string;
+    mode: 'CREATE' | 'UPDATE';
+    resStatus: number;
+    resBody: string;
+    traceId?: string;
+  }>;
   ghlCalendarLastSyncedAt?: string;
 
   // Supplier Quotes

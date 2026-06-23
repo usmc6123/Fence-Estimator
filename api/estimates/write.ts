@@ -1470,7 +1470,6 @@ async function syncEstimateToGhlCalendar(
     // Existing Event IDs (comma-separated string)
     const existingIdsStr = estimateData.ghlCalendarEventId || '';
     const existingIds = existingIdsStr.split(',').filter(Boolean);
-    const newIds: string[] = [];
 
     const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
     const baseTitle = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
@@ -1482,6 +1481,9 @@ async function syncEstimateToGhlCalendar(
     syncDebug.slotMatched = slotMatched;
 
     // Loop for each day and create/update appointment
+    const syncDaysResults: any[] = [];
+    const newIds: string[] = [];
+
     for (let i = 0; i < days; i++) {
       const currentD = new Date(startDate + 'T07:00:00');
       currentD.setDate(currentD.getDate() + i);
@@ -1514,38 +1516,69 @@ Crew Notes: ${notes || 'None'}`;
       };
 
       const ghlEventId = existingIds[i] || null;
+      const mode = ghlEventId ? 'UPDATE' : 'CREATE';
+      const endpoint = ghlEventId 
+        ? `https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`
+        : `https://services.leadconnectorhq.com/calendars/events/appointments`;
+
+      console.log(`[GHL CALENDAR SYNC] Day ${i+1}/${days} - Mode: ${mode}, Date: ${startDate}, Start: ${currentStartIso}`);
+      
       let res;
-      if (ghlEventId) {
-        res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
-          method: 'PUT',
+      let resText = '';
+      let resStatus = 0;
+      let daySuccess = false;
+      let returnedId = ghlEventId;
+      let dayError = '';
+      let traceId = '';
+
+      try {
+        res = await fetch(endpoint, {
+          method: ghlEventId ? 'PUT' : 'POST',
           headers,
           body: JSON.stringify(bodyPayload)
         });
-      } else {
-        res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(bodyPayload)
-        });
-      }
+        resStatus = res.status;
+        resText = await res.text();
+        traceId = res.headers.get('x-datadog-trace-id') || res.headers.get('trace-id') || '';
+        console.log(`[GHL CALENDAR SYNC] Day ${i+1} Response: ${resStatus}, TraceId: ${traceId}`);
 
-      const resStatus = res.status;
-      const resText = await res.text();
-      console.log(`[GHL CALENDAR SYNC] Day ${i+1} Response status=${resStatus}`);
-
-      if (res.ok) {
-        let resData: any = {};
-        try { resData = JSON.parse(resText); } catch(e) {}
-        const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id || ghlEventId;
-        if (returnedEventId) newIds.push(returnedEventId);
-      } else {
-        // If one day fails, we might want to log it and continue or stop
-        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Failure: ${resStatus} - ${resText}`);
-        syncDebug[`day${i+1}Error`] = `${resStatus} - ${resText}`;
-        if (resText.includes('slot no longer available')) {
-          syncDebug.slotUnavailableReason = `GHL rejected Day ${i+1} at 7:00 AM. Check GHL availability rules (weekdays, 4-day notice, etc).`;
+        if (res.ok) {
+          let resData: any = {};
+          try { resData = JSON.parse(resText); } catch(e) {}
+          const newId = resData.appointment?.id || resData.id || resData.event?.id;
+          if (newId) {
+            returnedId = newId;
+            daySuccess = true;
+            newIds.push(newId);
+            console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. ID: ${returnedId}`);
+          } else if (mode === 'UPDATE' && ghlEventId) {
+             // Some GHL PUT responses might be empty or not contain the ID but still be 200 OK
+             daySuccess = true;
+             newIds.push(ghlEventId);
+          } else {
+            dayError = 'Success response but no ID returned';
+          }
+        } else {
+          dayError = `HTTP ${resStatus}: ${resText}`;
         }
+      } catch (err: any) {
+        dayError = err.message || String(err);
+        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Error:`, err);
       }
+
+      syncDaysResults.push({
+        dayNumber: i + 1,
+        date: currentD.toISOString().split('T')[0],
+        startTime: currentStartIso,
+        endTime: currentEndIso,
+        status: daySuccess ? 'synced' : 'failed',
+        ghlCalendarEventId: returnedId,
+        error: dayError,
+        mode,
+        resStatus,
+        resBody: resText,
+        traceId
+      });
     }
 
     // Cleanup extra appointments if duration decreased
@@ -1561,20 +1594,22 @@ Crew Notes: ${notes || 'None'}`;
     }
 
     const finalIdsStr = newIds.join(',');
-    const syncSuccess = newIds.length > 0;
+    const overallSuccess = newIds.length > 0;
+    const partialSync = overallSuccess && newIds.length < days;
 
     await db.collection('estimates').doc(estimateId).set({
-      ghlCalendarEventId: finalIdsStr,
-      ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
-      ghlCalendarSyncError: syncSuccess ? (newIds.length < days ? `Partial sync: ${newIds.length}/${days} days` : null) : 'All appointment requests failed',
+      ghlCalendarEventId: finalIdsStr, // Backwards compatibility
+      ghlCalendarSyncDays: syncDaysResults,
+      ghlCalendarSyncStatus: overallSuccess ? 'synced' : 'failed',
+      ghlCalendarSyncError: overallSuccess ? (partialSync ? `Partial sync: ${newIds.length}/${days} days` : null) : 'All appointment requests failed',
       ghlCalendarLastSyncedAt: nowIso,
       ghlCalendarSyncDebug: syncDebug
     }, { merge: true });
 
-    if (syncSuccess) {
+    if (overallSuccess) {
       return { success: true, ghlCalendarEventId: finalIdsStr, ghlContactId };
     } else {
-      return { success: false, error: `GHL API Sync Failed. See debug info in estimate.` };
+      return { success: false, error: `GHL API Sync Failed. See sync details in admin.` };
     }
 
   } catch (err: any) {

@@ -806,6 +806,37 @@ export default function LaborTakeOff({
                   {estimate.ghlCalendarSyncStatus === 'synced' ? 'Synced to CRM' : estimate.ghlCalendarSyncStatus === 'failed' ? 'Sync Failed' : 'No Sync Active'}
                 </span>
 
+                {/* Per-Day Sync Status Breakdown */}
+                {estimate.ghlCalendarSyncDays && estimate.ghlCalendarSyncDays.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {estimate.ghlCalendarSyncDays.map((day: any) => (
+                      <div key={day.dayNumber} className="bg-white p-2 rounded-xl border border-slate-100 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">Day {day.dayNumber} • {day.date}</span>
+                          <span className={cn(
+                            "text-[8px] font-black uppercase px-1.5 py-0.5 rounded",
+                            day.status === 'synced' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                          )}>
+                            {day.status}
+                          </span>
+                        </div>
+                        {day.ghlCalendarEventId && (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <CheckCircle2 size={8} className="text-emerald-500" />
+                            <span className="text-[8px] text-slate-400 font-mono">GHL ID: {day.ghlCalendarEventId}</span>
+                          </div>
+                        )}
+                        {day.error && (
+                          <div className="mt-1 p-1 bg-rose-50/50 rounded text-[8px] text-rose-500 font-medium border border-rose-100/50 break-all">
+                            Error: {day.error}
+                            {day.traceId && <div className="mt-0.5 text-slate-400">Trace: {day.traceId}</div>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {estimate.ghlCalendarSyncStatus === 'failed' && (
                   <button
                     onClick={async () => {
