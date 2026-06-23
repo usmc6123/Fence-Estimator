@@ -1187,31 +1187,24 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   // Calculate Materials takeoff list if jobData exists
   const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
   const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => {
-    // Explicitly exclude non-material service/financial categories
-    const nonMaterialCategories = ['Labor', 'Install', 'Fee', 'Tax', 'Discount', 'Payment', 'Adjustment', 'Profit'];
-    const lowerCategory = (item.category || '').toLowerCase();
     const lowerDesc = (item.description || '').toLowerCase();
-    
-    const isServiceOrFee = nonMaterialCategories.some(cat => 
-      lowerCategory.includes(cat.toLowerCase()) || 
-      lowerDesc.includes(cat.toLowerCase())
-    );
+    const lowerCategory = (item.category || '').toLowerCase();
 
-    // Explicitly include physical materials or items marked as materials
-    const materialKeywords = [
-      'post', 'picket', 'rail', 'board', 'trim', 'concrete', 'gate', 'hinge', 'latch', 
-      'screw', 'nail', 'bracket', 'hardware', 'stain', 'pipe', 'link', 'fabric', 
-      'wire', 'bar', 'band', 'cap', 'panel', 'mesh', 'cement', 'wood', 'metal'
-    ];
-    
-    const isPhysicalMaterial = materialKeywords.some(kw => 
-      lowerDesc.includes(kw) || lowerCategory.includes(kw)
-    );
+    // 1. Specifically exclude "Demo Labor" as requested
+    if (lowerDesc.includes('demo labor')) return false;
 
+    // 2. Exclude other service/financial items (Labor, Install, Fees, etc.)
+    const exclusions = ['install charge', 'labor payout', 'tax', 'fee', 'discount', 'markup', 'credit'];
+    const isExcluded = exclusions.some(ex => lowerDesc.includes(ex) || lowerCategory.includes(ex));
+
+    // 3. If it's marked as a material item, always keep it
     if (item.isMaterialItem === true) return true;
-    if (isServiceOrFee) return false;
-    
-    return isPhysicalMaterial || !isServiceOrFee;
+
+    // 4. If it's an excluded service/financial item, remove it
+    if (isExcluded) return false;
+
+    // 5. Default: Keep all other items (materials)
+    return true;
   });
 
   // Determine current job status label and color
