@@ -785,14 +785,14 @@ export default function ManageEmployees() {
                 <p className="text-xs text-[#999999] mt-1">Use the form on the left to add your field installation crews.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
+              <div className="">
+                <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-[#E5E5E5] text-[10px] font-bold uppercase tracking-wider text-[#666666]">
                       <th className="pb-3 pl-4">Name & Contact</th>
-                      <th className="pb-3">Permissions & Status</th>
-                      <th className="pb-3">Dispatch Preferences</th>
-                      <th className="pb-3 text-right pr-4">Action Controls</th>
+                      <th className="pb-3">Permissions</th>
+                      <th className="pb-3">Dispatch</th>
+                      <th className="pb-3 text-right pr-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F0F0F0] font-medium">
@@ -814,7 +814,7 @@ export default function ManageEmployees() {
                         <td className="py-4">
                           <div className="flex flex-col gap-1 items-start">
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
                               emp.permission === 'Can Edit' 
                                 ? "bg-emerald-100 text-emerald-800" 
                                 : "bg-amber-100 text-amber-800"
@@ -823,7 +823,7 @@ export default function ManageEmployees() {
                               {emp.permission}
                             </span>
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
                               emp.isActive !== false ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-800"
                             )}>
                               {emp.isActive !== false ? "Active state" : "Inactive state"}
@@ -833,39 +833,39 @@ export default function ManageEmployees() {
                         <td className="py-4">
                           <div className="flex flex-col gap-1 items-start">
                             {emp.isPrimaryCrewContact ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest animate-pulse border border-emerald-300">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest animate-pulse border border-emerald-300">
                                 ★ Primary Crew Contact
                               </span>
                             ) : null}
                             <span className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide",
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
                               emp.canReceiveCrewDispatch !== false ? "bg-teal-100 text-teal-800" : "bg-gray-100 text-gray-800"
                             )}>
                               {emp.canReceiveCrewDispatch !== false ? "Receives Dispatch" : "No Dispatch"}
                             </span>
                           </div>
                         </td>
-                        <td className="py-4 text-right pr-4 space-x-1.5">
+                        <td className="py-4 text-right pr-4 space-x-1">
                           <button
                             onClick={() => handleOpenEdit(emp)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#D5D5D5] bg-white px-2.5 py-1.5 text-xs font-bold text-american-blue hover:bg-gray-50 transition-colors"
+                            title="Edit Details"
+                            className="inline-flex items-center justify-center rounded-lg border border-[#D5D5D5] bg-white p-1.5 text-american-blue hover:bg-gray-50 transition-colors"
                           >
-                            <Edit3 size={11} />
-                            Edit Details
+                            <Edit3 size={12} />
                           </button>
                           <button
                             onClick={() => handleOpenReset(emp)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#D5D5D5] bg-white px-2.5 py-1.5 text-xs font-bold text-american-blue hover:bg-gray-50 transition-colors"
+                            title="Code"
+                            className="inline-flex items-center justify-center rounded-lg border border-[#D5D5D5] bg-white p-1.5 text-american-blue hover:bg-gray-50 transition-colors"
                           >
-                            <KeyRound size={11} />
-                            Code
+                            <KeyRound size={12} />
                           </button>
                           <button
                             onClick={() => handleRemoveEmployee(emp)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors"
+                            title="Delete"
+                            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-700 hover:bg-red-100 transition-colors"
                           >
-                            <Trash2 size={11} />
-                            Delete
+                            <Trash2 size={12} />
                           </button>
                         </td>
                       </tr>
