@@ -1360,6 +1360,119 @@ async function saveGhlSyncLogLocal(estimateId: string | undefined, customerId: s
   }
 }
 
+/**
+ * Helper to sync schedule events to GHL Install Calendar
+ */
+async function syncEstimateToGhlCalendar(
+  estimateId: string, 
+  estimateData: any, 
+  startDate: string, 
+  duration: string | number, 
+  notes: string, 
+  token: string
+) {
+  try {
+    const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+    const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    const apiKey = settings.ghlApiKey;
+    const locationId = settings.ghlLocationId;
+    const calendarId = 'mLZAlEmZ3Y2QyByYTFQh'; // Install Calendar ID (Req)
+
+    if (!apiKey || !locationId) {
+      return { success: false, error: 'CRM credentials (API Key or Location ID) not configured in settings.' };
+    }
+
+    // Ensure we have a GHL Contact ID
+    let ghlContactId = estimateData.ghlContactId;
+    if (!ghlContactId) {
+      const syncRes = await syncCustomerToGhl({
+        eventType: 'job_schedule_updated',
+        estimate: { ...estimateData, id: estimateId },
+        status: 'Start Date Scheduled'
+      });
+      if (syncRes.success && syncRes.ghlContactId) {
+        ghlContactId = syncRes.ghlContactId;
+      } else {
+        return { success: false, error: 'Could not resolve GHL Contact ID for calendar sync.' };
+      }
+    }
+
+    let days = 1;
+    const durationStr = String(duration);
+    if (durationStr.includes('2')) days = 2;
+    else if (durationStr.includes('3')) days = 3;
+    else if (durationStr.includes('4')) days = 4;
+    else if (durationStr.includes('5')) days = 5;
+    else {
+      const parsed = parseInt(durationStr);
+      if (!isNaN(parsed)) days = parsed;
+    }
+
+    const startD = new Date(startDate + 'T08:00:00');
+    const endD = new Date(startD);
+    endD.setDate(endD.getDate() + days);
+    endD.setHours(17, 0, 0, 0);
+
+    const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
+    const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
+    const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
+Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
+Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
+Linear Feet: ${estimateData.linearFeet || 'N/A'}
+Crew Name: ${estimateData.assignedCrew || 'N/A'}
+Estimated Duration: ${duration}
+Estimate Number: ${estimateData.estimateNumber || 'N/A'}
+Job Portal Link: ${portalLink}
+Crew Notes: ${notes || 'None'}`;
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Version': '2021-04-15',
+      'Content-Type': 'application/json'
+    };
+
+    const ghlEventId = estimateData.ghlCalendarEventId || null;
+    const bodyPayload = {
+      calendarId,
+      contactId: ghlContactId,
+      startTime: startD.toISOString(),
+      endTime: endD.toISOString(),
+      title,
+      notes: appointmentNotes,
+      status: 'booked'
+    };
+
+    let res;
+    if (ghlEventId) {
+      console.log(`[GHL CALENDAR SYNC] Updating appointment ${ghlEventId}`);
+      res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(bodyPayload)
+      });
+    } else {
+      console.log(`[GHL CALENDAR SYNC] Creating new appointment`);
+      res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bodyPayload)
+      });
+    }
+
+    if (res.ok) {
+      const data: any = await res.json();
+      const newEventId = data.appointment?.id || data.id || data.event?.id || ghlEventId;
+      return { success: true, ghlCalendarEventId: newEventId, ghlContactId };
+    } else {
+      const errTxt = await res.text();
+      return { success: false, error: `GHL API Error: ${res.status} - ${errTxt}` };
+    }
+  } catch (err: any) {
+    console.error('[GHL CALENDAR SYNC ERROR]', err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
 async function getEstimateDocRef(estimateId: string) {
   let docRef = db.collection('estimates').doc(String(estimateId));
   let snap = await docRef.get();
@@ -2002,8 +2115,11 @@ export default async function handler(req: any, res: any) {
 
       await docRef.update(updates);
 
+      // Sync to GHL Calendar
+      await syncEstimateToGhlCalendar(estimateId, estimateData, preferredDate, estimateData.installDuration || 1, notes, token);
+
       // Create/Update schedule_event reflecting confirmed status
-      const eventId = estimateData.ghlInstallCalendarEventId || `install-${estimateId}`;
+      const eventId = estimateData.ghlCalendarEventId || `install-${estimateId}`;
       const startD = new Date(preferredDate);
       const endD = new Date(preferredDate);
       const duration = Number(estimateData.installDuration || 1);
@@ -2174,8 +2290,11 @@ export default async function handler(req: any, res: any) {
         jobStatus: 'Pending Crew Confirmation'
       };
 
+      // Sync to GHL Calendar
+      await syncEstimateToGhlCalendar(estimateId, estimateData, requestedStartDate, duration || 1, notes, token);
+
       // Wait, we add schedule_event representing alternative proposal
-      const eventId = estimateData.ghlInstallCalendarEventId || `install-${estimateId}`;
+      const eventId = estimateData.ghlCalendarEventId || `install-${estimateId}`;
 
       const eventPayload = {
         id: eventId,
@@ -5019,120 +5138,12 @@ export default async function handler(req: any, res: any) {
 
         const nowIso = new Date().toISOString();
 
-        // 1. Sync Contact first to update job status & custom fields
-        let ghlContactId = estimateData.ghlContactId || '';
-        try {
-          const syncRes = await syncCustomerToGhl({
-            eventType: 'job_start_scheduled',
-            estimate: {
-              ...estimateData,
-              id: estimateId,
-              scheduledStartDate: startDate,
-              scheduledDuration: duration,
-              scheduledNotes: notes,
-              jobPortalScheduled: true
-            },
-            status: 'Start Date Scheduled'
-          });
-          if (syncRes && syncRes.success && syncRes.ghlContactId) {
-            ghlContactId = syncRes.ghlContactId;
-          }
-        } catch (ghlErr) {
-          console.error('[GHL CALENDAR SYNC] Failed contact sync:', ghlErr);
-        }
-
-        // 2. Fetch GHL API settings
-        const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
-        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
-        const apiKey = settings.ghlApiKey;
-        const locationId = settings.ghlLocationId;
-        const calendarId = settings.ghlInstallCalendarId;
-
-        // 3. Prepare Calendar Event Details
-        let syncSuccess = false;
-        let syncErrorMsg = '';
-        let ghlEventId = estimateData.ghlInstallCalendarEventId || null;
-
-        let days = 1;
-        if (duration === '2 days' || duration === 2) days = 2;
-        else if (duration === '3 days' || duration === 3) days = 3;
-        else if (duration === '4 days' || duration === 4) days = 4;
-        else if (duration === '5+ days' || duration >= 5) days = 5;
-
-        const startD = new Date(startDate + 'T08:00:00');
-        const endD = new Date(startD);
-        endD.setDate(endD.getDate() + days);
-        endD.setHours(17, 0, 0, 0);
-
-        const startTimeStr = startD.toISOString();
-        const endTimeStr = endD.toISOString();
-
-        const portalLink = `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
-        const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
-        const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
-Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
-Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
-Linear Feet: ${estimateData.linearFeet || 'N/A'}
-Crew Name: ${estimateData.assignedCrew || 'N/A'}
-Estimated Duration: ${duration}
-Estimate Number: ${estimateData.estimateNumber || 'N/A'}
-Job Portal Link: ${portalLink}
-Crew Notes: ${notes || 'None'}`;
-
-        const headers = {
-          'Authorization': `Bearer ${apiKey}`,
-          'Version': '2021-04-15',
-          'Content-Type': 'application/json'
-        };
-
-        // 4. Run Calendar Sync (Create/Update Appointment)
-        if (apiKey && locationId && calendarId && ghlContactId) {
-          try {
-            const bodyPayload = {
-              calendarId,
-              contactId: ghlContactId,
-              startTime: startTimeStr,
-              endTime: endTimeStr,
-              title,
-              notes: appointmentNotes,
-              status: 'booked'
-            };
-
-            let ghlRes;
-            if (ghlEventId) {
-              console.log(`[GHL CALENDAR SYNC] Updating appointment ${ghlEventId}`);
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            } else {
-              console.log(`[GHL CALENDAR SYNC] Creating new appointment`);
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            }
-
-            if (ghlRes.ok) {
-              const resData: any = await ghlRes.json();
-              const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id;
-              if (returnedEventId) {
-                ghlEventId = returnedEventId;
-              }
-              syncSuccess = true;
-            } else {
-              const errTxt = await ghlRes.text();
-              throw new Error(`GHL returned HTTP ${ghlRes.status}: ${errTxt}`);
-            }
-          } catch (err: any) {
-            console.error(`[GHL CALENDAR SYNC ERROR]`, err);
-            syncErrorMsg = err.message || String(err);
-          }
-        } else {
-          syncErrorMsg = `Missing configuration: apiKey exists? ${!!apiKey}, locationId? ${!!locationId}, calendarId? ${!!calendarId}, contactId? ${!!ghlContactId}`;
-        }
+        // Sync to GHL Calendar
+        const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, token);
+        const syncSuccess = calSync.success;
+        const syncErrorMsg = calSync.error || '';
+        const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
         const logEntry = {
@@ -5169,8 +5180,8 @@ Crew Notes: ${notes || 'None'}`;
         updates.reminder72hrCrewAt = rem72.toISOString().split('T')[0];
         updates.reminder24hrCrewAt = rem24.toISOString().split('T')[0];
 
-        if (syncSuccess && ghlEventId) {
-          updates.ghlInstallCalendarEventId = ghlEventId;
+        if (syncSuccess && ghlCalendarEventId) {
+          updates.ghlCalendarEventId = ghlCalendarEventId;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
@@ -5254,119 +5265,12 @@ Crew Notes: ${notes || 'None'}`;
         const estimateData = snap.data() || {};
         const nowIso = new Date().toISOString();
 
-        // 1. Sync Contact first to update job status & custom fields
-        let ghlContactId = estimateData.ghlContactId || '';
-        try {
-          const syncRes = await syncCustomerToGhl({
-            eventType: 'job_start_scheduled',
-            estimate: {
-              ...estimateData,
-              id: estimateId,
-              scheduledStartDate: startDate,
-              scheduledDuration: duration,
-              scheduledNotes: notes,
-              assignedCrew,
-              jobPortalScheduled: true
-            },
-            status: 'Start Date Scheduled'
-          });
-          if (syncRes && syncRes.success && syncRes.ghlContactId) {
-            ghlContactId = syncRes.ghlContactId;
-          }
-        } catch (ghlErr) {
-          console.error('[GHL CALENDAR SYNC] Failed contact sync:', ghlErr);
-        }
-
-        // 2. Fetch GHL API settings
-        const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
-        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
-        const apiKey = settings.ghlApiKey;
-        const locationId = settings.ghlLocationId;
-        const calendarId = settings.ghlInstallCalendarId;
-
-        // 3. Prepare Calendar Event Details
-        let syncSuccess = false;
-        let syncErrorMsg = '';
-        let ghlEventId = estimateData.ghlInstallCalendarEventId || null;
-
-        let days = 1;
-        if (duration === '2 days' || duration === 2) days = 2;
-        else if (duration === '3 days' || duration === 3) days = 3;
-        else if (duration === '4 days' || duration === 4) days = 4;
-        else if (duration === '5+ days' || duration >= 5) days = 5;
-
-        const startD = new Date(startDate + 'T08:00:00');
-        const endD = new Date(startD);
-        endD.setDate(endD.getDate() + days);
-        endD.setHours(17, 0, 0, 0);
-
-        const startTimeStr = startD.toISOString();
-        const endTimeStr = endD.toISOString();
-
-        const portalLink = `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken || ''}`;
-        const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
-        const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
-Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
-Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
-Linear Feet: ${estimateData.linearFeet || 'N/A'}
-Crew Name: ${assignedCrew}
-Estimated Duration: ${duration}
-Estimate Number: ${estimateData.estimateNumber || 'N/A'}
-Job Portal Link: ${portalLink}
-Admin Notes: ${notes || 'None'}`;
-
-        const headers = {
-          'Authorization': `Bearer ${apiKey}`,
-          'Version': '2021-04-15',
-          'Content-Type': 'application/json'
-        };
-
-        // 4. Run Calendar Sync (Create/Update Appointment)
-        if (apiKey && locationId && calendarId && ghlContactId) {
-          try {
-            const bodyPayload = {
-              calendarId,
-              contactId: ghlContactId,
-              startTime: startTimeStr,
-              endTime: endTimeStr,
-              title,
-              notes: appointmentNotes,
-              status: 'booked'
-            };
-
-            let ghlRes;
-            if (ghlEventId) {
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            } else {
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            }
-
-            if (ghlRes.ok) {
-              const resData: any = await ghlRes.json();
-              const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id;
-              if (returnedEventId) {
-                ghlEventId = returnedEventId;
-              }
-              syncSuccess = true;
-            } else {
-              const errTxt = await ghlRes.text();
-              throw new Error(`GHL returned HTTP ${ghlRes.status}: ${errTxt}`);
-            }
-          } catch (err: any) {
-            console.error(`[GHL CALENDAR SYNC ERROR]`, err);
-            syncErrorMsg = err.message || String(err);
-          }
-        } else {
-          syncErrorMsg = `Missing configuration: apiKey exists? ${!!apiKey}, locationId? ${!!locationId}, calendarId? ${!!calendarId}, contactId? ${!!ghlContactId}`;
-        }
+        // Sync to GHL Calendar
+        const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, estimateData.laborSnapshotToken || '');
+        const syncSuccess = calSync.success;
+        const syncErrorMsg = calSync.error || '';
+        const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
         const logEntry = {
@@ -5404,8 +5308,8 @@ Admin Notes: ${notes || 'None'}`;
         updates.reminder72hrCrewAt = rem72.toISOString().split('T')[0];
         updates.reminder24hrCrewAt = rem24.toISOString().split('T')[0];
 
-        if (syncSuccess && ghlEventId) {
-          updates.ghlInstallCalendarEventId = ghlEventId;
+        if (syncSuccess && ghlCalendarEventId) {
+          updates.ghlCalendarEventId = ghlCalendarEventId;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
@@ -5479,119 +5383,12 @@ Admin Notes: ${notes || 'None'}`;
 
         const nowIso = new Date().toISOString();
 
-        // 1. Sync Contact first to update job status & custom fields
-        let ghlContactId = estimateData.ghlContactId || '';
-        try {
-          const syncRes = await syncCustomerToGhl({
-            eventType: 'job_start_scheduled',
-            estimate: {
-              ...estimateData,
-              id: estimateId,
-              scheduledStartDate: startDate,
-              scheduledDuration: duration,
-              scheduledNotes: notes,
-              assignedCrew,
-              jobPortalScheduled: true
-            },
-            status: 'Start Date Scheduled'
-          });
-          if (syncRes && syncRes.success && syncRes.ghlContactId) {
-            ghlContactId = syncRes.ghlContactId;
-          }
-        } catch (ghlErr) {
-          console.error('[GHL CALENDAR SYNC] Failed contact sync:', ghlErr);
-        }
-
-        // 2. Fetch GHL API settings
-        const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
-        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
-        const apiKey = settings.ghlApiKey;
-        const locationId = settings.ghlLocationId;
-        const calendarId = settings.ghlInstallCalendarId;
-
-        // 3. Prepare Calendar Event Details
-        let syncSuccess = false;
-        let syncErrorMsg = '';
-        let ghlEventId = estimateData.ghlInstallCalendarEventId || null;
-
-        let days = 1;
-        if (duration === '2 days' || duration === 2) days = 2;
-        else if (duration === '3 days' || duration === 3) days = 3;
-        else if (duration === '4 days' || duration === 4) days = 4;
-        else if (duration === '5+ days' || duration >= 5) days = 5;
-
-        const startD = new Date(startDate + 'T08:00:00');
-        const endD = new Date(startD);
-        endD.setDate(endD.getDate() + days);
-        endD.setHours(17, 0, 0, 0);
-
-        const startTimeStr = startD.toISOString();
-        const endTimeStr = endD.toISOString();
-
-        const portalLink = `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken || ''}`;
-        const title = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
-        const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
-Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
-Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
-Linear Feet: ${estimateData.linearFeet || 'N/A'}
-Crew Name: ${assignedCrew}
-Estimated Duration: ${duration}
-Estimate Number: ${estimateData.estimateNumber || 'N/A'}
-Job Portal Link: ${portalLink}
-Re-Sync Triggered: Yes`;
-
-        const headers = {
-          'Authorization': `Bearer ${apiKey}`,
-          'Version': '2021-04-15',
-          'Content-Type': 'application/json'
-        };
-
-        // 4. Run Calendar Sync (Create/Update Appointment)
-        if (apiKey && locationId && calendarId && ghlContactId) {
-          try {
-            const bodyPayload = {
-              calendarId,
-              contactId: ghlContactId,
-              startTime: startTimeStr,
-              endTime: endTimeStr,
-              title,
-              notes: appointmentNotes,
-              status: 'booked'
-            };
-
-            let ghlRes;
-            if (ghlEventId) {
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            } else {
-              ghlRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(bodyPayload)
-              });
-            }
-
-            if (ghlRes.ok) {
-              const resData: any = await ghlRes.json();
-              const returnedEventId = resData.appointment?.id || resData.id || resData.event?.id;
-              if (returnedEventId) {
-                ghlEventId = returnedEventId;
-              }
-              syncSuccess = true;
-            } else {
-              const errTxt = await ghlRes.text();
-              throw new Error(`GHL returned HTTP ${ghlRes.status}: ${errTxt}`);
-            }
-          } catch (err: any) {
-            console.error(`[GHL CALENDAR SYNC ERROR]`, err);
-            syncErrorMsg = err.message || String(err);
-          }
-        } else {
-          syncErrorMsg = `Missing configuration: apiKey exists? ${!!apiKey}, locationId? ${!!locationId}, calendarId? ${!!calendarId}, contactId? ${!!ghlContactId}`;
-        }
+        // Sync to GHL Calendar
+        const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, estimateData.laborSnapshotToken || '');
+        const syncSuccess = calSync.success;
+        const syncErrorMsg = calSync.error || '';
+        const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
         const logEntry = {
@@ -5610,8 +5407,8 @@ Re-Sync Triggered: Yes`;
           updates.ghlContactId = ghlContactId;
         }
 
-        if (syncSuccess && ghlEventId) {
-          updates.ghlInstallCalendarEventId = ghlEventId;
+        if (syncSuccess && ghlCalendarEventId) {
+          updates.ghlCalendarEventId = ghlCalendarEventId;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);

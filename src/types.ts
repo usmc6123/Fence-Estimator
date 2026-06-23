@@ -271,7 +271,7 @@ export interface Estimate {
   scheduledNotes?: string;
   ghlCalendarSyncStatus?: string;
   ghlCalendarSyncError?: string;
-  ghlInstallCalendarEventId?: string;
+  ghlCalendarEventId?: string;
   ghlCalendarLastSyncedAt?: string;
 
   // Supplier Quotes

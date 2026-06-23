@@ -87,7 +87,7 @@ export default function LaborTakeOff({
           scheduledNotes: adminScheduleNotes,
           ghlCalendarSyncStatus: resData.ghlCalendarSyncStatus,
           ghlCalendarSyncError: resData.ghlCalendarSyncError,
-          ghlInstallCalendarEventId: resData.ghlInstallCalendarEventId || estimate.ghlInstallCalendarEventId,
+          ghlCalendarEventId: resData.ghlCalendarEventId || estimate.ghlCalendarEventId,
           ghlCalendarLastSyncedAt: new Date().toISOString()
         });
       }
@@ -812,11 +812,11 @@ export default function LaborTakeOff({
                 )}
               </div>
 
-              {estimate.ghlInstallCalendarEventId && (
+              {estimate.ghlCalendarEventId && (
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 sm:col-span-2">
                   <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">GHL Appointment Event ID</span>
                   <span className="text-xs font-mono font-bold text-slate-700 mt-1 block select-all">
-                    {estimate.ghlInstallCalendarEventId}
+                    {estimate.ghlCalendarEventId}
                   </span>
                 </div>
               )}

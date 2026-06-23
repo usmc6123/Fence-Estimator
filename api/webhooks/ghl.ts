@@ -959,7 +959,7 @@ export default async function handler(req: any, res: any) {
           jobStatus: 'Pending Crew Confirmation',
           preferredInstallDate: appointmentStartTime,
           confirmedInstallDate: null, // Reset/clear until crew actually confirms
-          ghlInstallCalendarEventId: appointmentId,
+          ghlCalendarEventId: appointmentId,
           ghlInstallCalendarId: calendarId,
           schedulingHistory: [...existingHistory, schedulingHistoryEntry],
           updatedAt: nowIso
