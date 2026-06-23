@@ -983,6 +983,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'job_scheduled') eventTag = 'job-scheduled';
     else if (eventType === 'estimate_completed' || eventType === 'job_completed') eventTag = 'job-completed';
     else if (eventType === 'archived') eventTag = 'estimate-archived';
+    else if (eventType === 'labor_dispatched') eventTag = 'LSFW - Labor Dispatched';
 
     // Map the human-readable job status
     let currentJobStatus = status || 'Interested';
@@ -992,6 +993,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'estimate_declined') currentJobStatus = 'Declined';
     else if (eventType === 'estimate_completed' || eventType === 'job_completed') currentJobStatus = 'Completed';
     else if (eventType === 'archived') currentJobStatus = 'Archived';
+    else if (eventType === 'labor_dispatched') currentJobStatus = 'Labor Dispatched';
 
     // Form Custom Fields array
     const customFieldsPayload: { id: string; value: any }[] = [];
@@ -1015,6 +1017,12 @@ async function syncCustomerToGhl({
         addCf('linearFeet', Number(estimate.linearFeet || 0));
         addCf('customerName', estimate.customerName || (customer ? customer.customerName : ''));
         addCf('address', estimate.customerAddress || estimate.address || (customer ? (customer.address || customer.streetAddress) : ''));
+        
+        // Add new labor dispatches details
+        addCf('laborSnapshotLink', estimate.laborSnapshotLink || '');
+        addCf('crewScheduleLink', estimate.crewScheduleLink || '');
+        addCf('assignedCrew', estimate.assignedCrew || '');
+        addCf('dispatchDate', estimate.dispatchDate || '');
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -1078,6 +1086,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'estimate_accepted') mappedStageLabel = 'Accepted';
     else if (eventType === 'estimate_declined') mappedStageLabel = 'Declined';
     else if (eventType === 'job_scheduled') mappedStageLabel = 'Scheduled';
+    else if (eventType === 'labor_dispatched') mappedStageLabel = 'Scheduled';
     else if (eventType === 'estimate_completed' || eventType === 'job_completed') mappedStageLabel = 'Completed';
     else if (eventType === 'archived') mappedStageLabel = 'Archived';
 
@@ -2137,6 +2146,100 @@ export default async function handler(req: any, res: any) {
 
       await targetRef.update(updates);
       return res.status(200).json({ success: true, tracking: updates });
+    }
+
+    if (action === 'get-labor-snapshot') {
+      const estimateId = req.query?.estimateId || req.body?.estimateId;
+      const token = req.query?.token || req.body?.token;
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required.' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Estimate not found' });
+      }
+
+      const estimateData = snap.data() || {};
+
+      // Secure token verification: accepts laborSnapshotToken or crewScheduleToken or version ID check
+      const isValidToken = token && (
+        token === estimateData.laborSnapshotToken || 
+        token === estimateData.crewScheduleToken ||
+        (Array.isArray(estimateData.laborContractVersions) && estimateData.laborContractVersions.some((v: any) => v.versionId === token))
+      );
+
+      if (!isValidToken) {
+        return res.status(403).json({ error: 'Unauthorized: Invalid secure access token.' });
+      }
+
+      const snapshot = estimateData.laborContractSnapshot || null;
+
+      const ownerUid = estimateData.userId || estimateData.uid || estimateData.ownerId;
+      let companyConfig: any = null;
+      if (ownerUid) {
+        try {
+          const settingsSnap = await db.collection('companySettings').doc(ownerUid).get();
+          if (settingsSnap.exists) {
+            const data = settingsSnap.data() || {};
+            companyConfig = {
+              companyName: data.companyName || '',
+              companyEmail: data.companyEmail || '',
+              companyPhone: data.companyPhone || '',
+              companyLogo: data.companyLogo || '',
+              companyWebsite: data.companyWebsite || '',
+            };
+          }
+        } catch (err) {
+          console.warn('Failed to fetch companySettings:', err);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        estimate: {
+          id: snap.id,
+          ...estimateData,
+        },
+        snapshot,
+        settings: companyConfig
+      });
+    }
+
+    if (action === 'view-labor-snapshot') {
+      const estimateId = req.body?.estimateId || req.query?.estimateId;
+      const token = req.body?.token || req.query?.token;
+      if (!estimateId) {
+        return res.status(400).json({ error: 'Estimate ID is required' });
+      }
+
+      const { docRef, snap } = await getEstimateDocRef(estimateId);
+      if (snap.exists) {
+        const data = snap.data() || {};
+        const isValidToken = token && (
+          token === data.laborSnapshotToken || 
+          token === data.crewScheduleToken ||
+          (Array.isArray(data.laborContractVersions) && data.laborContractVersions.some((v: any) => v.versionId === token))
+        );
+
+        if (isValidToken) {
+          const log = data.laborContractEmailLog || [];
+          let updated = false;
+          const updatedLog = log.map((entry: any) => {
+            if (entry.status === 'Sent' || !entry.opened) {
+              updated = true;
+              return { ...entry, opened: true, status: 'Opened' };
+            }
+            return entry;
+          });
+
+          if (updated) {
+            await docRef.update({ laborContractEmailLog: updatedLog });
+            console.log(`[VIEW LABOR SNAPSHOT] Marked labor snapshot log as Opened.`);
+          }
+        }
+      }
+      return res.status(200).json({ success: true });
     }
 
     if (action === 'decision-public-estimate') {
@@ -3454,19 +3557,29 @@ export default async function handler(req: any, res: any) {
 
         const estimateData = snap.data() || {};
 
-        // Generate critical token
-        let crewScheduleToken = '';
-        try {
-          crewScheduleToken = generateSecureToken();
-        } catch (tokenErr: any) {
-          return res.status(500).json({
-            success: false,
-            error: "Crew scheduling token generation failed",
-            details: tokenErr?.message || String(tokenErr),
-            debugBuild: "labor-email-truthful-send-v1"
-          });
+        // Generate secure tokens if they don't already exist
+        let crewScheduleToken = estimateData.crewScheduleToken || '';
+        if (!crewScheduleToken) {
+          try {
+            crewScheduleToken = generateSecureToken();
+          } catch (tokenErr: any) {
+            crewScheduleToken = crypto.randomUUID();
+          }
         }
-        const appUrl = 'https://fence-estimator-eight.vercel.app';
+
+        let laborSnapshotToken = estimateData.laborSnapshotToken || '';
+        if (!laborSnapshotToken) {
+          try {
+            laborSnapshotToken = generateSecureToken();
+          } catch (tokenErr: any) {
+            laborSnapshotToken = crypto.randomUUID();
+          }
+        }
+
+        const host = req.headers.host || 'fence-estimator-eight.vercel.app';
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const appUrl = `${protocol}://${host}`;
+        const laborSnapshotLink = `${appUrl}/?portal=labor-snapshot&estimateId=${estimateId}&token=${laborSnapshotToken}`;
         const crewScheduleLink = `${appUrl}/?portal=crew-schedule&estimateId=${estimateId}&token=${crewScheduleToken}`;
         const nowIso = new Date().toISOString();
 
@@ -3475,9 +3588,298 @@ export default async function handler(req: any, res: any) {
 
         const customerName = snapshot ? snapshot.customerName : (estimateData.customerName || 'Valued Client');
         const jobAddress = snapshot ? snapshot.jobAddress : (estimateData.customerAddress || estimateData.address || 'N/A');
-        const fenceType = snapshot ? snapshot.fenceType : (estimateData.fenceType || 'Fence');
-        const height = snapshot ? snapshot.height : (estimateData.height || 6);
+        const fenceType = snapshot ? (snapshot.fenceType || snapshot.woodType || 'Fence') : (estimateData.fenceType || estimateData.fenceMaterial || 'Fence');
         const linearFeet = snapshot ? snapshot.linearFeet : (estimateData.linearFeet || 0);
+
+        const emailSubject = `New Job Dispatch - ${customerName}`;
+        
+        // Clean text-only body
+        const emailText = `Hello ${crewName || 'Crew'},
+
+You have been assigned a new project.
+
+Customer:
+${customerName}
+
+Address:
+${jobAddress}
+
+Fence Type:
+${fenceType}
+
+Linear Feet:
+${linearFeet}
+
+View Full Labor Breakdown:
+${laborSnapshotLink}
+
+Schedule Installation:
+${crewScheduleLink}
+
+Thank you,
+
+Lone Star Fence Works`;
+
+        // Modern, inbox-safe, professional HTML body
+        const emailHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1e293b;">
+  <div style="text-align: center; margin-bottom: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px;">
+    <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.025em; text-transform: uppercase;">LONE STAR FENCE WORKS</h2>
+    <p style="color: #64748b; margin: 4px 0 0 0; font-size: 12px; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase;">Job Dispatch Notification</p>
+  </div>
+  
+  <p style="font-size: 15px; line-height: 1.5; margin-top: 0;">Hello <strong>${crewName || 'Crew'}</strong>,</p>
+  <p style="font-size: 15px; line-height: 1.5;">You have been assigned a new project.</p>
+  
+  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; line-height: 1.6;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 4px 0; font-weight: bold; color: #475569; width: 110px; vertical-align: top;">Customer:</td>
+        <td style="padding: 4px 0; color: #0f172a; font-weight: 600;">${customerName}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; font-weight: bold; color: #475569; vertical-align: top;">Address:</td>
+        <td style="padding: 4px 0; color: #0f172a;">${jobAddress}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; font-weight: bold; color: #475569; vertical-align: top;">Fence Type:</td>
+        <td style="padding: 4px 0; color: #0f172a;">${fenceType}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; font-weight: bold; color: #475569; vertical-align: top;">Linear Feet:</td>
+        <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${linearFeet} LF</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div style="text-align: center; margin: 24px 0;">
+    <a href="${laborSnapshotLink}" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 14px; border-radius: 6px; margin-bottom: 12px; min-width: 220px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); text-align: center;">View Full Labor Breakdown</a>
+    <br />
+    <a href="${crewScheduleLink}" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 14px; border-radius: 6px; min-width: 220px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); text-align: center;">Schedule Installation</a>
+  </div>
+  
+  <p style="font-size: 14px; color: #475569; line-height: 1.5; margin-bottom: 0;">
+    Thank you,<br />
+    <strong>Lone Star Fence Works</strong>
+  </p>
+</div>`;
+
+        const htmlLength = emailHtml.length;
+        const textLength = emailText.length;
+
+        try {
+          console.log(`[SMTP LABOR CONTRACT] Dispatching notification to: ${recipientEmail}`);
+          const sendResult = await sendAppEmail({
+            to: recipientEmail,
+            subject: emailSubject,
+            text: emailText,
+            html: emailHtml,
+            estimateData,
+            decoded
+          });
+
+          const info = sendResult.info;
+          const from = `"${sendResult.resolvedFromName}" <${sendResult.resolvedFromEmail}>`;
+          const replyTo = sendResult.resolvedReplyToEmail;
+
+          console.log("LABOR NOTIFICATION EMAIL RESULT", {
+            messageId: info.messageId,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            response: info.response,
+            htmlLength,
+            textLength
+          });
+
+          const isAccepted = Array.isArray(info.accepted) && info.accepted.some((email: string) => email.toLowerCase() === recipientEmail.toLowerCase());
+
+          if (!isAccepted) {
+            console.error("LABOR NOTIFICATION EMAIL REJECTED BY SMTP", {
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from,
+              envelopeTo: info.envelope?.to,
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response,
+              rejected: info.rejected
+            });
+
+            return res.status(400).json({
+              success: false,
+              error: "Labor notification email was not accepted for delivery",
+              messageId: info.messageId,
+              accepted: info.accepted || [],
+              rejected: info.rejected || [],
+              response: info.response,
+              envelope: info.envelope,
+              debugBuild: "notification-labor-dispatch-v2",
+              from,
+              to: recipientEmail,
+              replyTo,
+              envelopeFrom: info.envelope?.from || '',
+              envelopeTo: info.envelope?.to || [],
+              subject: emailSubject,
+              textLength,
+              htmlLength,
+              smtpResponse: info.response
+            });
+          }
+
+          // Generate snapshot and logs
+          const snapshotToSave = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
+
+          const logEntry = {
+            recipient: recipientEmail,
+            crewName: crewName || 'Crew',
+            sentAt: nowIso,
+            subject: emailSubject,
+            includeDrawing: !!includeDrawing,
+            laborSnapshotLink,
+            crewScheduleLink,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            status: "Sent",
+            scheduled: estimateData.installStatus === 'Scheduled' || estimateData.installStatus === 'Completed',
+            completed: estimateData.installStatus === 'Completed',
+            opened: false
+          };
+
+          const laborContractVersions = estimateData.laborContractVersions || [];
+          const nextLaborVersionNumber = laborContractVersions.length + 1;
+          const laborVersionId = crypto.randomUUID();
+
+          const newLaborVersion = {
+            version: nextLaborVersionNumber,
+            versionId: laborVersionId,
+            createdAt: nowIso,
+            createdBy: decoded?.email || decoded?.uid || 'SYSTEM',
+            recipient: recipientEmail,
+            crewName: crewName || 'Crew',
+            subject: emailSubject,
+            message: message || '',
+            laborContractSnapshot: snapshotToSave,
+            includeDrawing: !!includeDrawing,
+            crewScheduleLink: crewScheduleLink || null,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            status: "Sent",
+            emailMessageId: info?.messageId || ''
+          };
+
+          const updates: any = {
+            crewScheduleToken,
+            crewScheduleTokenCreatedAt: nowIso,
+            crewScheduleTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            crewScheduleAccessEnabled: true,
+            crewEmailRecipient: recipientEmail,
+            allowCrewDirectSchedule: !!allowCrewDirectSchedule,
+            laborContractEmailSent: true,
+            laborContractEmailSentAt: nowIso,
+            laborContractEmailRecipient: recipientEmail,
+            laborContractEmailLog: admin.firestore.FieldValue.arrayUnion(logEntry),
+            laborContractVersions: [...laborContractVersions, newLaborVersion],
+            latestLaborContractVersion: nextLaborVersionNumber,
+            latestLaborContractVersionId: laborVersionId,
+            latestLaborContractSentAt: nowIso,
+            
+            // New fields for labor snapshot token
+            laborSnapshotToken,
+            laborSnapshotTokenCreatedAt: nowIso,
+            
+            // Direct fields
+            laborSnapshotLink,
+            crewScheduleLink,
+            assignedCrew: crewName || 'Crew',
+            dispatchDate: nowIso,
+          };
+
+          if (snapshotToSave) {
+            snapshotToSave.laborSnapshotLink = laborSnapshotLink;
+            snapshotToSave.crewScheduleLink = crewScheduleLink;
+            updates.laborContractSnapshot = snapshotToSave;
+          }
+
+          await docRef.update(updates);
+
+          // CRM Integration: Sync dispatched labor breakdown straight to Go High Level!
+          try {
+            console.log(`[GHL SYNC] Syncing customer to GHL for Labor Dispatched...`);
+            const ghlSyncObj = {
+              id: estimateId,
+              estimateNumber: estimateData.estimateNumber || '',
+              customerName: estimateData.customerName || '',
+              customerEmail: estimateData.customerEmail || '',
+              customerPhone: estimateData.customerPhone || '',
+              customerAddress: estimateData.customerAddress || estimateData.address || '',
+              fenceMaterial: fenceType,
+              linearFeet: linearFeet,
+              totalCost: estimateData.totalCost || estimateData.manualGrandTotal || 0,
+              laborSnapshotLink,
+              crewScheduleLink,
+              assignedCrew: crewName || 'Crew',
+              dispatchDate: nowIso,
+            };
+            
+            await syncCustomerToGhl({
+              eventType: 'labor_dispatched',
+              estimate: ghlSyncObj,
+              status: 'Labor Dispatched',
+            });
+            console.log(`[GHL SYNC] Successfully completed GHL sync.`);
+          } catch (ghlErr) {
+            console.error(`[GHL SYNC ERROR] Failed to sync to GHL during dispatch:`, ghlErr);
+          }
+
+          return res.status(200).json({
+            success: true,
+            messageId: info.messageId,
+            accepted: info.accepted || [],
+            rejected: info.rejected || [],
+            response: info.response,
+            envelope: info.envelope,
+            htmlLength,
+            textLength,
+            spamSafeVersion: true,
+            debugBuild: "notification-labor-dispatch-v2"
+          });
+        } catch (error: any) {
+          console.error("LABOR SIMPLE EMAIL EXCEPTION", error);
+          const resolvedFrom = error?.resolvedFromName && error?.resolvedFromEmail ? `"${error.resolvedFromName}" <${error.resolvedFromEmail}>` : '';
+          const resolvedReplyTo = error?.resolvedReplyToEmail || '';
+          
+          return res.status(500).json({
+            success: false,
+            error: "Labor notification email failed",
+            details: error?.message || String(error),
+            code: error?.code,
+            response: error?.response,
+            spamSafeVersion: true,
+            debugBuild: "notification-labor-dispatch-v2",
+            from: resolvedFrom,
+            to: recipientEmail,
+            replyTo: resolvedReplyTo,
+            envelopeFrom: error?.envelope?.from || '',
+            envelopeTo: error?.envelope?.to || [],
+            subject: emailSubject,
+            textLength,
+            htmlLength,
+            smtpResponse: error?.response || error?.message || String(error)
+          });
+        }
+      }
+
+      if (false) {
+        const snapshot: any = null;
+        const estimateData: any = {};
+        const recipientEmail: string = '';
+        const crewName: string = '';
+        const nowIso: string = '';
+        const includeDrawing: boolean = false;
+        const allowCrewDirectSchedule: boolean = false;
+        const message: string = '';
+        const crewScheduleLink: string = '';
+        const crewScheduleToken: string = '';
+        const docRef: any = null;
 
         let demoTotal = 0;
         let gateSummary = 'None';
