@@ -981,9 +981,15 @@ async function syncCustomerToGhl({
     else if (eventType === 'estimate_accepted') eventTag = 'estimate-accepted';
     else if (eventType === 'estimate_declined') eventTag = 'estimate-declined';
     else if (eventType === 'job_scheduled') eventTag = 'job-scheduled';
-    else if (eventType === 'estimate_completed' || eventType === 'job_completed') eventTag = 'job-completed';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed' || eventType === 'completed') eventTag = 'LSFW - Job Completed';
     else if (eventType === 'archived') eventTag = 'estimate-archived';
     else if (eventType === 'labor_dispatched') eventTag = 'LSFW - Labor Dispatched';
+    else if (eventType === 'crew_confirmed_72hr') eventTag = 'LSFW - Crew Confirmed 72hr';
+    else if (eventType === 'crew_confirmed_24hr') eventTag = 'LSFW - Crew Confirmed 24hr';
+    else if (eventType === 'schedule_conflict') eventTag = 'LSFW - Crew Schedule Conflict';
+    else if (eventType === 'pre_build_complete') eventTag = 'LSFW - Pre Build Complete';
+    else if (eventType === 'completion_submitted') eventTag = 'LSFW - Completion Checklist Submitted';
+    else if (eventType === 'returned_to_crew') eventTag = 'LSFW - Returned To Crew';
 
     // Map the human-readable job status
     let currentJobStatus = status || 'Interested';
@@ -991,9 +997,15 @@ async function syncCustomerToGhl({
     else if (eventType === 'manual_estimate_sent') currentJobStatus = 'Proposed';
     else if (eventType === 'estimate_accepted') currentJobStatus = 'Accepted';
     else if (eventType === 'estimate_declined') currentJobStatus = 'Declined';
-    else if (eventType === 'estimate_completed' || eventType === 'job_completed') currentJobStatus = 'Completed';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed' || eventType === 'completed') currentJobStatus = 'Completed';
     else if (eventType === 'archived') currentJobStatus = 'Archived';
     else if (eventType === 'labor_dispatched') currentJobStatus = 'Labor Dispatched';
+    else if (eventType === 'crew_confirmed_72hr') currentJobStatus = 'Crew Confirmed 72hr';
+    else if (eventType === 'crew_confirmed_24hr') currentJobStatus = 'Crew Confirmed 24hr';
+    else if (eventType === 'schedule_conflict') currentJobStatus = 'Crew Schedule Conflict';
+    else if (eventType === 'pre_build_complete') currentJobStatus = 'Pre-Build Complete';
+    else if (eventType === 'completion_submitted') currentJobStatus = 'Completion Checklist Submitted';
+    else if (eventType === 'returned_to_crew') currentJobStatus = 'Returned to Crew';
 
     // Form Custom Fields array
     const customFieldsPayload: { id: string; value: any }[] = [];
@@ -1086,8 +1098,8 @@ async function syncCustomerToGhl({
     else if (eventType === 'estimate_accepted') mappedStageLabel = 'Accepted';
     else if (eventType === 'estimate_declined') mappedStageLabel = 'Declined';
     else if (eventType === 'job_scheduled') mappedStageLabel = 'Scheduled';
-    else if (eventType === 'labor_dispatched') mappedStageLabel = 'Scheduled';
-    else if (eventType === 'estimate_completed' || eventType === 'job_completed') mappedStageLabel = 'Completed';
+    else if (eventType === 'labor_dispatched' || eventType === 'crew_confirmed_72hr' || eventType === 'crew_confirmed_24hr' || eventType === 'pre_build_complete' || eventType === 'completion_submitted' || eventType === 'returned_to_crew') mappedStageLabel = 'Scheduled';
+    else if (eventType === 'estimate_completed' || eventType === 'job_completed' || eventType === 'completed') mappedStageLabel = 'Completed';
     else if (eventType === 'archived') mappedStageLabel = 'Archived';
 
     if (pipelineId && mappedStageLabel && settings.ghlOpportunityStages) {
@@ -1102,7 +1114,7 @@ async function syncCustomerToGhl({
       let oppStatus = 'open';
       if (eventType === 'estimate_accepted') oppStatus = 'open';
       else if (eventType === 'estimate_declined') oppStatus = 'lost';
-      else if (eventType === 'estimate_completed' || eventType === 'job_completed') oppStatus = 'won';
+      else if (eventType === 'estimate_completed' || eventType === 'job_completed' || eventType === 'completed') oppStatus = 'won';
       else if (eventType === 'archived') oppStatus = 'abandoned';
 
       const monetaryValue = Number(estimate?.totalCost || estimate?.manualGrandTotal || 0);
@@ -3520,7 +3532,7 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        if (snap.exists) {
+         if (snap.exists) {
           await docRef.set({
             drawingUrl: admin.firestore.FieldValue.delete(),
             drawingFileName: admin.firestore.FieldValue.delete(),
@@ -3531,6 +3543,417 @@ export default async function handler(req: any, res: any) {
         }
 
         return res.status(200).json({ success: true, message: 'Drawing successfully removed' });
+      }
+
+      if (req.body && req.body.action === 'upload-job-portal-photo') {
+        const { estimateId, token, filename, mimeType, base64Data } = req.body || {};
+        if (!estimateId || !token || !filename || !mimeType || !base64Data) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+        const timestamp = Date.now();
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `job-photos/${estimateId}/${timestamp}-${sanitizedFilename}`;
+        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+        const file = bucket.file(storagePath);
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(';base64,')) {
+          cleanBase64 = cleanBase64.split(';base64,')[1];
+        }
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        await file.save(buffer, { metadata: { contentType: mimeType } });
+        let downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        try {
+          await file.makePublic();
+        } catch (pubErr) {
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({ action: 'read', expires });
+          downloadUrl = signedUrl;
+        }
+        return res.status(200).json({ success: true, drawingUrl: downloadUrl });
+      }
+
+      if (req.body && req.body.action === 'submit-pre-build-checklist') {
+        const { estimateId, token, crewLeaderName, startTime, notes, photos } = req.body || {};
+        if (!estimateId || !token || !crewLeaderName || !startTime || !Array.isArray(photos)) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+        const nowIso = new Date().toISOString();
+        const checklist = { crewLeaderName, startTime, notes, photos, completedAt: nowIso };
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Pre-Build Checklist Completed',
+          timestamp: nowIso,
+          user: crewLeaderName,
+          notes: `Pre-build submitted with ${photos.length} photos. ${notes || ''}`
+        };
+        await docRef.update({
+          jobPortalStatus: 'pre_build_complete',
+          preBuildChecklist: checklist,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify office
+        try {
+          const text = `Crew Leader ${crewLeaderName} has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.\n\nNotes: ${notes || 'None'}\nPhoto Count: ${photos.length}`;
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject: `Pre-Build Checklist Submitted - ${estimateData.customerName || 'Client'}`,
+            text,
+            html: `<h3>Pre-Build Checklist Submitted</h3><p>Crew Leader <strong>${crewLeaderName}</strong> has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.</p><p><strong>Notes:</strong> ${notes || 'None'}</p><p><strong>Photo Count:</strong> ${photos.length}</p>`,
+            estimateData
+          });
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        // Sync GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: 'pre_build_complete',
+            estimate: { id: estimateId, ...estimateData },
+            status: 'Pre-Build Complete'
+          });
+        } catch (ghlErr) {
+          console.error('GHL sync error:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'submit-completion-checklist') {
+        const { estimateId, token, crewLeaderName, completionTime, notes, issuesDocumented, photos } = req.body || {};
+        if (!estimateId || !token || !crewLeaderName || !completionTime || !Array.isArray(photos)) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+        const nowIso = new Date().toISOString();
+        const checklist = { crewLeaderName, completionTime, notes, issuesDocumented, photos, completedAt: nowIso };
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Completion Checklist Submitted',
+          timestamp: nowIso,
+          user: crewLeaderName,
+          notes: `Completion submitted with ${photos.length} photos. Issues: ${issuesDocumented ? 'Yes' : 'No'}. ${notes || ''}`
+        };
+        await docRef.update({
+          jobPortalStatus: 'completion_submitted',
+          completionChecklist: checklist,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify office
+        try {
+          const text = `Crew Leader ${crewLeaderName} has submitted the Completion Checklist for ${estimateData.customerName || 'customer'}.\n\nNotes: ${notes || 'None'}\nIssues: ${issuesDocumented ? 'Yes' : 'No'}\nPhoto Count: ${photos.length}`;
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject: `Completion Checklist Submitted - ${estimateData.customerName || 'Client'}`,
+            text,
+            html: `<h3>Completion Checklist Submitted</h3><p>Crew Leader <strong>${crewLeaderName}</strong> has submitted the Completion Checklist for ${estimateData.customerName || 'customer'}.</p><p><strong>Notes:</strong> ${notes || 'None'}</p><p><strong>Issues Documented:</strong> ${issuesDocumented ? 'Yes' : 'No'}</p><p><strong>Photo Count:</strong> ${photos.length}</p>`,
+            estimateData
+          });
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        // Sync GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: 'completion_submitted',
+            estimate: { id: estimateId, ...estimateData },
+            status: 'Completion Checklist Submitted'
+          });
+        } catch (ghlErr) {
+          console.error('GHL sync error:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'submit-schedule-response') {
+        const { estimateId, token, responseType, notes, confirmationType } = req.body || {};
+        if (!estimateId || !token || !responseType || !confirmationType) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+        const nowIso = new Date().toISOString();
+        const isConfirm = responseType === 'confirm';
+        const newStatus = isConfirm 
+          ? (confirmationType === '72hr' ? 'schedule_confirmed_72hr' : 'schedule_confirmed_24hr')
+          : 'schedule_conflict';
+        
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: isConfirm ? `Schedule Confirmed (${confirmationType})` : 'Crew Schedule Conflict Reported',
+          timestamp: nowIso,
+          user: 'Crew',
+          notes: notes || ''
+        };
+
+        await docRef.update({
+          jobPortalStatus: newStatus,
+          jobPortalPendingConfirmation: admin.firestore.FieldValue.delete(),
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify office
+        try {
+          const text = `Crew has responded to ${confirmationType} scheduling request for ${estimateData.customerName || 'customer'}.\n\nResponse: ${responseType.toUpperCase()}\nNotes: ${notes || 'None'}`;
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject: `Schedule Response (${responseType.toUpperCase()}) - ${estimateData.customerName || 'Client'}`,
+            text,
+            html: `<h3>Schedule Response Received</h3><p>Crew has responded to <strong>${confirmationType}</strong> scheduling request for ${estimateData.customerName || 'customer'}.</p><p><strong>Response:</strong> ${responseType.toUpperCase()}</p><p><strong>Notes:</strong> ${notes || 'None'}</p>`,
+            estimateData
+          });
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        // Sync GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: isConfirm ? `crew_confirmed_${confirmationType}` : 'schedule_conflict',
+            estimate: { id: estimateId, ...estimateData },
+            status: isConfirm ? `Crew Confirmed ${confirmationType}` : 'Crew Schedule Conflict'
+          });
+        } catch (ghlErr) {
+          console.error('GHL sync error:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'submit-job-portal-report') {
+        const { estimateId, token, reportType, details } = req.body || {};
+        if (!estimateId || !token || !reportType || !details) {
+          return res.status(400).json({ error: 'Missing parameters' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+        const nowIso = new Date().toISOString();
+        let eventName = 'Incident/Issue Reported';
+        if (reportType === 'shortage') eventName = 'Material Shortage Reported';
+        else if (reportType === 'delay') eventName = 'Rain / Delay Reported';
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: eventName,
+          timestamp: nowIso,
+          user: 'Crew',
+          notes: details
+        };
+
+        await docRef.update({
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify office
+        try {
+          const text = `Crew has reported a ${reportType.toUpperCase()} for ${estimateData.customerName || 'customer'}.\n\nDetails:\n${details}`;
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject: `Crew Report: ${reportType.toUpperCase()} - ${estimateData.customerName || 'Client'}`,
+            text,
+            html: `<h3>Crew Report: ${reportType.toUpperCase()}</h3><p>Crew has reported a ${reportType.toUpperCase()} for ${estimateData.customerName || 'customer'}.</p><p><strong>Details:</strong><br/>${details.replace(/\n/g, '<br/>')}</p>`,
+            estimateData
+          });
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'office-approve-completion') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin or employee login required' });
+        }
+        const { estimateId, notes } = req.body || {};
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Estimate ID is required' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        const nowIso = new Date().toISOString();
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Job Approved by Office',
+          timestamp: nowIso,
+          user: decoded?.email || 'Office Admin',
+          notes: notes || 'Completion approved.'
+        };
+
+        await docRef.update({
+          jobPortalStatus: 'completed',
+          installStatus: 'Completed',
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Sync GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: 'completed',
+            estimate: { id: estimateId, ...estimateData },
+            status: 'Completed'
+          });
+        } catch (ghlErr) {
+          console.error('GHL sync error:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'office-return-to-crew') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin or employee login required' });
+        }
+        const { estimateId, notes } = req.body || {};
+        if (!estimateId || !notes) {
+          return res.status(400).json({ error: 'Estimate ID and return reasons/notes are required' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        const nowIso = new Date().toISOString();
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Returned to Crew for Correction',
+          timestamp: nowIso,
+          user: decoded?.email || 'Office Admin',
+          notes: notes
+        };
+
+        await docRef.update({
+          jobPortalStatus: 'returned_to_crew',
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify Crew by Email
+        try {
+          const crewEmail = estimateData.crewEmailRecipient || estimateData.laborContractEmailRecipient;
+          if (crewEmail) {
+            const text = `Hello Crew,\n\nThe office has returned the job for ${estimateData.customerName || 'customer'} to your queue for correction/outstanding tasks.\n\nCorrection Notes:\n${notes}\n\nPlease access the secure Job Portal to review and resubmit upon completion:\n${estimateData.laborSnapshotLink || ''}`;
+            await sendAppEmail({
+              to: crewEmail,
+              subject: `Correction Required - ${estimateData.customerName || 'Client'}`,
+              text,
+              html: `<h3>Correction Required</h3><p>The office has returned the job for <strong>${estimateData.customerName || 'customer'}</strong> to your queue for correction/outstanding tasks.</p><p><strong>Correction Notes:</strong><br/>${notes.replace(/\n/g, '<br/>')}</p><p><a href="${estimateData.laborSnapshotLink || ''}" style="display:inline-block;background-color:#e63946;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:bold;">Open Secure Crew Job Portal</a></p>`,
+              estimateData
+            });
+          }
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        // Sync GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: 'returned_to_crew',
+            estimate: { id: estimateId, ...estimateData },
+            status: 'Returned to Crew'
+          });
+        } catch (ghlErr) {
+          console.error('GHL sync error:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'send-schedule-confirmation-request') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin or employee login required' });
+        }
+        const { estimateId, requestType } = req.body || {};
+        if (!estimateId || !requestType) {
+          return res.status(400).json({ error: 'Estimate ID and request type (72hr/24hr) are required' });
+        }
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+        const nowIso = new Date().toISOString();
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: `Schedule Confirmation Requested (${requestType})`,
+          timestamp: nowIso,
+          user: decoded?.email || 'Office Admin',
+          notes: `Requested ${requestType} confirmation.`
+        };
+
+        await docRef.update({
+          jobPortalPendingConfirmation: requestType,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify Crew by Email with direct Link to Job Portal
+        try {
+          const crewEmail = estimateData.crewEmailRecipient || estimateData.laborContractEmailRecipient;
+          if (crewEmail) {
+            const text = `Hello Crew,\n\nPlease confirm your schedule availability for the planned installation starting on ${estimateData.scheduledStartDate || 'Unscheduled Date'}.\n\nAccess the secure Crew Job Portal to confirm or report conflicts:\n${estimateData.laborSnapshotLink || ''}`;
+            await sendAppEmail({
+              to: crewEmail,
+              subject: `${requestType} Schedule Confirmation Required - ${estimateData.customerName || 'Client'}`,
+              text,
+              html: `<h3>Schedule Confirmation Required</h3><p>Please confirm your schedule availability for the planned installation starting on <strong>${estimateData.scheduledStartDate || 'Unscheduled Date'}</strong>.</p><p><a href="${estimateData.laborSnapshotLink || ''}" style="display:inline-block;background-color:#e63946;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:bold;">Open Crew Job Portal to Confirm</a></p>`,
+              estimateData
+            });
+          }
+        } catch (mailErr) {
+          console.error('Mail notification error:', mailErr);
+        }
+
+        return res.status(200).json({ success: true });
       }
 
       if (req.body && req.body.action === 'send-labor-contract') {
@@ -3610,11 +4033,8 @@ ${fenceType}
 Linear Feet:
 ${linearFeet}
 
-View Full Labor Breakdown:
+Access Secure Crew Job Portal:
 ${laborSnapshotLink}
-
-Schedule Installation:
-${crewScheduleLink}
 
 Thank you,
 
@@ -3652,9 +4072,7 @@ Lone Star Fence Works`;
   </div>
   
   <div style="text-align: center; margin: 24px 0;">
-    <a href="${laborSnapshotLink}" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 14px; border-radius: 6px; margin-bottom: 12px; min-width: 220px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); text-align: center;">View Full Labor Breakdown</a>
-    <br />
-    <a href="${crewScheduleLink}" style="display: inline-block; background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; font-size: 14px; border-radius: 6px; min-width: 220px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); text-align: center;">Schedule Installation</a>
+    <a href="${laborSnapshotLink}" style="display: inline-block; background-color: #e63946; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: bold; font-size: 14px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(230,57,70,0.2), 0 2px 4px -1px rgba(230,57,70,0.1); text-align: center;">Open Secure Crew Job Portal</a>
   </div>
   
   <p style="font-size: 14px; color: #475569; line-height: 1.5; margin-bottom: 0;">
@@ -3791,6 +4209,16 @@ Lone Star Fence Works`;
             crewScheduleLink,
             assignedCrew: crewName || 'Crew',
             dispatchDate: nowIso,
+
+            // New Job Portal Status & History Trackers
+            jobPortalStatus: 'dispatched',
+            jobPortalHistory: admin.firestore.FieldValue.arrayUnion({
+              id: crypto.randomUUID(),
+              event: 'Job Dispatched to Crew',
+              timestamp: nowIso,
+              user: decoded?.email || 'Office',
+              notes: `Dispatched to ${crewName || 'Crew'} (${recipientEmail})`
+            })
           };
 
           if (snapshotToSave) {

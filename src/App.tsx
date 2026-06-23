@@ -23,6 +23,7 @@ import ManageEmployees from './components/ManageEmployees';
 import CustomerEstimator from './components/CustomerEstimator/CustomerEstimator';
 import CustomerSignaturePortal from './components/CustomerSignaturePortal';
 import CrewSchedulePortal from './components/CrewSchedulePortal';
+import JobPortal from './components/JobPortal';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
@@ -438,6 +439,7 @@ export default function App() {
   const isCustomerPortal = portalParam === 'customer';
   const isContractPortal = portalParam === 'contract';
   const isCrewSchedulePortal = portalParam === 'crew-schedule';
+  const isJobPortal = portalParam === 'job-portal' || portalParam === 'labor-snapshot';
   
   const [aiContractScope, setAiContractScope] = React.useState<string | null>(() => {
     return getInitialValue('aiContractScope', 'fence_pro_customer_contract_ai_scope', null);
@@ -888,6 +890,10 @@ export default function App() {
 
   if (isCrewSchedulePortal) {
     return <CrewSchedulePortal />;
+  }
+
+  if (isJobPortal) {
+    return <JobPortal user={user} materials={materials} laborRates={laborRates} />;
   }
 
   if (isCustomerPortal) {
