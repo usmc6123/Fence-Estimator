@@ -4,9 +4,8 @@ import {
   HelpCircle, Shield, Mail, Check, X, UserPlus, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import bcrypt from 'bcryptjs';
 
 interface UserProfile {
   uid: string;
@@ -128,12 +127,15 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
   const handleToggleTier = async (u: UserProfile) => {
     const nextTier = u.subscriptionTier === 'free' ? 'paid' : 'free';
     try {
-      const uRef = doc(db, 'users', u.uid);
-      await updateDoc(uRef, {
-        tier: nextTier,
-        subscriptionTier: nextTier,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`, 'X-Admin-Token': adminToken || '' },
+        body: JSON.stringify({ userId: u.uid, action: 'tier', tier: nextTier })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error toggling tier: ${response.status}`);
+      }
       setSuccessToast(`Tier updated for ${u.name}!`);
       onRefresh();
       if (selectedUser?.uid === u.uid) {
@@ -149,11 +151,15 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
   const handleToggleStatus = async (u: UserProfile) => {
     const nextStatus = !u.isDisabled;
     try {
-      const uRef = doc(db, 'users', u.uid);
-      await updateDoc(uRef, {
-        isDisabled: nextStatus,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`, 'X-Admin-Token': adminToken || '' },
+        body: JSON.stringify({ userId: u.uid, action: nextStatus ? 'disable' : 'enable' })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error toggling status: ${response.status}`);
+      }
       setSuccessToast(`User ${nextStatus ? 'Disabled' : 'Enabled'}!`);
       onRefresh();
       if (selectedUser?.uid === u.uid) {
@@ -171,16 +177,15 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     if (!doubleCheck) return;
 
     try {
-      // Clean up subcollection estimates
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const estSnap = await getDocs(estRef);
-      for (const d of estSnap.docs) {
-        await deleteDoc(doc(db, 'users', userId, 'estimates', d.id));
+      const response = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`, 'X-Admin-Token': adminToken || '' },
+        body: JSON.stringify({ userId })
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error deleting user: ${response.status}`);
       }
-
-      // Delete user doc
-      const uRef = doc(db, 'users', userId);
-      await deleteDoc(uRef);
 
       setSuccessToast("User permanently deleted!");
       setIsEditUserOpen(false);
@@ -254,14 +259,15 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
         return;
       }
 
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(formResetPassword, salt);
-
-      const uRef = doc(db, 'users', resetPassUser.uid);
-      await updateDoc(uRef, {
-        passwordHash: passwordHash,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`, 'X-Admin-Token': adminToken || '' },
+        body: JSON.stringify({ userId: resetPassUser.uid, password: formResetPassword })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error resetting password: ${response.status}`);
+      }
 
       setSuccessToast(`Password reset successfully for ${resetPassUser.name}!`);
       setIsResetPassOpen(false);
@@ -282,15 +288,15 @@ export default function AdminUserManagement({ users, loading, adminToken, onRefr
     setIsSubmitting(true);
 
     try {
-      const uRef = doc(db, 'users', editingUser.uid);
-      await updateDoc(uRef, {
-        name: formName,
-        displayName: formName,
-        tier: formTier,
-        subscriptionTier: formTier,
-        isDisabled: formDisabled,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}`, 'X-Admin-Token': adminToken || '' },
+        body: JSON.stringify({ userId: editingUser.uid, name: formName, subscriptionTier: formTier, isDisabled: formDisabled })
       });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error updating user: ${response.status}`);
+      }
 
       setSuccessToast("User details updated successfully!");
       setIsEditUserOpen(false);
