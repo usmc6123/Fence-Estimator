@@ -1,29 +1,85 @@
 import React from 'react';
-import { Calculator } from 'lucide-react';
+import { Calculator, Save, CheckCircle2 } from 'lucide-react';
 import { LaborRates } from '../types';
 
 interface LaborPricingProps {
   laborRates: LaborRates;
   setLaborRates: (rates: LaborRates) => void;
+  onSave?: (rates: LaborRates) => Promise<boolean>;
 }
 
-export default function LaborPricing({ laborRates, setLaborRates }: LaborPricingProps) {
+export default function LaborPricing({ laborRates, setLaborRates, onSave }: LaborPricingProps) {
+  const [localRates, setLocalRates] = React.useState<LaborRates>(laborRates);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveSuccess, setSaveSuccess] = React.useState(false);
+
+  // Sync local rates if props change (e.g. from firestore load)
+  React.useEffect(() => {
+    setLocalRates(laborRates);
+  }, [laborRates]);
+
   const handleChange = (key: keyof LaborRates, value: number) => {
-    setLaborRates({
-      ...laborRates,
+    setLocalRates(prev => ({
+      ...prev,
       [key]: value
-    });
+    }));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+    try {
+      if (onSave) {
+        const success = await onSave(localRates);
+        if (success) {
+          setSaveSuccess(true);
+          setTimeout(() => setSaveSuccess(false), 3000);
+        }
+      } else {
+        // Fallback to just updating parent state if onSave not provided
+        setLaborRates(localRates);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to save labor rates:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
-      <div className="flex items-center gap-6">
-        <div className="h-20 w-20 rounded-[32px] bg-american-red flex items-center justify-center text-white shadow-2xl shadow-american-red/20 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-          <Calculator size={40} />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-6">
+          <div className="h-20 w-20 rounded-[32px] bg-american-red flex items-center justify-center text-white shadow-2xl shadow-american-red/20 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
+            <Calculator size={40} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black text-american-blue tracking-tighter uppercase leading-none">Labor Rate Legend</h1>
+            <p className="text-sm font-bold text-american-red uppercase tracking-[0.3em] mt-2">Cristian Palomo's Master Pricing Schedule</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-4xl font-black text-american-blue tracking-tighter uppercase leading-none">Labor Rate Legend</h1>
-          <p className="text-sm font-bold text-american-red uppercase tracking-[0.3em] mt-2">Cristian Palomo's Master Pricing Schedule</p>
+
+        <div className="flex items-center gap-4">
+          {saveSuccess && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-600 rounded-xl animate-in fade-in slide-in-from-right-4 duration-300">
+              <CheckCircle2 size={18} />
+              <span className="text-xs font-black uppercase tracking-widest">Labor rates saved.</span>
+            </div>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-3 px-8 py-4 bg-american-blue text-white rounded-[20px] font-black uppercase tracking-widest text-xs hover:bg-american-red hover:shadow-xl hover:shadow-american-red/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group shadow-lg shadow-american-blue/20"
+          >
+            {isSaving ? (
+              <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Save size={18} className="group-hover:scale-110 transition-transform" />
+            )}
+            <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+          </button>
         </div>
       </div>
 
@@ -49,7 +105,7 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={laborRates[item.key as keyof LaborRates]} 
+                      value={localRates[item.key as keyof LaborRates]} 
                       onChange={(e) => handleChange(item.key as keyof LaborRates, Number(e.target.value))} 
                       className="w-full rounded-2xl border-3 border-[#F0F0F0] bg-[#F9F9F9] px-5 py-4 text-base font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all" 
                     />
@@ -80,7 +136,7 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={laborRates[item.key as keyof LaborRates]} 
+                      value={localRates[item.key as keyof LaborRates]} 
                       onChange={(e) => handleChange(item.key as keyof LaborRates, Number(e.target.value))} 
                       className="w-full rounded-2xl border-3 border-[#F0F0F0] bg-[#F9F9F9] px-5 py-4 text-base font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all" 
                     />
@@ -110,7 +166,7 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={laborRates[item.key as keyof LaborRates]} 
+                      value={localRates[item.key as keyof LaborRates]} 
                       onChange={(e) => handleChange(item.key as keyof LaborRates, Number(e.target.value))} 
                       className="w-full rounded-2xl border-3 border-[#F0F0F0] bg-[#F9F9F9] px-5 py-4 text-base font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all" 
                     />
@@ -141,7 +197,7 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={laborRates[item.key as keyof LaborRates]} 
+                      value={localRates[item.key as keyof LaborRates]} 
                       onChange={(e) => handleChange(item.key as keyof LaborRates, Number(e.target.value))} 
                       className="w-full rounded-2xl border-3 border-[#F0F0F0] bg-[#F9F9F9] px-5 py-4 text-base font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all" 
                     />
@@ -152,6 +208,7 @@ export default function LaborPricing({ laborRates, setLaborRates }: LaborPricing
             </div>
           </div>
         </div>
+
 
         <div className="mt-16 p-8 rounded-[32px] bg-american-blue/5 border-2 border-dashed border-american-blue/10">
           <div className="flex items-start gap-4">

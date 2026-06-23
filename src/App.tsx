@@ -630,6 +630,26 @@ export default function App() {
     fetchGlobalSettings();
   }, [user]);
 
+  const handleSaveLaborRates = async (newRates: LaborRates) => {
+    setLaborRates(newRates);
+    localStorage.setItem('fence_pro_labor_rates', JSON.stringify(newRates));
+    
+    if (user) {
+      try {
+        const docRef = doc(db, 'companySettings', 'main');
+        await setDoc(docRef, {
+          laborRates: newRates,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        return true;
+      } catch (err) {
+        console.error('Failed to sync labor rates to cloud:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
   // Global Sync of laborRates and estimatorSettings back to Firestore (Only for authenticated company members)
   React.useEffect(() => {
     if (!user) return;
@@ -649,7 +669,6 @@ export default function App() {
         };
 
         await setDoc(docRef, {
-          laborRates,
           estimatorSettings,
           updatedAt: new Date().toISOString()
         }, { merge: true });
@@ -665,7 +684,6 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, [
-    laborRates, 
     estimate.markupPercentage, 
     estimate.wastePercentage, 
     estimate.taxPercentage, 
@@ -1100,7 +1118,11 @@ export default function App() {
             <MaterialLibrary materials={materials} setMaterials={setMaterials} user={user} />
           )}
           {activeTab === 'labor' && (
-            <LaborPricing laborRates={laborRates} setLaborRates={setLaborRates} />
+            <LaborPricing 
+              laborRates={laborRates} 
+              setLaborRates={setLaborRates} 
+              onSave={handleSaveLaborRates}
+            />
           )}
           {activeTab === 'takeoff' && (
             <MaterialTakeOff 
