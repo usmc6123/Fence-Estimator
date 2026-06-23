@@ -18,6 +18,7 @@ import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import FileGallery from './FileGallery';
 import { analyzeBlueprintDocument } from '../services/geminiService';
+import { JobDiagramsManager } from './JobDiagramsManager';
 
 interface EstimatorProps {
   materials: MaterialItem[];
@@ -1056,6 +1057,23 @@ export default function Estimator({
                 </div>
               )}
             </div>
+
+            {/* Comprehensive Crew Job Diagrams & Site Plans Section */}
+            {estimate.id && (
+              <JobDiagramsManager
+                estimateId={estimate.id}
+                diagrams={estimate.diagrams || []}
+                drawingUrl={estimate.drawingUrl || undefined}
+                drawingFileName={estimate.drawingFileName || undefined}
+                drawingMimeType={estimate.drawingMimeType || undefined}
+                onDiagramsChange={(updatedDiagrams) => {
+                  setEstimate({
+                    ...estimate,
+                    diagrams: updatedDiagrams
+                  });
+                }}
+              />
+            )}
           </div>
         );
       case 3: // Consolidated Style & Measurements (Moved to Step 3)

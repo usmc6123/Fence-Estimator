@@ -277,6 +277,7 @@ export interface Estimate {
   quotes?: SupplierQuote[];
   customLaborItems?: { id: string; name: string; cost: number }[];
   photos?: JobPhoto[];
+  diagrams?: JobDiagram[];
 
   // Customer Signature / Portal Engagement Logs
   customerDecision?: 'accepted' | 'declined' | null;
@@ -350,6 +351,20 @@ export interface JobPhoto {
   timestamp: string;
   note?: string;
   category?: 'Site' | 'Reference' | 'Progress' | 'Completed';
+}
+
+export interface JobDiagram {
+  diagramId: string;
+  estimateId: string;
+  jobPortalId?: string;
+  title: string;
+  type: string;
+  fileUrl: string;
+  storagePath?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  visibleToCrew: boolean;
 }
 
 export interface SavedEstimate extends Estimate {

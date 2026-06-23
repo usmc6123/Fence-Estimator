@@ -5,7 +5,8 @@ import {
   Check, Loader2, RefreshCw, Eye, ShieldCheck, ChevronLeft, ChevronRight,
   Camera, Plus, Trash2, ClipboardList, Package, Image as ImageIcon,
   Map, MessageSquare, History, CheckCircle2, X, AlertCircle, Play,
-  Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft, Lock
+  Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft, Lock,
+  ExternalLink, FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { storage } from '../lib/firebase';

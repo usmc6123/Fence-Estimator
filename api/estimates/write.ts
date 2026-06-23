@@ -3523,6 +3523,195 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json(drawingMetadata);
       }
 
+      if (req.body && req.body.action === 'upload-diagram') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+
+        const { estimateId, filename, mimeType, size, base64Data, title, type, visibleToCrew } = req.body || {};
+        if (!estimateId || !filename || !mimeType || !base64Data) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedMimeTypes.includes(mimeType)) {
+          return res.status(400).json({ error: 'Invalid file format. Only PDF, JPG, PNG, WEBP are allowed.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (snap.exists) {
+          const existingData = snap.data() || {};
+          if (
+            existingData.uid !== decoded.uid &&
+            existingData.userId !== decoded.uid &&
+            !isWriteAdmin
+          ) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+          }
+        } else {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+
+        const timestamp = Date.now();
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `estimate-diagrams/${estimateId}/${timestamp}-${sanitizedFilename}`;
+
+        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+        const file = bucket.file(storagePath);
+
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(';base64,')) {
+          cleanBase64 = cleanBase64.split(';base64,')[1];
+        }
+        const buffer = Buffer.from(cleanBase64, 'base64');
+
+        await file.save(buffer, {
+          metadata: {
+            contentType: mimeType,
+          }
+        });
+
+        let downloadUrl = '';
+        try {
+          await file.makePublic();
+          downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        } catch (pubErr: any) {
+          console.warn('makePublic failed during diagram upload, using signed url fallback:', pubErr?.message || pubErr);
+        }
+
+        if (!downloadUrl) {
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: expires
+          });
+          downloadUrl = signedUrl;
+        }
+
+        const diagramId = crypto.randomUUID();
+        const isoNow = new Date().toISOString();
+        const newDiagram = {
+          diagramId,
+          estimateId,
+          jobPortalId: estimateId,
+          title: title || filename,
+          type: type || 'Other Diagram',
+          fileUrl: downloadUrl,
+          storagePath: storagePath,
+          createdAt: isoNow,
+          updatedAt: isoNow,
+          createdBy: decoded.email || decoded.uid || 'Office',
+          visibleToCrew: visibleToCrew !== undefined ? !!visibleToCrew : true
+        };
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'diagramAttachedToPortal',
+          diagramTitle: newDiagram.title,
+          diagramType: newDiagram.type,
+          attachedAt: isoNow,
+          user: decoded.email || decoded.uid || 'Office',
+          timestamp: isoNow,
+          notes: `Attached diagram "${newDiagram.title}" (${newDiagram.type}) to Job Portal.`
+        };
+
+        await docRef.update({
+          diagrams: admin.firestore.FieldValue.arrayUnion(newDiagram),
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true, diagram: newDiagram });
+      }
+
+      if (req.body && req.body.action === 'toggle-diagram-visibility') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+
+        const { estimateId, diagramId, visibleToCrew } = req.body || {};
+        if (!estimateId || !diagramId) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+
+        const existingData = snap.data() || {};
+        if (
+          existingData.uid !== decoded.uid &&
+          existingData.userId !== decoded.uid &&
+          !isWriteAdmin
+        ) {
+          return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+        }
+
+        const diagrams = Array.isArray(existingData.diagrams) ? existingData.diagrams : [];
+        const updatedDiagrams = diagrams.map((diag: any) => {
+          if (diag.diagramId === diagramId) {
+            return {
+              ...diag,
+              visibleToCrew: !!visibleToCrew,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return diag;
+        });
+
+        await docRef.update({
+          diagrams: updatedDiagrams
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'delete-diagram') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+
+        const { estimateId, diagramId } = req.body || {};
+        if (!estimateId || !diagramId) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+
+        const existingData = snap.data() || {};
+        if (
+          existingData.uid !== decoded.uid &&
+          existingData.userId !== decoded.uid &&
+          !isWriteAdmin
+        ) {
+          return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+        }
+
+        const diagrams = Array.isArray(existingData.diagrams) ? existingData.diagrams : [];
+        const diagramToDelete = diagrams.find((d: any) => d.diagramId === diagramId);
+
+        if (diagramToDelete && diagramToDelete.storagePath) {
+          try {
+            const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+            const file = bucket.file(diagramToDelete.storagePath);
+            await file.delete();
+          } catch (storageErr: any) {
+            console.warn('Storage deletion failed, continuing database cleanup:', storageErr?.message || storageErr);
+          }
+        }
+
+        const updatedDiagrams = diagrams.filter((diag: any) => diag.diagramId !== diagramId);
+
+        await docRef.update({
+          diagrams: updatedDiagrams
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
       if (req.body && req.body.action === 'remove-drawing') {
         if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
           return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
@@ -5119,6 +5308,16 @@ Re-Sync Triggered: Yes`;
              </div>` 
           : "";
 
+        const hasDiagrams = !!estimateData.drawingUrl || (Array.isArray(estimateData.diagrams) && estimateData.diagrams.some((d: any) => d.visibleToCrew));
+        const diagramsNoticeText = hasDiagrams 
+          ? "\n\nDiagrams and site plans are available in the Job Portal." 
+          : "";
+        const diagramsNoticeHtml = hasDiagrams 
+          ? `<p style="font-size: 15px; line-height: 1.5; font-weight: bold; color: #1e293b; margin: 16px 0;">
+               Diagrams and site plans are available in the Job Portal.
+             </p>` 
+          : "";
+
         // Clean text-only body
         const emailText = `Hello ${crewName || 'Crew'},
 
@@ -5134,7 +5333,7 @@ Fence Type:
 ${fenceType}
 
 Linear Feet:
-${linearFeet}${vendorDocNoticeText}
+${linearFeet}${vendorDocNoticeText}${diagramsNoticeText}
 
 Access Secure Crew Job Portal:
 ${laborSnapshotLink}
@@ -5153,6 +5352,7 @@ Lone Star Fence Works`;
   <p style="font-size: 15px; line-height: 1.5; margin-top: 0;">Hello <strong>${crewName || 'Crew'}</strong>,</p>
   <p style="font-size: 15px; line-height: 1.5;">You have been assigned a new project.</p>
   ${vendorDocNoticeHtml}
+  ${diagramsNoticeHtml}
   
   <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; line-height: 1.6;">
     <table style="width: 100%; border-collapse: collapse;">
