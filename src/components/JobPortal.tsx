@@ -33,6 +33,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   // Interactive site drawing zoom state
   const [zoomDrawing, setZoomDrawing] = useState(false);
+  const [selectedDiagram, setSelectedDiagram] = useState<any>(null);
 
   // Office actions states
   const [adminNotes, setAdminNotes] = useState('');
@@ -1392,52 +1393,97 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 </div>
               </div>
 
-              {/* DRAWINGS SECTION */}
+              {/* DIAGRAMS / SITE PLANS SECTION */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-base font-black uppercase text-white tracking-tight">Layout site drawing</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Uploaded dimension plan</p>
+                    <h3 className="text-base font-black uppercase text-white tracking-tight">Diagrams / Site Plans</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Project layouts & sketches</p>
                   </div>
                 </div>
 
-                {snapshot.drawingUrl ? (
-                  <div className="bg-[#0A1120] p-3 rounded-2xl border border-blue-900/15 text-center relative group">
-                    {snapshot.drawingMimeType?.includes('pdf') || snapshot.drawingUrl?.toLowerCase().includes('.pdf') ? (
-                      <div className="py-8">
-                        <ImageIcon className="mx-auto text-slate-500 mb-2" size={44} />
-                        <p className="text-xs text-slate-400 mb-4">{snapshot.drawingFileName || 'layout.pdf'}</p>
-                        <a
-                          href={snapshot.drawingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase rounded-lg transition-all"
-                        >
-                          Download layout PDF
-                        </a>
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Primary Drawing */}
+                  {snapshot.drawingUrl && (
+                    <div className="bg-[#0A1120] p-3 rounded-2xl border border-blue-900/15 text-center relative group">
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded">Primary Layout</span>
                       </div>
-                    ) : (
-                      <div className="relative overflow-hidden rounded-xl cursor-pointer" onClick={() => setZoomDrawing(true)}>
-                        <img 
-                          src={snapshot.drawingUrl} 
-                          alt="Layout Drawing" 
-                          className="w-full h-48 object-cover group-hover:scale-105 transition-all duration-300 rounded-xl"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-xs text-white font-black uppercase bg-[#E63946] px-3 py-1.5 rounded-lg shadow-lg">Click to Zoom</span>
+                      {snapshot.drawingMimeType?.includes('pdf') || snapshot.drawingUrl?.toLowerCase().includes('.pdf') ? (
+                        <div className="py-6">
+                          <FileText className="mx-auto text-slate-500 mb-2" size={32} />
+                          <p className="text-[10px] text-slate-400 mb-3 truncate px-4">{snapshot.drawingFileName || 'layout.pdf'}</p>
+                          <a
+                            href={snapshot.drawingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded-lg transition-all"
+                          >
+                            <ExternalLink size={12} /> View PDF
+                          </a>
                         </div>
+                      ) : (
+                        <div className="relative overflow-hidden rounded-xl cursor-pointer" onClick={() => setSelectedDiagram({ fileUrl: snapshot.drawingUrl, title: snapshot.drawingFileName || 'Primary Layout' })}>
+                          <img 
+                            src={snapshot.drawingUrl} 
+                            alt="Layout Drawing" 
+                            className="w-full h-40 object-cover group-hover:scale-105 transition-all duration-300 rounded-xl"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-[10px] text-white font-black uppercase bg-[#E63946] px-3 py-1.5 rounded-lg shadow-lg">Click to Zoom</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Additional Diagrams */}
+                  {jobData?.diagrams?.filter((d: any) => d.visibleToCrew).map((diag: any) => {
+                    const isPdf = diag.fileUrl?.toLowerCase().includes('.pdf');
+                    return (
+                      <div key={diag.diagramId} className="bg-[#0A1120] p-3 rounded-2xl border border-blue-900/15 text-center relative group">
+                        <div className="flex items-center justify-between mb-2 px-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded">{diag.type}</span>
+                        </div>
+                        {isPdf ? (
+                          <div className="py-6">
+                            <FileText className="mx-auto text-slate-500 mb-2" size={32} />
+                            <p className="text-[10px] text-slate-400 mb-3 truncate px-4">{diag.title}</p>
+                            <a
+                              href={diag.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded-lg transition-all"
+                            >
+                              <ExternalLink size={12} /> View PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="relative overflow-hidden rounded-xl cursor-pointer" onClick={() => setSelectedDiagram(diag)}>
+                            <img 
+                              src={diag.fileUrl} 
+                              alt={diag.title} 
+                              className="w-full h-40 object-cover group-hover:scale-105 transition-all duration-300 rounded-xl"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-[10px] text-white font-black uppercase bg-[#E63946] px-3 py-1.5 rounded-lg shadow-lg">Click to Zoom</span>
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-2">
+                          {diag.title}
+                        </p>
                       </div>
-                    )}
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2">
-                      File: {snapshot.drawingFileName || 'Layout_Plan_Drawing.jpg'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-8 bg-[#0A1120] border-2 border-dashed border-blue-900/10 rounded-2xl text-center text-slate-500">
-                    <ImageIcon className="mx-auto mb-2 text-slate-600" size={32} />
-                    <p className="text-xs font-bold uppercase tracking-wider">No Site Layout Drawing Provided</p>
-                  </div>
-                )}
+                    );
+                  })}
+
+                  {!snapshot.drawingUrl && (!jobData?.diagrams || jobData.diagrams.filter((d: any) => d.visibleToCrew).length === 0) && (
+                    <div className="p-8 bg-[#0A1120] border-2 border-dashed border-blue-900/10 rounded-2xl text-center text-slate-500">
+                      <ImageIcon className="mx-auto mb-2 text-slate-600" size={32} />
+                      <p className="text-xs font-bold uppercase tracking-wider">No Diagrams Provided</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -2680,6 +2726,43 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
               alt="Site plan zoom view" 
               className="max-w-full max-h-full object-contain rounded-lg"
             />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* GENERIC DIAGRAM FULL-SCREEN MODAL */}
+      <AnimatePresence>
+        {selectedDiagram && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 z-[999] flex flex-col items-center justify-center p-4"
+          >
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+              <h3 className="text-sm font-black text-white uppercase tracking-widest">{selectedDiagram.title}</h3>
+              <button 
+                onClick={() => setSelectedDiagram(null)}
+                className="h-10 w-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <img 
+              src={selectedDiagram.fileUrl} 
+              alt={selectedDiagram.title} 
+              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+            />
+            <div className="mt-6 flex gap-4">
+               <a 
+                href={selectedDiagram.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-xs font-black uppercase tracking-widest rounded-xl"
+               >
+                 <ExternalLink size={14} /> Open Full View
+               </a>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
