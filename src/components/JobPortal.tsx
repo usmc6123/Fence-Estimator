@@ -336,7 +336,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     setLineItemStatuses(prev => ({
       ...prev,
       [itemId]: {
-        ...(prev[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' }),
+        ...(prev[itemId] || { status: 'Not Received', notes: '', photoUrl: '' }),
         status
       }
     }));
@@ -346,7 +346,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     setLineItemStatuses(prev => ({
       ...prev,
       [itemId]: {
-        ...(prev[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' }),
+        ...(prev[itemId] || { status: 'Not Received', notes: '', photoUrl: '' }),
         [field]: value
       }
     }));
@@ -737,7 +737,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
         setLineItemStatuses(prev => ({
           ...prev,
           [itemId]: {
-            ...(prev[itemId] || { status: 'Confirmed', notes: '' }),
+            ...(prev[itemId] || { status: 'Not Received', notes: '' }),
             photoUrl: data.drawingUrl
           }
         }));
@@ -2503,11 +2503,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                       setPickupGeneralNotes('');
                                       setPickupGeneralPhotos([]);
                                       
-                                      // Initialize statuses to 'Confirmed' for ALL materials in the job
+                                      // Initialize statuses to 'Not Received' for ALL materials in the job
                                       const initialStatuses: any = {};
                                       materialsList.forEach((item: any, idx: number) => {
                                         const itemId = item.id || `mat-${idx}-${item.name}`;
-                                        initialStatuses[itemId] = { status: 'Confirmed', notes: '' };
+                                        initialStatuses[itemId] = { status: 'Not Received', notes: '' };
                                       });
                                       setLineItemStatuses(initialStatuses);
                                       
@@ -3934,7 +3934,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     <div className="space-y-4">
                       {materialsList.map((item: any, idx: number) => {
                         const itemId = item.id || `mat-${idx}-${item.name}`;
-                        const statusObj = lineItemStatuses[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' };
+                        const statusObj = lineItemStatuses[itemId] || { status: 'Not Received', notes: '', photoUrl: '' };
                         
                         return (
                           <div key={itemId} className="p-4 bg-[#070D19] border border-blue-900/10 rounded-2xl space-y-3">
