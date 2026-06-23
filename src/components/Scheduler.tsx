@@ -2116,7 +2116,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                                                  onClick={() => {
                                                      setRescheduleDateStr(selectedEvent.startDate || "");
                                                      setRescheduleTimeStr(selectedEvent.startTime || "09:00");
-                                                     setRescheduleDuration(estimateObj?.scheduledDuration || 2);
+                                                     setRescheduleDuration(typeof estimateObj?.scheduledDuration === 'number' ? estimateObj.scheduledDuration : parseInt(String(estimateObj?.scheduledDuration || 2), 10) || 2);
                                                      setIsRescheduling(true);
                                                  }}
                                                  className="w-full bg-[#F5F7FA] hover:bg-[#E5E5E5] text-american-blue border border-[#E5E5E5] py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all min-h-[48px]"

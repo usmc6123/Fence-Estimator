@@ -595,7 +595,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           crewScheduleToken,
           laborSnapshotLink,
           crewScheduleLink,
-          jobPortalStatus: 'created',
+          jobPortalStatus: 'scheduling_required',
           jobPortalHistory: [...existingHistory, newHistoryEntry],
           laborContractSnapshot: defaultSnapshot
         })

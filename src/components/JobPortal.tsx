@@ -79,6 +79,68 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [overrideSubmitting, setOverrideSubmitting] = useState(false);
   const [overrideError, setOverrideError] = useState('');
 
+  // --- JOB PORTAL INITIAL SCHEDULING STATES & HANDLERS ---
+  const [scheduleStartDate, setScheduleStartDate] = useState('');
+  const [scheduleDuration, setScheduleDuration] = useState('1 day');
+  const [scheduleNotes, setScheduleNotes] = useState('');
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+
+  const getMinDateString = () => {
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 4);
+    return minDate.toISOString().split('T')[0];
+  };
+
+  const handleScheduleJobStart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleStartDate || !scheduleDuration) {
+      setScheduleError('Please fill out all required fields.');
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
+    minDateLimit.setHours(0,0,0,0);
+    const selectedDate = new Date(scheduleStartDate + 'T00:00:00');
+
+    if (selectedDate.getTime() < minDateLimit.getTime()) {
+      setScheduleError(`The soonest start date allowed is 4 calendar days from today (${minDateLimit.toISOString().split('T')[0]}).`);
+      return;
+    }
+
+    setScheduleSubmitting(true);
+    setScheduleError('');
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'schedule-job-start',
+          estimateId,
+          token,
+          startDate: scheduleStartDate,
+          duration: scheduleDuration,
+          notes: scheduleNotes
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to submit schedule.');
+      }
+
+      await fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      setScheduleError(err.message || String(err));
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
   // Helper functions for Materials & Vendor Docs
   const handleVendorDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -893,13 +955,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     in_progress: { label: 'In Progress', color: 'text-blue-400 border-blue-500', bg: 'bg-blue-500/10' },
     completion_submitted: { label: 'Completion Submitted', color: 'text-[#E63946] border-[#E63946]', bg: 'bg-[#E63946]/10' },
     returned_to_crew: { label: 'Returned to Crew', color: 'text-amber-500 border-amber-600', bg: 'bg-amber-600/10' },
-    completed: { label: 'Completed', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' }
+    completed: { label: 'Completed', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' },
+    scheduling_required: { label: 'Scheduling Required', color: 'text-rose-400 border-rose-500', bg: 'bg-rose-500/10' },
+    start_date_scheduled: { label: 'Start Date Scheduled', color: 'text-blue-400 border-blue-500', bg: 'bg-blue-500/10' }
   };
 
   const currentStatusKey = jobData.jobPortalStatus || 'dispatched';
   const statusInfo = statusLabels[currentStatusKey] || { label: 'Active Job', color: 'text-blue-400 border-blue-500', bg: 'bg-blue-500/10' };
 
   // Sequential Workflow Helper Variables
+  const isScheduled = !!jobData?.scheduledStartDate;
   const hasVendorDocs = Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0;
   const isMaterialsConfirmed = !hasVendorDocs || (!!jobData.materialConfirmation || currentStatusKey === 'materials_confirmed' || currentStatusKey === 'start_approved_with_material_issue' || currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
   const isPreBuildComplete = !!jobData.preBuildChecklist || (currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
@@ -1102,75 +1167,95 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             <span>Job Progression Tracker</span>
             <span className="text-[#E63946]">Sequential Workflow Active</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-2">
             
-            {/* Step 1: Material Pickup Confirmation */}
+            {/* Step 1: Schedule Start Date */}
             <div className={cn(
-              "relative p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isMaterialsConfirmed 
+              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isScheduled 
                 ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : currentStatusKey === 'material_issue_reported'
-                  ? "bg-rose-950/20 border-rose-500/30 text-rose-400 animate-pulse"
-                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+                : "bg-[#0A1120] border-rose-500/30 text-rose-400 animate-pulse"
             )}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider">1. Material Pickup</span>
-                {isMaterialsConfirmed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                <span className="text-[10px] font-black uppercase tracking-wider">1. Schedule Start</span>
+                {isScheduled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isScheduled ? "Start Date Set" : "Action Required"}
+              </span>
+            </div>
+
+            {/* Step 2: Material Pickup Confirmation */}
+            <div className={cn(
+              "relative p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              !isScheduled
+                ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed"
+                : isMaterialsConfirmed 
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                  : currentStatusKey === 'material_issue_reported'
+                    ? "bg-rose-950/20 border-rose-500/30 text-rose-400 animate-pulse"
+                    : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">2. Confirm Materials</span>
+                {isMaterialsConfirmed ? <CheckCircle2 size={14} /> : !isScheduled ? <Lock size={12} /> : <AlertTriangle size={14} />}
               </div>
               <span className="text-xs font-bold">
                 {isMaterialsConfirmed 
                   ? "Confirmed Complete" 
-                  : currentStatusKey === 'material_issue_reported' 
-                    ? "Issue Reported" 
-                    : "Action Required"}
+                  : !isScheduled
+                    ? "Locked (Awaiting Step 1)"
+                    : currentStatusKey === 'material_issue_reported' 
+                      ? "Issue Reported" 
+                      : "Action Required"}
               </span>
             </div>
 
-            {/* Step 2: Pre-Build Checklist */}
+            {/* Step 3: Pre-Build Site Check */}
             <div className={cn(
               "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
               isPreBuildComplete 
                 ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : !isMaterialsConfirmed 
+                : (!isScheduled || !isMaterialsConfirmed) 
                   ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
                   : "bg-[#0A1120] border-amber-500/30 text-amber-400"
             )}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider">2. Pre-Build Site Check</span>
-                {isPreBuildComplete ? <CheckCircle2 size={14} /> : !isMaterialsConfirmed ? <Lock size={12} /> : <AlertTriangle size={14} />}
+                <span className="text-[10px] font-black uppercase tracking-wider">3. Pre-Build Site Check</span>
+                {isPreBuildComplete ? <CheckCircle2 size={14} /> : (!isScheduled || !isMaterialsConfirmed) ? <Lock size={12} /> : <AlertTriangle size={14} />}
               </div>
               <span className="text-xs font-bold">
                 {isPreBuildComplete 
                   ? "Completed" 
-                  : !isMaterialsConfirmed 
-                    ? "Locked (Awaiting Step 1)" 
-                    : "Ready to Submit"}
-              </span>
-            </div>
-
-            {/* Step 3: Completion Checklist */}
-            <div className={cn(
-              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isCompletionComplete 
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : !isPreBuildComplete 
-                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
-                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
-            )}>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider">3. Completion Sign-Off</span>
-                {isCompletionComplete ? <CheckCircle2 size={14} /> : !isPreBuildComplete ? <Lock size={12} /> : <AlertTriangle size={14} />}
-              </div>
-              <span className="text-xs font-bold">
-                {isCompletionComplete 
-                  ? "Submitted" 
-                  : !isPreBuildComplete 
+                  : (!isScheduled || !isMaterialsConfirmed) 
                     ? "Locked (Awaiting Step 2)" 
                     : "Ready to Submit"}
               </span>
             </div>
 
-            {/* Step 4: Office Approval */}
+            {/* Step 4: Completion Sign-Off */}
+            <div className={cn(
+              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isCompletionComplete 
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) 
+                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
+                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">4. Completion Sign-Off</span>
+                {isCompletionComplete ? <CheckCircle2 size={14} /> : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) ? <Lock size={12} /> : <AlertTriangle size={14} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isCompletionComplete 
+                  ? "Submitted" 
+                  : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) 
+                    ? "Locked (Awaiting Step 3)" 
+                    : "Ready to Submit"}
+              </span>
+            </div>
+
+            {/* Step 5: Office Review */}
             <div className={cn(
               "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
               isOfficeApproved 
@@ -1180,7 +1265,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                   : "bg-[#0A1120]/40 border-slate-800 text-slate-500"
             )}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider">4. Office Review</span>
+                <span className="text-[10px] font-black uppercase tracking-wider">5. Office Review</span>
                 {isOfficeApproved ? <CheckCircle2 size={14} /> : currentStatusKey === 'completion_submitted' ? <Clock size={14} /> : <Lock size={12} />}
               </div>
               <span className="text-xs font-bold">
@@ -1195,7 +1280,9 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           </div>
         </div>
 
-        {/* Tab Selection */}
+        {isScheduled ? (
+          <>
+            {/* Tab Selection */}
         <div className="flex items-center gap-2 border-b border-blue-900/20 overflow-x-auto pb-1.5 scrollbar-thin">
           <button
             onClick={() => setActiveTab('overview')}
@@ -2459,6 +2546,116 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           )}
 
         </div>
+
+          </>
+        ) : (
+          <div className="bg-[#111A2E] rounded-3xl p-6 sm:p-8 border border-blue-900/15 shadow-xl space-y-6">
+            <div className="border-b border-blue-900/10 pb-4">
+              <h2 className="text-xl font-black uppercase text-white tracking-tight flex items-center gap-2">
+                <CalendarIcon className="text-[#E63946]" size={24} />
+                Schedule Job Start
+              </h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">
+                You must schedule the job start date before you can access the rest of the portal.
+              </p>
+            </div>
+
+            {/* Warning Message Box */}
+            <div className="p-4 bg-rose-950/20 border-2 border-rose-500/30 text-rose-300 rounded-2xl flex items-center gap-3">
+              <AlertCircle className="text-rose-400 shrink-0 animate-bounce" size={20} />
+              <p className="text-xs font-black uppercase tracking-wider">
+                Please schedule the job start date to begin the sequential workflow.
+              </p>
+            </div>
+
+            {/* Job Details Card */}
+            <div className="bg-[#0A1120] p-6 rounded-2xl border border-blue-900/10 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold text-slate-300">
+              <div>
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Customer Name</span>
+                <span className="text-sm font-black text-slate-200 mt-0.5 block">{snapshot.customerName || jobData.customerName || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Jobsite Address</span>
+                <span className="text-sm font-black text-slate-200 mt-0.5 block">{snapshot.jobAddress || jobData.customerAddress || jobData.address || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Fence Type / Wood</span>
+                <span className="text-sm font-black text-slate-200 mt-0.5 block">{snapshot.fenceMaterial || jobData.fenceMaterial || jobData.woodType || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Linear Feet</span>
+                <span className="text-sm font-black text-slate-200 mt-0.5 block">{snapshot.linearFeet || jobData.linearFeet || '0'} LF</span>
+              </div>
+              <div className="md:col-span-2">
+                <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Assigned Crew Name</span>
+                <span className="text-sm font-black text-slate-200 mt-0.5 block">{snapshot.crewName || jobData.assignedCrew || 'Scheduled Crew'}</span>
+              </div>
+            </div>
+
+            {/* Schedule Form */}
+            <form onSubmit={handleScheduleJobStart} className="space-y-4">
+              {scheduleError && (
+                <div className="p-4 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs font-bold">
+                  {scheduleError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Proposed Start Date</label>
+                  <input
+                    type="date"
+                    min={getMinDateString()}
+                    value={scheduleStartDate}
+                    onChange={(e) => setScheduleStartDate(e.target.value)}
+                    className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-[#E63946]"
+                    required
+                  />
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide mt-1">
+                    Earliest allowed: {new Date(new Date().getTime() + 4 * 24 * 60 * 60 * 1000).toLocaleDateString()} (4 calendar days from today)
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Duration</label>
+                  <select
+                    value={scheduleDuration}
+                    onChange={(e) => setScheduleDuration(e.target.value)}
+                    className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#E63946]"
+                    required
+                  >
+                    <option value="1 day">1 day</option>
+                    <option value="2 days">2 days</option>
+                    <option value="3 days">3 days</option>
+                    <option value="4 days">4 days</option>
+                    <option value="5+ days">5+ days</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Crew Schedule Notes</label>
+                <textarea
+                  placeholder="Include any schedule details, planned daily goals, or coordination notes for the office..."
+                  value={scheduleNotes}
+                  onChange={(e) => setScheduleNotes(e.target.value)}
+                  className="w-full bg-[#0A1120] border border-blue-900/30 rounded-xl p-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#E63946]"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={scheduleSubmitting}
+                  className="px-6 py-3 bg-[#E63946] hover:bg-[#E63946]/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-[#E63946]/20 disabled:opacity-50"
+                >
+                  {scheduleSubmitting ? 'Scheduling...' : 'Schedule Job Start & Continue'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
       </div>
 

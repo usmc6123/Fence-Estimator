@@ -34,6 +34,112 @@ export default function LaborTakeOff({
   const [customInstructions, setCustomInstructions] = useState<string>('');
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
 
+  // --- STATE FOR SCHEDULE & CRM SYNC ---
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [adminStartDate, setAdminStartDate] = useState(estimate.scheduledStartDate || '');
+  const [adminDuration, setAdminDuration] = useState(estimate.scheduledDuration || '1 day');
+  const [adminCrew, setAdminCrew] = useState(estimate.assignedCrew || '');
+  const [adminScheduleNotes, setAdminScheduleNotes] = useState(estimate.scheduledNotes || '');
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [scheduleSuccess, setScheduleSuccess] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+
+  const handleAdminUpdateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminStartDate || !adminDuration || !adminCrew) {
+      setScheduleError('Please fill out all required fields.');
+      return;
+    }
+
+    setScheduleSubmitting(true);
+    setScheduleError('');
+    setScheduleSuccess('');
+
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'admin-update-schedule',
+          estimateId: estimate.id,
+          startDate: adminStartDate,
+          duration: adminDuration,
+          assignedCrew: adminCrew,
+          notes: adminScheduleNotes
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to update schedule.');
+      }
+
+      setScheduleSuccess('Schedule updated and successfully synced with GHL Calendar!');
+      setIsEditingSchedule(false);
+      
+      if (onUpdateEstimate) {
+        onUpdateEstimate({
+          scheduledStartDate: adminStartDate,
+          scheduledDuration: adminDuration,
+          assignedCrew: adminCrew,
+          scheduledNotes: adminScheduleNotes,
+          ghlCalendarSyncStatus: resData.ghlCalendarSyncStatus,
+          ghlCalendarSyncError: resData.ghlCalendarSyncError,
+          ghlInstallCalendarEventId: resData.ghlInstallCalendarEventId || estimate.ghlInstallCalendarEventId,
+          ghlCalendarLastSyncedAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      setScheduleError(err.message || String(err));
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
+  const handleResyncGhlCalendar = async () => {
+    setScheduleSubmitting(true);
+    setScheduleError('');
+    setScheduleSuccess('');
+
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'resync-ghl-calendar',
+          estimateId: estimate.id
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || 'Failed to perform calendar re-sync.');
+      }
+
+      if (resData.success) {
+        setScheduleSuccess('Manual GHL Calendar re-sync completed successfully!');
+      } else {
+        throw new Error(resData.ghlCalendarSyncError || 'Sync failed.');
+      }
+
+      if (onUpdateEstimate) {
+        onUpdateEstimate({
+          ghlCalendarSyncStatus: resData.ghlCalendarSyncStatus,
+          ghlCalendarSyncError: resData.ghlCalendarSyncError,
+          ghlCalendarLastSyncedAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      setScheduleError(err.message || String(err));
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
+
   // --- STATE FOR EMAIL LABOR CONTRACT ---
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -532,6 +638,199 @@ export default function LaborTakeOff({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Installation Schedule & CRM Sync Panel */}
+      {estimate.laborSnapshotToken && (
+        <div className="bg-white p-6 rounded-[32px] shadow-xl border-2 border-american-blue/10 space-y-4 print:hidden animate-in fade-in duration-500">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-xl bg-blue-50 text-american-blue flex items-center justify-center text-sm shadow-inner">
+                <Calendar size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-american-blue uppercase tracking-tight">Installation Schedule & CRM Sync</h3>
+                <p className="text-[10px] font-bold text-american-blue/60 uppercase tracking-widest">
+                  Manage GoHighLevel Calendar Events & Crew Portal Start Times
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isEditingSchedule) {
+                    setIsEditingSchedule(false);
+                  } else {
+                    setAdminStartDate(estimate.scheduledStartDate || '');
+                    setAdminDuration(estimate.scheduledDuration || '1 day');
+                    setAdminCrew(estimate.assignedCrew || '');
+                    setAdminScheduleNotes(estimate.scheduledNotes || '');
+                    setIsEditingSchedule(true);
+                  }
+                  setScheduleSuccess('');
+                  setScheduleError('');
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
+              >
+                {isEditingSchedule ? 'Cancel' : 'Edit Schedule'}
+              </button>
+              
+              {estimate.scheduledStartDate && (
+                <button
+                  type="button"
+                  disabled={scheduleSubmitting}
+                  onClick={handleResyncGhlCalendar}
+                  className="px-4 py-2 bg-american-blue hover:bg-american-blue/90 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center gap-1"
+                >
+                  {scheduleSubmitting ? (
+                    <Loader2 className="animate-spin" size={12} />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  Re-Sync CRM Calendar
+                </button>
+              )}
+            </div>
+          </div>
+
+          {scheduleError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-700 text-xs rounded-xl font-bold">
+              {scheduleError}
+            </div>
+          )}
+
+          {scheduleSuccess && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs rounded-xl font-bold">
+              {scheduleSuccess}
+            </div>
+          )}
+
+          {isEditingSchedule ? (
+            <form onSubmit={handleAdminUpdateSchedule} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider">Start Date</label>
+                <input
+                  type="date"
+                  value={adminStartDate}
+                  onChange={(e) => setAdminStartDate(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-american-blue"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider">Duration</label>
+                <select
+                  value={adminDuration}
+                  onChange={(e) => setAdminDuration(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-american-blue"
+                  required
+                >
+                  <option value="1 day">1 day</option>
+                  <option value="2 days">2 days</option>
+                  <option value="3 days">3 days</option>
+                  <option value="4 days">4 days</option>
+                  <option value="5+ days">5+ days</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider">Assigned Crew</label>
+                <input
+                  type="text"
+                  placeholder="Crew Name..."
+                  value={adminCrew}
+                  onChange={(e) => setAdminCrew(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-american-blue"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-4">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider">Schedule Notes</label>
+                <textarea
+                  placeholder="Add any internal / customer facing notes for this schedule..."
+                  value={adminScheduleNotes}
+                  onChange={(e) => setAdminScheduleNotes(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-american-blue"
+                  rows={2}
+                />
+              </div>
+
+              <div className="md:col-span-4 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={scheduleSubmitting}
+                  className="px-5 py-2 bg-american-red hover:bg-american-red/90 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+                >
+                  {scheduleSubmitting ? 'Saving Changes...' : 'Save & Sync Schedule'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold text-slate-700">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">Scheduled Start Date</span>
+                <span className="text-sm font-black text-american-blue mt-1 block">
+                  {estimate.scheduledStartDate || 'Not Scheduled Yet'}
+                </span>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">Duration</span>
+                <span className="text-sm font-black text-american-blue mt-1 block">
+                  {estimate.scheduledDuration || 'Not Scheduled Yet'}
+                </span>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">Assigned Crew</span>
+                <span className="text-sm font-black text-american-blue mt-1 block">
+                  {estimate.assignedCrew || 'Not Dispatched/Assigned'}
+                </span>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">GHL CRM Sync Status</span>
+                <span className={cn(
+                  "text-xs font-black uppercase mt-1.5 inline-block px-2.5 py-0.5 rounded-full border",
+                  estimate.ghlCalendarSyncStatus === 'synced'
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                    : estimate.ghlCalendarSyncStatus === 'failed'
+                      ? "bg-rose-50 text-rose-600 border-rose-200"
+                      : "bg-slate-50 text-slate-500 border-slate-200"
+                )}>
+                  {estimate.ghlCalendarSyncStatus === 'synced' ? 'Synced to CRM' : estimate.ghlCalendarSyncStatus === 'failed' ? 'Sync Failed' : 'No Sync Active'}
+                </span>
+                {estimate.ghlCalendarLastSyncedAt && (
+                  <span className="block text-[8px] text-slate-400 mt-1 font-normal">
+                    Synced: {new Date(estimate.ghlCalendarLastSyncedAt).toLocaleString()}
+                  </span>
+                )}
+              </div>
+
+              {estimate.ghlInstallCalendarEventId && (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 sm:col-span-2">
+                  <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">GHL Appointment Event ID</span>
+                  <span className="text-xs font-mono font-bold text-slate-700 mt-1 block select-all">
+                    {estimate.ghlInstallCalendarEventId}
+                  </span>
+                </div>
+              )}
+
+              {estimate.scheduledNotes && (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 sm:col-span-2">
+                  <span className="block text-[10px] text-slate-400 font-black uppercase tracking-wider">Schedule Notes</span>
+                  <span className="text-xs font-medium text-slate-600 mt-1 block italic">
+                    "{estimate.scheduledNotes}"
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

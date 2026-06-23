@@ -266,7 +266,12 @@ export interface Estimate {
 
   scheduledStartDate?: string;
   scheduledEndDate?: string;
-  scheduledDuration?: number; // Days
+  scheduledDuration?: string | number; // Days or duration string e.g. "1 day"
+  scheduledNotes?: string;
+  ghlCalendarSyncStatus?: string;
+  ghlCalendarSyncError?: string;
+  ghlInstallCalendarEventId?: string;
+  ghlCalendarLastSyncedAt?: string;
 
   // Supplier Quotes
   quotes?: SupplierQuote[];
