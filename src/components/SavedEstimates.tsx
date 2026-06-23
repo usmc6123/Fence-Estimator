@@ -64,7 +64,7 @@ const getStatusStyle = (statusLabel: string) => {
 
 export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user, materials, laborRates }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'archived'>('active');
+  const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'declined' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<'list' | 'files'>('list');
   const [selectedJobPhotos, setSelectedJobPhotos] = React.useState<SavedEstimate | null>(null);
@@ -465,15 +465,17 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           address.toLowerCase().includes(searchTerm.toLowerCase());
     
     let matchesFilter = false;
-    const currentStatus = (est.status as any) || 'active';
+    const displayStatus = getEstimateDisplayStatus(est);
     if (filter === 'all') {
       matchesFilter = true;
     } else if (filter === 'active') {
-      matchesFilter = (currentStatus === 'active') && est.jobStatus !== 'Completed';
+      matchesFilter = displayStatus !== 'Archived' && displayStatus !== 'Completed' && displayStatus !== 'Declined';
     } else if (filter === 'completed') {
-      matchesFilter = (currentStatus === 'active' || currentStatus === 'completed') && est.jobStatus === 'Completed';
+      matchesFilter = displayStatus === 'Completed';
+    } else if (filter === 'declined') {
+      matchesFilter = displayStatus === 'Declined';
     } else if (filter === 'archived') {
-      matchesFilter = currentStatus === 'archived';
+      matchesFilter = displayStatus === 'Archived';
     }
 
     return matchesSearch && matchesFilter;
@@ -528,6 +530,87 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
     } catch (error: any) {
       console.error('Failed to update job status:', error);
       alert(error.message || 'Failed to update job status');
+    }
+  };
+
+  const handleCreateJobPortal = async (estimate: SavedEstimate, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!user) return;
+
+    const est = estimate as any;
+
+    try {
+      const generateToken = () => {
+        try {
+          const arr = new Uint8Array(8);
+          window.crypto.getRandomValues(arr);
+          return Array.from(arr, dec => dec.toString(16).padStart(2, '0')).join('');
+        } catch (e) {
+          return Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10);
+        }
+      };
+
+      const laborSnapshotToken = generateToken();
+      const crewScheduleToken = generateToken();
+
+      const appUrl = `${window.location.protocol}//${window.location.host}`;
+      const laborSnapshotLink = `${appUrl}/?portal=job-portal&estimateId=${est.id}&token=${laborSnapshotToken}`;
+      const crewScheduleLink = `${appUrl}/?portal=crew-schedule&estimateId=${est.id}&token=${crewScheduleToken}`;
+      const nowIso = new Date().toISOString();
+
+      const token = localStorage.getItem('company_admin_token');
+
+      const existingHistory = Array.isArray(est.jobPortalHistory) ? est.jobPortalHistory : [];
+      const newHistoryEntry = {
+        id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        event: 'Job Portal Created',
+        timestamp: nowIso,
+        user: user.email || 'Office',
+        notes: 'Job Portal manually initialized.'
+      };
+
+      const defaultSnapshot = est.laborContractSnapshot || {
+        customerName: est.customerName || 'Valued Client',
+        jobAddress: est.customerAddress || est.address || 'N/A',
+        fenceType: est.fenceType || 'Fence',
+        height: est.height || 6,
+        linearFeet: est.linearFeet || 0,
+        totalDirectLaborPayout: est.grandTotal || 0,
+        scopeOfWorkHtmlOrText: est.scopeOfWorkHtmlOrText || "Standard installation procedures apply.",
+        drawingUrl: est.drawingUrl || null,
+        drawingFileName: est.drawingFileName || null,
+        drawingMimeType: est.drawingMimeType || null
+      };
+
+      const response = await fetch('/api/estimates/write', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: est.id,
+          laborSnapshotToken,
+          crewScheduleToken,
+          laborSnapshotLink,
+          crewScheduleLink,
+          jobPortalStatus: 'created',
+          jobPortalHistory: [...existingHistory, newHistoryEntry],
+          laborContractSnapshot: defaultSnapshot
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to initialize Job Portal');
+      }
+
+      await fetchEstimates();
+      window.open(laborSnapshotLink, '_blank');
+    } catch (error: any) {
+      console.error('Failed to create Job Portal:', error);
+      alert(error.message || 'Failed to create Job Portal');
     }
   };
 
@@ -734,7 +817,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           >
             {/* Filter */}
             <div className="flex bg-[#F5F5F7] p-1.5 rounded-2xl w-fit">
-              {(['active', 'completed', 'archived', 'all'] as const).map((f) => (
+              {(['active', 'completed', 'declined', 'archived', 'all'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -1039,6 +1122,49 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                         >
                                           <Calendar size={14} /> Schedule Job
                                         </button>
+                                        {/* Job Portal / Create Job Portal */}
+                                        {!!estimate.laborSnapshotToken ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const portalLink = `${window.location.protocol}//${window.location.host}/?portal=job-portal&estimateId=${estimate.id}&token=${estimate.laborSnapshotToken}`;
+                                                window.open(portalLink, '_blank');
+                                                setOpenDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                            >
+                                              <ExternalLink size={14} /> Open Job Portal
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const portalLink = `${window.location.protocol}//${window.location.host}/?portal=job-portal&estimateId=${estimate.id}&token=${estimate.laborSnapshotToken}`;
+                                                navigator.clipboard.writeText(portalLink)
+                                                  .then(() => alert('Job Portal link copied to clipboard!'))
+                                                  .catch(() => alert('Failed to copy. URL: ' + portalLink));
+                                                setOpenDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                            >
+                                              <Copy size={14} /> Copy Job Portal Link
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCreateJobPortal(estimate, e);
+                                              setOpenDropdownId(null);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-xs font-bold text-[#444444] hover:bg-[#F5F5F7] hover:text-[#111111] flex items-center gap-2"
+                                          >
+                                            <Briefcase size={14} /> Create Job Portal
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={(e) => {
