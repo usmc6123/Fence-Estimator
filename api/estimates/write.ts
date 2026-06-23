@@ -1381,11 +1381,23 @@ async function syncEstimateToGhlCalendar(
     const locationId = settings.ghlLocationId;
     const calendarId = settings.ghlInstallCalendarId || 'mLZAlEmZ3Y2QyByYTFQh'; // Use settings or fallback
 
-    console.log(`[GHL CALENDAR SYNC] Config: locationId=${locationId}, calendarId=${calendarId}, apiKeyExists=${!!apiKey}`);
+    const mask = (str: string) => str && str.length > 8 ? `${str.substring(0, 4)}...${str.substring(str.length - 4)}` : (str || 'null');
+    console.log(`[GHL CALENDAR SYNC] Config: locationId=${mask(locationId)}, calendarId=${calendarId}, apiKeyExists=${!!apiKey}`);
 
     if (!apiKey || !locationId) {
       console.warn(`[GHL CALENDAR SYNC] Aborting: Missing apiKey or locationId`);
-      return { success: false, error: 'CRM credentials (API Key or Location ID) not configured in settings.' };
+      const errorMsg = !apiKey ? 'Missing GHL API Key' : 'Missing GHL Location ID';
+      
+      // Update estimate status if possible
+      try {
+        await db.collection('estimates').doc(estimateId).set({
+          ghlCalendarSyncStatus: 'failed',
+          ghlCalendarSyncError: errorMsg,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {}
+
+      return { success: false, error: `CRM credentials (${errorMsg}) not configured in settings.` };
     }
 
     // Ensure we have a GHL Contact ID
@@ -1445,6 +1457,7 @@ Crew Notes: ${notes || 'None'}`;
 
     const ghlEventId = estimateData.ghlCalendarEventId || null;
     const bodyPayload = {
+      locationId,
       calendarId,
       contactId: ghlContactId,
       startTime: startTimeIso,
@@ -1454,7 +1467,8 @@ Crew Notes: ${notes || 'None'}`;
       status: 'booked'
     };
 
-    console.log(`[GHL CALENDAR SYNC] Request bodyPayload:`, JSON.stringify(bodyPayload));
+    console.log(`[GHL CALENDAR SYNC] Request payload keys: ${Object.keys(bodyPayload).join(', ')}`);
+    console.log(`[GHL CALENDAR SYNC] Request bodyPayload (masked):`, JSON.stringify({ ...bodyPayload, locationId: mask(locationId) }));
 
     let res;
     if (ghlEventId) {
