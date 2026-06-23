@@ -5,7 +5,7 @@ import {
   Check, Loader2, RefreshCw, Eye, ShieldCheck, ChevronLeft, ChevronRight,
   Camera, Plus, Trash2, ClipboardList, Package, Image as ImageIcon,
   Map, MessageSquare, History, CheckCircle2, X, AlertCircle, Play,
-  Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft
+  Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft, Lock
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { storage } from '../lib/firebase';
@@ -38,6 +38,403 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [adminSubmitting, setAdminSubmitting] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+
+  // Material Confirmation States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [activeDocForConfirmation, setActiveDocForConfirmation] = useState<any>(null);
+  const [pickupLeaderName, setPickupLeaderName] = useState('');
+  const [pickupLocationState, setPickupLocationState] = useState('');
+  const [pickupDateTimeState, setPickupDateTimeState] = useState('');
+  const [pickupGeneralNotes, setPickupGeneralNotes] = useState('');
+  const [pickupGeneralPhotos, setPickupGeneralPhotos] = useState<string[]>([]);
+  const [isUploadingPickupPhoto, setIsUploadingPickupPhoto] = useState(false);
+  const [uploadingLineItemPhotoId, setUploadingLineItemPhotoId] = useState<string | null>(null);
+  const [lineItemStatuses, setLineItemStatuses] = useState<Record<string, { status: string; notes: string; photoUrl?: string }>>({});
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
+  const [confirmSuccessMessage, setConfirmSuccessMessage] = useState('');
+
+  // Admin Upload Vendor Doc States
+  const [showUploadDocPanel, setShowUploadDocPanel] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newSalesOrderNumber, setNewSalesOrderNumber] = useState('');
+  const [newPickupLocation, setNewPickupLocation] = useState('');
+  const [newPickupDateTime, setNewPickupDateTime] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const [newVisibleToCrew, setNewVisibleToCrew] = useState(true);
+  const [newDocFilename, setNewDocFilename] = useState('');
+  const [newDocBase64, setNewDocBase64] = useState('');
+  const [newDocMimeType, setNewDocMimeType] = useState('');
+  const [newDocLineItems, setNewDocLineItems] = useState<{ id: string; description: string; qty: number }[]>([]);
+  const [newLineItemDesc, setNewLineItemDesc] = useState('');
+  const [newLineItemQty, setNewLineItemQty] = useState(1);
+  const [isUploadingVendorDoc, setIsUploadingVendorDoc] = useState(false);
+  const [uploadDocError, setUploadDocError] = useState('');
+  const [uploadDocSuccess, setUploadDocSuccess] = useState('');
+
+  // Office Override Action Modal States
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideDecision, setOverrideDecision] = useState<'approve_anyway' | 'return_to_crew'>('approve_anyway');
+  const [overrideNotes, setOverrideNotes] = useState('');
+  const [overrideSubmitting, setOverrideSubmitting] = useState(false);
+  const [overrideError, setOverrideError] = useState('');
+
+  // Helper functions for Materials & Vendor Docs
+  const handleVendorDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setNewDocFilename(file.name);
+    setNewDocMimeType(file.type || 'application/octet-stream');
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewDocBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddLineItemToNewDoc = () => {
+    if (!newLineItemDesc.trim()) return;
+    const newItem = {
+      id: crypto.randomUUID(),
+      description: newLineItemDesc,
+      qty: newLineItemQty
+    };
+    setNewDocLineItems(prev => [...prev, newItem]);
+    setNewLineItemDesc('');
+    setNewLineItemQty(1);
+  };
+
+  const handleRemoveLineItemFromNewDoc = (id: string) => {
+    setNewDocLineItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleUpdateLineItemStatus = (itemId: string, status: string) => {
+    setLineItemStatuses(prev => ({
+      ...prev,
+      [itemId]: {
+        ...(prev[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' }),
+        status
+      }
+    }));
+  };
+
+  const handleUpdateLineItemField = (itemId: string, field: 'notes' | 'photoUrl', value: string) => {
+    setLineItemStatuses(prev => ({
+      ...prev,
+      [itemId]: {
+        ...(prev[itemId] || { status: 'Confirmed', notes: '', photoUrl: '' }),
+        [field]: value
+      }
+    }));
+  };
+
+  const handleRemoveGeneralPhoto = (index: number) => {
+    setPickupGeneralPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUploadVendorDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUploadDocError('');
+    setUploadDocSuccess('');
+    setIsUploadingVendorDoc(true);
+
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      if (!adminToken) {
+        throw new Error('Admin login token required. Please log in as an administrator.');
+      }
+
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'upload-vendor-document',
+          estimateId,
+          vendorName: newVendorName,
+          salesOrderNumber: newSalesOrderNumber,
+          pickupLocation: newPickupLocation,
+          pickupDateTime: newPickupDateTime,
+          notes: newNotes,
+          visibleToCrew: newVisibleToCrew,
+          filename: newDocFilename,
+          mimeType: newDocMimeType,
+          base64Data: newDocBase64,
+          lineItems: newDocLineItems
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload vendor document.');
+      }
+
+      setUploadDocSuccess('Vendor document successfully uploaded and saved!');
+      // Clear fields
+      setNewVendorName('');
+      setNewSalesOrderNumber('');
+      setNewPickupLocation('');
+      setNewPickupDateTime('');
+      setNewNotes('');
+      setNewDocFilename('');
+      setNewDocBase64('');
+      setNewDocMimeType('');
+      setNewDocLineItems([]);
+      
+      // Refresh estimate data
+      fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      setUploadDocError(err.message || String(err));
+    } finally {
+      setIsUploadingVendorDoc(false);
+    }
+  };
+
+  const handleDeleteVendorDoc = async (documentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this vendor pickup document? This is irreversible.')) return;
+    
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      if (!adminToken) {
+        throw new Error('Admin login token required.');
+      }
+
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'delete-vendor-document',
+          estimateId,
+          documentId
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete vendor document.');
+      }
+
+      fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      alert(err.message || String(err));
+    }
+  };
+
+  const handleUploadPickupPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploadingPickupPhoto(true);
+    setConfirmError('');
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+        });
+        reader.readAsDataURL(file);
+        const base64Data = await base64Promise;
+
+        const res = await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: 'upload-job-portal-photo',
+            estimateId,
+            token,
+            filename: `pickup_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
+            mimeType: file.type || 'image/jpeg',
+            base64Data
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to upload photo');
+        }
+
+        if (data.drawingUrl) {
+          setPickupGeneralPhotos(prev => [...prev, data.drawingUrl]);
+        }
+      }
+    } catch (err: any) {
+      setConfirmError(`Photo upload failed: ${err.message || String(err)}`);
+    } finally {
+      setIsUploadingPickupPhoto(false);
+    }
+  };
+
+  const handleUploadLineItemPhoto = async (itemId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLineItemPhotoId(itemId);
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+      });
+      reader.readAsDataURL(file);
+      const base64Data = await base64Promise;
+
+      const res = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'upload-job-portal-photo',
+          estimateId,
+          token,
+          filename: `item_${itemId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
+          mimeType: file.type || 'image/jpeg',
+          base64Data
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to upload item photo');
+      }
+
+      if (data.drawingUrl) {
+        setLineItemStatuses(prev => ({
+          ...prev,
+          [itemId]: {
+            ...(prev[itemId] || { status: 'Confirmed', notes: '' }),
+            photoUrl: data.drawingUrl
+          }
+        }));
+      }
+    } catch (err: any) {
+      setConfirmError(`Line item photo upload failed: ${err.message || String(err)}`);
+    } finally {
+      setUploadingLineItemPhotoId(null);
+    }
+  };
+
+  const handleSubmitMaterialConfirmation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfirmError('');
+    setConfirmSuccessMessage('');
+    setConfirmSubmitting(true);
+
+    try {
+      const lineItems = activeDocForConfirmation?.lineItems || [];
+      let hasIssues = false;
+      const problemList: string[] = [];
+
+      for (const item of lineItems) {
+        const itemState = lineItemStatuses[item.id];
+        if (!itemState || !itemState.status) {
+          throw new Error(`Please complete the status selection for "${item.description}"`);
+        }
+        if (itemState.status !== 'Confirmed') {
+          hasIssues = true;
+          if (!itemState.notes || !itemState.notes.trim()) {
+            throw new Error(`Notes are required for item "${item.description}" because it is marked as ${itemState.status}.`);
+          }
+          if (!itemState.photoUrl) {
+            throw new Error(`A photo is required for item "${item.description}" because it is marked as ${itemState.status}.`);
+          }
+          problemList.push(`${item.description}: ${itemState.status} - Notes: ${itemState.notes}`);
+        }
+      }
+
+      if (pickupGeneralPhotos.length === 0) {
+        throw new Error('At least one general photo of the loaded material or sales order is required to submit.');
+      }
+
+      const problemSummary = problemList.join('\n');
+
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'submit-material-confirmation',
+          estimateId,
+          token,
+          crewLeaderName: pickupLeaderName,
+          pickupLocation: pickupLocationState,
+          notes: pickupGeneralNotes,
+          photos: pickupGeneralPhotos,
+          lineItemsStatus: lineItemStatuses,
+          hasIssues,
+          problemSummary
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit material confirmation.');
+      }
+
+      setConfirmSuccessMessage('Material pickup confirmation submitted successfully!');
+      setShowConfirmModal(false);
+      
+      // Refresh job data
+      fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      setConfirmError(err.message || String(err));
+    } finally {
+      setConfirmSubmitting(false);
+    }
+  };
+
+  const handleOverrideMaterialIssue = async (decision: 'approve_anyway' | 'return_to_crew') => {
+    setOverrideError('');
+    setOverrideSubmitting(true);
+
+    try {
+      const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
+      if (!adminToken) {
+        throw new Error('Admin login token required.');
+      }
+
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: 'override-material-issue',
+          estimateId,
+          decision,
+          adminNotes: overrideNotes
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit override action.');
+      }
+
+      setShowOverrideModal(false);
+      setOverrideNotes('');
+      fetchJobDetails(estimateId, token);
+    } catch (err: any) {
+      setOverrideError(err.message || String(err));
+    } finally {
+      setOverrideSubmitting(false);
+    }
+  };
 
   // Crew Checklist states
   const [crewLeaderName, setCrewLeaderName] = useState('');
@@ -485,6 +882,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   // Determine current job status label and color
   const statusLabels: Record<string, { label: string, color: string, bg: string }> = {
     dispatched: { label: 'Job Dispatched', color: 'text-slate-300 border-slate-500', bg: 'bg-slate-500/10' },
+    materials_pending: { label: 'Materials Pending Pickup', color: 'text-amber-500 border-amber-500', bg: 'bg-amber-500/10' },
+    materials_confirmed: { label: 'Materials Confirmed Complete', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' },
+    material_issue_reported: { label: 'Material Issue Reported', color: 'text-rose-400 border-rose-500', bg: 'bg-rose-500/10' },
+    start_approved_with_material_issue: { label: 'Approved Start (With Material Issue)', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' },
     schedule_confirmed_72hr: { label: 'Schedule Confirmed (72hr)', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' },
     schedule_confirmed_24hr: { label: 'Schedule Confirmed (24hr)', color: 'text-emerald-400 border-emerald-500', bg: 'bg-emerald-500/10' },
     schedule_conflict: { label: 'Schedule Conflict', color: 'text-rose-400 border-rose-500', bg: 'bg-rose-500/10' },
@@ -497,6 +898,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   const currentStatusKey = jobData.jobPortalStatus || 'dispatched';
   const statusInfo = statusLabels[currentStatusKey] || { label: 'Active Job', color: 'text-blue-400 border-blue-500', bg: 'bg-blue-500/10' };
+
+  // Sequential Workflow Helper Variables
+  const hasVendorDocs = Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0;
+  const isMaterialsConfirmed = !hasVendorDocs || (!!jobData.materialConfirmation || currentStatusKey === 'materials_confirmed' || currentStatusKey === 'start_approved_with_material_issue' || currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
+  const isPreBuildComplete = !!jobData.preBuildChecklist || (currentStatusKey === 'pre_build_complete' || currentStatusKey === 'in_progress' || currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed');
+  const isCompletionComplete = currentStatusKey === 'completion_submitted' || currentStatusKey === 'completed';
+  const isOfficeApproved = currentStatusKey === 'completed';
 
   return (
     <div className="min-h-screen bg-[#070D19] text-slate-100 font-sans pb-16">
@@ -685,6 +1093,105 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 {statusInfo.label}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Sequential Workflow Progress Stepper */}
+        <div className="bg-[#111A2E]/60 border border-blue-900/10 p-5 rounded-[24px]">
+          <div className="text-[10px] text-slate-500 uppercase font-extrabold tracking-wider mb-4 flex items-center justify-between">
+            <span>Job Progression Tracker</span>
+            <span className="text-[#E63946]">Sequential Workflow Active</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-2">
+            
+            {/* Step 1: Material Pickup Confirmation */}
+            <div className={cn(
+              "relative p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isMaterialsConfirmed 
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                : currentStatusKey === 'material_issue_reported'
+                  ? "bg-rose-950/20 border-rose-500/30 text-rose-400 animate-pulse"
+                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">1. Material Pickup</span>
+                {isMaterialsConfirmed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isMaterialsConfirmed 
+                  ? "Confirmed Complete" 
+                  : currentStatusKey === 'material_issue_reported' 
+                    ? "Issue Reported" 
+                    : "Action Required"}
+              </span>
+            </div>
+
+            {/* Step 2: Pre-Build Checklist */}
+            <div className={cn(
+              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isPreBuildComplete 
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                : !isMaterialsConfirmed 
+                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
+                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">2. Pre-Build Site Check</span>
+                {isPreBuildComplete ? <CheckCircle2 size={14} /> : !isMaterialsConfirmed ? <Lock size={12} /> : <AlertTriangle size={14} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isPreBuildComplete 
+                  ? "Completed" 
+                  : !isMaterialsConfirmed 
+                    ? "Locked (Awaiting Step 1)" 
+                    : "Ready to Submit"}
+              </span>
+            </div>
+
+            {/* Step 3: Completion Checklist */}
+            <div className={cn(
+              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isCompletionComplete 
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                : !isPreBuildComplete 
+                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
+                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">3. Completion Sign-Off</span>
+                {isCompletionComplete ? <CheckCircle2 size={14} /> : !isPreBuildComplete ? <Lock size={12} /> : <AlertTriangle size={14} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isCompletionComplete 
+                  ? "Submitted" 
+                  : !isPreBuildComplete 
+                    ? "Locked (Awaiting Step 2)" 
+                    : "Ready to Submit"}
+              </span>
+            </div>
+
+            {/* Step 4: Office Approval */}
+            <div className={cn(
+              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
+              isOfficeApproved 
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
+                : currentStatusKey === 'completion_submitted'
+                  ? "bg-amber-950/20 border-amber-500/30 text-amber-400"
+                  : "bg-[#0A1120]/40 border-slate-800 text-slate-500"
+            )}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider">4. Office Review</span>
+                {isOfficeApproved ? <CheckCircle2 size={14} /> : currentStatusKey === 'completion_submitted' ? <Clock size={14} /> : <Lock size={12} />}
+              </div>
+              <span className="text-xs font-bold">
+                {isOfficeApproved 
+                  ? "Approved & Closed" 
+                  : currentStatusKey === 'completion_submitted' 
+                    ? "Awaiting Backoffice Review" 
+                    : "Locked"}
+              </span>
+            </div>
+
           </div>
         </div>
 
@@ -952,6 +1459,495 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           {/* TAB 3: MATERIALS CHECKLIST */}
           {activeTab === 'materials' && (
             <div className="space-y-6">
+              {/* ----------------- VENDOR SALES ORDERS & MATERIAL PICKUP SECTION ----------------- */}
+              <div className="bg-[#111A2E]/50 border border-blue-900/15 rounded-3xl p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-blue-900/10 pb-4">
+                  <div>
+                    <h3 className="text-base font-black uppercase text-white tracking-tight flex items-center gap-2">
+                      <Package className="text-[#E63946]" size={20} />
+                      Material Pickup & Vendor Documents
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                      Manage and confirm material pickup orders from local vendors
+                    </p>
+                  </div>
+                  
+                  {user && (
+                    <button
+                      onClick={() => setShowUploadDocPanel(!showUploadDocPanel)}
+                      className="px-4 py-2 bg-[#E63946] hover:bg-[#E63946]/90 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      {showUploadDocPanel ? 'Close Upload Form' : 'Upload Vendor SO'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Admin upload form */}
+                {user && showUploadDocPanel && (
+                  <form onSubmit={handleUploadVendorDoc} className="bg-[#0A1120] border border-blue-900/20 p-5 rounded-2xl space-y-4">
+                    <h4 className="text-xs font-black uppercase text-white tracking-wider border-b border-blue-900/15 pb-2">
+                      Upload New Vendor Sales Order / Pickup Document
+                    </h4>
+                    
+                    {uploadDocError && (
+                      <div className="p-3 bg-rose-950/40 border border-rose-900/30 text-rose-400 text-xs font-bold rounded-xl">
+                        ⚠️ {uploadDocError}
+                      </div>
+                    )}
+                    {uploadDocSuccess && (
+                      <div className="p-3 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl">
+                        ✓ {uploadDocSuccess}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Vendor Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newVendorName}
+                          onChange={(e) => setNewVendorName(e.target.value)}
+                          placeholder="e.g. Cedar Supply Depot"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Sales Order / Pickup Ticket Number *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newSalesOrderNumber}
+                          onChange={(e) => setNewSalesOrderNumber(e.target.value)}
+                          placeholder="e.g. SO-98421"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Location *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newPickupLocation}
+                          onChange={(e) => setNewPickupLocation(e.target.value)}
+                          placeholder="e.g. 104 Main St, Austin TX"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Date/Time (Optional)</label>
+                        <input
+                          type="datetime-local"
+                          value={newPickupDateTime}
+                          onChange={(e) => setNewPickupDateTime(e.target.value)}
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes for Crew</label>
+                      <textarea
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        placeholder="e.g. Pick up the premium rails first, check for splitting..."
+                        className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Upload Document File (PDF/JPG/PNG/WEBP/DOC/DOCX) *</label>
+                        <input
+                          type="file"
+                          required
+                          onChange={handleVendorDocFileChange}
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                          className="w-full text-xs text-slate-300 bg-[#070D19] border-2 border-blue-900/10 rounded-xl p-2.5 cursor-pointer"
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-2 select-none cursor-pointer mt-4">
+                        <input
+                          type="checkbox"
+                          checked={newVisibleToCrew}
+                          onChange={(e) => setNewVisibleToCrew(e.target.checked)}
+                          className="h-4 w-4 rounded bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
+                        />
+                        <span className="text-xs font-bold text-slate-200">Visible to Crew in Job Portal</span>
+                      </label>
+                    </div>
+
+                    {/* Manual line items editor */}
+                    <div className="space-y-3 pt-2 border-t border-blue-900/10">
+                      <span className="block text-[10px] font-black uppercase text-slate-300 tracking-wider">
+                        Document Line Items for Crew Audit (Manual Entry)
+                      </span>
+                      
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newLineItemDesc}
+                          onChange={(e) => setNewLineItemDesc(e.target.value)}
+                          placeholder="e.g. Japanese Cedar Pickett 1x6x6"
+                          className="flex-1 text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          value={newLineItemQty}
+                          onChange={(e) => setNewLineItemQty(Number(e.target.value))}
+                          placeholder="Qty"
+                          className="w-20 text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddLineItemToNewDoc}
+                          className="px-4 bg-blue-900 hover:bg-blue-800 text-white font-black text-xs uppercase tracking-wider rounded-xl"
+                        >
+                          Add Item
+                        </button>
+                      </div>
+
+                      {newDocLineItems.length > 0 ? (
+                        <div className="bg-[#070D19] rounded-xl overflow-hidden border border-blue-900/15">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-blue-950/20 text-[9px] text-slate-400 font-extrabold uppercase tracking-wider border-b border-blue-900/10">
+                                <th className="p-2.5">Item Description</th>
+                                <th className="p-2.5 w-24">Required Qty</th>
+                                <th className="p-2.5 w-16 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {newDocLineItems.map((item) => (
+                                <tr key={item.id} className="border-b border-blue-900/5 text-xs">
+                                  <td className="p-2.5 font-bold text-slate-200">{item.description}</td>
+                                  <td className="p-2.5 font-mono text-amber-400">{item.qty} pcs</td>
+                                  <td className="p-2.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveLineItemFromNewDoc(item.id)}
+                                      className="text-rose-500 hover:text-rose-400 p-1"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">No line items added yet. Add at least one material line item so the crew can audit it.</p>
+                      )}
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={isUploadingVendorDoc || !newDocFilename}
+                        className={cn(
+                          "w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2",
+                          (isUploadingVendorDoc || !newDocFilename) && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {isUploadingVendorDoc ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Uploading Document & Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Send size={14} />
+                            Save & Upload Vendor Document
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Documents List */}
+                {Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0 ? (
+                  <div className="space-y-4">
+                    {jobData.vendorDocuments
+                      .filter((d: any) => user || d.visibleToCrew)
+                      .map((doc: any) => {
+                        const isConfirmed = !!jobData.materialConfirmation || !!doc.confirmation;
+                        const confirmationDetails = jobData.materialConfirmation || doc.confirmation;
+                        
+                        return (
+                          <div key={doc.id} className="bg-[#0A1120] border border-blue-900/15 p-5 rounded-2xl space-y-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-blue-900/10 pb-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black text-white uppercase">{doc.vendorName}</span>
+                                  <span className="text-[10px] font-mono text-slate-400 font-bold uppercase bg-slate-800/60 px-2 py-0.5 rounded">
+                                    SO #{doc.salesOrderNumber}
+                                  </span>
+                                  {user && (
+                                    <span className={cn(
+                                      "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border",
+                                      doc.visibleToCrew 
+                                        ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5" 
+                                        : "text-slate-500 border-slate-700 bg-slate-800/10"
+                                    )}>
+                                      {doc.visibleToCrew ? 'Visible to Crew' : 'Hidden from Crew'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                  <span><strong>Location:</strong> {doc.pickupLocation}</span>
+                                  {doc.pickupDateTime && (
+                                    <span><strong>Target Date/Time:</strong> {new Date(doc.pickupDateTime).toLocaleString()}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                  href={doc.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1 border border-blue-900/30"
+                                >
+                                  <Eye size={13} /> View Order Document
+                                </a>
+
+                                {user && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVendorDoc(doc.id)}
+                                    className="p-1.5 bg-rose-950/20 border border-rose-900/20 hover:bg-rose-950/40 text-rose-400 rounded-lg transition-all"
+                                    title="Delete document"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {doc.notes && (
+                              <p className="text-xs text-slate-300 italic bg-[#070D19]/60 p-3 rounded-xl border border-blue-900/5">
+                                <strong>Office Notes:</strong> {doc.notes}
+                              </p>
+                            )}
+
+                            {/* Line items checklist */}
+                            {Array.isArray(doc.lineItems) && doc.lineItems.length > 0 && (
+                              <div className="space-y-2">
+                                <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                  Pickup Item Manifest:
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {doc.lineItems.map((item: any) => {
+                                    const itemStatus = confirmationDetails?.lineItemsStatus?.[item.id]?.status || 'Pending';
+                                    const itemNotes = confirmationDetails?.lineItemsStatus?.[item.id]?.notes;
+                                    const itemPhoto = confirmationDetails?.lineItemsStatus?.[item.id]?.photoUrl;
+                                    
+                                    return (
+                                      <div key={item.id} className="p-3 bg-[#070D19]/40 border border-blue-900/5 rounded-xl flex items-center justify-between gap-4">
+                                        <div className="space-y-0.5">
+                                          <span className="text-xs font-bold text-slate-300">{item.description}</span>
+                                          <span className="text-[10px] font-black text-amber-500 font-mono">Qty: {item.qty}</span>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <span className={cn(
+                                            "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
+                                            itemStatus === 'Confirmed' 
+                                              ? "bg-emerald-500/10 text-emerald-400" 
+                                              : itemStatus === 'Pending' 
+                                                ? "bg-amber-500/10 text-amber-500 animate-pulse" 
+                                                : "bg-rose-500/10 text-rose-400"
+                                          )}>
+                                            {itemStatus}
+                                          </span>
+                                          {itemNotes && (
+                                            <p className="text-[9px] text-slate-400 italic mt-0.5 line-clamp-1 max-w-[120px]" title={itemNotes}>
+                                              "{itemNotes}"
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* CONFIRMATION SECTION */}
+                            {isConfirmed ? (
+                              <div className="bg-emerald-950/20 border border-emerald-500/20 p-4 rounded-xl space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-emerald-400">
+                                    <CheckCircle2 size={16} />
+                                    <span className="text-xs font-black uppercase tracking-wider">Materials Pickup Confirmed</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    {confirmationDetails?.confirmedAt ? new Date(confirmationDetails.confirmedAt).toLocaleString() : ''}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+                                  <div className="space-y-1">
+                                    <p><strong className="text-slate-400">Confirmed By:</strong> {confirmationDetails?.crewLeaderName}</p>
+                                    <p><strong className="text-slate-400">Pickup Location:</strong> {confirmationDetails?.pickupLocation || doc.pickupLocation}</p>
+                                    {confirmationDetails?.notes && (
+                                      <p><strong className="text-slate-400">Crew Notes:</strong> {confirmationDetails.notes}</p>
+                                    )}
+                                  </div>
+
+                                  {/* Photos */}
+                                  {Array.isArray(confirmationDetails?.photos) && confirmationDetails.photos.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pickup Documentation Photos:</span>
+                                      <div className="flex flex-wrap gap-2">
+                                        {confirmationDetails.photos.map((url: string, idx: number) => (
+                                          <a key={idx} href={url} target="_blank" rel="noreferrer" className="block h-12 w-12 overflow-hidden rounded-lg border border-blue-900/10 hover:border-[#E63946] transition-all">
+                                            <img src={url} alt={`Pickup confirmation ${idx}`} className="h-full w-full object-cover" />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Reported problems summary */}
+                                {confirmationDetails?.hasIssues && (
+                                  <div className="p-3 bg-rose-950/30 border border-rose-500/20 rounded-lg space-y-1.5 mt-2">
+                                    <div className="flex items-center gap-1.5 text-rose-400 text-xs font-bold">
+                                      <AlertTriangle size={14} />
+                                      <span>Issues Documented during Pickup:</span>
+                                    </div>
+                                    <p className="text-xs text-slate-300 whitespace-pre-wrap">{confirmationDetails.problemSummary}</p>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              /* Crew Action Button */
+                              !user && (
+                                <div className="bg-[#1D3557]/40 border border-blue-900/20 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                                  <div className="space-y-1">
+                                    <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+                                      <AlertTriangle size={15} /> Action Required: Check In Order
+                                    </span>
+                                    <p className="text-[10px] text-slate-400">
+                                      Auditing and confirming material statuses is required before starting the project.
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      setActiveDocForConfirmation(doc);
+                                      setPickupLeaderName(crewLeaderName || '');
+                                      setPickupLocationState(doc.pickupLocation || '');
+                                      setPickupDateTimeState(doc.pickupDateTime || '');
+                                      setPickupGeneralNotes('');
+                                      setPickupGeneralPhotos([]);
+                                      
+                                      // Initialize statuses to 'Confirmed'
+                                      const initialStatuses: any = {};
+                                      (doc.lineItems || []).forEach((item: any) => {
+                                        initialStatuses[item.id] = { status: 'Confirmed', notes: '' };
+                                      });
+                                      setLineItemStatuses(initialStatuses);
+                                      
+                                      setConfirmError('');
+                                      setConfirmSuccessMessage('');
+                                      setShowConfirmModal(true);
+                                    }}
+                                    className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5"
+                                  >
+                                    <ClipboardList size={14} />
+                                    Check In & Confirm Materials
+                                  </button>
+                                </div>
+                              )
+                            )}
+
+                            {/* OFFICE OVERRIDE AREA FOR ADMIN */}
+                            {user && isConfirmed && confirmationDetails?.hasIssues && currentStatusKey === 'material_issue_reported' && (
+                              <div className="bg-amber-950/30 border border-amber-500/30 p-4 rounded-xl space-y-3 mt-4">
+                                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                                  <ShieldCheck size={16} />
+                                  <span>Office Action Required: Material Issue Override Panel</span>
+                                </div>
+                                <p className="text-[10px] text-slate-300">
+                                  The crew reported a material issue. You can override and authorize them to start anyway, or issue instructions to return the order or resolve vendor errors.
+                                </p>
+                                
+                                <div className="space-y-3 pt-2">
+                                  <div className="space-y-1">
+                                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Override Action Decision *</label>
+                                    <div className="flex gap-4">
+                                      <label className="flex items-center gap-2 select-none cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="overrideDecision"
+                                          checked={overrideDecision === 'approve_anyway'}
+                                          onChange={() => setOverrideDecision('approve_anyway')}
+                                          className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
+                                        />
+                                        <span className="text-xs font-bold text-slate-200">Approve Start Anyway (Unlocks Pre-Build)</span>
+                                      </label>
+                                      <label className="flex items-center gap-2 select-none cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="overrideDecision"
+                                          checked={overrideDecision === 'return_to_crew'}
+                                          onChange={() => setOverrideDecision('return_to_crew')}
+                                          className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
+                                        />
+                                        <span className="text-xs font-bold text-slate-200">Return to Crew / Vendor (Resolve Issues First)</span>
+                                      </label>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Resolution Instructions / Admin Notes *</label>
+                                    <textarea
+                                      required
+                                      value={overrideNotes}
+                                      onChange={(e) => setOverrideNotes(e.target.value)}
+                                      placeholder="e.g. Approved start. Local supplier delivering substitutions by 2 PM..."
+                                      className="w-full text-xs bg-[#070D19] text-white border border-blue-900/30 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
+                                      rows={2}
+                                    />
+                                  </div>
+
+                                  {overrideError && (
+                                    <p className="text-xs text-rose-400 font-bold">⚠️ {overrideError}</p>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    disabled={overrideSubmitting || !overrideNotes.trim()}
+                                    onClick={() => handleOverrideMaterialIssue(overrideDecision)}
+                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] font-black text-[10px] uppercase tracking-wider rounded-lg transition-all"
+                                  >
+                                    {overrideSubmitting ? 'Submitting Override...' : 'Submit Resolution Action'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="p-8 bg-[#0A1120] border-2 border-dashed border-blue-900/10 rounded-2xl text-center text-slate-500">
+                    <Package className="mx-auto mb-2 text-slate-600" size={32} />
+                    <p className="text-xs font-bold uppercase tracking-wider">No vendor sales orders or material pickup documents attached to this job.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* ----------------- BILL OF MATERIALS CHECKLIST ----------------- */}
               <div className="border-b border-blue-900/10 pb-4">
                 <h3 className="text-base font-black uppercase text-white tracking-tight">Bill of Materials Checklist</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Crews can use this list to audit loading & yard deliveries</p>
@@ -1003,7 +1999,19 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Submit before digging any holes or installing posts</p>
                   </div>
 
-                  {jobData.preBuildChecklist ? (
+                  {!isMaterialsConfirmed ? (
+                    <div className="bg-[#0A1120]/40 border border-slate-800 rounded-2xl p-6 text-center space-y-3">
+                      <div className="h-10 w-10 bg-amber-950/20 text-amber-500 rounded-full flex items-center justify-center mx-auto">
+                        <Lock size={18} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-black uppercase text-slate-200">Pre-Build Checklist Locked</h4>
+                        <p className="text-[10px] text-slate-400">
+                          This checklist is locked until **Step 1: Material Pickup Confirmation** is completed. Please go to the **Material Checklist** tab to confirm pickup.
+                        </p>
+                      </div>
+                    </div>
+                  ) : jobData.preBuildChecklist ? (
                     <div className="bg-emerald-950/20 border border-emerald-500/20 p-5 rounded-2xl space-y-4">
                       <div className="flex items-center gap-2 text-emerald-400">
                         <CheckCircle2 size={18} />
@@ -1169,8 +2177,18 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         )}
                       </div>
                     </div>
-                  ) : (currentStatusKey !== 'pre_build_complete' && currentStatusKey !== 'returned_to_crew') ? (
-                    <p className="text-xs text-slate-500 italic">Please complete and submit the Pre-Build Checklist first before accessing the Completion Checklist.</p>
+                  ) : !isPreBuildComplete ? (
+                    <div className="bg-[#0A1120]/40 border border-slate-800 rounded-2xl p-6 text-center space-y-3">
+                      <div className="h-10 w-10 bg-amber-950/20 text-amber-500 rounded-full flex items-center justify-center mx-auto">
+                        <Lock size={18} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-black uppercase text-slate-200">Completion Checklist Locked</h4>
+                        <p className="text-[10px] text-slate-400">
+                          This checklist is locked until **Step 2: Pre-Build Site Check** is completed. Please complete and submit the **Pre-Build Checklist** first.
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <form onSubmit={handleSubmitCompletion} className="space-y-4">
                       {checklistError && (
@@ -1566,6 +2584,285 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                   Cancel
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CREW WORKFLOW: MATERIAL PICKUP CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {showConfirmModal && activeDocForConfirmation && (
+          <div className="fixed inset-0 bg-black/95 z-[120] flex items-center justify-center overflow-y-auto p-4 md:p-8">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111A2E] border border-blue-900/35 rounded-3xl max-w-3xl w-full my-auto overflow-hidden shadow-2xl flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="bg-[#1D3557] p-5 border-b border-blue-900/20 flex justify-between items-center shrink-0">
+                <div className="space-y-1">
+                  <h3 className="text-base font-black uppercase text-white tracking-tight flex items-center gap-2">
+                    <ClipboardList className="text-[#E63946]" size={20} />
+                    Material Audit & Check-In Confirmation
+                  </h3>
+                  <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">
+                    Vendor: {activeDocForConfirmation.vendorName} | Order: #{activeDocForConfirmation.salesOrderNumber}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowConfirmModal(false)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800/40 hover:bg-slate-800 transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable Modal Content */}
+              <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh] scrollbar-thin">
+                
+                {confirmError && (
+                  <div className="p-4 bg-rose-950/40 border border-rose-900/30 text-rose-400 text-xs font-bold rounded-xl">
+                    ⚠️ {confirmError}
+                  </div>
+                )}
+                {confirmSuccessMessage && (
+                  <div className="p-4 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl">
+                    ✓ {confirmSuccessMessage}
+                  </div>
+                )}
+
+                {/* Audit metadata */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Crew Leader Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={pickupLeaderName}
+                      onChange={(e) => setPickupLeaderName(e.target.value)}
+                      placeholder="Your Full Name"
+                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Location *</label>
+                    <input
+                      type="text"
+                      required
+                      value={pickupLocationState}
+                      onChange={(e) => setPickupLocationState(e.target.value)}
+                      placeholder="Vendor yard address"
+                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Actual Pickup Date/Time *</label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={pickupDateTimeState}
+                      onChange={(e) => setPickupDateTimeState(e.target.value)}
+                      className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-3 py-2.5 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Manifest Line Items Verification table */}
+                <div className="space-y-3">
+                  <span className="block text-xs font-black uppercase text-slate-300 tracking-wider">
+                    Line Item Quality & Quantity Audit
+                  </span>
+                  
+                  {Array.isArray(activeDocForConfirmation.lineItems) && activeDocForConfirmation.lineItems.length > 0 ? (
+                    <div className="space-y-4">
+                      {activeDocForConfirmation.lineItems.map((item: any) => {
+                        const statusObj = lineItemStatuses[item.id] || { status: 'Confirmed', notes: '', photoUrl: '' };
+                        
+                        return (
+                          <div key={item.id} className="p-4 bg-[#070D19] border border-blue-900/10 rounded-2xl space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-900/5 pb-2">
+                              <div>
+                                <span className="text-xs font-black text-slate-100 uppercase">{item.description}</span>
+                                <span className="text-[10px] font-mono text-amber-500 font-bold block">Required Quantity: {item.qty} pcs</span>
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-1">
+                                {['Confirmed', 'Short', 'Damaged', 'Substituted', 'Not Received'].map((st) => (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => handleUpdateLineItemStatus(item.id, st)}
+                                    className={cn(
+                                      "px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded border transition-all",
+                                      statusObj.status === st
+                                        ? st === 'Confirmed'
+                                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                          : st === 'Short' || st === 'Substituted'
+                                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                            : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                                        : "bg-[#0c1322] text-slate-400 border-slate-800 hover:text-slate-300"
+                                    )}
+                                  >
+                                    {st === 'Confirmed' ? '✓ ' : ''}{st}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Additional inputs if NOT Confirmed */}
+                            {statusObj.status !== 'Confirmed' && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 animate-fadeIn">
+                                <div className="space-y-1">
+                                  <label className="block text-[8px] font-black uppercase text-[#E63946] tracking-wider">
+                                    Describe the {statusObj.status} issue *
+                                  </label>
+                                  <textarea
+                                    required
+                                    value={statusObj.notes || ''}
+                                    onChange={(e) => handleUpdateLineItemField(item.id, 'notes', e.target.value)}
+                                    placeholder={`Explain why this is ${statusObj.status.toLowerCase()}...`}
+                                    className="w-full text-xs bg-[#0c1322] text-white border border-rose-500/20 focus:border-rose-500 rounded-xl px-3 py-2 focus:outline-none"
+                                    rows={2}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="block text-[8px] font-black uppercase text-[#E63946] tracking-wider">
+                                    Upload Photo of {statusObj.status} Issue *
+                                  </label>
+                                  
+                                  <div className="flex items-center gap-3">
+                                    <label className="flex-1 flex flex-col items-center justify-center aspect-[4/1] border border-dashed border-rose-500/20 hover:border-rose-500 rounded-xl bg-[#0c1322] cursor-pointer text-slate-400 hover:text-white transition-all relative overflow-hidden">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleUploadLineItemPhoto(item.id, e)}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                      />
+                                      {uploadingLineItemPhotoId === item.id ? (
+                                        <div className="flex items-center gap-1 text-[9px] font-bold text-rose-400">
+                                          <Loader2 size={12} className="animate-spin" /> Uploading...
+                                        </div>
+                                      ) : statusObj.photoUrl ? (
+                                        <span className="text-[9px] font-bold text-emerald-400">✓ Photo Uploaded (Click to change)</span>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider">
+                                          <Camera size={12} /> Upload Photo
+                                        </div>
+                                      )}
+                                    </label>
+                                    
+                                    {statusObj.photoUrl && (
+                                      <a href={statusObj.photoUrl} target="_blank" rel="noopener noreferrer" className="h-10 w-10 shrink-0 border border-emerald-500/20 rounded-xl overflow-hidden block">
+                                        <img src={statusObj.photoUrl} alt="issue" className="h-full w-full object-cover" />
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 italic">No checklist items defined for this sales order.</p>
+                  )}
+                </div>
+
+                {/* General Pickup Documentation Photos */}
+                <div className="space-y-3 pt-2 border-t border-blue-900/10">
+                  <span className="block text-xs font-black uppercase text-slate-300 tracking-wider">
+                    General Loaded Material or Sales Order Photos * (Min 1 photo required)
+                  </span>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-blue-900/20 hover:border-[#E63946] rounded-2xl bg-[#070D19]/40 cursor-pointer text-slate-400 hover:text-white transition-all relative overflow-hidden">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadPickupPhoto}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      {isUploadingPickupPhoto ? (
+                        <div className="text-center space-y-1">
+                          <Loader2 size={18} className="animate-spin mx-auto text-[#E63946]" />
+                          <span className="text-[9px] font-bold text-slate-500">Uploading...</span>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <Camera size={18} className="mx-auto" />
+                          <span className="text-[9px] font-black uppercase tracking-wider block">Add Photo</span>
+                        </div>
+                      )}
+                    </label>
+
+                    {pickupGeneralPhotos.map((url, index) => (
+                      <div key={index} className="aspect-square rounded-2xl overflow-hidden border border-blue-900/10 relative group bg-[#070D19]">
+                        <img src={url} alt={`General pickup ${index}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGeneralPhoto(index)}
+                          className="absolute top-1.5 right-1.5 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* General notes */}
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">General Check-In Notes / Comments (Optional)</label>
+                  <textarea
+                    value={pickupGeneralNotes}
+                    onChange={(e) => setPickupGeneralNotes(e.target.value)}
+                    placeholder="Add notes about loaded items, vendor service, or substitution approvals..."
+                    className="w-full text-xs bg-[#070D19] text-white border border-blue-900/10 focus:border-blue-900 rounded-xl p-3 focus:outline-none"
+                    rows={2}
+                  />
+                </div>
+
+              </div>
+
+              {/* Submit Area Footer */}
+              <div className="bg-[#111A2E] border-t border-blue-900/15 p-5 flex items-center justify-between gap-4 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+                >
+                  Close & Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={confirmSubmitting || isUploadingPickupPhoto || !pickupLeaderName.trim() || pickupGeneralPhotos.length < 1}
+                  onClick={handleSubmitMaterialConfirmation}
+                  className={cn(
+                    "px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center gap-1.5",
+                    (confirmSubmitting || isUploadingPickupPhoto || !pickupLeaderName.trim() || pickupGeneralPhotos.length < 1) && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {confirmSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Submitting Audit...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      Verify & Submit Material Confirmation
+                    </>
+                  )}
+                </button>
+              </div>
+
             </motion.div>
           </div>
         )}

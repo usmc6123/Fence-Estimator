@@ -990,6 +990,10 @@ async function syncCustomerToGhl({
     else if (eventType === 'pre_build_complete') eventTag = 'LSFW - Pre Build Complete';
     else if (eventType === 'completion_submitted') eventTag = 'LSFW - Completion Checklist Submitted';
     else if (eventType === 'returned_to_crew') eventTag = 'LSFW - Returned To Crew';
+    else if (eventType === 'vendor_doc_uploaded') eventTag = 'LSFW - Material Pickup Document Added';
+    else if (eventType === 'materials_confirmed') eventTag = 'LSFW - Materials Confirmed';
+    else if (eventType === 'material_issue_reported') eventTag = 'LSFW - Material Issue Reported';
+    else if (eventType === 'start_approved_with_material_issue') eventTag = 'LSFW - Start Approved With Material Issue';
 
     // Map the human-readable job status
     let currentJobStatus = status || 'Interested';
@@ -1006,6 +1010,9 @@ async function syncCustomerToGhl({
     else if (eventType === 'pre_build_complete') currentJobStatus = 'Pre-Build Complete';
     else if (eventType === 'completion_submitted') currentJobStatus = 'Completion Checklist Submitted';
     else if (eventType === 'returned_to_crew') currentJobStatus = 'Returned to Crew';
+    else if (eventType === 'materials_confirmed') currentJobStatus = 'Materials Confirmed';
+    else if (eventType === 'material_issue_reported') currentJobStatus = 'Material Issue Reported';
+    else if (eventType === 'start_approved_with_material_issue') currentJobStatus = 'Start Approved with Issue';
 
     // Form Custom Fields array
     const customFieldsPayload: { id: string; value: any }[] = [];
@@ -1035,6 +1042,15 @@ async function syncCustomerToGhl({
         addCf('crewScheduleLink', estimate.crewScheduleLink || '');
         addCf('assignedCrew', estimate.assignedCrew || '');
         addCf('dispatchDate', estimate.dispatchDate || '');
+
+        // Add vendor & material confirmation details
+        addCf('vendorName', estimate.vendorName || '');
+        addCf('vendorSalesOrderNumber', estimate.vendorSalesOrderNumber || '');
+        addCf('materialPickupLocation', estimate.materialPickupLocation || '');
+        addCf('materialConfirmationStatus', estimate.materialConfirmationStatus || '');
+        addCf('materialsConfirmedAt', estimate.materialsConfirmedAt || '');
+        addCf('materialIssueReported', estimate.materialIssueReported || '');
+        addCf('materialIssueSummary', estimate.materialIssueSummary || '');
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -3545,6 +3561,487 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ success: true, message: 'Drawing successfully removed' });
       }
 
+      if (req.body && req.body.action === 'upload-vendor-document') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin access required to upload vendor pickup documents.' });
+        }
+
+        const { 
+          estimateId, 
+          vendorName, 
+          salesOrderNumber, 
+          pickupLocation, 
+          pickupDateTime, 
+          notes, 
+          visibleToCrew, 
+          filename, 
+          mimeType, 
+          base64Data,
+          lineItems
+        } = req.body || {};
+
+        if (!estimateId || !vendorName || !salesOrderNumber || !filename || !mimeType || !base64Data) {
+          return res.status(400).json({ error: 'Missing required parameters. estimateId, vendorName, salesOrderNumber, filename, mimeType, and base64Data are required.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+
+        const timestamp = Date.now();
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `vendor-documents/${estimateId}/${timestamp}-${sanitizedFilename}`;
+        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+        const file = bucket.file(storagePath);
+        
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(';base64,')) {
+          cleanBase64 = cleanBase64.split(';base64,')[1];
+        }
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        await file.save(buffer, { metadata: { contentType: mimeType } });
+
+        let downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        try {
+          await file.makePublic();
+        } catch (pubErr) {
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({ action: 'read', expires });
+          downloadUrl = signedUrl;
+        }
+
+        const docId = crypto.randomUUID();
+        const newDoc = {
+          id: docId,
+          vendorName,
+          salesOrderNumber,
+          pickupLocation: pickupLocation || '',
+          pickupDateTime: pickupDateTime || '',
+          notes: notes || '',
+          visibleToCrew: !!visibleToCrew,
+          fileUrl: downloadUrl,
+          fileName: filename,
+          storagePath,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: decoded.email || 'Office Admin',
+          lineItems: Array.isArray(lineItems) ? lineItems : []
+        };
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Vendor Document Uploaded',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office Admin',
+          notes: `Uploaded sales order document "${filename}" for vendor "${vendorName}". Sales Order: #${salesOrderNumber}.`
+        };
+
+        const existingDocs = Array.isArray(estimateData.vendorDocuments) ? estimateData.vendorDocuments : [];
+        const updatedDocs = [...existingDocs, newDoc];
+
+        await docRef.update({
+          vendorDocuments: updatedDocs,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify crew if job has already been dispatched
+        const crewEmail = estimateData.laborContractEmailRecipient || estimateData.crewEmailRecipient;
+        if (crewEmail && estimateData.jobPortalStatus && visibleToCrew) {
+          try {
+            const jobPortalLink = estimateData.laborSnapshotLink || `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken}`;
+            const text = `A material pickup document has been added to the Job Portal for this job.\n\nCustomer:\n${estimateData.customerName || 'Client'}\n\nVendor:\n${vendorName}\n\nSales Order:\n#${salesOrderNumber}\n\nPickup Location:\n${pickupLocation || 'N/A'}\n\nOpen Job Portal:\n${jobPortalLink}`;
+            const html = `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5e5; border-radius: 12px; background-color: #ffffff;">
+                <h2 style="color: #1d3557; border-bottom: 2px solid #e63946; padding-bottom: 10px; margin-top: 0;">Material Pickup Document Added</h2>
+                <p>A new material pickup document is available in the Job Portal for this job.</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #666666; width: 140px;">Customer:</td>
+                    <td style="padding: 8px 0; color: #111111;">${estimateData.customerName || 'Client'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #666666;">Vendor Name:</td>
+                    <td style="padding: 8px 0; color: #111111;">${vendorName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #666666;">Sales Order #:</td>
+                    <td style="padding: 8px 0; color: #111111;">#${salesOrderNumber}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #666666;">Pickup Location:</td>
+                    <td style="padding: 8px 0; color: #111111;">${pickupLocation || 'N/A'}</td>
+                  </tr>
+                </table>
+                <p style="margin-top: 20px;">
+                  <a href="${jobPortalLink}" style="display: inline-block; background-color: #e63946; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 14px;">Open Job Portal</a>
+                </p>
+              </div>
+            `;
+            await sendAppEmail({
+              to: crewEmail,
+              subject: `Material Pickup Document Added - ${estimateData.customerName || 'Client'}`,
+              text,
+              html,
+              estimateData
+            });
+          } catch (emailErr) {
+            console.error('Failed to send vendor document upload notification email to crew:', emailErr);
+          }
+        }
+
+        try {
+          await syncCustomerToGhl({
+            eventType: 'vendor_doc_uploaded',
+            estimate: {
+              ...estimateData,
+              id: estimateId,
+              vendorName,
+              vendorSalesOrderNumber: salesOrderNumber,
+              materialPickupLocation: pickupLocation
+            }
+          });
+        } catch (ghlErr) {
+          console.error('Failed to sync vendor_doc_uploaded event to GHL:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true, document: newDoc });
+      }
+
+      if (req.body && req.body.action === 'delete-vendor-document') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin access required to delete vendor pickup documents.' });
+        }
+
+        const { estimateId, documentId } = req.body || {};
+        if (!estimateId || !documentId) {
+          return res.status(400).json({ error: 'Missing parameters estimateId or documentId' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+
+        const existingDocs = Array.isArray(estimateData.vendorDocuments) ? estimateData.vendorDocuments : [];
+        const docToDelete = existingDocs.find((d: any) => d.id === documentId);
+        if (!docToDelete) {
+          return res.status(404).json({ error: 'Vendor document not found in estimate record' });
+        }
+
+        if (docToDelete.storagePath) {
+          try {
+            const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+            const file = bucket.file(docToDelete.storagePath);
+            await file.delete();
+          } catch (storageErr: any) {
+            console.warn('Could not delete vendor doc file from Firebase Storage:', storageErr?.message || storageErr);
+          }
+        }
+
+        const updatedDocs = existingDocs.filter((d: any) => d.id !== documentId);
+        
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: 'Vendor Document Deleted',
+          timestamp: new Date().toISOString(),
+          user: decoded.email || 'Office Admin',
+          notes: `Deleted vendor document "${docToDelete.fileName}" for vendor "${docToDelete.vendorName}".`
+        };
+
+        await docRef.update({
+          vendorDocuments: updatedDocs,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        return res.status(200).json({ success: true });
+      }
+
+      if (req.body && req.body.action === 'submit-material-confirmation') {
+        const { estimateId, token, crewLeaderName, pickupLocation, notes, photos, lineItemsStatus, hasIssues, problemSummary } = req.body || {};
+        if (!estimateId || !token || !crewLeaderName || !pickupLocation) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+
+        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
+        }
+
+        const nowIso = new Date().toISOString();
+        const newStatus = hasIssues ? 'material_issue_reported' : 'materials_confirmed';
+
+        const confirmationData = {
+          crewLeaderName,
+          pickupLocation,
+          notes: notes || '',
+          photos: Array.isArray(photos) ? photos : [],
+          lineItemsStatus: lineItemsStatus || {},
+          completedAt: nowIso,
+          status: newStatus,
+          hasIssues: !!hasIssues,
+          problemSummary: problemSummary || ''
+        };
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: hasIssues ? 'Material Issues Reported' : 'Materials Confirmed',
+          timestamp: nowIso,
+          user: crewLeaderName,
+          notes: hasIssues 
+            ? `Crew reported material pickup issues: ${problemSummary}. General Notes: ${notes || 'None'}` 
+            : `Crew confirmed material pickup successfully with no issues. General Notes: ${notes || 'None'}`
+        };
+
+        await docRef.update({
+          materialConfirmation: confirmationData,
+          jobPortalStatus: newStatus,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        // Notify office immediately
+        try {
+          const crewName = estimateData.assignedCrew || crewLeaderName || 'Assigned Crew';
+          const jobPortalLink = estimateData.laborSnapshotLink || `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken}`;
+          const officeLink = `https://fence-estimator-eight.vercel.app/dossier?id=${estimateId}`;
+
+          const subject = hasIssues 
+            ? `🚨 MATERIAL PICKUP ISSUE - Crew: ${crewName} - Client: ${estimateData.customerName || 'Client'}`
+            : `✅ MATERIAL PICKUP CONFIRMED - Crew: ${crewName} - Client: ${estimateData.customerName || 'Client'}`;
+
+          const text = `
+            ${hasIssues ? '⚠️ ATTENTION: Material pickup issues have been reported!' : '✓ Material pickup successfully confirmed.'}
+            
+            Customer Name: ${estimateData.customerName || 'N/A'}
+            Job Address: ${estimateData.customerAddress || 'N/A'}
+            Crew Name: ${crewName}
+            Pickup Location: ${pickupLocation}
+            
+            Confirmation Status: ${hasIssues ? 'ISSUES REPORTED' : 'CONFIRMED OK'}
+            ${hasIssues ? `Problem Items:\n${problemSummary}` : ''}
+            
+            Crew Leader Notes: ${notes || 'None'}
+            Photos Uploaded: ${Array.isArray(photos) ? photos.length : 0}
+            
+            Job Portal Link: ${jobPortalLink}
+            Office Admin Link: ${officeLink}
+          `;
+
+          const html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid ${hasIssues ? '#e63946' : '#2a9d8f'}; border-radius: 16px; background-color: #ffffff;">
+              <h2 style="color: ${hasIssues ? '#e63946' : '#2a9d8f'}; border-bottom: 2px solid ${hasIssues ? '#e63946' : '#2a9d8f'}; padding-bottom: 12px; margin-top: 0;">
+                ${hasIssues ? '🚨 Material Pickup Issues Reported' : '✅ Material Pickup Confirmed'}
+              </h2>
+              <p style="font-size: 14px; line-height: 1.5; color: #333333;">
+                ${hasIssues ? 'A crew has reported material discrepancies or damages during pickup.' : 'The crew has completed material confirmation successfully.'}
+              </p>
+              
+              <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666; width: 160px;">Customer Name:</td>
+                  <td style="padding: 10px 0; color: #111111; font-weight: bold;">${estimateData.customerName || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666;">Jobsite Address:</td>
+                  <td style="padding: 10px 0; color: #111111;">${estimateData.customerAddress || 'N/A'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666;">Crew Name:</td>
+                  <td style="padding: 10px 0; color: #111111;">${crewName}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666;">Pickup Location:</td>
+                  <td style="padding: 10px 0; color: #111111;">${pickupLocation}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666;">Confirmation Status:</td>
+                  <td style="padding: 10px 0; color: ${hasIssues ? '#e63946' : '#2a9d8f'}; font-weight: bold;">
+                    ${hasIssues ? 'ISSUES REPORTED / DISCREPANCY' : 'ALL CONFIRMED & LOADED'}
+                  </td>
+                </tr>
+                ${hasIssues ? `
+                <tr style="border-bottom: 1px solid #f0f0f0; background-color: #fff5f5;">
+                  <td style="padding: 10px; font-weight: bold; color: #e63946; vertical-align: top;">Problem Items:</td>
+                  <td style="padding: 10px; color: #c1121f; font-family: monospace; white-space: pre-wrap;">${problemSummary}</td>
+                </tr>` : ''}
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666; vertical-align: top;">General Notes:</td>
+                  <td style="padding: 10px 0; color: #333333; font-style: italic;">${notes || 'None'}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f0f0;">
+                  <td style="padding: 10px 0; font-weight: bold; color: #666666;">Attached Photos:</td>
+                  <td style="padding: 10px 0; color: #333333;">${Array.isArray(photos) ? photos.length : 0} image(s)</td>
+                </tr>
+              </table>
+
+              <div style="margin-top: 25px; display: flex; gap: 15px;">
+                <a href="${jobPortalLink}" style="display: inline-block; background-color: #1d3557; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 13px;">Open Crew Job Portal</a>
+                <a href="${officeLink}" style="display: inline-block; background-color: #e63946; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 13px; margin-left: 10px;">Open Backoffice Estimate</a>
+              </div>
+            </div>
+          `;
+
+          await sendAppEmail({
+            to: 'bradens@lonestarfenceworks.com',
+            subject,
+            text,
+            html,
+            estimateData
+          });
+        } catch (mailErr) {
+          console.error('Failed to send material confirmation notification email:', mailErr);
+        }
+
+        // Sync to GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: newStatus,
+            estimate: {
+              ...estimateData,
+              id: estimateId,
+              materialConfirmationStatus: hasIssues ? 'Issues Reported' : 'Confirmed',
+              materialsConfirmedAt: nowIso,
+              materialIssueReported: hasIssues ? 'Yes' : 'No',
+              materialIssueSummary: problemSummary || ''
+            }
+          });
+        } catch (ghlErr) {
+          console.error('Failed to sync material confirmation to GHL:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true, materialConfirmation: confirmationData });
+      }
+
+      if (req.body && req.body.action === 'override-material-issue') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        if (!isWriteAdmin) {
+          return res.status(403).json({ error: 'Forbidden: Admin access required to override material issues.' });
+        }
+
+        const { estimateId, decision, adminNotes } = req.body || {};
+        if (!estimateId || !decision) {
+          return res.status(400).json({ error: 'Missing parameters estimateId or decision' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        if (!snap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimateData = snap.data() || {};
+
+        const nowIso = new Date().toISOString();
+        let newStatus = 'materials_confirmed';
+        let logEvent = 'Material Issues Overridden';
+        let logNotes = `Office approved starting the job despite material issues. Admin Notes: ${adminNotes || 'None'}`;
+        let ghlEvent = 'start_approved_with_material_issue';
+
+        if (decision === 'approve_anyway') {
+          newStatus = 'start_approved_with_material_issue';
+          logEvent = 'Material Issues Approved';
+        } else if (decision === 'return_to_crew') {
+          newStatus = 'dispatched'; // Reset back to dispatched so they can re-evaluate
+          logEvent = 'Material Issues Returned to Crew';
+          logNotes = `Office returned material issues for correction. Admin Notes: ${adminNotes || 'Required'}`;
+          ghlEvent = 'returned_to_crew';
+        }
+
+        const logEntry = {
+          id: crypto.randomUUID(),
+          event: logEvent,
+          timestamp: nowIso,
+          user: decoded.email || 'Office Admin',
+          notes: logNotes
+        };
+
+        const updatedConfirmation = estimateData.materialConfirmation ? {
+          ...estimateData.materialConfirmation,
+          adminDecision: decision,
+          adminNotes: adminNotes || '',
+          decidedAt: nowIso,
+          decidedBy: decoded.email || 'Office Admin'
+        } : null;
+
+        await docRef.update({
+          jobPortalStatus: newStatus,
+          jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry),
+          ...(updatedConfirmation ? { materialConfirmation: updatedConfirmation } : {})
+        });
+
+        // Notify crew via email
+        const crewEmail = estimateData.laborContractEmailRecipient || estimateData.crewEmailRecipient;
+        if (crewEmail) {
+          try {
+            const jobPortalLink = estimateData.laborSnapshotLink || `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken}`;
+            const subject = decision === 'approve_anyway' 
+              ? `✅ START APPROVED - Customer: ${estimateData.customerName || 'Client'}`
+              : `⚠️ MATERIAL ACTION REQUIRED - Customer: ${estimateData.customerName || 'Client'}`;
+
+            const text = decision === 'approve_anyway'
+              ? `Hi Crew,\n\nThe office has reviewed the reported material issues and APPROVED starting the job anyway.\n\nYou are clear to proceed with the Pre-Build Checklist.\n\nOffice Comments:\n${adminNotes || 'None'}\n\nOpen Job Portal:\n${jobPortalLink}`
+              : `Hi Crew,\n\nThe office has reviewed the material issues reported and returned the order for correction/re-evaluation.\n\nPlease double check materials or communicate with vendor/yard as instructed.\n\nOffice Instructions:\n${adminNotes || 'None'}\n\nOpen Job Portal:\n${jobPortalLink}`;
+
+            const html = `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e5e5e5; border-radius: 12px; background-color: #ffffff;">
+                <h2 style="color: ${decision === 'approve_anyway' ? '#1d3557' : '#e63946'}; border-bottom: 2px solid ${decision === 'approve_anyway' ? '#2a9d8f' : '#e63946'}; padding-bottom: 10px; margin-top: 0;">
+                  ${decision === 'approve_anyway' ? '✅ Proceed with Installation Approved' : '⚠️ Material Confirmation Returned'}
+                </h2>
+                <p style="font-size: 14px; line-height: 1.5; color: #333333;">
+                  ${decision === 'approve_anyway' 
+                    ? 'The office has reviewed your reported issues and approved you to start work anyway. The Pre-Build Checklist is now unlocked.' 
+                    : 'The office has returned the material confirmation step for re-evaluation or yard coordination.'}
+                </p>
+                <div style="background-color: #f8f9fa; border-left: 4px solid ${decision === 'approve_anyway' ? '#2a9d8f' : '#e63946'}; padding: 15px; margin: 15px 0; font-size: 13px; border-radius: 4px;">
+                  <strong>Office Instructions / Notes:</strong><br/>
+                  <p style="margin: 5px 0 0 0; font-style: italic; color: #555555;">${adminNotes || 'None provided.'}</p>
+                </div>
+                <p style="margin-top: 25px;">
+                  <a href="${jobPortalLink}" style="display: inline-block; background-color: #e63946; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 14px;">Open Crew Job Portal</a>
+                </p>
+              </div>
+            `;
+
+            await sendAppEmail({
+              to: crewEmail,
+              subject,
+              text,
+              html,
+              estimateData
+            });
+          } catch (emailErr) {
+            console.error('Failed to notify crew of override decision:', emailErr);
+          }
+        }
+
+        // Sync with GHL
+        try {
+          await syncCustomerToGhl({
+            eventType: ghlEvent,
+            estimate: {
+              ...estimateData,
+              id: estimateId
+            }
+          });
+        } catch (ghlErr) {
+          console.error('Failed to sync override decision to GHL:', ghlErr);
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
       if (req.body && req.body.action === 'upload-job-portal-photo') {
         const { estimateId, token, filename, mimeType, base64Data } = req.body || {};
         if (!estimateId || !token || !filename || !mimeType || !base64Data) {
@@ -4016,6 +4513,16 @@ export default async function handler(req: any, res: any) {
 
         const emailSubject = `New Job Dispatch - ${customerName}`;
         
+        const hasVendorDocs = Array.isArray(estimateData.vendorDocuments) && estimateData.vendorDocuments.some((d: any) => d.visibleToCrew);
+        const vendorDocNoticeText = hasVendorDocs 
+          ? "\n\nIMPORTANT: Material pickup documents are available in the Job Portal. Please confirm all materials during pickup." 
+          : "";
+        const vendorDocNoticeHtml = hasVendorDocs 
+          ? `<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; color: #b45309;">
+               <strong>Material Pickup Required:</strong> Material pickup documents are available in the Job Portal. Please confirm all materials during pickup.
+             </div>` 
+          : "";
+
         // Clean text-only body
         const emailText = `Hello ${crewName || 'Crew'},
 
@@ -4031,7 +4538,7 @@ Fence Type:
 ${fenceType}
 
 Linear Feet:
-${linearFeet}
+${linearFeet}${vendorDocNoticeText}
 
 Access Secure Crew Job Portal:
 ${laborSnapshotLink}
@@ -4049,6 +4556,7 @@ Lone Star Fence Works`;
   
   <p style="font-size: 15px; line-height: 1.5; margin-top: 0;">Hello <strong>${crewName || 'Crew'}</strong>,</p>
   <p style="font-size: 15px; line-height: 1.5;">You have been assigned a new project.</p>
+  ${vendorDocNoticeHtml}
   
   <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; line-height: 1.6;">
     <table style="width: 100%; border-collapse: collapse;">

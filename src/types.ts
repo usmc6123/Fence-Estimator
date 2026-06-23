@@ -299,6 +299,18 @@ export interface Estimate {
   latestContractVersionId?: string;
   latestContractStatus?: string;
   latestContractSentAt?: string;
+
+  // Job Portal & Material Pickup
+  jobPortalStatus?: string;
+  jobPortalHistory?: any[];
+  vendorDocuments?: any[];
+  materialConfirmation?: any;
+  laborSnapshotToken?: string;
+  crewScheduleToken?: string;
+  laborSnapshotLink?: string;
+  crewScheduleLink?: string;
+  assignedCrew?: string;
+  dispatchDate?: string;
 }
 
 export interface ScheduleEvent {
