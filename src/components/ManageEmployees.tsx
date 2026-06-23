@@ -237,8 +237,26 @@ export default function ManageEmployees() {
         }
       }
 
-      // 2. Delete firestore document
-      await deleteDoc(doc(db, 'employees', emp.email));
+      // 2. Delete firestore document via API
+      const adminToken = localStorage.getItem('company_admin_token') || '';
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Admin-Token': adminToken
+        },
+        body: JSON.stringify({
+          action: "delete-employee",
+          email: emp.email
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error deleting employee: ${response.status}`);
+      }
+
       await fetchEmployees();
       alert(`Employee "${emp.email}" was removed successfully.`);
     } catch (err: any) {
@@ -273,36 +291,32 @@ export default function ManageEmployees() {
 
     try {
       const targetEmail = editingEmployee.email;
+      const adminToken = localStorage.getItem('company_admin_token') || '';
 
-      // Primary Crew Contact logic inside Edit Modal
-      if (editIsPrimaryCrewContact) {
-        const updates = employees
-          .filter(e => (e.isPrimaryCrewContact || e.primaryCrewContact) && e.email !== targetEmail)
-          .map(async (e) => {
-            const docRef = doc(db, 'employees', e.email);
-            await setDoc(docRef, { 
-              isPrimaryCrewContact: false,
-              primaryCrewContact: false,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          });
-        await Promise.all(updates);
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Admin-Token': adminToken
+        },
+        body: JSON.stringify({
+          action: "update-employee",
+          email: targetEmail,
+          name: editName,
+          phone: editPhone,
+          role: editRole,
+          isActive: editIsActive,
+          canReceiveCrewDispatch: editCanReceiveCrewDispatch,
+          isPrimaryCrewContact: editIsPrimaryCrewContact,
+          permission: editPermission
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error updating employee: ${response.status}`);
       }
-
-      await setDoc(doc(db, 'employees', targetEmail), {
-        name: editName.trim(),
-        phone: editPhone.trim(),
-        role: editRole.trim(),
-        isActive: editIsActive,
-        active: editIsActive,
-        canReceiveCrewDispatch: editCanReceiveCrewDispatch,
-        canReceiveCrewDispatchEmails: editCanReceiveCrewDispatch,
-        isPrimaryCrewContact: editIsPrimaryCrewContact,
-        primaryCrewContact: editIsPrimaryCrewContact,
-        permission: editPermission,
-        permissionLevel: editPermission,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
 
       await fetchEmployees();
       alert(`Employee details updated successfully for "${targetEmail}".`);
@@ -350,10 +364,26 @@ export default function ManageEmployees() {
         }
       }
 
-      // Update Firestore document
-      await setDoc(doc(db, 'employees', resetEmail), {
-        password: resetNewPassword.trim()
-      }, { merge: true });
+      // Update Firestore document via API
+      const adminToken = localStorage.getItem('company_admin_token') || '';
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Admin-Token': adminToken
+        },
+        body: JSON.stringify({
+          action: "reset-employee-password",
+          email: resetEmail,
+          newPassword: resetNewPassword.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `Server error resetting employee password: ${response.status}`);
+      }
 
       await fetchEmployees();
       setResetSuccess("Password reset successfully!");

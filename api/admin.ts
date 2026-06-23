@@ -455,6 +455,96 @@ export default async function handler(req: any, res: any) {
         });
       }
 
+    } else if (action === 'update-employee') {
+      const issuer = verifyAdminToken(req);
+      if (!issuer) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid or missing.' });
+      }
+
+      const {
+        email,
+        name,
+        phone,
+        role,
+        isActive,
+        canReceiveCrewDispatch,
+        isPrimaryCrewContact,
+        permission
+      } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const targetEmail = email.toLowerCase().trim();
+
+      if (isPrimaryCrewContact) {
+        const primarySnap = await db.collection('employees').where('isPrimaryCrewContact', '==', true).get();
+        const batch = db.batch();
+        primarySnap.forEach((doc: any) => {
+          if (doc.id !== targetEmail) {
+            batch.update(doc.ref, {
+              isPrimaryCrewContact: false,
+              primaryCrewContact: false,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        });
+        await batch.commit();
+      }
+
+      await db.collection('employees').doc(targetEmail).set({
+        name: (name || '').trim(),
+        phone: (phone || '').trim(),
+        role: (role || '').trim(),
+        isActive: isActive !== false,
+        active: isActive !== false,
+        canReceiveCrewDispatch: canReceiveCrewDispatch !== false,
+        canReceiveCrewDispatchEmails: canReceiveCrewDispatch !== false,
+        isPrimaryCrewContact: !!isPrimaryCrewContact,
+        primaryCrewContact: !!isPrimaryCrewContact,
+        permission: permission || 'View Only',
+        permissionLevel: permission || 'View Only',
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      return res.status(200).json({ success: true, message: 'Employee updated successfully.' });
+
+    } else if (action === 'delete-employee') {
+      const issuer = verifyAdminToken(req);
+      if (!issuer) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid or missing.' });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const targetEmail = email.toLowerCase().trim();
+      await db.collection('employees').doc(targetEmail).delete();
+
+      return res.status(200).json({ success: true, message: 'Employee deleted successfully.' });
+
+    } else if (action === 'reset-employee-password') {
+      const issuer = verifyAdminToken(req);
+      if (!issuer) {
+        return res.status(401).json({ error: 'Admin authentication is required. Token is invalid or missing.' });
+      }
+
+      const { email, newPassword } = req.body;
+      if (!email || !newPassword) {
+        return res.status(400).json({ error: 'Email and new password are required' });
+      }
+
+      const targetEmail = email.toLowerCase().trim();
+      await db.collection('employees').doc(targetEmail).set({
+        password: newPassword.trim(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      return res.status(200).json({ success: true, message: 'Employee password updated.' });
+
     } else {
       return res.status(400).json({ error: `Action '${action}' is not supported.` });
     }
