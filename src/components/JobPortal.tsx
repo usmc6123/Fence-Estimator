@@ -6,7 +6,7 @@ import {
   Camera, Plus, Trash2, ClipboardList, Package, Image as ImageIcon,
   Map, MessageSquare, History, CheckCircle2, X, AlertCircle, Play,
   Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft, Lock,
-  ExternalLink, FileText
+  ExternalLink, FileText, DollarSign
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { storage } from '../lib/firebase';
@@ -1186,13 +1186,33 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
   // Calculate Materials takeoff list if jobData exists
   const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
-  const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => 
-    item.category === 'Lumber' || 
-    item.category === 'Posts' || 
-    item.category === 'Hardware' || 
-    item.category === 'Pickets' ||
-    item.isMaterialItem === true
-  );
+  const materialsList = (calculatedTakeoff?.summary || []).filter((item: any) => {
+    // Explicitly exclude non-material service/financial categories
+    const nonMaterialCategories = ['Labor', 'Install', 'Fee', 'Tax', 'Discount', 'Payment', 'Adjustment', 'Profit'];
+    const lowerCategory = (item.category || '').toLowerCase();
+    const lowerDesc = (item.description || '').toLowerCase();
+    
+    const isServiceOrFee = nonMaterialCategories.some(cat => 
+      lowerCategory.includes(cat.toLowerCase()) || 
+      lowerDesc.includes(cat.toLowerCase())
+    );
+
+    // Explicitly include physical materials or items marked as materials
+    const materialKeywords = [
+      'post', 'picket', 'rail', 'board', 'trim', 'concrete', 'gate', 'hinge', 'latch', 
+      'screw', 'nail', 'bracket', 'hardware', 'stain', 'pipe', 'link', 'fabric', 
+      'wire', 'bar', 'band', 'cap', 'panel', 'mesh', 'cement', 'wood', 'metal'
+    ];
+    
+    const isPhysicalMaterial = materialKeywords.some(kw => 
+      lowerDesc.includes(kw) || lowerCategory.includes(kw)
+    );
+
+    if (item.isMaterialItem === true) return true;
+    if (isServiceOrFee) return false;
+    
+    return isPhysicalMaterial || !isServiceOrFee;
+  });
 
   // Determine current job status label and color
   const statusLabels: Record<string, { label: string, color: string, bg: string }> = {
@@ -1796,7 +1816,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     <tr className="bg-[#0A1120]/80 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-blue-900/10">
                       <th className="px-5 py-4">Operation / Task Name</th>
                       <th className="px-5 py-4 text-center">Volume</th>
-                      {isAdmin && <th className="px-5 py-4 text-right">Crew Net Payout</th>}
+                      <th className="px-5 py-4 text-right">Crew Net Payout</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-blue-900/5">
@@ -1812,11 +1832,9 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                               {item.qty} {item.unit}
                             </span>
                           </td>
-                          {isAdmin && (
-                            <td className="px-5 py-4 text-right font-bold text-[#E63946] font-mono">
-                              ${Number(item.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                            </td>
-                          )}
+                          <td className="px-5 py-4 text-right font-bold text-[#E63946] font-mono">
+                            ${Number(item.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       ))
                     ) : (
@@ -1827,16 +1845,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </tr>
                     )}
                   </tbody>
-                  {isAdmin && (
-                    <tfoot>
-                      <tr className="bg-[#1D3557]/20 border-t-2 border-blue-900/30">
-                        <td colSpan={2} className="px-5 py-4 text-right font-black uppercase tracking-widest text-[10px] text-slate-300">Total Direct Labor Payout</td>
-                        <td className="px-5 py-4 text-right font-black text-[#E63946] text-base font-mono">
-                          ${Number(snapshot.totalDirectLaborPayout || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
+                  <tfoot>
+                    <tr className="bg-[#1D3557]/20 border-t-2 border-blue-900/30">
+                      <td colSpan={2} className="px-5 py-4 text-right font-black uppercase tracking-widest text-[10px] text-slate-300">Total Direct Labor Payout</td>
+                      <td className="px-5 py-4 text-right font-black text-[#E63946] text-base font-mono">
+                        ${Number(snapshot.totalDirectLaborPayout || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 
