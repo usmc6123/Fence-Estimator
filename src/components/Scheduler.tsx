@@ -422,6 +422,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const endDate = addDays(date, duration - 1);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
+    const scheduleSyncTraceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
@@ -436,7 +437,8 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           startDate: startDateStr,
           duration: duration,
           assignedCrew: estimate.assignedCrew || 'Crew',
-          notes: ''
+          notes: '',
+          scheduleSyncTraceId
         })
       });
       if (!response.ok) {
@@ -460,6 +462,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           return;
       }
 
+      const scheduleSyncTraceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
@@ -472,7 +475,8 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           estimateId: estimateId,
           startDate: newDateStr,
           duration: newDuration,
-          notes: 'Rescheduled via calendar'
+          notes: 'Rescheduled via calendar',
+          scheduleSyncTraceId
         })
       });
       if (!response.ok) {
