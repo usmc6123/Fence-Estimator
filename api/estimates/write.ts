@@ -1603,16 +1603,19 @@ async function syncEstimateToGhlCalendar(
         }
       }
 
-      const dayTitle = days > 1 ? `${baseTitle} (Day ${i + 1}/${days})` : baseTitle;
-      const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
-Job Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
+      const dayTitle = days > 1 ? `Install - ${estimateData.customerName || 'N/A'} - ${estimateData.customerCity || estimateData.city || ''} (Day ${i + 1}/${days})` : `Install - ${estimateData.customerName || 'N/A'} - ${estimateData.customerCity || estimateData.city || ''}`;
+      
+      const adminEstimateLink = portalLink.replace('/portal/', '/estimate/');
+      
+      const appointmentNotes = `Customer: ${estimateData.customerName || 'N/A'}
+Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
 Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
 Linear Feet: ${estimateData.linearFeet || 'N/A'}
-Crew Name: ${estimateData.assignedCrew || 'N/A'}
-Estimated Duration: ${duration} (Day ${i + 1} of ${days})
-Estimate Number: ${estimateData.estimateNumber || 'N/A'}
-Job Portal Link: ${portalLink}
-Crew Notes: ${notes || 'None'}`;
+Crew: ${estimateData.assignedCrew || 'N/A'}
+Duration: ${days} ${days > 1 ? 'Days' : 'Day'}
+Estimate #: ${estimateData.estimateNumber || 'N/A'}
+Job Portal: ${portalLink}
+Admin Estimate: ${adminEstimateLink}`;
 
       const bodyPayload = {
         locationId,
@@ -1638,9 +1641,14 @@ Crew Notes: ${notes || 'None'}`;
       let dayError = '';
       let traceId = '';
 
-      // Only proceed if match found or if it's an update (updates might not need slot verification)
+      // Strict Match Verification Before Sending (As requested)
+      const isExactMatch = slotMatchDebug.startTimeMatches;
+
       if (!slotMatchDebug.matchFound && !ghlEventId) {
         dayError = `Comparison Failed: No available 7:00 AM slot found on ${targetDateStr}.`;
+        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Aborted: ${dayError}`);
+      } else if (!isExactMatch && !ghlEventId) {
+        dayError = `Match Verification Failed: Requested ${targetStartIso} but GHL Slot was ${finalStart}. Skipping creation.`;
         console.error(`[GHL CALENDAR SYNC] Day ${i+1} Aborted: ${dayError}`);
       } else {
         try {
@@ -1718,6 +1726,7 @@ Crew Notes: ${notes || 'None'}`;
 
     await db.collection('estimates').doc(estimateId).set({
       ghlCalendarEventId: finalIdsStr, // Backwards compatibility
+      ghlCalendarEventIds: newIds, // Array as requested
       ghlCalendarSyncDays: syncDaysResults,
       ghlCalendarSyncStatus: overallSuccess ? 'synced' : 'failed',
       ghlCalendarSyncError: overallSuccess ? (partialSync ? `Partial sync: ${newIds.length}/${days} days` : null) : 'All appointment requests failed',
