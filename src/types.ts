@@ -268,10 +268,13 @@ export interface Estimate {
   scheduledStartDate?: string;
   scheduledEndDate?: string;
   scheduledDuration?: string | number; // Days or duration string e.g. "1 day"
+  installDuration?: string | number;
   scheduledNotes?: string;
   ghlCalendarSyncStatus?: 'synced' | 'failed' | 'pending';
   ghlCalendarSyncError?: string | null;
   ghlCalendarEventId?: string;
+  ghlCalendarEventIds?: string[];
+  ghlSyncDebug?: any;
   ghlCalendarSyncDays?: Array<{
     dayNumber: number;
     date: string;

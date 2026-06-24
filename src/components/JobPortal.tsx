@@ -176,20 +176,37 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
     setScheduleSubmitting(true);
     setScheduleError('');
+    
+    const scheduleSyncTraceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+    const bodyPayload = {
+      action: 'schedule-job-start',
+      estimateId,
+      token,
+      startDate: scheduleStartDate,
+      duration: scheduleDuration,
+      notes: scheduleNotes,
+      scheduleSyncTraceId
+    };
+
+    console.log(`[FRONTEND ACTION TRACE] schedule-job-start click handler
+      scheduleSyncTraceId: ${scheduleSyncTraceId}
+      estimateId: ${estimateId}
+      customerName: ${jobData?.customerName || 'N/A'}
+      selected start date: ${scheduleStartDate}
+      selected duration/install days: ${scheduleDuration}
+      selected crew: ${jobData?.assignedCrew || 'N/A'}
+      action being called: schedule-job-start
+      backend endpoint being called: /api/estimates/write
+      request payload sent to backend: ${JSON.stringify(bodyPayload, null, 2)}
+    `);
+
     try {
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          action: 'schedule-job-start',
-          estimateId,
-          token,
-          startDate: scheduleStartDate,
-          duration: scheduleDuration,
-          notes: scheduleNotes
-        })
+        body: JSON.stringify(bodyPayload)
       });
 
       const resData = await response.json();
@@ -214,22 +231,40 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
     setRescheduleSubmitting(true);
     setScheduleError('');
+
+    const scheduleSyncTraceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+    const actionName = jobData?.scheduledStartDate ? 'update-job-schedule' : 'schedule-job-start';
+    const bodyPayload = {
+      action: actionName,
+      estimateId,
+      token,
+      startDate: newScheduleStartDate,
+      duration: newScheduleDuration,
+      reason: newScheduleReason || 'Initial Schedule',
+      notes: newScheduleNotes,
+      changedBy: isAdmin ? 'Admin' : (jobData?.assignedCrew || 'Crew'),
+      scheduleSyncTraceId
+    };
+
+    console.log(`[FRONTEND ACTION TRACE] ${actionName} click handler
+      scheduleSyncTraceId: ${scheduleSyncTraceId}
+      estimateId: ${estimateId}
+      customerName: ${jobData?.customerName || 'N/A'}
+      selected start date: ${newScheduleStartDate}
+      selected duration/install days: ${newScheduleDuration}
+      selected crew: ${jobData?.assignedCrew || 'N/A'}
+      action being called: ${actionName}
+      backend endpoint being called: /api/estimates/write
+      request payload sent to backend: ${JSON.stringify(bodyPayload, null, 2)}
+    `);
+
     try {
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          action: jobData?.scheduledStartDate ? 'update-job-schedule' : 'schedule-job-start',
-          estimateId,
-          token,
-          startDate: newScheduleStartDate,
-          duration: newScheduleDuration,
-          reason: newScheduleReason || 'Initial Schedule',
-          notes: newScheduleNotes,
-          changedBy: isAdmin ? 'Admin' : (jobData?.assignedCrew || 'Crew')
-        })
+        body: JSON.stringify(bodyPayload)
       });
 
       const resData = await response.json();
