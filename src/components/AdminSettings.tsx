@@ -59,7 +59,11 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
           }
         });
         if (!response.ok) {
-          throw new Error('Failed to load company configurations from node database.');
+          throw new Error('Settings failed to load. Check server logs.');
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Settings failed to load. Check server logs.');
         }
         const data = await response.json();
         
@@ -70,7 +74,7 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         setCompanyWebsite(data.companyWebsite || '');
         setCompanyLogo(data.companyLogo || '');
       } catch (err: any) {
-        setSaveError(err.message || 'Error occurred while loading config profile.');
+        setSaveError(err.message || 'Settings failed to load. Check server logs.');
       } finally {
         setIsLoading(false);
       }
@@ -113,10 +117,19 @@ export default function AdminSettings({ adminEmail, adminToken, setAdminToken, o
         body: JSON.stringify(payload)
       });
 
-      const resData = await response.json();
       if (!response.ok) {
-        throw new Error(resData.error || 'Failed to persist company configurations.');
+        let errorMsg = 'Settings failed to save. Check server logs.';
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const resData = await response.json();
+            errorMsg = resData.error || errorMsg;
+          } catch (e) {}
+        }
+        throw new Error(errorMsg);
       }
+
+      const resData = await response.json();
 
       setSaveSuccess('Admin general settings saved successfully!');
       // Update local storage representation slightly to have it cached
