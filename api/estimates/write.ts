@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import { format, addDays } from 'date-fns';
 import { syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar } from '../lib/ghlCalendarSync.js';
 import { randomBytes } from 'crypto';
 
@@ -3753,6 +3754,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // --- AUTHENTICATION CHECK ---
     const authHeader = req.headers.authorization;
     let decoded: any = null;
 
@@ -3775,6 +3777,123 @@ export default async function handler(req: any, res: any) {
                          decoded.uid === 'braden-lonestar-uid' || 
                          decodedEmail === 'bradens@lonestarfenceworks.com' || 
                          decodedEmail === 'usmc6123@gmail.com';
+
+    // --- IMMEDIATE SCHEDULER TRACE CREATION FOR ALL SCHEDULER ACTIONS ---
+    if (action && action !== 'write-scheduler-trace' && [
+      'reschedule-job', 
+      'create-schedule-event', 
+      'update-schedule-event', 
+      'delete-schedule-event', 
+      'schedule-job-start', 
+      'admin-update-schedule', 
+      'resync-ghl-calendar'
+    ].includes(action)) {
+      try {
+        const traceId = req.body?.scheduleSyncTraceId || req.query?.scheduleSyncTraceId || ("trace-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
+        if (req.body) {
+          req.body.scheduleSyncTraceId = traceId;
+        }
+
+        let estimateId = req.body?.estimateId || req.query?.estimateId || '';
+        const eventId = req.body?.id || req.query?.id || req.body?.eventId || '';
+        
+        if (!estimateId && eventId) {
+          if (String(eventId).startsWith('install-')) {
+            estimateId = String(eventId).replace('install-', '');
+          } else if (String(eventId).startsWith('estimate-')) {
+            const parts = String(eventId).split('-');
+            if (parts[1]) estimateId = parts[1];
+          }
+        }
+
+        let customerName = 'N/A';
+        let estimateData: any = null;
+        if (estimateId) {
+          try {
+            const { snap } = await getEstimateDocRef(estimateId);
+            if (snap.exists) {
+              estimateData = snap.data();
+              customerName = estimateData.customerName || 'N/A';
+            }
+          } catch (err) {
+            console.warn('Failed to load estimate for initial trace log:', err);
+          }
+        }
+
+        const nowIso = new Date().toISOString();
+        const initialSteps = [
+          {
+            step: 'STEP_1',
+            label: 'User clicked Save Schedule',
+            status: 'success' as const,
+            installStartDate: req.body?.startDate || req.body?.start || req.body?.scheduledStartDate || nowIso.split('T')[0],
+            installDays: req.body?.duration || req.body?.scheduledDuration || 1,
+            crew: req.body?.assignedCrew || req.body?.crew || estimateData?.assignedCrew || 'N/A',
+            timestamp: nowIso
+          },
+          {
+            step: 'STEP_2',
+            label: 'Frontend created request payload',
+            status: 'success' as const,
+            payload: req.body || {},
+            timestamp: nowIso
+          },
+          {
+            step: 'STEP_3',
+            label: 'POST /api/estimates/write',
+            status: 'success' as const,
+            endpoint: '/api/estimates/write',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            payload: req.body || {},
+            timestamp: nowIso
+          },
+          {
+            step: 'STEP_4',
+            label: 'Backend router entered',
+            status: 'success' as const,
+            actionMatched: action,
+            handler: 'estimates/write handler',
+            timestamp: nowIso
+          }
+        ];
+
+        // Determine if GHL sync will be called for this action
+        // Now including create-schedule-event if estimateId is present
+        const willCallGhlHelper = (
+          action === 'reschedule-job' || 
+          action === 'schedule-job-start' || 
+          ((action === 'update-schedule-event' || action === 'create-schedule-event') && estimateId)
+        );
+        
+        const traceStatus = willCallGhlHelper ? 'running' : 'skipped';
+        const traceError = willCallGhlHelper ? '' : 'Job Scheduler saved schedule but did not call GHL sync helper.';
+        const actionReason = action === 'delete-schedule-event' ? 'Delete action requested, GHL sync skipped.' : traceError;
+
+        if (!willCallGhlHelper) {
+          initialSteps.push({
+            step: 'shared_helper_called',
+            label: 'Shared GHL Helper Called',
+            status: 'skipped' as any,
+            reason: actionReason,
+            timestamp: nowIso
+          } as any);
+        }
+
+        await logGhlActivity({
+          traceId,
+          estimateId,
+          customerName,
+          source: 'Job Scheduler',
+          action,
+          status: traceStatus as any,
+          error: actionReason,
+          steps: initialSteps as any[]
+        });
+      } catch (err) {
+        console.error('Error in immediate scheduler trace creation:', err);
+      }
+    }
 
     // Determine the actual action (using standard method or a simulated one such as action params)
     const method = req.method;
@@ -6930,9 +7049,12 @@ Lone Star Fence Works`;
         const { action, estimateId, startDate, duration, assignedCrew, notes, id: eventIdFromReq } = req.body || {};
         console.log(`[BACKEND ACTION] ${action}: estimateId=${estimateId}, startDate=${startDate}, duration=${duration}, eventId=${eventIdFromReq}`);
 
-        if (action === 'reschedule-job' || (action === 'update-schedule-event' && estimateId)) {
-          if (!estimateId || !startDate || !duration) {
-            return res.status(400).json({ error: 'Missing parameters: estimateId, startDate, and duration are required.' });
+        if (action === 'reschedule-job' || ((action === 'update-schedule-event' || action === 'create-schedule-event') && estimateId)) {
+          // If duration is missing, default to 1 (common for estimate appointments)
+          const finalDuration = duration || 1;
+          
+          if (!estimateId || !startDate) {
+            return res.status(400).json({ error: 'Missing parameters: estimateId and startDate are required.' });
           }
 
           const { docRef, snap } = await getEstimateDocRef(estimateId);
@@ -6945,7 +7067,12 @@ Lone Star Fence Works`;
           const scheduleEventId = eventIdFromReq || "install-" + estimateId;
           const scheduleSyncTraceId = req.body.scheduleSyncTraceId || ("trace-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
 
+          // Use the JWT token for the GHL helper if body token is missing
+          const jwtToken = req.headers.authorization ? req.headers.authorization.split(' ')[1] : '';
+          const syncToken = req.body.token || jwtToken || estimateData.laborSnapshotToken || estimateData.crewScheduleToken || '';
+
           try {
+            // STEP 4: Backend Router Entered (Reporting back to trace)
             await logGhlActivity({
               traceId: scheduleSyncTraceId,
               estimateId,
@@ -6954,175 +7081,114 @@ Lone Star Fence Works`;
                 {
                   step: 'STEP_4',
                   label: 'Backend router entered',
-                  status: 'success',
+                  status: 'success' as const,
                   actionMatched: action,
                   handler: 'estimates/write handler (schedule/reschedule event)',
-                  timestamp: new Date().toISOString()
-                }
+                  timestamp: nowIso
+                } as any
               ]
             });
-          } catch (err) {
-            console.error('Failed to log STEP_4 trace:', err);
-          }
 
-          console.log(`[BACKEND ACTION TRACE] action_received: reschedule-job/update-schedule-event
-            scheduleSyncTraceId: ${scheduleSyncTraceId}
-            action: reschedule-job/update-schedule-event
-            estimateId: ${estimateId}
-            scheduleEventId: ${scheduleEventId}
-            selected start date: ${startDate}
-            duration/install days: ${duration}
-            whether schedule event was saved: YES
-            whether estimate was updated: YES
-            whether GHL sync was requested: YES
-            which helper function was called: syncEstimateToGhlCalendar
-          `);
+            // Update estimate doc
+            const estimateUpdates: any = {
+              scheduledStartDate: startDate,
+              scheduledDuration: finalDuration,
+              assignedCrew: assignedCrew || estimateData.assignedCrew || 'Crew',
+              status: 'Scheduled',
+              jobStatus: 'Scheduled',
+              updatedAt: nowIso
+            };
 
-          // Sync to GHL Calendar
-          const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes || '', estimateData.laborSnapshotToken || '', scheduleSyncTraceId, action);
-          const syncSuccess = calSync.success;
-          const syncErrorMsg = calSync.error || '';
-          const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
-          const ghlCalendarEventIds = calSync.ghlCalendarEventIds || (ghlCalendarEventId ? [ghlCalendarEventId] : []);
-          const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
+            // Calculate reminders
+            try {
+              const startDateObj = new Date(startDate + 'T08:00:00');
+              const rem72 = new Date(startDateObj);
+              rem72.setDate(rem72.getDate() - 3);
+              const rem24 = new Date(startDateObj);
+              rem24.setDate(rem24.getDate() - 1);
 
-          // Save details back to Firestore
-          const logEntry = {
-            id: crypto.randomUUID(),
-            event: action === 'reschedule-job' ? 'Job Rescheduled' : 'Schedule Event Updated',
-            timestamp: nowIso,
-            user: 'Admin',
-            notes: `Action: ${action}. Start: ${startDate}, Duration: ${duration}, Assigned Crew: ${assignedCrew || 'N/A'}. Notes: ${notes || 'None'}`
-          };
-
-          const updates: any = {
-            scheduledStartDate: startDate,
-            scheduledDuration: duration,
-            scheduledNotes: notes || '',
-            assignedCrew: assignedCrew || estimateData.assignedCrew || 'Crew',
-            jobPortalStatus: 'start_date_scheduled',
-            jobPortalScheduled: true,
-            scheduleLastChangedAt: nowIso,
-            scheduleLastChangedBy: 'Admin',
-            scheduleChangeReason: action === 'reschedule-job' ? 'Rescheduled' : 'Updated',
-            updatedAt: nowIso,
-            ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
-            ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg
-          };
-
-          if (ghlContactId) updates.ghlContactId = ghlContactId;
-          if (ghlCalendarEventId) {
-            updates.ghlCalendarEventId = ghlCalendarEventId;
-            updates.ghlCalendarEventIds = ghlCalendarEventIds;
-          }
-
-          // Save reminders
-          try {
-            const startDateObj = new Date(startDate + 'T08:00:00');
-            const rem72 = new Date(startDateObj);
-            rem72.setDate(rem72.getDate() - 3);
-            const rem24 = new Date(startDateObj);
-            rem24.setDate(rem24.getDate() - 1);
-
-            updates.reminder72hrCrewAt = rem72.toISOString().split('T')[0];
-            updates.reminder24hrCrewAt = rem24.toISOString().split('T')[0];
-          } catch(e) {}
-
-          updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
-          await docRef.update(updates);
-
-          // Update schedule_events
-          try {
-            const durationNum = parseInt(String(duration)) || 1;
-            const startD_iso = new Date(startDate);
-            const endD_iso = new Date(startD_iso);
-            endD_iso.setDate(endD_iso.getDate() + durationNum - 1);
-            const endDate = endD_iso.toISOString().split('T')[0];
+              estimateUpdates.reminder72hrCrewAt = rem72.toISOString().split('T')[0];
+              estimateUpdates.reminder24hrCrewAt = rem24.toISOString().split('T')[0];
+            } catch(e) {}
             
-            const evId = eventIdFromReq || "install-" + estimateId;
-            await db.collection('schedule_events').doc(evId).set({
-              start: startDate,
-              startDate,
-              end: endDate,
-              endDate,
-              title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
-              crew: assignedCrew || estimateData.assignedCrew || 'N/A',
+            await docRef.update(estimateUpdates);
+
+            // Create/Update schedule event doc
+            const eventType = req.body.type || (action === 'reschedule-job' ? 'Job' : 'Estimate');
+            const eventTitle = req.body.title || (eventType === 'Job' ? `Install: ${estimateData.customerName || 'Unknown'}` : `EST: ${estimateData.customerName || 'Unknown'}`);
+
+            await db.collection('schedule_events').doc(scheduleEventId).set({
               estimateId: estimateId,
-              type: 'Job',
-              notes: `Updated via ${action}. Notes: ${notes || 'None'}`
+              title: eventTitle,
+              startDate: startDate,
+              endDate: format(addDays(new Date(startDate + 'T00:00:00'), finalDuration - 1), 'yyyy-MM-dd'),
+              startTime: req.body.startTime || "07:00",
+              duration: finalDuration,
+              assignedCrew: assignedCrew || estimateData.assignedCrew || 'Crew',
+              notes: notes || '',
+              type: eventType,
+              updatedAt: nowIso
             }, { merge: true });
-            
-            await docRef.update({ scheduledEndDate: endDate });
 
-            try {
-              await logGhlActivity({
-                traceId: scheduleSyncTraceId,
-                estimateId,
-                customerName: estimateData.customerName || '',
-                steps: [
-                  {
-                    step: 'STEP_5',
-                    label: 'Schedule event updated',
-                    status: 'success',
-                    docPath: `schedule_events/${evId}`,
-                    docId: evId,
-                    fieldsWritten: {
-                      start: startDate,
-                      startDate,
-                      end: endDate,
-                      endDate,
-                      title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
-                      crew: assignedCrew || estimateData.assignedCrew || 'N/A',
-                      estimateId: estimateId,
-                      type: 'Job',
-                      notes: `Updated via ${action}. Notes: ${notes || 'None'}`
-                    },
-                    timestamp: new Date().toISOString()
-                  }
-                ]
-              });
-            } catch (err) {
-              console.error('Failed to log STEP_5 trace:', err);
-            }
-          } catch (evErr) {
-            console.error(`Failed to update schedule_events in ${action}:`, evErr);
+            // STEP 5: Schedule event updated
+            await logGhlActivity({
+              traceId: scheduleSyncTraceId,
+              steps: [
+                {
+                  step: 'STEP_5',
+                  label: 'Schedule event updated',
+                  status: 'success' as const,
+                  docPath: `schedule_events/${scheduleEventId}`,
+                  docId: scheduleEventId,
+                  fieldsWritten: {
+                    startDate,
+                    duration: finalDuration,
+                    assignedCrew: assignedCrew || 'Crew',
+                    type: eventType
+                  },
+                  timestamp: new Date().toISOString()
+                } as any
+              ]
+            });
+
+            // 3. Call shared GHL sync helper
+            const calSync = await syncEstimateToGhlCalendar(
+              estimateId,
+              estimateData,
+              startDate,
+              finalDuration,
+              notes || '',
+              syncToken,
+              scheduleSyncTraceId,
+              action
+            );
+
+            return res.status(200).json({ 
+              success: true, 
+              message: 'Schedule updated and synced to GHL.',
+              ghlResult: calSync,
+              id: scheduleEventId
+            });
+
+          } catch (error: any) {
+            console.error(`Error in ${action}:`, error);
+            await logGhlActivity({
+              traceId: scheduleSyncTraceId,
+              status: 'failed',
+              error: error.message || String(error)
+            });
+            return res.status(500).json({ error: `Internal server error during ${action}: ` + (error.message || String(error)) });
           }
-
-          return res.status(200).json({
-            success: true,
-            id: estimateId,
-            ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
-            ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg,
-            ghlSyncDebug: calSync.ghlSyncDebug || null
-          });
         }
 
-        // Default handling for other schedule events (Busy, Blackout, or generic update)
-        if (action === 'create-schedule-event' || action === 'update-schedule-event' || action === 'schedule-event') {
-          const { id, ...eventData } = req.body;
-          const evId = id || eventIdFromReq;
-          if (!evId) return res.status(400).json({ error: 'Event ID is required.' });
-          
-          eventData.userId = eventData.userId || decoded.uid;
-          await db.collection('schedule_events').doc(String(evId)).set(eventData, { merge: true });
-
-          // If it has an estimateId, we might want to sync customer to GHL at least
-          if (eventData.estimateId) {
-            try {
-              const estSnap = await db.collection('estimates').doc(String(eventData.estimateId)).get();
-              if (estSnap.exists) {
-                const estData = estSnap.data() || {};
-                await syncCustomerToGhl({
-                  eventType: 'schedule_event_updated',
-                  estimate: { id: estSnap.id, ...estData },
-                  status: 'Proposed',
-                  source: 'manual_admin'
-                });
-              }
-            } catch (err) {}
-          }
-          return res.status(200).json({ id: evId, ...eventData });
-        }
+        // Default handling for other schedule events (Busy, Blackout, or generic update without estimate)
+        const { id, ...eventData } = req.body;
+        const evId = id || eventIdFromReq;
+        if (!evId) return res.status(400).json({ error: 'Event ID is required.' });
+        
+        eventData.userId = eventData.userId || decoded.uid;
+        await db.collection('schedule_events').doc(String(evId)).set(eventData, { merge: true });
+        return res.status(200).json({ id: evId, ...eventData });
       }
 
       if (req.body && (req.body.action === 'delete-schedule-event' || req.method === 'DELETE')) {

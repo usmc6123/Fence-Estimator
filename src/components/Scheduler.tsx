@@ -342,6 +342,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         notes: `Estimate appointment @ ${estimateTime} for ${estimate.customerName}`
     };
 
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
@@ -352,6 +353,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           },
           body: JSON.stringify({
             action: 'create-schedule-event',
+            scheduleSyncTraceId: traceId,
             ...newEvent
           })
         });
@@ -646,6 +648,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const handleRescheduleEstimate = async (eventId: string, newDateStr: string, newTimeStr: string) => {
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
       const token = localStorage.getItem('company_admin_token');
       const response = await fetch('/api/estimates/write', {
@@ -656,6 +659,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         },
         body: JSON.stringify({
           action: 'update-schedule-event',
+          scheduleSyncTraceId: traceId,
           id: eventId,
           startDate: newDateStr,
           startTime: newTimeStr
@@ -686,6 +690,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         userId: user.uid
     };
 
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
@@ -696,6 +701,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           },
           body: JSON.stringify({
             action: 'create-schedule-event',
+            scheduleSyncTraceId: traceId,
             ...newEvent
           })
         });
@@ -726,6 +732,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         endTime: busyAllDay ? undefined : busyEnd
     };
 
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
@@ -736,6 +743,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           },
           body: JSON.stringify({
             action: 'create-schedule-event',
+            scheduleSyncTraceId: traceId,
             ...newEvent
           })
         });
@@ -751,6 +759,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout' | 'Busy') => {
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         const token = localStorage.getItem('company_admin_token');
         const response = await fetch('/api/estimates/write', {
@@ -761,6 +770,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           },
           body: JSON.stringify({
             action: 'delete-schedule-event',
+            scheduleSyncTraceId: traceId,
             id
           })
         });
@@ -778,6 +788,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           },
           body: JSON.stringify({
             action: 'delete-schedule-event',
+            scheduleSyncTraceId: traceId,
             id: `install-${id}` // For jobs, we use the install- prefix in schedule_events
           })
         });

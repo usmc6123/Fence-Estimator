@@ -3379,7 +3379,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                                 <div className="space-y-4 flex-1">
                                   <p className="text-[10px] font-bold text-american-blue uppercase tracking-widest">Step-by-Step execution path</p>
                                   <div className="relative border-l border-gray-200 pl-4 ml-2 space-y-6">
-                                    {mappedSteps.map((step, idx) => {
+                                    {mappedSteps.map((step: any, idx) => {
                                       const isSuccess = step.status === 'success';
                                       const isFailed = step.status === 'failed';
                                       const isSkipped = step.status === 'skipped';

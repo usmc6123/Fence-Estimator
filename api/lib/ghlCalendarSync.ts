@@ -209,7 +209,7 @@ export async function syncEstimateToGhlCalendar(
   await saveGhlSyncDebug(estimateId, ghlSyncDebug);
 
   let sourceLabel = 'Manual Resync';
-  if (actionName === 'schedule-job-start') sourceLabel = 'Job Scheduler';
+  if (actionName === 'schedule-job-start' || actionName === 'reschedule-job') sourceLabel = 'Job Scheduler';
   else if (actionName === 'admin-update-schedule') sourceLabel = 'Job Portal';
   else if (actionName === 'resync-ghl-calendar') sourceLabel = 'Manual Resync';
   else if (actionName === 'diagnostic') sourceLabel = 'Diagnostic Test';
