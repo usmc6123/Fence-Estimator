@@ -168,18 +168,22 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         let firebaseData: any = {};
         let apiData: any = {};
 
-        // 1. Try to load from direct client Firestore companySettings/main
-        try {
-          const settingsDoc = await getDoc(doc(db, 'companySettings', 'main'));
-          if (settingsDoc.exists()) {
-            firebaseData = settingsDoc.data();
+        // 1. Load settings via API instead of direct client Firestore companySettings/main
+        const token = adminToken || localStorage.getItem('company_admin_token');
+        if (token) {
+          try {
+            const response = await fetch('/api/settings', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+              firebaseData = await response.json();
+            }
+          } catch (error) {
+            console.warn("Could not load settings from API settings endpoint on mount:", error);
           }
-        } catch (error) {
-          console.warn("Could not load from Firestore companySettings/main:", error);
         }
 
         // 2. Try to load secure SMTP & Templates from API
-        const token = adminToken || localStorage.getItem('company_admin_token');
         if (token) {
           try {
             const response = await fetch('/api/settings', {
@@ -323,75 +327,6 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     setSaveError(null);
     setSaveSuccess(null);
     try {
-      // 1. Client-side database update to companySettings/main for direct frontend configurations
-      const clientPayload = {
-        companyName: formData.companyName,
-        businessEmail: formData.businessEmail,
-        phoneNumber: formData.phoneNumber,
-        website: formData.website,
-        address: formData.address,
-        companyLogo: formData.companyLogo,
-        emailProvider: formData.emailProvider,
-        resendApiKey: formData.resendApiKey,
-        adminNotificationEmail: formData.adminNotificationEmail,
-        sendCopyBccToAdmin: formData.sendCopyBccToAdmin,
-        enableEmailEventTracking: formData.enableEmailEventTracking,
-        enableResendWebhook: formData.enableResendWebhook,
-        ghlWebhookUrl: formData.ghlWebhookUrl,
-        gohighlevelWebhookUrl: formData.ghlWebhookUrl,
-        ghlWebhookInstantEstimateSubmitted: formData.ghlWebhookInstantEstimateSubmitted,
-        ghlWebhookManualEstimateSent: formData.ghlWebhookManualEstimateSent,
-        ghlWebhookEstimateAccepted: formData.ghlWebhookEstimateAccepted,
-        ghlWebhookEstimateCompleted: formData.ghlWebhookEstimateCompleted,
-        ghlWebhookEstimateDeclined: formData.ghlWebhookEstimateDeclined,
-        googleReviewLink: formData.googleReviewLink,
-        autoSyncEstimates: formData.autoSyncEstimates,
-        
-        // GHL configurations
-        ghlLocationId: formData.ghlLocationId,
-        ghlApiKey: formData.ghlApiKey,
-        ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
-        ghlPrefillSources: formData.ghlPrefillSources,
-        ghlMinChars: formData.ghlMinChars,
-        ghlMaxResults: formData.ghlMaxResults,
-        
-        enableInstantEstimateWebhook: formData.enableInstantEstimateWebhook,
-        suppressInstantEstimateWorkflowExisting: formData.suppressInstantEstimateWorkflowExisting,
-        suppressIfEstimateScheduled: formData.suppressIfEstimateScheduled,
-        suppressIfEstimateSent: formData.suppressIfEstimateSent,
-        suppressIfCustomerAccepted: formData.suppressIfCustomerAccepted,
-        suppressIfCustomerCompleted: formData.suppressIfCustomerCompleted,
-        allowManualForceTrigger: formData.allowManualForceTrigger,
-
-        // Direct GHL API Sync configs
-        enableGhlApiSync: formData.enableGhlApiSync,
-        keepGhlLegacyWebhooks: formData.keepGhlLegacyWebhooks,
-        ghlPipelineId: formData.ghlPipelineId,
-        ghlOpportunityStages: formData.ghlOpportunityStages,
-        ghlCustomFields: formData.ghlCustomFields,
-        enableGhlCalendarPrimaryScheduler: formData.enableGhlCalendarPrimaryScheduler,
-        sendCrewEmailAfterGhlInstallBooking: formData.sendCrewEmailAfterGhlInstallBooking,
-        sendAdminBackupEmail: formData.sendAdminBackupEmail,
-        requireEstimateIdMatching: formData.requireEstimateIdMatching,
-        allowFallbackMatching: formData.allowFallbackMatching,
-        ghlInstallCalendarId: formData.ghlInstallCalendarId,
-        minimumInstallLeadDays: formData.minimumInstallLeadDays,
-        
-        // Include templates inside main doc so embed widgets can pull acceptance screens
-        estimateEmailSubject: formData.estimateEmailSubject,
-        estimateEmailBody: formData.estimateEmailBody,
-        estimateAcceptedMessage: formData.estimateAcceptedMessage,
-        estimateDeclinedMessage: formData.estimateDeclinedMessage,
-        
-        updatedAt: new Date().toISOString()
-      };
-      
-      try {
-        await setDoc(doc(db, 'companySettings', 'main'), clientPayload, { merge: true });
-      } catch (clientErr) {
-        console.error("Error saving directly to firestore:", clientErr);
-      }
-
       // 2. API Backend Secure save to establish validated node server environment
       const token = adminToken || localStorage.getItem('company_admin_token');
       if (token) {
