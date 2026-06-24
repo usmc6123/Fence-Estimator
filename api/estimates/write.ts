@@ -1533,11 +1533,56 @@ async function syncEstimateToGhlCalendar(
     for (let i = 0; i < days; i++) {
       const currentD = new Date(startDate + 'T07:00:00');
       currentD.setDate(currentD.getDate() + i);
+      const targetDateStr = currentD.toISOString().split('T')[0];
       
-      const currentStartIso = currentD.toISOString();
-      const currentEndD = new Date(currentD);
-      currentEndD.setHours(currentEndD.getHours() + 3); // 3-hour duration
-      const currentEndIso = currentEndD.toISOString();
+      const targetStartIso = currentD.toISOString();
+      const targetEndD = new Date(currentD);
+      targetEndD.setHours(targetEndD.getHours() + 3); 
+      const targetEndIso = targetEndD.toISOString();
+
+      // 1. Fetch Slots for this specific day
+      let daySlots: any[] = [];
+      let slotMatchDebug: any = {
+        requestedStart: targetStartIso,
+        requestedEnd: targetEndIso,
+        requestedTimezone: slotTimezone,
+        matchFound: false,
+        startTimeMatches: false,
+        endTimeValid: true,
+        timezoneMatches: true // Hardcoded comparison for now
+      };
+
+      try {
+        const dayStartT = new Date(targetDateStr + 'T00:00:00').getTime();
+        const dayEndT = dayStartT + 86400000;
+        const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${dayStartT}&endDate=${dayEndT}&timezone=${slotTimezone}`;
+        const slotRes = await fetch(slotUrl, { headers });
+        const slotText = await slotRes.text();
+        if (slotRes.ok) {
+          const slotData = JSON.parse(slotText);
+          daySlots = slotData.slots || slotData[targetDateStr] || [];
+          slotMatchDebug.availableSlotsCount = daySlots.length;
+        }
+      } catch (e) {}
+
+      // 2. Compare and Find Matching Slot
+      const matchedSlot = daySlots.find(s => {
+        const sStart = typeof s === 'string' ? s : (s.startTime || '');
+        const sStartIso = new Date(sStart).toISOString();
+        return sStartIso === targetStartIso || sStartIso.includes('T07:00:00');
+      });
+
+      let finalStart = targetStartIso;
+      let finalEnd = targetEndIso;
+
+      if (matchedSlot) {
+        slotMatchDebug.matchFound = true;
+        slotMatchDebug.startTimeMatches = true;
+        slotMatchDebug.matchedSlot = matchedSlot;
+        finalStart = typeof matchedSlot === 'string' ? matchedSlot : (matchedSlot.startTime || targetStartIso);
+        // Use GHL's endTime if provided, otherwise our 3h calc
+        finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || targetEndIso);
+      }
 
       const dayTitle = days > 1 ? `${baseTitle} (Day ${i + 1}/${days})` : baseTitle;
       const appointmentNotes = `Customer Name: ${estimateData.customerName || 'N/A'}
@@ -1554,8 +1599,8 @@ Crew Notes: ${notes || 'None'}`;
         locationId,
         calendarId,
         contactId: ghlContactId,
-        startTime: currentStartIso,
-        endTime: currentEndIso,
+        startTime: finalStart,
+        endTime: finalEnd,
         title: dayTitle,
         notes: appointmentNotes,
         status: 'booked'
@@ -1567,9 +1612,6 @@ Crew Notes: ${notes || 'None'}`;
         ? `https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`
         : `https://services.leadconnectorhq.com/calendars/events/appointments`;
 
-      console.log(`[GHL CALENDAR SYNC] Day ${i+1}/${days} - Mode: ${mode}, Date: ${startDate}, Start: ${currentStartIso}`);
-      
-      let res;
       let resText = '';
       let resStatus = 0;
       let daySuccess = false;
@@ -1577,66 +1619,65 @@ Crew Notes: ${notes || 'None'}`;
       let dayError = '';
       let traceId = '';
 
-      try {
-        res = await fetch(endpoint, {
-          method: ghlEventId ? 'PUT' : 'POST',
-          headers,
-          body: JSON.stringify(bodyPayload)
-        });
-        resStatus = res.status;
-        resText = await res.text();
-        traceId = res.headers.get('x-datadog-trace-id') || res.headers.get('trace-id') || '';
-        console.log(`[GHL CALENDAR SYNC] Day ${i+1} Response: ${resStatus}, TraceId: ${traceId}`);
+      // Only proceed if match found or if it's an update (updates might not need slot verification)
+      if (!slotMatchDebug.matchFound && !ghlEventId) {
+        dayError = `Comparison Failed: No available 7:00 AM slot found on ${targetDateStr}.`;
+        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Aborted: ${dayError}`);
+      } else {
+        try {
+          const res = await fetch(endpoint, {
+            method: ghlEventId ? 'PUT' : 'POST',
+            headers,
+            body: JSON.stringify(bodyPayload)
+          });
+          resStatus = res.status;
+          resText = await res.text();
+          traceId = res.headers.get('x-datadog-trace-id') || res.headers.get('trace-id') || '';
+          
+          console.log(`[GHL CALENDAR SYNC] Day ${i+1} Appointment Request:
+            URL: ${endpoint}
+            Method: ${ghlEventId ? 'PUT' : 'POST'}
+            Headers: ${JSON.stringify({ ...headers, Authorization: 'Bearer ****' })}
+            Body: ${JSON.stringify(bodyPayload)}
+          `);
 
-        if (res.ok) {
-          let resData: any = {};
-          try { resData = JSON.parse(resText); } catch(e) {}
-          const newId = resData.appointment?.id || resData.id || resData.event?.id;
-          if (newId) {
-            returnedId = newId;
-            daySuccess = true;
-            newIds.push(newId);
-            console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. ID: ${returnedId}`);
-
-            // Verify the created appointment exists if it's the first day
-            if (i === 0) {
-              try {
-                const verifyRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${newId}`, { headers });
-                const verifyStatus = verifyRes.status;
-                const verifyBody = await verifyRes.text();
-                console.log(`[GHL CALENDAR SYNC] Day 1 Verification: Status=${verifyStatus}, Body=${verifyBody}`);
-                syncDebug.day1Verification = { status: verifyStatus, body: verifyBody };
-              } catch (vErr) {
-                console.error(`[GHL CALENDAR SYNC] Day 1 Verification Failed:`, vErr);
-              }
+          if (res.ok) {
+            let resData: any = {};
+            try { resData = JSON.parse(resText); } catch(e) {}
+            const newId = resData.appointment?.id || resData.id || resData.event?.id;
+            if (newId) {
+              returnedId = newId;
+              daySuccess = true;
+              newIds.push(newId);
+              console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. ID: ${returnedId}`);
+            } else if (mode === 'UPDATE' && ghlEventId) {
+              daySuccess = true;
+              newIds.push(ghlEventId);
+            } else {
+              dayError = 'Success response but no ID returned';
             }
-          } else if (mode === 'UPDATE' && ghlEventId) {
-             // Some GHL PUT responses might be empty or not contain the ID but still be 200 OK
-             daySuccess = true;
-             newIds.push(ghlEventId);
           } else {
-            dayError = 'Success response but no ID returned';
+            dayError = `HTTP ${resStatus}: ${resText}`;
           }
-        } else {
-          dayError = `HTTP ${resStatus}: ${resText}`;
+        } catch (err: any) {
+          dayError = err.message || String(err);
+          console.error(`[GHL CALENDAR SYNC] Day ${i+1} Error:`, err);
         }
-      } catch (err: any) {
-        dayError = err.message || String(err);
-        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Error:`, err);
       }
 
       syncDaysResults.push({
         dayNumber: i + 1,
-        date: currentD.toISOString().split('T')[0],
-        startTime: currentStartIso,
-        endTime: currentEndIso,
+        date: targetDateStr,
+        startTime: finalStart,
+        endTime: finalEnd,
         status: daySuccess ? 'synced' : 'failed',
         ghlCalendarEventId: returnedId,
         error: dayError,
         mode,
         resStatus,
         resBody: resText,
-        traceId
+        traceId,
+        slotComparison: slotMatchDebug
       });
     }
 

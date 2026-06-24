@@ -826,6 +826,22 @@ export default function LaborTakeOff({
                             <span className="text-[8px] text-slate-400 font-mono">GHL ID: {day.ghlCalendarEventId}</span>
                           </div>
                         )}
+                        {day.slotComparison && (
+                          <div className="mt-1 p-1.5 bg-slate-50 rounded border border-slate-100 space-y-1">
+                            <div className="flex items-center justify-between text-[7px] uppercase font-bold tracking-tight text-slate-500">
+                              <span>Slot Comparison</span>
+                              <span className={day.slotComparison.matchFound ? "text-emerald-500" : "text-amber-500"}>
+                                {day.slotComparison.matchFound ? "MATCHED" : "NO MATCH"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-[7px] font-mono text-slate-400">
+                              <div>REQ START: {day.slotComparison.requestedStart?.split('T')[1].substring(0, 5)}</div>
+                              <div>REQ END: {day.slotComparison.requestedEnd?.split('T')[1].substring(0, 5)}</div>
+                              <div>TZ: {day.slotComparison.requestedTimezone}</div>
+                              <div>SLOTS: {day.slotComparison.availableSlotsCount || 0}</div>
+                            </div>
+                          </div>
+                        )}
                         {day.error && (
                           <div className="mt-1 p-1 bg-rose-50/50 rounded text-[8px] text-rose-500 font-medium border border-rose-100/50 break-all">
                             Error: {day.error}

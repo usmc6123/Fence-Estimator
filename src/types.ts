@@ -284,6 +284,14 @@ export interface Estimate {
     resStatus: number;
     resBody: string;
     traceId?: string;
+    slotComparison?: {
+      requestedStart: string;
+      requestedEnd: string;
+      requestedTimezone: string;
+      matchFound: boolean;
+      availableSlotsCount?: number;
+      matchedSlot?: any;
+    };
   }>;
   ghlCalendarLastSyncedAt?: string;
 
