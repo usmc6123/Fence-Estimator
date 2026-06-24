@@ -389,11 +389,11 @@ export default function GhlIntegrationCenter({
             <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                 <Cpu className="text-indigo-600" size={18} />
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Create Scheduler Trace Test</h4>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Scheduler Path Verification</h4>
               </div>
 
               <p className="text-[10px] text-slate-500 leading-relaxed">
-                Run the exact same backend code path as saving a real schedule from the Job Scheduler to verify the end-to-end trace creation and helper execution.
+                Verify if the Job Scheduler frontend save action successfully executes the standard shared GHL helper function in the backend path.
               </p>
 
               <button
@@ -403,17 +403,17 @@ export default function GhlIntegrationCenter({
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
               >
                 {verifyingPath ? <RefreshCw className="animate-spin" size={14} /> : <Zap size={14} />}
-                {verifyingPath ? 'Creating Trace Test...' : 'Create Scheduler Trace Test'}
+                {verifyingPath ? 'Verifying Path...' : 'Verify Scheduler Path'}
               </button>
 
               {verificationResult && (
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-[10px] animate-fade-in">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Scheduler Save Action Fires:</span>
+                    <span className="font-extrabold">Scheduler Save Clicked:</span>
                     <span className="font-bold text-emerald-600">YES</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Backend Action Receives It:</span>
+                    <span className="font-extrabold">Backend Action Called:</span>
                     <span className="font-bold text-emerald-600">YES</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
@@ -421,14 +421,8 @@ export default function GhlIntegrationCenter({
                     <span className="font-bold text-emerald-600">YES</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Appointment Creation Attempted:</span>
-                    <span className={`font-bold ${verificationResult.success ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {verificationResult.success ? 'YES (SUCCESS)' : 'YES (ATTEMPTED)'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
                     <span className="font-extrabold">Helper Name:</span>
-                    <span className="font-bold font-mono text-indigo-600">{verificationResult.schedulerHelper || 'syncEstimateToGhlCalendar()'}</span>
+                    <span className="font-bold font-mono text-indigo-600">{verificationResult.schedulerHelper}</span>
                   </div>
 
                   <div className="pt-1.5">
@@ -643,12 +637,12 @@ export default function GhlIntegrationCenter({
               )}
             </div>
 
-            {/* SECTION 2: Real Scheduler Sync Reports */}
+            {/* SECTION 2: Live Activity Monitor */}
             <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <Activity className="text-indigo-600" size={18} />
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Real Scheduler Sync Reports</h4>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Live Activity Monitor</h4>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -690,95 +684,56 @@ export default function GhlIntegrationCenter({
               </div>
 
               {/* Logs Table */}
-              <div className="overflow-x-auto border border-slate-100 rounded-xl max-h-[450px]">
+              <div className="overflow-x-auto border border-slate-100 rounded-xl max-h-[300px]">
                 <table className="w-full text-left text-[11px] border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 uppercase font-extrabold tracking-wider border-b border-slate-200 whitespace-nowrap">
+                    <tr className="bg-slate-50 text-slate-500 uppercase font-extrabold tracking-wider border-b border-slate-200">
                       <th className="p-3">Time</th>
                       <th className="p-3">Source</th>
-                      <th className="p-3">Customer/Estimate</th>
-                      <th className="p-3">Schedule Sync Trace ID</th>
+                      <th className="p-3">Action</th>
                       <th className="p-3">Status</th>
-                      <th className="p-3">Last Completed Step</th>
-                      <th className="p-3">Failed Step</th>
-                      <th className="p-3">Error Message</th>
-                      <th className="p-3">Appointment IDs Created</th>
-                      <th className="p-3 text-right">Action</th>
+                      <th className="p-3 text-right">Duration</th>
+                      <th className="p-3 font-mono">Trace ID</th>
                     </tr>
                   </thead>
                   <tbody>
                     {logsLoading ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400">
-                          <RefreshCw className="animate-spin inline-block mr-1" size={14} /> Loading scheduler sync logs...
+                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                          <RefreshCw className="animate-spin inline-block mr-1" size={14} /> Loading activity traces...
                         </td>
                       </tr>
                     ) : filteredLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-8 text-center text-slate-400">
-                          No scheduler sync logs recorded yet.
+                        <td colSpan={6} className="p-8 text-center text-slate-400">
+                          No diagnostic or sync logs recorded yet.
                         </td>
                       </tr>
                     ) : (
-                      filteredLogs.slice(0, 25).map((log) => {
+                      filteredLogs.map((log) => {
                         const isSelected = selectedLog?.traceId === log.traceId;
-                        const formattedTime = log.timestamp 
-                          ? new Date(log.timestamp).toLocaleString()
-                          : 'N/A';
-
-                        // Calculate steps
-                        const lastCompleted = log.steps ? [...log.steps].reverse().find((s: any) => s.status === 'success') : null;
-                        const lastCompletedStep = lastCompleted ? lastCompleted.label : 'None';
-
-                        const failedStepObj = log.steps ? log.steps.find((s: any) => s.status === 'failed') : null;
-                        const failedStep = failedStepObj ? (failedStepObj.reason || failedStepObj.label) : 'None';
-
-                        const appointmentIdText = log.appointmentId || log.ghlAppointmentId || (log.appointmentIds && Array.isArray(log.appointmentIds) ? log.appointmentIds.join(', ') : '') || 'None';
-
-                        // Source resolution
-                        let displaySource = log.source || 'Manual Resync';
-                        if (log.traceId?.startsWith('trace-verify-')) {
-                          displaySource = 'Diagnostic Test';
-                        } else if (log.status === 'Not Attempted') {
-                          displaySource = 'Job Scheduler';
-                        }
+                        const formattedTime = log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A';
                         
                         return (
                           <tr
                             key={log.traceId}
-                            className={`border-b border-slate-100 hover:bg-slate-50 transition-all ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : ''}`}
+                            onClick={() => setSelectedLog(log)}
+                            className={`border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-all ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50' : ''}`}
                           >
-                            <td className="p-3 text-slate-500 whitespace-nowrap">{formattedTime}</td>
-                            <td className="p-3 font-bold text-slate-700 whitespace-nowrap">{displaySource}</td>
-                            <td className="p-3 font-semibold text-slate-800 whitespace-nowrap">
-                              {log.customerName || 'N/A'} <span className="text-[9px] text-slate-400 font-normal">({log.estimateId || 'No Estimate'})</span>
-                            </td>
-                            <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{log.traceId}</td>
-                            <td className="p-3 whitespace-nowrap">
+                            <td className="p-3 text-slate-500">{formattedTime}</td>
+                            <td className="p-3 font-bold text-slate-700">{log.source || 'Manual Resync'}</td>
+                            <td className="p-3 font-medium text-slate-600">{log.action || 'Unknown'}</td>
+                            <td className="p-3">
                               <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                                 log.status === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                                 log.status === 'running' ? 'bg-blue-50 text-blue-700 border border-blue-100 animate-pulse' :
-                                log.status === 'Not Attempted' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                                 'bg-rose-50 text-rose-700 border border-rose-100'
                               }`}>
                                 {log.status || 'unknown'}
                               </span>
                             </td>
-                            <td className="p-3 text-slate-600 font-medium whitespace-nowrap">{lastCompletedStep}</td>
-                            <td className="p-3 text-rose-600 font-medium whitespace-nowrap">{failedStep}</td>
-                            <td className="p-3 text-slate-500 max-w-[200px] truncate" title={log.error || ''}>
-                              {log.error || 'None'}
-                            </td>
-                            <td className="p-3 font-mono text-slate-700 whitespace-nowrap">{appointmentIdText}</td>
-                            <td className="p-3 text-right whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedLog(log)}
-                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-[10px] transition-all"
-                              >
-                                View Details
-                              </button>
-                            </td>
+                            <td className="p-3 text-right font-mono text-slate-500">{log.responseTime || log.duration || 0}ms</td>
+                            <td className="p-3 font-mono text-slate-400">{log.traceId}</td>
                           </tr>
                         );
                       })
@@ -791,99 +746,71 @@ export default function GhlIntegrationCenter({
             {/* SECTION 3: Full Request Inspector */}
             {selectedLog && (
               <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4 animate-fade-in">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Eye className="text-indigo-600" size={18} />
-                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Full Request Inspector</h4>
-                  </div>
-                  <span className="font-mono text-[9px] text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                    Trace: {selectedLog.traceId}
-                  </span>
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <Eye className="text-indigo-600" size={18} />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Full Request Inspector</h4>
                 </div>
 
-                {selectedLog.status === 'Not Attempted' && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl space-y-2 text-xs">
-                    <p className="font-bold flex items-center gap-1.5 text-amber-950">
-                      <AlertCircle size={14} className="text-amber-600" />
-                      Status: Not Attempted
-                    </p>
-                    <p className="leading-relaxed">
-                      <strong>Reason:</strong> The Job Scheduler did not call the traced backend GHL sync action. This proves the scheduler path is not reaching GHL sync. Please click the <strong>Create Scheduler Trace Test</strong> button to diagnostic verify why the network request did not fire from the frontend.
-                    </p>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[10px]">
-                  <div className="space-y-3">
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Execution Trace Info</p>
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between"><span className="text-slate-400">Frontend Action:</span> <span className="font-bold text-slate-800">{selectedLog.source === 'Job Scheduler' ? 'handleSaveSchedule()' : selectedLog.source === 'Job Portal' ? 'schedule-job-start()' : selectedLog.status === 'Not Attempted' ? 'Not Attempted' : 'onSyncTrigger()'}</span></div>
+                  <div className="space-y-2">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Execution Details</p>
+                      <div className="space-y-1">
+                        <div className="flex justify-between"><span className="text-slate-400">Frontend Action:</span> <span className="font-bold text-slate-800">{selectedLog.source === 'Job Scheduler' ? 'handleSaveSchedule()' : 'onSyncTrigger()'}</span></div>
                         <div className="flex justify-between"><span className="text-slate-400">Backend Action:</span> <span className="font-bold text-slate-800">{selectedLog.action || 'Manual Resync'}</span></div>
                         <div className="flex justify-between"><span className="text-slate-400">Shared Helper:</span> <span className="font-mono font-bold text-indigo-600">syncEstimateToGhlCalendar()</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Schedule Event ID:</span> <span className="font-mono font-bold text-slate-800">{selectedLog.scheduleEventId || 'install-' + selectedLog.estimateId}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Estimate ID:</span> <span className="font-mono font-bold text-slate-800">{selectedLog.estimateId || 'N/A'}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Start Date:</span> <span className="font-bold text-slate-800">{selectedLog.startDate || selectedLog.requestBody?.startDate || 'N/A'}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Install Days:</span> <span className="font-bold text-slate-800">{selectedLog.duration || selectedLog.requestBody?.duration || 'N/A'}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">GHL Appointment IDs:</span> <span className="font-mono font-bold text-slate-800">{selectedLog.appointmentId || selectedLog.ghlAppointmentId || 'N/A'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">HTTP Method:</span> <span className="font-bold text-indigo-600">{selectedLog.method || 'GET'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Status Code:</span> <span className={`font-mono font-bold ${selectedLog.statusCode === 200 ? 'text-emerald-600' : 'text-rose-600'}`}>{selectedLog.statusCode || 'N/A'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Response Time:</span> <span className="font-bold text-slate-800">{selectedLog.responseTime || 0}ms</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Appointment ID:</span> <span className="font-mono font-bold text-slate-800">{selectedLog.appointmentId || 'None'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Trace ID:</span> <span className="font-mono text-slate-500">{selectedLog.traceId}</span></div>
                       </div>
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide font-sans">Free Slots Query (Request / Response)</p>
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-slate-400 block mb-0.5">Free Slots Query Request:</span>
-                          <pre className="font-mono text-[8px] text-emerald-700 bg-slate-900 p-2 rounded-lg max-h-[80px] overflow-y-auto">
-                            {selectedLog.freeSlotsRequest ? JSON.stringify(selectedLog.freeSlotsRequest, null, 2) : 'N/A'}
-                          </pre>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block mb-0.5">Free Slots Query Response:</span>
-                          <pre className="font-mono text-[8px] text-amber-500 bg-slate-900 p-2 rounded-lg max-h-[100px] overflow-y-auto">
-                            {selectedLog.freeSlotsResponse ? JSON.stringify(selectedLog.freeSlotsResponse, null, 2) : 'N/A'}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Headers & Endpoint</p>
+                      <div className="space-y-1">
+                        <div><span className="text-slate-400">Endpoint URL:</span> <p className="font-mono text-slate-700 bg-white p-1 rounded border border-slate-100 break-all">{selectedLog.endpoint || 'https://services.leadconnectorhq.com'}</p></div>
+                        <div className="pt-1"><span className="text-slate-400">Request Headers:</span> 
+                          <pre className="font-mono text-[8px] text-slate-600 bg-white p-1.5 rounded border border-slate-100 mt-1">
+                            {JSON.stringify({
+                              'Authorization': 'Bearer ••••••',
+                              'Version': '2021-04-15',
+                              'Content-Type': 'application/json'
+                            }, null, 2)}
                           </pre>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Appointment Create (Request / Response)</p>
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-slate-400 block mb-0.5">Appointment Request:</span>
-                          <pre className="font-mono text-[8px] text-emerald-700 bg-slate-900 p-2 rounded-lg max-h-[90px] overflow-y-auto">
-                            {selectedLog.appointmentCreateRequest ? JSON.stringify(selectedLog.appointmentCreateRequest, null, 2) : 'N/A'}
-                          </pre>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block mb-0.5">Appointment Response:</span>
-                          <pre className="font-mono text-[8px] text-amber-500 bg-slate-900 p-2 rounded-lg max-h-[100px] overflow-y-auto">
-                            {selectedLog.appointmentCreateResponse ? JSON.stringify(selectedLog.appointmentCreateResponse, null, 2) : 'N/A'}
-                          </pre>
-                        </div>
-                      </div>
+                  <div className="space-y-2">
+                    {/* Request/Response Body inspect */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Request Payload</p>
+                      <pre className="font-mono text-[8px] text-emerald-700 bg-slate-900 p-2 rounded-lg max-h-[120px] overflow-y-auto">
+                        {selectedLog.requestBody ? JSON.stringify(selectedLog.requestBody, null, 2) : 'No request payload.'}
+                      </pre>
                     </div>
 
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                      <p className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide">Response Payload</p>
+                      <pre className="font-mono text-[8px] text-amber-500 bg-slate-900 p-2 rounded-lg max-h-[140px] overflow-y-auto">
+                        {selectedLog.responseBody ? (
+                          typeof selectedLog.responseBody === 'string' 
+                            ? selectedLog.responseBody 
+                            : JSON.stringify(selectedLog.responseBody, null, 2)
+                        ) : 'No response payload.'}
+                      </pre>
+                    </div>
+                    
                     <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-900 text-[9px] flex gap-2">
                       <Database size={12} className="text-indigo-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold">Firestore Write Result:</span>
-                        <p className="font-mono mt-0.5 text-indigo-800">{selectedLog.firestoreResult || 'success: written sync state and traces to Firestore'}</p>
+                        <span className="font-bold">Firestore Update Result:</span>
+                        <p className="font-mono mt-0.5 text-indigo-800">{selectedLog.firestoreResult || 'success: written trace log state'}</p>
                       </div>
                     </div>
-
-                    {selectedLog.error && (
-                      <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-800 text-[10px] items-start">
-                        <AlertCircle className="text-rose-600 shrink-0 mt-0.5" size={14} />
-                        <div>
-                          <p className="font-extrabold uppercase tracking-wide">Raw Error Message</p>
-                          <p className="font-mono mt-1 text-rose-700 break-all">{selectedLog.error}</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

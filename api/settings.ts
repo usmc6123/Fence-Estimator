@@ -2294,51 +2294,6 @@ export default async function handler(req: any, res: any) {
         try {
           const logsSnap = await db.collection('ghl_integration_logs').orderBy('timestamp', 'desc').limit(200).get();
           const logs = logsSnap.docs.map((doc: any) => doc.data());
-
-          // Get schedule events to detect if any scheduled jobs are missing a GHL trace (Not Attempted)
-          const eventsSnap = await db.collection('schedule_events').get();
-          const events = eventsSnap.docs.map((doc: any) => doc.data());
-
-          // Check for any scheduled jobs that do not have a corresponding trace log
-          for (const ev of events) {
-            if (!ev.estimateId || ev.id?.startsWith('blackout') || ev.estimateId.startsWith('verify-')) continue;
-
-            const hasTraceLog = logs.some((l: any) => l.estimateId === ev.estimateId);
-            
-            if (!hasTraceLog) {
-              let customerName = 'Scheduled Job';
-              try {
-                const estSnap = await db.collection('estimates').doc(ev.estimateId).get();
-                if (estSnap.exists) {
-                  customerName = estSnap.data()?.customerName || customerName;
-                }
-              } catch (e) {}
-
-              const synthTraceId = "trace-not-attempted-" + ev.estimateId;
-              logs.push({
-                traceId: synthTraceId,
-                estimateId: ev.estimateId,
-                customerName: customerName,
-                source: 'Job Scheduler',
-                action: 'schedule-job-start',
-                status: 'Not Attempted',
-                timestamp: ev.updatedAt || ev.createdAt || new Date().toISOString(),
-                error: 'The Job Scheduler did not call the traced backend GHL sync action.',
-                steps: [
-                  { step: 'frontend_save', label: 'Frontend Save Clicked', status: 'success' },
-                  { step: 'backend_action', label: 'Backend Action Received', status: 'failed', reason: 'GHL sync was not initiated/called.' }
-                ]
-              });
-            }
-          }
-
-          // Re-sort the combined logs descending by timestamp
-          logs.sort((a: any, b: any) => {
-            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-            return timeB - timeA;
-          });
-
           return res.status(200).json({ success: true, logs });
         } catch (err: any) {
           return res.status(500).json({ success: false, error: err.message || String(err) });

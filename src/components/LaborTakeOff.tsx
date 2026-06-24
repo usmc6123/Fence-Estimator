@@ -56,7 +56,6 @@ export default function LaborTakeOff({
     setScheduleError('');
     setScheduleSuccess('');
 
-    const scheduleSyncTraceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
@@ -69,8 +68,7 @@ export default function LaborTakeOff({
           startDate: adminStartDate,
           duration: adminDuration,
           assignedCrew: adminCrew,
-          notes: adminScheduleNotes,
-          scheduleSyncTraceId
+          notes: adminScheduleNotes
         })
       });
 
