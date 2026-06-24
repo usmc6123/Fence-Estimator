@@ -417,9 +417,28 @@ export async function syncEstimateToGhlCalendar(
     // Existing Event IDs (comma-separated string or array)
     let existingIds: string[] = [];
     if (Array.isArray(estimateData.ghlCalendarEventIds)) {
-      existingIds = estimateData.ghlCalendarEventIds.filter(Boolean);
+      existingIds = estimateData.ghlCalendarEventIds.map((item: any) => 
+        typeof item === 'string' ? item : (item && item.ghlCalendarEventId)
+      ).filter(Boolean);
     } else if (estimateData.ghlCalendarEventId) {
       existingIds = String(estimateData.ghlCalendarEventId).split(',').filter(Boolean);
+    }
+
+    // RESCHEDULING RULE: If duration changes, delete old appointments first
+    if (existingIds.length > 0 && existingIds.length !== days) {
+      console.log(`[GHL SYNC TRACE - ${traceId}] Duration changed from ${existingIds.length} to ${days}. Cleaning up old appointments first.`);
+      for (const oldId of existingIds) {
+        try {
+          console.log(`[GHL SYNC TRACE - ${traceId}] Deleting old appointment during reschedule: ${oldId}`);
+          await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${oldId}`, {
+            method: 'DELETE',
+            headers
+          });
+        } catch (err) {
+          console.error(`[GHL SYNC TRACE - ${traceId}] Failed to delete old appointment ${oldId}:`, err);
+        }
+      }
+      existingIds = []; // Clear them so the loop below creates new ones
     }
 
     const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
@@ -865,5 +884,104 @@ Admin Estimate: ${adminEstimateLink}`;
     console.log("GHL_SYNC_DEBUG_FULL_JSON_END");
 
     return { success: false, error: err.message || String(err), ghlSyncDebug };
+  }
+}
+
+/**
+ * Canceled/Deleted GHL Appointments for a given schedule event.
+ */
+export async function cancelGhlCalendarAppointmentsForSchedule(scheduleEventId: string) {
+  const traceId = `cancel-${Math.random().toString(36).substring(2, 15)}`;
+  const nowIso = new Date().toISOString();
+  console.log(`[GHL SYNC TRACE - ${traceId}] Starting GHL cancellation for schedule: ${scheduleEventId}`);
+
+  try {
+    // 1. Fetch schedule event
+    const eventSnap = await db.collection('schedule_events').doc(String(scheduleEventId)).get();
+    if (!eventSnap.exists) {
+      console.warn(`[GHL SYNC TRACE - ${traceId}] Schedule event not found: ${scheduleEventId}`);
+      return { success: false, error: 'Schedule event not found.' };
+    }
+    const eventData = eventSnap.data() || {};
+    const estimateId = eventData.estimateId;
+
+    // 2. Collect IDs
+    const ghlIds: string[] = [];
+    if (eventData.ghlCalendarEventId) {
+      ghlIds.push(eventData.ghlCalendarEventId);
+    }
+    if (Array.isArray(eventData.ghlCalendarEventIds)) {
+      eventData.ghlCalendarEventIds.forEach((item: any) => {
+        if (item && item.ghlCalendarEventId) {
+          ghlIds.push(item.ghlCalendarEventId);
+        }
+      });
+    }
+
+    const uniqueIds = Array.from(new Set(ghlIds)).filter(Boolean);
+    if (uniqueIds.length === 0) {
+      console.log(`[GHL SYNC TRACE - ${traceId}] No GHL appointment IDs found to cancel.`);
+      return { success: true, message: 'No GHL appointments found to cancel.' };
+    }
+
+    // 3. Fetch settings
+    const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+    const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    const apiKey = settings.ghlApiKey;
+
+    if (!apiKey) {
+      console.warn(`[GHL SYNC TRACE - ${traceId}] GHL API Key missing, cannot cancel appointments.`);
+      return { success: false, error: 'GHL API Key missing.' };
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Version': '2021-04-15',
+      'Content-Type': 'application/json'
+    };
+
+    const results: any[] = [];
+    let allSucceeded = true;
+
+    // 4. Delete each appointment
+    for (const idToDelete of uniqueIds) {
+      try {
+        console.log(`[GHL SYNC TRACE - ${traceId}] Deleting GHL appointment: ${idToDelete}`);
+        const res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${idToDelete}`, {
+          method: 'DELETE',
+          headers
+        });
+        const resStatus = res.status;
+        const resText = await res.text();
+        
+        results.push({ id: idToDelete, status: resStatus, response: resText });
+        if (resStatus !== 200 && resStatus !== 204 && resStatus !== 404) {
+          allSucceeded = false;
+        }
+      } catch (err) {
+        console.error(`[GHL SYNC TRACE - ${traceId}] Failed to delete ${idToDelete}:`, err);
+        results.push({ id: idToDelete, error: String(err) });
+        allSucceeded = false;
+      }
+    }
+
+    // 5. Log activity
+    await logGhlActivity({
+      traceId,
+      estimateId,
+      source: 'App Deletion',
+      action: 'cancelGhlCalendarAppointmentsForSchedule',
+      status: allSucceeded ? 'success' : 'failed',
+      responseBody: { results },
+      steps: [
+        { step: "ghl_cancel_started", status: "success" },
+        { step: "ghl_cancel_completed", status: allSucceeded ? "success" : "failed" }
+      ]
+    });
+
+    return { success: allSucceeded, results };
+  } catch (err) {
+    console.error(`[GHL SYNC TRACE - ${traceId}] Error in cancel helper:`, err);
+    return { success: false, error: String(err) };
   }
 }

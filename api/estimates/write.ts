@@ -3,7 +3,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { format, addDays } from 'date-fns';
-import { syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar } from '../lib/ghlCalendarSync.js';
+import { 
+  syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar,
+  cancelGhlCalendarAppointmentsForSchedule 
+} from '../lib/ghlCalendarSync.js';
 import { randomBytes } from 'crypto';
 
 function generateSecureToken(): string {
@@ -7277,6 +7280,12 @@ Lone Star Fence Works`;
         console.log(`[BACKEND ACTION] ${action}: id=${id}`);
 
         if (!id) return res.status(400).json({ error: 'Event ID is required.' });
+        
+        console.log(`[GHL SYNC] Attempting GHL cleanup before deleting schedule event: ${id}`);
+        const cancelRes = await cancelGhlCalendarAppointmentsForSchedule(String(id));
+        if (!cancelRes.success) {
+          console.warn(`[GHL SYNC] GHL cleanup failed or partially failed for ${id}:`, cancelRes.error || cancelRes.results);
+        }
 
         // If it's an install event, we should probably clear the estimate schedule fields too
         if (String(id).startsWith('install-')) {
@@ -7295,7 +7304,21 @@ Lone Star Fence Works`;
         }
 
         await db.collection('schedule_events').doc(String(id)).delete();
-        return res.status(200).json({ success: true, id });
+        return res.status(200).json({ success: true, id, cancelRes });
+      }
+
+      if (req.body && req.body.action === 'retry-ghl-cleanup') {
+        const id = req.body.scheduleEventId;
+        if (!id) return res.status(400).json({ error: 'Schedule Event ID is required.' });
+        
+        console.log(`[BACKEND ACTION] retry-ghl-cleanup: id=${id}`);
+        const cancelRes = await cancelGhlCalendarAppointmentsForSchedule(String(id));
+        
+        if (cancelRes.success) {
+          return res.status(200).json({ success: true, message: 'GHL appointments removed successfully.', results: cancelRes.results });
+        } else {
+          return res.status(200).json({ success: false, error: cancelRes.error || 'Partial failure during cleanup.', results: cancelRes.results });
+        }
       }
       if (req.body && req.body.action === 'send') {
         const estimateId = req.body.estimateId || req.query.estimateId;

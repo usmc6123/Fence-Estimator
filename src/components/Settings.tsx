@@ -6,7 +6,7 @@ import {
   ImageIcon, Server, Settings2, Send, AlertCircle, Terminal,
   Eye, EyeOff, Copy, Plus, Activity, Check, Database, Sparkles,
   Calendar, Search, Lock, Key, CheckSquare, Square, ChevronDown, ChevronUp, ChevronRight,
-  AlertTriangle, Clock, TerminalSquare, Info
+  AlertTriangle, Clock, TerminalSquare, Info, Trash2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -317,6 +317,37 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [saveSuccess, setSaveSuccess] = React.useState<string | null>(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [isRetryingCleanup, setIsRetryingCleanup] = React.useState(false);
+
+  const retryGhlCleanup = async (trace: any) => {
+    try {
+      setIsRetryingCleanup(true);
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'retry-ghl-cleanup',
+          scheduleEventId: trace.ghlSyncDebug?.scheduleEventId || trace.scheduleEventId || trace.id || trace.estimateId,
+          traceId: trace.traceId
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert('GHL Cleanup Successful: ' + (data.message || 'Appointments removed.'));
+      } else {
+        alert('GHL Cleanup Failed: ' + (data.error || 'Check logs.'));
+      }
+    } catch (err: any) {
+      alert('Retry failed: ' + err.message);
+    } finally {
+      setIsRetryingCleanup(false);
+    }
+  };
+
   const [activeSection, setActiveSection] = React.useState<'company' | 'integration' | 'smtp' | 'templates' | 'notifications'>('company');
   
   const [formData, setFormData] = React.useState({
@@ -4910,7 +4941,17 @@ export default function Settings({ user, adminToken }: SettingsProps) {
             </div>
             
             {/* Modal Footer */}
-            <div className="p-8 border-t border-gray-100 flex justify-end bg-gray-50/50 rounded-b-[32px]">
+            <div className="p-8 border-t border-gray-100 flex items-center justify-end gap-4 bg-gray-50/50 rounded-b-[32px]">
+              {(selectedTrace.status === 'failed' || selectedTrace.action?.includes('delete')) && (
+                <button
+                  onClick={() => retryGhlCleanup(selectedTrace)}
+                  disabled={isRetryingCleanup}
+                  className="px-6 py-4 bg-white border border-red-200 text-red-600 rounded-[20px] text-xs font-black uppercase tracking-[0.2em] hover:bg-red-50 transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isRetryingCleanup ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Retry GHL Cleanup
+                </button>
+              )}
               <button 
                 onClick={() => setViewingFailureDetails(false)}
                 className="px-10 py-4 bg-american-blue text-white rounded-[20px] text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:scale-95"

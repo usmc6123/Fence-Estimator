@@ -900,6 +900,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         if (!response.ok) {
           throw new Error(`HTTP error ${response.status}`);
         }
+        const data = await response.json();
+        if (data.cancelRes && !data.cancelRes.success) {
+          alert('Schedule deleted locally, but GHL appointment cleanup failed. You can retry cleanup from the GHL Trace logs in Settings.');
+        }
         await fetchEvents();
     } else {
         const token = localStorage.getItem('company_admin_token');
@@ -918,6 +922,11 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         if (!response.ok) {
           throw new Error(await response.text());
         }
+        const data = await response.json();
+        if (data.cancelRes && !data.cancelRes.success) {
+          alert('Schedule deleted locally, but GHL appointment cleanup failed. You can retry cleanup from the GHL Trace logs in Settings.');
+        }
+        await fetchEvents();
     }
     setShowEventModal(false);
   };
