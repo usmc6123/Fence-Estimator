@@ -799,6 +799,15 @@ Admin Estimate: ${adminEstimateLink}`;
       ]
     });
 
+    console.log("=========================");
+    console.log("BEGIN GHL SYNC DEBUG");
+    console.log("=========================");
+    console.dir(ghlSyncDebug, { depth: null });
+    console.log(JSON.stringify(ghlSyncDebug, null, 2));
+    console.log("=========================");
+    console.log("END GHL SYNC DEBUG");
+    console.log("=========================");
+
     return { success: false, error: err.message || String(err), ghlSyncDebug };
   }
 }
