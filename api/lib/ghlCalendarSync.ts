@@ -358,8 +358,8 @@ export async function syncEstimateToGhlCalendar(
             { step: "backend_action_received", status: "success" },
             { step: "schedule_event_saved", status: "success" },
             { step: "ghl_sync_helper_entered", status: "failed", reason: contactErr },
-            { step: "free_slots_success", status: "skipped", reason: "Contact resolution failed" },
-            { step: "appointment_create_success", status: "skipped", reason: "Contact resolution failed" }
+            { step: "free_slots_request_failed", status: "skipped", reason: "Contact resolution failed" },
+            { step: "appointment_create_failed", status: "skipped", reason: "Contact resolution failed" }
           ];
           await saveGhlSyncDebug(estimateId, ghlSyncDebug);
 
@@ -390,8 +390,8 @@ export async function syncEstimateToGhlCalendar(
           { step: "backend_action_received", status: "success" },
           { step: "schedule_event_saved", status: "success" },
           { step: "ghl_sync_helper_entered", status: "failed", reason: contactErr },
-          { step: "free_slots_success", status: "skipped", reason: "Contact resolution failed" },
-          { step: "appointment_create_success", status: "skipped", reason: "Contact resolution failed" }
+          { step: "free_slots_request_failed", status: "skipped", reason: "Contact resolution failed" },
+          { step: "appointment_create_failed", status: "skipped", reason: "Contact resolution failed" }
         ];
         await saveGhlSyncDebug(estimateId, ghlSyncDebug);
 
@@ -528,13 +528,13 @@ export async function syncEstimateToGhlCalendar(
         slotMatchDebug.matchFound = true;
         slotMatchDebug.matchedSlot = matchedSlot;
         
-        // USE EXACT SLOT FROM GHL
+        // 1. USE EXACT SLOT START FROM GHL
         finalStart = typeof matchedSlot === 'string' ? matchedSlot : (matchedSlot.startTime || targetStartIso);
         
-        // Calculate 3h end time based on the exact start provided
+        // 2. CALCULATE 3H END TIME STRICTLY FROM START
         const endD = new Date(finalStart);
-        endD.setHours(endD.getHours() + 3);
-        finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || endD.toISOString());
+        endD.setMinutes(endD.getMinutes() + 180); // 3 Hours exactly
+        finalEnd = endD.toISOString();
         
         slotMatchDebug.startTimeMatches = true;
       }
@@ -581,11 +581,26 @@ Admin Estimate: ${adminEstimateLink}`;
         status: 'booked'
       };
 
+      // EXPLICIT DEBUG LOGS BEFORE CREATION
+      const startD_check = new Date(finalStart);
+      const endD_check = new Date(finalEnd);
+      const durationMs = endD_check.getTime() - startD_check.getTime();
+      const durationMinutes = Math.round(durationMs / 60000);
+      const startEqualsEnd = finalStart === finalEnd;
+
       const ghlEventId = existingIds[i] || null;
       const mode = ghlEventId ? 'UPDATE' : 'CREATE';
       const endpoint = ghlEventId 
         ? `https://services.leadconnectorhq.com/calendars/events/appointments/${ghlEventId}`
         : `https://services.leadconnectorhq.com/calendars/events/appointments`;
+
+      console.log(`[GHL SYNC DEBUG] Pre-Appointment Creation Check:
+        - selectedSlot: ${JSON.stringify(matchedSlot)}
+        - appointmentStartTime: ${finalStart}
+        - appointmentEndTime: ${finalEnd}
+        - durationMinutes: ${durationMinutes}
+        - startEqualsEnd: ${startEqualsEnd}
+        - timezone: ${slotTimezone}`);
 
       let resText = '';
       let resStatus = 0;
@@ -594,7 +609,22 @@ Admin Estimate: ${adminEstimateLink}`;
       let dayError = '';
       let dayTraceId = '';
 
-      if (!slotMatchDebug.matchFound && !ghlEventId) {
+      if (startEqualsEnd) {
+        dayError = `Invalid local appointment range: startTime equals endTime (${finalStart}).`;
+        console.error(`[GHL SYNC TRACE - ${traceId}] Day ${i+1} (${targetDateStr}) Aborted: ${dayError}`);
+        errors.push(`Day ${i+1} aborted: ${dayError}`);
+        overallSuccess = false;
+
+        await logGhlActivity({
+          traceId,
+          status: 'failed',
+          error: dayError,
+          steps: [
+            { step: "appointment_create_failed", status: "failed", reason: dayError },
+            { step: "appointment_id_returned_failed", status: "failed", reason: "Zero duration range" }
+          ]
+        });
+      } else if (!slotMatchDebug.matchFound && !ghlEventId) {
         dayError = `Comparison Failed: No available slots found on ${targetDateStr}.`;
         console.error(`[GHL SYNC TRACE - ${traceId}] Day ${i+1} (${targetDateStr}) Aborted: ${dayError}`);
         errors.push(`Day ${i+1} aborted: ${dayError}`);
@@ -605,8 +635,8 @@ Admin Estimate: ${adminEstimateLink}`;
           status: 'failed',
           error: dayError,
           steps: [
-            { step: "appointment_create", status: "failed", reason: dayError },
-            { step: "appointment_id_returned", status: "failed", reason: "Comparison Failed" },
+            { step: "appointment_create_failed", status: "failed", reason: dayError },
+            { step: "appointment_id_returned_failed", status: "failed", reason: "Comparison Failed" },
             { step: "firestore_updated", status: "skipped" },
             { step: "ui_updated", status: "skipped" }
           ]
@@ -667,8 +697,8 @@ Admin Estimate: ${adminEstimateLink}`;
           status: daySuccess ? 'success' : 'failed',
           error: daySuccess ? undefined : dayError,
           steps: [
-            { step: "appointment_create", status: daySuccess ? "success" : "failed", reason: daySuccess ? undefined : dayError },
-            { step: "appointment_id_returned", status: daySuccess ? "success" : "failed", reason: daySuccess ? `Returned ID: ${returnedId}` : dayError }
+            { step: daySuccess ? "appointment_create_success" : "appointment_create_failed", status: daySuccess ? "success" : "failed", reason: daySuccess ? undefined : dayError },
+            { step: daySuccess ? "appointment_id_returned_success" : "appointment_id_returned_failed", status: daySuccess ? "success" : "failed", reason: daySuccess ? `Returned ID: ${returnedId}` : dayError }
           ]
         });
       }
