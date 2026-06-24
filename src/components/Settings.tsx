@@ -2300,6 +2300,39 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                           </div>
 
                           <div className="space-y-4">
+                            {/* Spec Comparison Section */}
+                            {diagnosticResult.specCheck && (
+                              <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 space-y-2">
+                                <h6 className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Compare With GHL Spec</h6>
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-400">Endpoint Matches Spec:</span>
+                                    <span className={cn("text-[10px] font-bold", diagnosticResult.specCheck.endpointMatches ? "text-emerald-400" : "text-rose-400")}>
+                                      {diagnosticResult.specCheck.endpointMatches ? "YES" : "NO"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-400">Method Matches Spec:</span>
+                                    <span className={cn("text-[10px] font-bold", diagnosticResult.specCheck.methodMatches ? "text-emerald-400" : "text-rose-400")}>
+                                      {diagnosticResult.specCheck.methodMatches ? "YES" : "NO"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-400">Required Params Present:</span>
+                                    <span className={cn("text-[10px] font-bold", diagnosticResult.specCheck.requiredParamsPresent ? "text-emerald-400" : "text-rose-400")}>
+                                      {diagnosticResult.specCheck.requiredParamsPresent ? "YES" : "NO"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-400">Unexpected Params:</span>
+                                    <span className={cn("text-[10px] font-bold", !diagnosticResult.specCheck.unexpectedParamsPresent ? "text-emerald-400" : "text-rose-400")}>
+                                      {diagnosticResult.specCheck.unexpectedParamsPresent ? "YES" : "NONE"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Request Section */}
                             <div>
                               <div className="flex items-center gap-2 mb-2">
@@ -2308,16 +2341,32 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                               </div>
                               <div className="space-y-2 font-mono text-[10px]">
                                 <div className="flex gap-2">
-                                  <span className="text-slate-500 min-w-[60px]">Method:</span>
-                                  <span className="text-emerald-400 font-bold">{diagnosticResult.debug?.request?.method || 'GET'}</span>
+                                  <span className="text-slate-500 min-w-[80px]">Base URL:</span>
+                                  <span className="text-slate-300">{diagnosticResult.debug?.baseUrl}</span>
                                 </div>
                                 <div className="flex gap-2">
-                                  <span className="text-slate-500 min-w-[60px]">URL:</span>
+                                  <span className="text-slate-500 min-w-[80px]">Endpoint:</span>
+                                  <span className="text-slate-300">{diagnosticResult.debug?.endpoint}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[80px]">Method:</span>
+                                  <span className="text-emerald-400 font-bold">{diagnosticResult.debug?.method || 'GET'}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[80px]">API Version:</span>
+                                  <span className="text-slate-300">{diagnosticResult.debug?.apiVersion}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[80px]">Full URL:</span>
                                   <span className="text-slate-300 break-all">{diagnosticResult.debug?.request?.url}</span>
                                 </div>
                                 <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Headers</div>
                                 <pre className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[9px] overflow-x-auto">
                                   {JSON.stringify(diagnosticResult.debug?.request?.headers, null, 2)}
+                                </pre>
+                                <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Query Params</div>
+                                <pre className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[9px] overflow-x-auto">
+                                  {JSON.stringify(diagnosticResult.debug?.request?.params, null, 2)}
                                 </pre>
                               </div>
                             </div>
@@ -2334,10 +2383,14 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                               <div className="space-y-2 font-mono text-[10px]">
                                 {diagnosticResult.debug?.response?.traceId && (
                                   <div className="flex gap-2">
-                                    <span className="text-slate-500 min-w-[60px]">Trace ID:</span>
+                                    <span className="text-slate-500 min-w-[80px]">Trace ID:</span>
                                     <span className="text-slate-300">{diagnosticResult.debug.response.traceId}</span>
                                   </div>
                                 )}
+                                <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Response Headers</div>
+                                <pre className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[9px] overflow-x-auto max-h-32">
+                                  {JSON.stringify(diagnosticResult.debug?.response?.headers, null, 2)}
+                                </pre>
                                 <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Body</div>
                                 <pre className="p-3 bg-slate-950 rounded border border-slate-800 text-slate-300 text-[9px] overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
                                   {diagnosticResult.debug?.response?.body || JSON.stringify(diagnosticResult, null, 2)}

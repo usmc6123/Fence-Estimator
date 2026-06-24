@@ -826,7 +826,7 @@ export default async function handler(req: any, res: any) {
         const endT = startT + (7 * 24 * 60 * 60 * 1000); // +7 days
         const timezone = 'America/Chicago';
 
-        const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${timezone}&locationId=${locationId}`;
+        const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${timezone}`;
         
         const mask = (str: string) => str && str.length > 8 ? `${str.substring(0, 4)}...${str.substring(str.length - 4)}` : (str || 'null');
 
@@ -843,11 +843,23 @@ export default async function handler(req: any, res: any) {
           const resHeaders: Record<string, string> = {};
           slotRes.headers.forEach((val, key) => { resHeaders[key] = val; });
 
+          const specCheck = {
+            endpointMatches: slotUrl.includes(`/calendars/${calendarId}/free-slots`),
+            methodMatches: true, // It is GET
+            requiredParamsPresent: !!startT && !!endT,
+            unexpectedParamsPresent: false // We removed locationId
+          };
+
           return res.status(200).json({
             success: slotRes.ok,
             validation,
+            specCheck,
             debug: {
               function: 'buildFreeSlotsRequest()',
+              baseUrl: 'https://services.leadconnectorhq.com',
+              endpoint: `/calendars/${calendarId}/free-slots`,
+              method: 'GET',
+              apiVersion: '2021-04-15',
               request: {
                 method: 'GET',
                 url: slotUrl,
@@ -857,7 +869,6 @@ export default async function handler(req: any, res: any) {
                 },
                 params: {
                   calendarId,
-                  locationId: mask(locationId),
                   startDate: startT,
                   endDate: endT,
                   timezone

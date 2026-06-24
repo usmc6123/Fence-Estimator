@@ -1424,13 +1424,12 @@ async function syncEstimateToGhlCalendar(
       const startT = new Date(startDate + 'T00:00:00').getTime();
       const endT = startT + 86400000; // +24h
       
-      const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${slotTimezone}&locationId=${locationId}`;
+      const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${slotTimezone}`;
       
       console.log(`[GHL CALENDAR SYNC] Slot Troubleshooting Request:
         Method: GET
         URL: ${slotUrl}
         CalendarId: ${calendarId}
-        LocationId: ${mask(locationId)}
         StartDate: ${startDate} (${startT})
         EndDate: ${new Date(endT).toISOString()} (${endT})
         Timezone: ${slotTimezone}
@@ -1440,8 +1439,6 @@ async function syncEstimateToGhlCalendar(
         method: 'GET',
         url: slotUrl,
         calendarId,
-        locationIdExists: !!locationId,
-        locationIdMasked: mask(locationId),
         startDate,
         startTimeSent: startT,
         endTimeSent: endT,
