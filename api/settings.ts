@@ -797,11 +797,11 @@ export default async function handler(req: any, res: any) {
         
         const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
         
-        if (!apiKey || !locationId || !calendarId) {
+        if (!apiKey || !locationId || !calendarId || calendarId === 'free-slots') {
           return res.status(400).json({ 
             success: false, 
-            error: 'Missing credentials or calendar ID for slot test.',
-            details: { apiKeyExists: !!apiKey, locationIdExists: !!locationId, calendarIdExists: !!calendarId }
+            error: 'Missing credentials or invalid calendar ID for slot test.',
+            details: { apiKeyExists: !!apiKey, locationIdExists: !!locationId, calendarIdExists: !!calendarId, calendarId }
           });
         }
 
@@ -816,8 +816,10 @@ export default async function handler(req: any, res: any) {
         const endT = startT + (7 * 24 * 60 * 60 * 1000); // +7 days
         const timezone = 'America/Chicago';
 
-        const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=${timezone}&locationId=${locationId}`;
+        const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${timezone}&locationId=${locationId}`;
         
+        const mask = (str: string) => str && str.length > 8 ? `${str.substring(0, 4)}...${str.substring(str.length - 4)}` : (str || 'null');
+
         try {
           const slotRes = await fetch(slotUrl, { headers });
           const traceId = slotRes.headers.get('x-datadog-trace-id') || slotRes.headers.get('trace-id') || 'N/A';
@@ -826,10 +828,16 @@ export default async function handler(req: any, res: any) {
           return res.status(200).json({
             success: slotRes.ok,
             debug: {
+              method: 'GET',
               status: slotRes.status,
               traceId,
               body,
-              url: slotUrl
+              url: slotUrl,
+              calendarId,
+              locationIdMasked: mask(locationId),
+              timezone,
+              startDateSent: new Date(startT).toISOString(),
+              endDateSent: new Date(endT).toISOString()
             }
           });
         } catch (err: any) {

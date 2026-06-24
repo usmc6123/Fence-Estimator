@@ -1415,11 +1415,16 @@ async function syncEstimateToGhlCalendar(
     let availableSlots: any[] = [];
     const slotTimezone = 'America/Chicago';
     try {
+      // Validation
+      if (!calendarId || calendarId === 'free-slots') {
+        throw new Error(`Invalid Calendar ID: ${calendarId}`);
+      }
+
       // startDate is YYYY-MM-DD
       const startT = new Date(startDate + 'T00:00:00').getTime();
       const endT = startT + 86400000; // +24h
       
-      const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=${slotTimezone}&locationId=${locationId}`;
+      const slotUrl = `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots?startDate=${startT}&endDate=${endT}&timezone=${slotTimezone}&locationId=${locationId}`;
       
       console.log(`[GHL CALENDAR SYNC] Slot Troubleshooting Request:
         Method: GET
@@ -1432,9 +1437,11 @@ async function syncEstimateToGhlCalendar(
       `);
       
       syncDebug.slotRequest = {
+        method: 'GET',
         url: slotUrl,
         calendarId,
         locationIdExists: !!locationId,
+        locationIdMasked: mask(locationId),
         startDate,
         startTimeSent: startT,
         endTimeSent: endT,
@@ -1458,7 +1465,8 @@ async function syncEstimateToGhlCalendar(
       `);
 
       if (slotRes.ok) {
-        const slotData = JSON.parse(slotText);
+        let slotData: any = {};
+        try { slotData = JSON.parse(slotText); } catch(e) { slotData = {}; }
         availableSlots = slotData.slots || slotData[startDate] || [];
         syncDebug.availableSlots = availableSlots;
         console.log(`[GHL CALENDAR SYNC] Slots found: ${availableSlots.length}`);

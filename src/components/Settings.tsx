@@ -2276,12 +2276,28 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                               <span className="text-slate-400">Status:</span>
                               <span className="text-slate-800">{diagnosticResult.debug.status}</span>
                             </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Method:</span>
+                              <span className="text-slate-800 font-bold">{diagnosticResult.debug.method}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Calendar ID:</span>
+                              <span className="text-slate-800">{diagnosticResult.debug.calendarId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Location ID:</span>
+                              <span className="text-slate-800">{diagnosticResult.debug.locationIdMasked}</span>
+                            </div>
                             {diagnosticResult.debug.traceId && (
                               <div className="flex justify-between">
                                 <span className="text-slate-400">Trace ID:</span>
                                 <span className="text-slate-800">{diagnosticResult.debug.traceId}</span>
                               </div>
                             )}
+                            <div className="mt-2 text-slate-500 font-bold uppercase text-[8px]">Request URL:</div>
+                            <div className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 break-all leading-tight">
+                              {diagnosticResult.debug.url}
+                            </div>
                             <div className="mt-2 text-slate-500 font-bold uppercase text-[8px]">Response Body:</div>
                             <pre className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
                               {diagnosticResult.debug.body || JSON.stringify(diagnosticResult, null, 2)}
