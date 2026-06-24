@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import GhlIntegrationCenter from './GhlIntegrationCenter';
 
 interface SettingsProps {
   user?: any;

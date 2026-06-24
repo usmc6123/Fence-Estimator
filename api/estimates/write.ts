@@ -1370,8 +1370,8 @@ async function logGhlActivity(log: {
   traceId: string;
   estimateId?: string;
   customerName?: string;
-  source: string;
-  action: string;
+  source?: string;
+  action?: string;
   endpoint?: string;
   method?: string;
   requestHeaders?: any;
@@ -1382,7 +1382,7 @@ async function logGhlActivity(log: {
   statusCode?: number;
   responseTime?: number;
   appointmentId?: string;
-  status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+  status?: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
   error?: string;
   duration?: number;
   steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
@@ -1468,7 +1468,7 @@ async function saveGhlSyncDebug(estimateId: string, debugObj: any) {
 /**
  * Helper to sync schedule events to GHL Install Calendar
  */
-async function syncEstimateToGhlCalendar(
+export async function syncEstimateToGhlCalendar(
   estimateId: string, 
   estimateData: any, 
   startDate: string, 
