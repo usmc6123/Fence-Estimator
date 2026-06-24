@@ -97,8 +97,8 @@ service cloud.firestore {
         && data.description is string;
     }
 
-    function isValidSettings(data) {
-      return data.id is string
+    function isValidSettings(data, settingId) {
+      return (settingId == 'main' || data.id is string)
         && (data.ghlWebhookUrl == null || data.ghlWebhookUrl is string);
     }
 
@@ -148,7 +148,7 @@ service cloud.firestore {
     match /companySettings/{settingId} {
       allow get: if isCompanyMember() || settingId == 'main' || (isSignedIn() && request.auth.uid == settingId);
       allow list: if isCompanyMember();
-      allow create, update: if (canWriteData() || (isSignedIn() && request.auth.uid == settingId)) && isValidSettings(incoming());
+      allow create, update: if (canWriteData() || (isSignedIn() && request.auth.uid == settingId)) && isValidSettings(incoming(), settingId);
       allow delete: if isAdmin();
     }
 

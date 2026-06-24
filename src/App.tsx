@@ -610,10 +610,15 @@ export default function App() {
       try {
         const docRef = doc(db, 'companySettings', 'main');
         const dSnap = await getDoc(docRef);
+        console.log('[DIAGNOSTIC] Loading laborRates from:', docRef.path);
         if (dSnap.exists()) {
           const sData = dSnap.data();
+          console.log('[DIAGNOSTIC] Data found in main:', Object.keys(sData));
           if (sData.laborRates) {
+            console.log('[DIAGNOSTIC] laborRates found in main, updating state');
             setLaborRates(sData.laborRates);
+          } else {
+            console.log('[DIAGNOSTIC] No laborRates key in main document');
           }
           if (sData.estimatorSettings) {
             setEstimate(prev => ({
@@ -621,6 +626,8 @@ export default function App() {
               ...sData.estimatorSettings
             }));
           }
+        } else {
+          console.log('[DIAGNOSTIC] companySettings/main does not exist in Firestore');
         }
       } catch (err) {
         console.warn('Failed to load global settings from Firestore:', err);
@@ -637,13 +644,17 @@ export default function App() {
     if (user) {
       try {
         const docRef = doc(db, 'companySettings', 'main');
+        console.log('[DIAGNOSTIC] Saving laborRates to:', docRef.path);
+        console.log('[DIAGNOSTIC] Keys being saved:', Object.keys(newRates));
         await setDoc(docRef, {
+          id: 'main', // Ensure validation passes for Firestore rules
           laborRates: newRates,
           updatedAt: new Date().toISOString()
         }, { merge: true });
+        console.log('[DIAGNOSTIC] Labor rates save SUCCESS');
         return true;
       } catch (err) {
-        console.error('Failed to sync labor rates to cloud:', err);
+        console.error('[DIAGNOSTIC] Labor rates save FAILURE:', err);
         return false;
       }
     }
@@ -669,6 +680,7 @@ export default function App() {
         };
 
         await setDoc(docRef, {
+          id: 'main', // Ensure validation passes
           estimatorSettings,
           updatedAt: new Date().toISOString()
         }, { merge: true });
