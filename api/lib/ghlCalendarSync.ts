@@ -29,6 +29,25 @@ if (admin.apps.length === 0) {
 
 export const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+/**
+ * Recursively removes undefined values from objects/arrays to prevent Firestore errors.
+ */
+function sanitizeForFirestore(val: any): any {
+  if (val === undefined) return null;
+  if (val === null) return null;
+  if (typeof val !== 'object') return val;
+  if (Array.isArray(val)) {
+    return val.map(v => sanitizeForFirestore(v));
+  }
+  const sanitized: any = {};
+  for (const key in val) {
+    if (Object.prototype.hasOwnProperty.call(val, key)) {
+      sanitized[key] = sanitizeForFirestore(val[key]);
+    }
+  }
+  return sanitized;
+}
+
 export async function getEstimateDocRef(estimateId: string) {
   let docRef = db.collection('estimates').doc(String(estimateId));
   let snap = await docRef.get();
@@ -95,7 +114,7 @@ export async function logGhlActivity(log: {
       mergedSteps = mergedSteps.map((s: any) => ({ ...s, timestamp: s.timestamp || new Date().toISOString() }));
     }
 
-    const docData = {
+    const docData = sanitizeForFirestore({
       traceId,
       estimateId: log.estimateId || existingSnap.data()?.estimateId || '',
       customerName: log.customerName || existingSnap.data()?.customerName || '',
@@ -118,7 +137,7 @@ export async function logGhlActivity(log: {
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
       firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
-    };
+    });
 
     await logRef.set(docData, { merge: true });
 
@@ -140,11 +159,12 @@ export async function logGhlActivity(log: {
  */
 export async function saveGhlSyncDebug(estimateId: string, debugObj: any) {
   try {
+    const sanitizedDebug = sanitizeForFirestore(debugObj);
     const { docRef } = await getEstimateDocRef(estimateId);
-    await docRef.set({ ghlSyncDebug: debugObj }, { merge: true });
+    await docRef.set({ ghlSyncDebug: sanitizedDebug }, { merge: true });
     
     const scheduleEventId = "install-" + estimateId;
-    await db.collection('schedule_events').doc(scheduleEventId).set({ ghlSyncDebug: debugObj }, { merge: true });
+    await db.collection('schedule_events').doc(scheduleEventId).set({ ghlSyncDebug: sanitizedDebug }, { merge: true });
   } catch (e) {
     console.error('[GHL CALENDAR SYNC] Failed to save ghlSyncDebug to Firestore:', e);
   }
@@ -715,12 +735,12 @@ Admin Estimate: ${adminEstimateLink}`;
     // Also update schedule_events with synced GHL event IDs
     try {
       const scheduleEventId = "install-" + estimateId;
-      await db.collection('schedule_events').doc(scheduleEventId).set({
+      await db.collection('schedule_events').doc(scheduleEventId).set(sanitizeForFirestore({
         ghlCalendarEventId: finalIdsStr,
         ghlCalendarEventIds: newIds,
         ghlCalendarSyncStatus: overallSuccessFinal ? 'synced' : 'failed',
         ghlSyncDebug: ghlSyncDebug
-      }, { merge: true });
+      }), { merge: true });
       console.log(`[GHL SYNC TRACE - ${traceId}] Saved GHL IDs and ghlSyncDebug to schedule_events for ${scheduleEventId}`);
     } catch (e) {
       console.error('Failed updating schedule_events with GHL IDs:', e);

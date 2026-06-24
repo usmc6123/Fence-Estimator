@@ -33,6 +33,25 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+/**
+ * Recursively removes undefined values from objects/arrays to prevent Firestore errors.
+ */
+function sanitizeForFirestore(val: any): any {
+  if (val === undefined) return null;
+  if (val === null) return null;
+  if (typeof val !== 'object') return val;
+  if (Array.isArray(val)) {
+    return val.map(v => sanitizeForFirestore(v));
+  }
+  const sanitized: any = {};
+  for (const key in val) {
+    if (Object.prototype.hasOwnProperty.call(val, key)) {
+      sanitized[key] = sanitizeForFirestore(val[key]);
+    }
+  }
+  return sanitized;
+}
+
 export interface SendAppEmailParams {
   to: string;
   subject: string;
@@ -407,7 +426,7 @@ async function logGhlActivity(log: {
       mergedSteps = mergedSteps.map((s: any) => ({ ...s, timestamp: s.timestamp || new Date().toISOString() }));
     }
 
-    const docData = {
+    const docData = sanitizeForFirestore({
       traceId,
       estimateId: log.estimateId || existingSnap.data()?.estimateId || '',
       customerName: log.customerName || existingSnap.data()?.customerName || '',
@@ -430,7 +449,7 @@ async function logGhlActivity(log: {
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
       firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
-    };
+    });
 
     await logRef.set(docData, { merge: true });
 

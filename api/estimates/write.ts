@@ -170,6 +170,25 @@ export function shouldTriggerCustomerEstimatorWorkflow(
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+/**
+ * Recursively removes undefined values from objects/arrays to prevent Firestore errors.
+ */
+function sanitizeForFirestore(val: any): any {
+  if (val === undefined) return null;
+  if (val === null) return null;
+  if (typeof val !== 'object') return val;
+  if (Array.isArray(val)) {
+    return val.map(v => sanitizeForFirestore(v));
+  }
+  const sanitized: any = {};
+  for (const key in val) {
+    if (Object.prototype.hasOwnProperty.call(val, key)) {
+      sanitized[key] = sanitizeForFirestore(val[key]);
+    }
+  }
+  return sanitized;
+}
+
 export interface SendAppEmailParams {
   to: string;
   subject: string;
@@ -1411,7 +1430,7 @@ async function logGhlActivity(log: {
       mergedSteps = mergedSteps.map((s: any) => ({ ...s, timestamp: s.timestamp || new Date().toISOString() }));
     }
 
-    const docData = {
+    const docData = sanitizeForFirestore({
       traceId,
       estimateId: log.estimateId || existingSnap.data()?.estimateId || '',
       customerName: log.customerName || existingSnap.data()?.customerName || '',
@@ -1434,7 +1453,7 @@ async function logGhlActivity(log: {
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
       firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
-    };
+    });
 
     await logRef.set(docData, { merge: true });
 
@@ -1456,11 +1475,12 @@ async function logGhlActivity(log: {
  */
 async function saveGhlSyncDebug(estimateId: string, debugObj: any) {
   try {
+    const sanitizedDebug = sanitizeForFirestore(debugObj);
     const { docRef } = await getEstimateDocRef(estimateId);
-    await docRef.set({ ghlSyncDebug: debugObj }, { merge: true });
+    await docRef.set({ ghlSyncDebug: sanitizedDebug }, { merge: true });
     
     const scheduleEventId = "install-" + estimateId;
-    await db.collection('schedule_events').doc(scheduleEventId).set({ ghlSyncDebug: debugObj }, { merge: true });
+    await db.collection('schedule_events').doc(scheduleEventId).set({ ghlSyncDebug: sanitizedDebug }, { merge: true });
   } catch (e) {
     console.error('[GHL CALENDAR SYNC] Failed to save ghlSyncDebug to Firestore:', e);
   }
@@ -5509,14 +5529,14 @@ export default async function handler(req: any, res: any) {
           const endDate = endD_iso.toISOString().split('T')[0];
           
           const eventId = "install-" + estimateId;
-          await db.collection('schedule_events').doc(eventId).set({
+          await db.collection('schedule_events').doc(eventId).set(sanitizeForFirestore({
             start: startDate,
             end: endDate,
             title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
             crew: estimateData.assignedCrew || 'N/A',
             estimateId: estimateId,
             notes: `Scheduled via Job Portal. Notes: ${notes || 'None'}`
-          }, { merge: true });
+          }), { merge: true });
           
           await docRef.update({ scheduledEndDate: endDate });
         } catch (evErr) {
@@ -5656,14 +5676,14 @@ export default async function handler(req: any, res: any) {
           const endDate = endD_iso.toISOString().split('T')[0];
           
           const eventId = "install-" + estimateId;
-          await db.collection('schedule_events').doc(eventId).set({
+          await db.collection('schedule_events').doc(eventId).set(sanitizeForFirestore({
             start: startDate,
             end: endDate,
             title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
             crew: assignedCrew || 'N/A',
             estimateId: estimateId,
             notes: `Updated by Admin. Notes: ${notes || 'None'}`
-          }, { merge: true });
+          }), { merge: true });
           
           await docRef.update({ scheduledEndDate: endDate });
         } catch (evErr) {
@@ -7153,7 +7173,7 @@ Lone Star Fence Works`;
             const eventType = req.body.type || (action === 'reschedule-job' ? 'Job' : 'Estimate');
             const eventTitle = req.body.title || (eventType === 'Job' ? `Install: ${estimateData.customerName || 'Unknown'}` : `EST: ${estimateData.customerName || 'Unknown'}`);
 
-            await db.collection('schedule_events').doc(scheduleEventId).set({
+            await db.collection('schedule_events').doc(scheduleEventId).set(sanitizeForFirestore({
               estimateId: estimateId,
               title: eventTitle,
               startDate: startDate,
@@ -7164,7 +7184,7 @@ Lone Star Fence Works`;
               notes: notes || '',
               type: eventType,
               updatedAt: nowIso
-            }, { merge: true });
+            }), { merge: true });
 
             // STEP 5: Schedule event updated
             await logGhlActivity({
