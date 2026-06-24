@@ -792,6 +792,54 @@ export default async function handler(req: any, res: any) {
         await settingsDocRef.set(updatedSettings, { merge: true });
         return res.status(200).json({ success: true, message: 'Settings saved successfully.' });
 
+      } else if (action === 'ghl-test-calendar-slots') {
+        const { ghlApiKey, ghlLocationId, calendarId } = req.body;
+        
+        const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
+        
+        if (!apiKey || !locationId || !calendarId) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Missing credentials or calendar ID for slot test.',
+            details: { apiKeyExists: !!apiKey, locationIdExists: !!locationId, calendarIdExists: !!calendarId }
+          });
+        }
+
+        const headers = {
+          'Authorization': `Bearer ${apiKey}`,
+          'Version': '2021-04-15',
+          'Content-Type': 'application/json'
+        };
+
+        const now = new Date();
+        const startT = now.getTime();
+        const endT = startT + (7 * 24 * 60 * 60 * 1000); // +7 days
+        const timezone = 'America/Chicago';
+
+        const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=${timezone}&locationId=${locationId}`;
+        
+        try {
+          const slotRes = await fetch(slotUrl, { headers });
+          const traceId = slotRes.headers.get('x-datadog-trace-id') || slotRes.headers.get('trace-id') || 'N/A';
+          const body = await slotRes.text();
+          
+          return res.status(200).json({
+            success: slotRes.ok,
+            debug: {
+              status: slotRes.status,
+              traceId,
+              body,
+              url: slotUrl
+            }
+          });
+        } catch (err: any) {
+          return res.status(500).json({
+            success: false,
+            error: `Failed to fetch slots from GHL: ${err.message}`,
+            debug: { error: err.message, stack: err.stack }
+          });
+        }
+
       } else if (action === 'test-email') {
         const {
           emailProvider,

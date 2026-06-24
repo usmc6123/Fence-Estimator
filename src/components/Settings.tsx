@@ -2211,6 +2211,91 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                       <p className="text-[10px] text-[#999999]">Used to restrict lead time mapping window boundaries for custom automation tags. Recommended default is 4.</p>
                     </div>
                   </div>
+
+                  {/* GHL Calendar Diagnostic / Troubleshooting Panel */}
+                  <div className="mt-4 p-4 rounded-xl border border-rose-100 bg-rose-50/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="text-rose-500" size={16} />
+                        <h5 className="text-xs font-black uppercase tracking-tight text-rose-700">Sync Diagnostic & Slot Troubleshooting</h5>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={async () => {
+                          setIsTestingDiagnostic(true);
+                          setDiagnosticResult(null);
+                          try {
+                            const token = adminToken || localStorage.getItem('company_admin_token');
+                            const res = await fetch('/api/settings', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                              },
+                              body: JSON.stringify({
+                                action: 'ghl-test-calendar-slots',
+                                ghlApiKey: formData.ghlApiKey,
+                                ghlLocationId: formData.ghlLocationId,
+                                calendarId: formData.ghlInstallCalendarId || 'mLZAlEmZ3Y2QyByYTFQh'
+                              })
+                            });
+                            const data = await res.json();
+                            setDiagnosticResult(data);
+                          } catch (err: any) {
+                            setDiagnosticResult({ success: false, error: err.message });
+                          } finally {
+                            setIsTestingDiagnostic(false);
+                          }
+                        }}
+                        disabled={isTestingDiagnostic || !formData.ghlApiKey}
+                        className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-600 text-[10px] font-black uppercase border border-rose-200 rounded-lg shadow-sm transition-all disabled:opacity-50"
+                      >
+                        {isTestingDiagnostic ? "Checking..." : "Verify Slot Connectivity"}
+                      </button>
+                    </div>
+                    
+                    <p className="text-[10px] text-rose-600/70 leading-relaxed">
+                      This diagnostic checks if your API Key and Location ID have permission to read the selected Calendar's availability. GHL requires a 4-day scheduling buffer and active availability rules.
+                    </p>
+
+                    {diagnosticResult && (
+                      <div className="mt-3 p-3 bg-white rounded-lg border border-rose-100 font-mono text-[10px] space-y-2 overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-rose-50 pb-1 mb-1">
+                          <span className="font-bold text-slate-700 uppercase">Diagnostic Result</span>
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[8px] font-black uppercase",
+                            diagnosticResult.success ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                          )}>
+                            {diagnosticResult.success ? "Passed" : "Failed"}
+                          </span>
+                        </div>
+                        
+                        {diagnosticResult.debug && (
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Status:</span>
+                              <span className="text-slate-800">{diagnosticResult.debug.status}</span>
+                            </div>
+                            {diagnosticResult.debug.traceId && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Trace ID:</span>
+                                <span className="text-slate-800">{diagnosticResult.debug.traceId}</span>
+                              </div>
+                            )}
+                            <div className="mt-2 text-slate-500 font-bold uppercase text-[8px]">Response Body:</div>
+                            <pre className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+                              {diagnosticResult.debug.body || JSON.stringify(diagnosticResult, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {!diagnosticResult.debug && (
+                           <pre className="text-rose-500 whitespace-pre-wrap break-all">
+                             {JSON.stringify(diagnosticResult, null, 2)}
+                           </pre>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Section 3: Webhook Information & Outbound Triggers */}

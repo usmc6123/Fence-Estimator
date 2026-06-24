@@ -1413,32 +1413,73 @@ async function syncEstimateToGhlCalendar(
 
     // 1. Troubleshoot: Check GHL Free Slots for the requested day
     let availableSlots: any[] = [];
+    const slotTimezone = 'America/Chicago';
     try {
       // startDate is YYYY-MM-DD
       const startT = new Date(startDate + 'T00:00:00').getTime();
       const endT = startT + 86400000; // +24h
       
-      const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=America/Chicago`;
-      console.log(`[GHL CALENDAR SYNC] Checking slots: ${slotUrl}`);
+      const slotUrl = `https://services.leadconnectorhq.com/calendars/free-slots?calendarId=${calendarId}&startDate=${startT}&endDate=${endT}&timezone=${slotTimezone}&locationId=${locationId}`;
       
+      console.log(`[GHL CALENDAR SYNC] Slot Troubleshooting Request:
+        Method: GET
+        URL: ${slotUrl}
+        CalendarId: ${calendarId}
+        LocationId: ${mask(locationId)}
+        StartDate: ${startDate} (${startT})
+        EndDate: ${new Date(endT).toISOString()} (${endT})
+        Timezone: ${slotTimezone}
+      `);
+      
+      syncDebug.slotRequest = {
+        url: slotUrl,
+        calendarId,
+        locationIdExists: !!locationId,
+        startDate,
+        startTimeSent: startT,
+        endTimeSent: endT,
+        timezone: slotTimezone
+      };
+
       const slotRes = await fetch(slotUrl, { headers });
+      const slotTraceId = slotRes.headers.get('x-datadog-trace-id') || slotRes.headers.get('trace-id') || 'N/A';
       const slotText = await slotRes.text();
       
+      syncDebug.slotResponse = {
+        status: slotRes.status,
+        body: slotText,
+        traceId: slotTraceId
+      };
+
+      console.log(`[GHL CALENDAR SYNC] Slot Troubleshooting Response:
+        Status: ${slotRes.status}
+        TraceId: ${slotTraceId}
+        Body: ${slotText}
+      `);
+
       if (slotRes.ok) {
         const slotData = JSON.parse(slotText);
-        // GHL API v2 free-slots usually returns an object with slots per date
-        // or a flattened list depending on specific version.
         availableSlots = slotData.slots || slotData[startDate] || [];
         syncDebug.availableSlots = availableSlots;
-        syncDebug.slotsResponse = slotText;
         console.log(`[GHL CALENDAR SYNC] Slots found: ${availableSlots.length}`);
       } else {
         syncDebug.slotsError = `Failed to fetch slots: ${slotRes.status} - ${slotText}`;
-        console.warn(`[GHL CALENDAR SYNC] Slots fetch failed: ${slotRes.status}`);
       }
     } catch (slotErr: any) {
       console.error(`[GHL CALENDAR SYNC] Error fetching slots:`, slotErr);
       syncDebug.slotsError = slotErr.message;
+    }
+
+    // Check for 4-day notice
+    const leadDays = settings.minimumInstallLeadDays !== undefined ? Number(settings.minimumInstallLeadDays) : 4;
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + leadDays);
+    minDate.setHours(0,0,0,0);
+    const selectedDateObj = new Date(startDate + 'T00:00:00');
+    
+    if (selectedDateObj < minDate) {
+      console.warn(`[GHL CALENDAR SYNC] Warning: Selected date ${startDate} is less than ${leadDays} days notice.`);
+      syncDebug.noticeWarning = `Date ${startDate} is before required ${leadDays}-day lead time (${minDate.toISOString().split('T')[0]}).`;
     }
 
     // Ensure we have a GHL Contact ID
@@ -1551,6 +1592,19 @@ Crew Notes: ${notes || 'None'}`;
             daySuccess = true;
             newIds.push(newId);
             console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. ID: ${returnedId}`);
+
+            // Verify the created appointment exists if it's the first day
+            if (i === 0) {
+              try {
+                const verifyRes = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${newId}`, { headers });
+                const verifyStatus = verifyRes.status;
+                const verifyBody = await verifyRes.text();
+                console.log(`[GHL CALENDAR SYNC] Day 1 Verification: Status=${verifyStatus}, Body=${verifyBody}`);
+                syncDebug.day1Verification = { status: verifyStatus, body: verifyBody };
+              } catch (vErr) {
+                console.error(`[GHL CALENDAR SYNC] Day 1 Verification Failed:`, vErr);
+              }
+            }
           } else if (mode === 'UPDATE' && ghlEventId) {
              // Some GHL PUT responses might be empty or not contain the ID but still be 200 OK
              daySuccess = true;
