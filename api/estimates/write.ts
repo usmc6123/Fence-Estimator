@@ -1527,6 +1527,27 @@ export default async function handler(req: any, res: any) {
   try {
     const action = req.query?.action || req.body?.action;
 
+    // --- REAL BACKEND SCHEDULE ACTION RECEIVED ---
+    const scheduleActions = [
+      'schedule-job-start', 
+      'reschedule-job', 
+      'admin-update-schedule', 
+      'create-schedule-event', 
+      'update-schedule-event', 
+      'update-job-schedule',
+      'update-crew-install-schedule'
+    ];
+    if (scheduleActions.includes(action)) {
+      console.log("REAL BACKEND SCHEDULE ACTION RECEIVED");
+      console.log({
+        action,
+        traceId: req.body?.scheduleSyncTraceId || req.query?.scheduleSyncTraceId,
+        estimateId: req.body?.estimateId || req.query?.estimateId,
+        scheduleEventId: req.body?.id || req.body?.eventId || req.query?.eventId,
+        requestBody: req.body
+      });
+    }
+
     // --- SCHEDULER TRACE REPORT STEP LOGGING ---
     if (action === 'write-scheduler-trace') {
       try {

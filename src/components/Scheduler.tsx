@@ -311,6 +311,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const scheduleEstimate = async (estimateId: string, date: Date) => {
+    // TRIPWIRE C: Scheduler.tsx scheduleEstimate fired
+    console.log("TRIPWIRE C: Scheduler.tsx scheduleEstimate fired");
+    alert("TRIPWIRE C: Scheduler.tsx scheduleEstimate fired");
+
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
@@ -465,6 +469,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const scheduleJob = async (estimateId: string, date: Date) => {
+    // TRIPWIRE A: Scheduler.tsx scheduleJob fired
+    console.log("TRIPWIRE A: Scheduler.tsx scheduleJob fired");
+    alert("TRIPWIRE A: Scheduler.tsx scheduleJob fired");
+
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
@@ -569,6 +577,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const handleRescheduleJob = async (estimateId: string, newDateStr: string, newDuration: number) => {
+    // TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired
+    console.log("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
+    alert("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
+
     const estimate = savedEstimates.find(e => e.id === estimateId);
     const customerName = estimate?.customerName || 'N/A';
     const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
@@ -670,6 +682,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const handleRescheduleEstimate = async (eventId: string, newDateStr: string, newTimeStr: string) => {
+    // TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired
+    console.log("TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired");
+    alert("TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired");
+
     const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
       const token = localStorage.getItem('company_admin_token');
@@ -700,6 +716,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const addBlackout = async (date: Date) => {
+    // TRIPWIRE H: Scheduler.tsx addBlackout fired
+    console.log("TRIPWIRE H: Scheduler.tsx addBlackout fired");
+    alert("TRIPWIRE H: Scheduler.tsx addBlackout fired");
+
     if (!user) return;
     const dateKey = format(date, 'yyyy-MM-dd');
     const id = `blackout-${dateKey}-${user.uid}`;
@@ -739,6 +759,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const addBusy = async (date: Date, title: string) => {
+    // TRIPWIRE I: Scheduler.tsx addBusy fired
+    console.log("TRIPWIRE I: Scheduler.tsx addBusy fired");
+    alert("TRIPWIRE I: Scheduler.tsx addBusy fired");
+
     if (!user) return;
     const dateKey = format(date, 'yyyy-MM-dd');
     const id = `busy-${Date.now()}-${user.uid}`;
@@ -781,6 +805,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout' | 'Busy') => {
+    // TRIPWIRE J: Scheduler.tsx deleteEvent fired
+    console.log("TRIPWIRE J: Scheduler.tsx deleteEvent fired");
+    alert("TRIPWIRE J: Scheduler.tsx deleteEvent fired");
+
     const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         const token = localStorage.getItem('company_admin_token');

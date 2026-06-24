@@ -46,6 +46,10 @@ export default function LaborTakeOff({
   const [showDayDebug, setShowDayDebug] = useState<Record<string, boolean>>({});
 
   const handleAdminUpdateSchedule = async (e: React.FormEvent) => {
+    // TRIPWIRE F: LaborTakeOff.tsx handleAdminUpdateSchedule fired
+    console.log("TRIPWIRE F: LaborTakeOff.tsx handleAdminUpdateSchedule fired");
+    alert("TRIPWIRE F: LaborTakeOff.tsx handleAdminUpdateSchedule fired");
+
     e.preventDefault();
     if (!adminStartDate || !adminDuration || !adminCrew) {
       setScheduleError('Please fill out all required fields.');

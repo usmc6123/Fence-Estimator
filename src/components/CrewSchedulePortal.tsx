@@ -87,6 +87,10 @@ export default function CrewSchedulePortal() {
   };
 
   const handleUpdateSchedule = async (e: React.FormEvent) => {
+    // TRIPWIRE K: CrewSchedulePortal.tsx handleUpdateSchedule fired
+    console.log("TRIPWIRE K: CrewSchedulePortal.tsx handleUpdateSchedule fired");
+    alert("TRIPWIRE K: CrewSchedulePortal.tsx handleUpdateSchedule fired");
+
     e.preventDefault();
     if (!chosenStartDate) {
       setSubmitError('Please select a valid start date.');

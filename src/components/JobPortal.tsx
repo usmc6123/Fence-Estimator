@@ -157,6 +157,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   };
 
   const handleScheduleJobStart = async (e: React.FormEvent) => {
+    // TRIPWIRE D: JobPortal.tsx handleScheduleJobStart fired
+    console.log("TRIPWIRE D: JobPortal.tsx handleScheduleJobStart fired");
+    alert("TRIPWIRE D: JobPortal.tsx handleScheduleJobStart fired");
+
     e.preventDefault();
     if (!scheduleStartDate || !scheduleDuration) {
       setScheduleError('Please fill out all required fields.');
@@ -223,6 +227,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   };
 
   const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    // TRIPWIRE E: JobPortal.tsx handleRescheduleSubmit fired
+    console.log("TRIPWIRE E: JobPortal.tsx handleRescheduleSubmit fired");
+    alert("TRIPWIRE E: JobPortal.tsx handleRescheduleSubmit fired");
+
     e.preventDefault();
     if (!newScheduleStartDate || !newScheduleDuration) {
       setScheduleError('Please fill out all required fields.');
