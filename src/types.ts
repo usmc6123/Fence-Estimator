@@ -289,9 +289,11 @@ export interface Estimate {
       requestedEnd: string;
       requestedTimezone: string;
       matchFound: boolean;
+      startTimeMatches: boolean;
       availableSlotsCount?: number;
       matchedSlot?: any;
     };
+    requestBody?: string;
   }>;
   ghlCalendarLastSyncedAt?: string;
 

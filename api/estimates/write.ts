@@ -1577,11 +1577,17 @@ async function syncEstimateToGhlCalendar(
 
       if (matchedSlot) {
         slotMatchDebug.matchFound = true;
-        slotMatchDebug.startTimeMatches = true;
         slotMatchDebug.matchedSlot = matchedSlot;
+        
+        // USE EXACT SLOT FROM GHL
         finalStart = typeof matchedSlot === 'string' ? matchedSlot : (matchedSlot.startTime || targetStartIso);
-        // Use GHL's endTime if provided, otherwise our 3h calc
-        finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || targetEndIso);
+        
+        // Calculate 3h end time based on the exact start provided
+        const endD = new Date(finalStart);
+        endD.setHours(endD.getHours() + 3);
+        finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || endD.toISOString());
+        
+        slotMatchDebug.startTimeMatches = (finalStart === (typeof matchedSlot === 'string' ? matchedSlot : matchedSlot.startTime));
       }
 
       const dayTitle = days > 1 ? `${baseTitle} (Day ${i + 1}/${days})` : baseTitle;
@@ -1637,7 +1643,6 @@ Crew Notes: ${notes || 'None'}`;
           console.log(`[GHL CALENDAR SYNC] Day ${i+1} Appointment Request:
             URL: ${endpoint}
             Method: ${ghlEventId ? 'PUT' : 'POST'}
-            Headers: ${JSON.stringify({ ...headers, Authorization: 'Bearer ****' })}
             Body: ${JSON.stringify(bodyPayload)}
           `);
 
@@ -1677,7 +1682,8 @@ Crew Notes: ${notes || 'None'}`;
         resStatus,
         resBody: resText,
         traceId,
-        slotComparison: slotMatchDebug
+        slotComparison: slotMatchDebug,
+        requestBody: JSON.stringify(bodyPayload)
       });
     }
 

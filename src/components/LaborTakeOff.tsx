@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image, Send, Calendar, Clock, RefreshCw } from 'lucide-react';
+import { Printer, FileText, Hammer, Shield, ExternalLink, Sparkles, Loader2, Download, CheckCircle2, Image, Send, Calendar, Clock, RefreshCw, Terminal, XCircle } from 'lucide-react';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Employee } from '../types';
@@ -43,6 +43,7 @@ export default function LaborTakeOff({
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [scheduleSuccess, setScheduleSuccess] = useState('');
   const [scheduleError, setScheduleError] = useState('');
+  const [showDayDebug, setShowDayDebug] = useState<Record<string, boolean>>({});
 
   const handleAdminUpdateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -834,14 +835,82 @@ export default function LaborTakeOff({
                                 {day.slotComparison.matchFound ? "MATCHED" : "NO MATCH"}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-1 text-[7px] font-mono text-slate-400">
-                              <div>REQ START: {day.slotComparison.requestedStart?.split('T')[1].substring(0, 5)}</div>
-                              <div>REQ END: {day.slotComparison.requestedEnd?.split('T')[1].substring(0, 5)}</div>
-                              <div>TZ: {day.slotComparison.requestedTimezone}</div>
-                              <div>SLOTS: {day.slotComparison.availableSlotsCount || 0}</div>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[7px] font-mono text-slate-400">
+                              <div className="flex justify-between">
+                                <span>SLOT START:</span>
+                                <span className={cn(day.slotComparison.startTimeMatches ? "text-emerald-500" : "text-rose-500")}>
+                                  {day.slotComparison.matchedSlot ? (typeof day.slotComparison.matchedSlot === 'string' ? day.slotComparison.matchedSlot : day.slotComparison.matchedSlot.startTime).split('T')[1].substring(0, 5) : 'NONE'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>SLOTS AVAIL:</span>
+                                <span>{day.slotComparison.availableSlotsCount || 0}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>REQ START:</span>
+                                <span>{day.slotComparison.requestedStart?.split('T')[1].substring(0, 5)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>TIMEZONE:</span>
+                                <span>{day.slotComparison.requestedTimezone}</span>
+                              </div>
                             </div>
                           </div>
                         )}
+
+                        {/* Developer Debug Panel */}
+                        <div className="mt-2">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const key = `debug-${day.dayNumber}`;
+                              const newState = { ...showDayDebug, [key]: !showDayDebug[key] };
+                              setShowDayDebug(newState);
+                            }}
+                            className="flex items-center gap-1 text-[7px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors"
+                          >
+                            <Terminal size={8} />
+                            {showDayDebug[`debug-${day.dayNumber}`] ? 'Hide Developer Debug' : 'Show Developer Debug'}
+                          </button>
+
+                          {showDayDebug[`debug-${day.dayNumber}`] && (
+                            <div className="mt-1.5 p-2 bg-slate-900 rounded-lg border border-slate-800 space-y-2 overflow-hidden shadow-xl">
+                              <div>
+                                <div className="text-[7px] font-black uppercase text-emerald-400 tracking-wider mb-1">Appointment Request</div>
+                                <div className="space-y-1 font-mono text-[7px]">
+                                  <div className="flex gap-2">
+                                    <span className="text-slate-500 min-w-[50px]">Method:</span>
+                                    <span className="text-emerald-400 font-bold">{day.mode === 'UPDATE' ? 'PUT' : 'POST'}</span>
+                                  </div>
+                                  <div className="mt-1 text-slate-600 font-bold uppercase text-[6px]">Request Body</div>
+                                  <pre className="p-1.5 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[6px] overflow-x-auto max-h-24">
+                                    {day.requestBody ? JSON.stringify(JSON.parse(day.requestBody), null, 2) : 'No request body logged'}
+                                  </pre>
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="text-[7px] font-black uppercase text-rose-400 tracking-wider mb-1">GHL Response</div>
+                                <div className="space-y-1 font-mono text-[7px]">
+                                  <div className="flex gap-2">
+                                    <span className="text-slate-500 min-w-[50px]">Status:</span>
+                                    <span className={cn(day.status === 'synced' ? "text-emerald-400" : "text-rose-400")}>{day.resStatus}</span>
+                                  </div>
+                                  {day.traceId && (
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 min-w-[50px]">Trace ID:</span>
+                                      <span className="text-slate-400">{day.traceId}</span>
+                                    </div>
+                                  )}
+                                  <div className="mt-1 text-slate-600 font-bold uppercase text-[6px]">Response Body</div>
+                                  <pre className="p-1.5 bg-slate-950 rounded border border-slate-800 text-slate-300 text-[6px] overflow-x-auto max-h-24 whitespace-pre-wrap">
+                                    {day.resBody || 'No response body logged'}
+                                  </pre>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                         {day.error && (
                           <div className="mt-1 p-1 bg-rose-50/50 rounded text-[8px] text-rose-500 font-medium border border-rose-100/50 break-all">
                             Error: {day.error}
