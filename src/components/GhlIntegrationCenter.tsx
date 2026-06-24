@@ -113,15 +113,7 @@ export default function GhlIntegrationCenter({
     setTestToolResult(null);
     try {
       const payload: any = { action: 'ghl-test-tool', testType };
-      if (testType === 'force-resync-job') {
-        if (!forceResyncId.trim()) {
-          alert('Please enter a valid Estimate ID to force resync.');
-          setTestToolRunning(null);
-          return;
-        }
-        payload.estimateId = forceResyncId.trim();
-      }
-
+      
       const response = await fetch('/api/settings', {
         method: 'POST',
         headers: {
@@ -140,33 +132,6 @@ export default function GhlIntegrationCenter({
       setTestToolResult({ testType, success: false, error: err.message });
     } finally {
       setTestToolRunning(null);
-    }
-  };
-
-  // Verify Scheduler Execution Path
-  const runSchedulerPathVerification = async () => {
-    setVerifyingPath(true);
-    setVerificationResult(null);
-    try {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
-        },
-        body: JSON.stringify({ action: 'ghl-verify-scheduler-path' })
-      });
-      const data = await response.json();
-      if (data.success) {
-        setVerificationResult(data);
-      } else {
-        setVerificationResult({ success: false, error: data.error || 'Failed to verify path' });
-      }
-      await fetchActivityLogs();
-    } catch (err: any) {
-      setVerificationResult({ success: false, error: err.message });
-    } finally {
-      setVerifyingPath(false);
     }
   };
 
@@ -385,84 +350,6 @@ export default function GhlIntegrationCenter({
               )}
             </div>
 
-            {/* SECTION 5: Scheduler Execution Verification */}
-            <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Cpu className="text-indigo-600" size={18} />
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">Scheduler Path Verification</h4>
-              </div>
-
-              <p className="text-[10px] text-slate-500 leading-relaxed">
-                Verify if the Job Scheduler frontend save action successfully executes the standard shared GHL helper function in the backend path.
-              </p>
-
-              <button
-                type="button"
-                onClick={runSchedulerPathVerification}
-                disabled={verifyingPath}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-              >
-                {verifyingPath ? <RefreshCw className="animate-spin" size={14} /> : <Zap size={14} />}
-                {verifyingPath ? 'Verifying Path...' : 'Verify Scheduler Path'}
-              </button>
-
-              {verificationResult && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-[10px] animate-fade-in">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Scheduler Save Clicked:</span>
-                    <span className="font-bold text-emerald-600">YES</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Backend Action Called:</span>
-                    <span className="font-bold text-emerald-600">YES</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Shared GHL Helper Called:</span>
-                    <span className="font-bold text-emerald-600">YES</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <span className="font-extrabold">Helper Name:</span>
-                    <span className="font-bold font-mono text-indigo-600">{verificationResult.schedulerHelper}</span>
-                  </div>
-
-                  <div className="pt-1.5">
-                    <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400">Path Comparison</span>
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      <div className="p-2 bg-white rounded-lg border border-slate-100">
-                        <p className="text-[8px] font-extrabold uppercase text-slate-400">Scheduler Helper</p>
-                        <p className="font-mono text-[9px] font-bold text-slate-800 mt-0.5">{verificationResult.schedulerHelper}</p>
-                      </div>
-                      <div className="p-2 bg-white rounded-lg border border-slate-100">
-                        <p className="text-[8px] font-extrabold uppercase text-slate-400">Diagnostic Helper</p>
-                        <p className="font-mono text-[9px] font-bold text-slate-800 mt-0.5">{verificationResult.diagnosticHelper}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-1 border-t border-slate-100 text-[10px]">
-                    <span className="font-bold">Same Helper Function?</span>
-                    <span className="font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full text-[9px]">
-                      YES
-                    </span>
-                  </div>
-
-                  {isDevMode && (
-                    <div className="bg-slate-900 text-indigo-300 p-2.5 rounded-lg font-mono text-[8px] space-y-1.5 max-h-[120px] overflow-y-auto">
-                      <p className="text-white font-bold border-b border-indigo-900 pb-1 uppercase">Divergence Trace:</p>
-                      <p className="text-slate-400">// Diagnostic Path Call Stack:</p>
-                      {verificationResult.diagnosticCallStack?.map((s: string, idx: number) => (
-                        <p key={idx} className="pl-2">► {s}</p>
-                      ))}
-                      <p className="text-slate-400 mt-1">// Scheduler Path Call Stack:</p>
-                      {verificationResult.schedulerCallStack?.map((s: string, idx: number) => (
-                        <p key={idx} className="pl-2">► {s}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* SECTION 6: GHL Test Tools */}
             <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -476,9 +363,6 @@ export default function GhlIntegrationCenter({
                   { id: 'verify-location', label: 'Verify Location Context', desc: 'Queries location metadata to test scopes' },
                   { id: 'verify-calendar', label: 'Verify Calendar Access', desc: 'Validates configured installer calendar' },
                   { id: 'check-free-slots', label: 'Check Calendar Free Slots', desc: 'Queries 7-day windows from LeadConnector' },
-                  { id: 'create-test-appointment', label: 'Create Test Appointment', desc: 'Creates temporary diagnostic booking' },
-                  { id: 'update-test-appointment', label: 'Update Test Appointment', desc: 'Tests updating a booked appointment' },
-                  { id: 'delete-test-appointment', label: 'Delete Test Appointment', desc: 'Cancels the test diagnostic appointment' },
                   { id: 'retry-last-sync', label: 'Retry Last Failed Sync', desc: 'Pulls the last failed attempt and retries' }
                 ].map((tool) => (
                   <button

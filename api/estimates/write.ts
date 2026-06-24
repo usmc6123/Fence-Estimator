@@ -1587,16 +1587,6 @@ export default async function handler(req: any, res: any) {
       'update-crew-install-schedule'
     ];
     if (scheduleActions.includes(action)) {
-      console.log("REAL BACKEND SCHEDULE ACTION RECEIVED");
-      // CHECKPOINT 10: Request received
-      console.log("CHECKPOINT 10: Request received", {
-        action,
-        traceId: req.body?.scheduleSyncTraceId || req.query?.scheduleSyncTraceId,
-        estimateId: req.body?.estimateId || req.query?.estimateId,
-        scheduleEventId: req.body?.id || req.body?.eventId || req.query?.eventId,
-        requestBody: req.body
-      });
-
       // Availability Validation
       const vStartDate = req.body?.startDate || req.query?.startDate;
       const vDuration = Number(req.body?.duration || req.query?.duration || 1);
@@ -7154,9 +7144,7 @@ Lone Star Fence Works`;
 
         if (action === 'reschedule-job' || ((action === 'update-schedule-event' || action === 'create-schedule-event') && estimateId)) {
           if (action === 'reschedule-job') {
-            console.log("REAL JOB SCHEDULER BACKEND ACTION RECEIVED");
-            // CHECKPOINT 11: Matched backend action
-            console.log("CHECKPOINT 11: Matched backend action (reschedule-job)");
+            // No debug logs
           }
           // If duration is missing, default to 1 (common for estimate appointments)
           const finalDuration = duration || 1;
@@ -7269,8 +7257,6 @@ Lone Star Fence Works`;
             });
 
             // 3. Call shared GHL sync helper
-            // CHECKPOINT 12: Calling GHL helper
-            console.log("CHECKPOINT 12: Calling GHL helper", { estimateId, startDate, finalDuration, scheduleSyncTraceId });
             const calSync = await syncEstimateToGhlCalendar(
               estimateId,
               estimateData,
@@ -7281,9 +7267,6 @@ Lone Star Fence Works`;
               scheduleSyncTraceId,
               action
             );
-            // CHECKPOINT 13: Returned from helper
-            console.log("CHECKPOINT 13: Returned from helper", { calSync });
-
             // Final sync log
             await logGhlActivity({
               traceId: scheduleSyncTraceId,

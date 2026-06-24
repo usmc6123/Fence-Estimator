@@ -343,10 +343,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const scheduleEstimate = async (estimateId: string, date: Date) => {
-    // TRIPWIRE C: Scheduler.tsx scheduleEstimate fired
-    console.log("TRIPWIRE C: Scheduler.tsx scheduleEstimate fired");
-    alert("TRIPWIRE C: Scheduler.tsx scheduleEstimate fired");
-
     const estimate = savedEstimates.find(e => e.id === estimateId);
     if (!estimate || !user) return;
 
@@ -502,18 +498,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
   const scheduleJob = async (estimateId: string, date: Date) => {
     // Initialize trace array
-    if (!(window as any).schedulerTrace) (window as any).schedulerTrace = [];
-    const addTrace = (checkpoint: number, label: string, data: any) => {
-      const entry = { checkpoint, label, time: new Date().toISOString(), data };
-      console.log(`[CHECKPOINT ${checkpoint}] ${label}`, data);
-      alert(`CHECKPOINT ${checkpoint}: ${label}`);
-      (window as any).schedulerTrace.push(entry);
-    };
-
     try {
-      // CHECKPOINT 1: Entered scheduleJob()
-      addTrace(1, "Entered scheduleJob()", { estimateId, date: date.toISOString() });
-
       const availability = isDateUnavailable(date, selectedDuration);
       if (availability.isUnavailable) {
         alert(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
@@ -522,12 +507,8 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
       const estimate = savedEstimates.find(e => e.id === estimateId);
       if (!estimate || !user) {
-        addTrace(1.1, "Early exit: Missing estimate or user", { hasEstimate: !!estimate, hasUser: !!user });
         return;
       }
-
-      // CHECKPOINT 2: Estimate selected
-      addTrace(2, "Estimate selected", { estimateId: estimate.id, customer: estimate.customerName });
 
       const startDateStr = format(date, 'yyyy-MM-dd');
       const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
@@ -535,19 +516,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       // Check for Job Blackouts
       const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(startDateStr));
       if (isBlackedOut) {
-          addTrace(2.1, "Exit: Blackout detected", { startDateStr });
           alert("This day is a designated blackout for installs.");
           return;
       }
 
       const duration = selectedDuration; 
-      // CHECKPOINT 3: Duration calculated
-      addTrace(3, "Duration calculated", { duration });
-
       const endDate = addDays(date, duration - 1);
       const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-      // CHECKPOINT 4: Payload created
+      // Payload created
       const payload = {
         action: 'reschedule-job',
         estimateId: estimateId,
@@ -557,10 +534,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         notes: '',
         scheduleSyncTraceId: traceId
       };
-      addTrace(4, "Payload created", { payload });
-
-      // CHECKPOINT 5: Calling /api/estimates/write
-      addTrace(5, "Calling /api/estimates/write", { endpoint: '/api/estimates/write', action: payload.action });
 
       await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 1, 'success', {
         installStartDate: startDateStr,
@@ -576,9 +549,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       try {
         const token = localStorage.getItem('company_admin_token');
         
-        // CHECKPOINT 6: Fetch request sent
-        addTrace(6, "Fetch request sent", { url: '/api/estimates/write', method: 'POST' });
-
         await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'success', {
           endpoint: '/api/estimates/write',
           method: 'POST',
@@ -600,9 +570,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         
         const resText = await response.clone().text();
 
-        // CHECKPOINT 7: Fetch response received
-        addTrace(7, "Fetch response received", { status: response.status, body: resText });
-
         await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, response.ok ? 'success' : 'failed', {
           endpoint: '/api/estimates/write',
           method: 'POST',
@@ -611,13 +578,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         });
 
         if (!response.ok) {
-          addTrace(7.1, "Error: Fetch response not OK", { status: response.status, body: resText });
           throw new Error(resText);
         }
 
         const resData = JSON.parse(resText);
-        // CHECKPOINT 8: Response parsed
-        addTrace(8, "Response parsed", { resData });
 
         // EXPOSE GHL FAILURE DETAILS IF PRESENT
         if (resData.ghlResult && !resData.ghlResult.success) {
@@ -627,8 +591,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           const errorMsg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Unknown error');
           const errorBody = firstError?.responseBody ? JSON.stringify(firstError.responseBody) : 'N/A';
           
-          console.warn('GHL Sync Failure Details (Checkpoint 7/8):', { failedStep, errorMsg, errorBody });
-          alert(`GHL SYNC FAILURE: \nStep: ${failedStep}\nError: ${errorMsg}\nResponse: ${errorBody}`);
+          console.error('GHL Sync Failure Details:', { failedStep, errorMsg, errorBody });
         }
 
         setShowEventModal(false);
@@ -655,21 +618,14 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
             }
         }
 
-        // CHECKPOINT 9: Finished scheduleJob()
-        addTrace(9, "Finished scheduleJob()", { success: true });
-
       } catch (innerErr: any) {
-        addTrace(99, "Exception in fetch block", { message: innerErr.message, stack: innerErr.stack });
         console.error('Fetch error:', innerErr);
         await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'failed', {
           error: innerErr.message || String(innerErr)
         });
-        alert(`SCHEDULER ERROR: ${innerErr.message}`);
       }
     } catch (outerErr: any) {
-      addTrace(100, "Exception in outer block", { message: outerErr.message, stack: outerErr.stack });
       console.error('Outer error:', outerErr);
-      alert(`SCHEDULER CRITICAL ERROR: ${outerErr.message}`);
     }
   };
 
@@ -679,9 +635,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       alert(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
       return;
     }
-    // TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired
-    console.log("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
-    alert("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
 
     const estimate = savedEstimates.find(e => e.id === estimateId);
     const customerName = estimate?.customerName || 'N/A';
@@ -697,18 +650,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           alert("This day is a designated blackout for installs.");
           return;
       }
-
-      // STEP 1: Clicked Save Schedule
-      console.log("REAL JOB SCHEDULER SAVE FIRED");
-      console.log({
-        scheduleSyncTraceId: traceId,
-        estimateId,
-        selectedDate: newDateStr,
-        duration: newDuration,
-        crew: estimate?.assignedCrew || 'Crew',
-        endpoint: '/api/estimates/write',
-        action: 'reschedule-job'
-      });
 
       await traceSchedulerStep(traceId, estimateId, customerName, 1, 'success', {
         installStartDate: newDateStr,
@@ -776,8 +717,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         const errorMsg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Unknown error');
         const errorBody = firstError?.responseBody ? JSON.stringify(firstError.responseBody) : 'N/A';
         
-        console.warn('GHL Sync Failure Details (Reschedule):', { failedStep, errorMsg, errorBody });
-        alert(`GHL SYNC FAILURE (Reschedule): \nStep: ${failedStep}\nError: ${errorMsg}\nResponse: ${errorBody}`);
+        console.error('GHL Sync Failure Details:', { failedStep, errorMsg, errorBody });
       }
 
       setIsRescheduling(false);
@@ -798,10 +738,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const handleRescheduleEstimate = async (eventId: string, newDateStr: string, newTimeStr: string) => {
-    // TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired
-    console.log("TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired");
-    alert("TRIPWIRE G: Scheduler.tsx handleRescheduleEstimate fired");
-
     const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     try {
       const token = localStorage.getItem('company_admin_token');
@@ -832,10 +768,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const addBlackout = async (date: Date) => {
-    // TRIPWIRE H: Scheduler.tsx addBlackout fired
-    console.log("TRIPWIRE H: Scheduler.tsx addBlackout fired");
-    alert("TRIPWIRE H: Scheduler.tsx addBlackout fired");
-
     if (!user) return;
     const dateKey = format(date, 'yyyy-MM-dd');
     const id = `blackout-${dateKey}-${user.uid}`;
@@ -875,10 +807,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const addBusy = async (date: Date, title: string) => {
-    // TRIPWIRE I: Scheduler.tsx addBusy fired
-    console.log("TRIPWIRE I: Scheduler.tsx addBusy fired");
-    alert("TRIPWIRE I: Scheduler.tsx addBusy fired");
-
     if (!user) return;
     const dateKey = format(date, 'yyyy-MM-dd');
     const id = `busy-${Date.now()}-${user.uid}`;
@@ -921,10 +849,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const deleteEvent = async (id: string, type: 'Job' | 'Estimate' | 'Blackout' | 'Busy') => {
-    // TRIPWIRE J: Scheduler.tsx deleteEvent fired
-    console.log("TRIPWIRE J: Scheduler.tsx deleteEvent fired");
-    alert("TRIPWIRE J: Scheduler.tsx deleteEvent fired");
-
     const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     if (type === 'Blackout' || type === 'Estimate' || type === 'Busy') {
         const token = localStorage.getItem('company_admin_token');
