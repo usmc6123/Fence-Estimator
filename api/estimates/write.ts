@@ -3,7 +3,6 @@ import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar } from '../lib/ghlCalendarSync';
-import { getEstimateFinalPrice } from '../../src/lib/utils';
 import { randomBytes } from 'crypto';
 
 function generateSecureToken(): string {
