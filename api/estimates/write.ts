@@ -1372,7 +1372,22 @@ async function syncEstimateToGhlCalendar(
   token: string
 ) {
   const actionName = 'syncEstimateToGhlCalendar';
-  console.log(`[GHL CALENDAR SYNC] Start: action=${actionName}, estimateId=${estimateId}, startDate=${startDate}, duration=${duration}`);
+  
+  let days = 1;
+  const durationStr = String(duration);
+  if (durationStr.includes('2')) days = 2;
+  else if (durationStr.includes('3')) days = 3;
+  else if (durationStr.includes('4')) days = 4;
+  else if (durationStr.includes('5')) days = 5;
+  else {
+    const parsed = parseInt(durationStr);
+    if (!isNaN(parsed)) days = parsed;
+  }
+
+  console.log(`[GHL SYNC HELPER] syncEstimateToGhlCalendar called
+    estimateId: ${estimateId}
+    number of days to sync: ${days}
+  `);
   
   const nowIso = new Date().toISOString();
   let syncDebug: any = {
@@ -1396,7 +1411,8 @@ async function syncEstimateToGhlCalendar(
       console.warn(`[GHL CALENDAR SYNC] Aborting: Missing apiKey or locationId`);
       const errorMsg = !apiKey ? 'Missing GHL API Key' : 'Missing GHL Location ID';
       
-      await db.collection('estimates').doc(estimateId).set({
+      const { docRef: targetDocRef } = await getEstimateDocRef(estimateId);
+      await targetDocRef.set({
         ghlCalendarSyncStatus: 'failed',
         ghlCalendarSyncError: errorMsg,
         ghlCalendarLastSyncedAt: nowIso
@@ -1415,7 +1431,6 @@ async function syncEstimateToGhlCalendar(
     let availableSlots: any[] = [];
     const slotTimezone = 'America/Chicago';
     try {
-      // Validation
       if (!calendarId || calendarId === 'free-slots') {
         throw new Error(`Invalid Calendar ID: ${calendarId}`);
       }
@@ -1464,7 +1479,18 @@ async function syncEstimateToGhlCalendar(
       if (slotRes.ok) {
         let slotData: any = {};
         try { slotData = JSON.parse(slotText); } catch(e) { slotData = {}; }
-        availableSlots = slotData.slots || slotData[startDate] || [];
+        
+        const extractedSlots: any[] = [];
+        if (slotData.slots && Array.isArray(slotData.slots)) {
+          extractedSlots.push(...slotData.slots);
+        } else {
+          Object.keys(slotData).forEach(dateKey => {
+            if (slotData[dateKey]?.slots && Array.isArray(slotData[dateKey].slots)) {
+              extractedSlots.push(...slotData[dateKey].slots);
+            }
+          });
+        }
+        availableSlots = extractedSlots;
         syncDebug.availableSlots = availableSlots;
         console.log(`[GHL CALENDAR SYNC] Slots found: ${availableSlots.length}`);
       } else {
@@ -1502,28 +1528,23 @@ async function syncEstimateToGhlCalendar(
       }
     }
 
-    let days = 1;
-    const durationStr = String(duration);
-    if (durationStr.includes('2')) days = 2;
-    else if (durationStr.includes('3')) days = 3;
-    else if (durationStr.includes('4')) days = 4;
-    else if (durationStr.includes('5')) days = 5;
-    else {
-      const parsed = parseInt(durationStr);
-      if (!isNaN(parsed)) days = parsed;
+    // Existing Event IDs (comma-separated string or array)
+    let existingIds: string[] = [];
+    if (Array.isArray(estimateData.ghlCalendarEventIds)) {
+      existingIds = estimateData.ghlCalendarEventIds.filter(Boolean);
+    } else if (estimateData.ghlCalendarEventId) {
+      existingIds = String(estimateData.ghlCalendarEventId).split(',').filter(Boolean);
     }
 
-    // Existing Event IDs (comma-separated string)
-    const existingIdsStr = estimateData.ghlCalendarEventId || '';
-    const existingIds = existingIdsStr.split(',').filter(Boolean);
-
     const portalLink = `https://ais-dev-fofnlg6ga7ou55bw54gntq-35743419833.us-east5.run.app/?portal=job-portal&estimateId=${estimateId}&token=${token}`;
-    const baseTitle = `Install - ${estimateData.customerName || 'Customer'} - ${estimateData.estimateNumber || ''}`;
     
     // Check if 7:00 AM slot is matched
     const requestedSlotStr = `${startDate}T07:00:00`; 
     syncDebug.requestedSlot = requestedSlotStr;
-    const slotMatched = availableSlots.some(s => String(s).includes('07:00') || String(s.startTime || '').includes('07:00'));
+    const slotMatched = availableSlots.some(s => {
+      const sStr = typeof s === 'string' ? s : (s.startTime || '');
+      return sStr.includes('07:00') || sStr.includes('07:00:00');
+    });
     syncDebug.slotMatched = slotMatched;
 
     // Loop for each day and create/update appointment
@@ -1549,7 +1570,7 @@ async function syncEstimateToGhlCalendar(
         matchFound: false,
         startTimeMatches: false,
         endTimeValid: true,
-        timezoneMatches: true // Hardcoded comparison for now
+        timezoneMatches: true
       };
 
       try {
@@ -1560,17 +1581,29 @@ async function syncEstimateToGhlCalendar(
         const slotText = await slotRes.text();
         if (slotRes.ok) {
           const slotData = JSON.parse(slotText);
-          // GHL Response shape: { "2026-06-29": { "slots": [...] } }
-          daySlots = slotData.slots || (slotData[targetDateStr]?.slots) || slotData[targetDateStr] || [];
+          
+          const daySlotsExtracted: any[] = [];
+          if (slotData.slots && Array.isArray(slotData.slots)) {
+            daySlotsExtracted.push(...slotData.slots);
+          } else {
+            Object.keys(slotData).forEach(dateKey => {
+              if (slotData[dateKey]?.slots && Array.isArray(slotData[dateKey].slots)) {
+                daySlotsExtracted.push(...slotData[dateKey].slots);
+              }
+            });
+          }
+          daySlots = daySlotsExtracted;
           slotMatchDebug.availableSlotsCount = daySlots.length;
         }
       } catch (e) {}
 
+      // Log free slots returned for this day
+      console.log(`[GHL CALENDAR SYNC] Day ${i+1}: free slots returned for ${targetDateStr}: ${JSON.stringify(daySlots)}`);
+
       // 2. Compare and Find Matching Slot
       const matchedSlot = daySlots.find(s => {
         const sStart = typeof s === 'string' ? s : (s.startTime || '');
-        const sStartIso = new Date(sStart).toISOString();
-        return sStartIso === targetStartIso || sStartIso.includes('T07:00:00');
+        return sStart.startsWith(`${targetDateStr}T07:00:00`) || sStart.includes(`${targetDateStr}T07:00:00`);
       });
 
       let finalStart = targetStartIso;
@@ -1588,32 +1621,31 @@ async function syncEstimateToGhlCalendar(
         endD.setHours(endD.getHours() + 3);
         finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || endD.toISOString());
         
-        // Compare what we WANTED vs what we GOT from GHL
-        // Using a loose check for the 7:00:00 part if needed, but the user wants exact match verification
-        slotMatchDebug.startTimeMatches = (finalStart === targetStartIso);
-        
-        // If it's not an exact string match but it IS the same time (e.g. timezone notation diff), we might still want to proceed
-        // However, the user said "If NO, do not send... and display mismatch"
-        // Let's check if the time component is the same at least
-        const finalStartD = new Date(finalStart);
-        const targetStartD = new Date(targetStartIso);
-        if (finalStartD.getTime() === targetStartD.getTime()) {
-           // It's the same moment!
-           slotMatchDebug.startTimeMatches = true;
-        }
+        slotMatchDebug.startTimeMatches = true;
       }
 
-      const dayTitle = days > 1 ? `Install - ${estimateData.customerName || 'N/A'} - ${estimateData.customerCity || estimateData.city || ''} (Day ${i + 1}/${days})` : `Install - ${estimateData.customerName || 'N/A'} - ${estimateData.customerCity || estimateData.city || ''}`;
-      
+      console.log(`[GHL CALENDAR SYNC] Day ${i+1} selection: matchedSlot=${JSON.stringify(matchedSlot)}, startTimeMatches=${slotMatchDebug.startTimeMatches}`);
+
+      const customerName = estimateData.customerName || 'N/A';
+      const customerCity = estimateData.customerCity || estimateData.city || 'N/A';
+      const customerAddress = estimateData.customerAddress || estimateData.address || 'N/A';
+      const fenceType = estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A';
+      const linearFeet = estimateData.linearFeet || 'N/A';
+      const assignedCrew = estimateData.assignedCrew || 'N/A';
+      const estimateNumber = estimateData.estimateNumber || 'N/A';
       const adminEstimateLink = portalLink.replace('/portal/', '/estimate/');
+
+      const dayTitle = days > 1 
+        ? `Install - ${customerName} - ${customerCity} (Day ${i + 1}/${days})` 
+        : `Install - ${customerName} - ${customerCity}`;
       
-      const appointmentNotes = `Customer: ${estimateData.customerName || 'N/A'}
-Address: ${estimateData.customerAddress || estimateData.address || 'N/A'}
-Fence Type: ${estimateData.fenceMaterial || estimateData.woodType || estimateData.fenceType || 'N/A'}
-Linear Feet: ${estimateData.linearFeet || 'N/A'}
-Crew: ${estimateData.assignedCrew || 'N/A'}
+      const appointmentNotes = `Customer: ${customerName}
+Address: ${customerAddress}
+Fence Type: ${fenceType}
+Linear Feet: ${linearFeet}
+Crew: ${assignedCrew}
 Duration: ${days} ${days > 1 ? 'Days' : 'Day'}
-Estimate #: ${estimateData.estimateNumber || 'N/A'}
+Estimate #: ${estimateNumber}
 Job Portal: ${portalLink}
 Admin Estimate: ${adminEstimateLink}`;
 
@@ -1642,15 +1674,13 @@ Admin Estimate: ${adminEstimateLink}`;
       let traceId = '';
 
       // Strict Match Verification Before Sending (As requested)
-      const isExactMatch = slotMatchDebug.startTimeMatches;
+      const isExactMatch = slotMatchDebug.matchFound;
 
       if (!slotMatchDebug.matchFound && !ghlEventId) {
         dayError = `Comparison Failed: No available 7:00 AM slot found on ${targetDateStr}.`;
         console.error(`[GHL CALENDAR SYNC] Day ${i+1} Aborted: ${dayError}`);
-      } else if (!isExactMatch && !ghlEventId) {
-        dayError = `Match Verification Failed: Requested ${targetStartIso} but GHL Slot was ${finalStart}. Skipping creation.`;
-        console.error(`[GHL CALENDAR SYNC] Day ${i+1} Aborted: ${dayError}`);
       } else {
+        console.log(`[GHL CALENDAR SYNC] Day ${i+1} Appointment Create/Update Attempted: Mode=${mode}, ID=${ghlEventId || 'NEW'}, startTime=${finalStart}, endTime=${finalEnd}`);
         try {
           const res = await fetch(endpoint, {
             method: ghlEventId ? 'PUT' : 'POST',
@@ -1661,11 +1691,7 @@ Admin Estimate: ${adminEstimateLink}`;
           resText = await res.text();
           traceId = res.headers.get('x-datadog-trace-id') || res.headers.get('trace-id') || '';
           
-          console.log(`[GHL CALENDAR SYNC] Day ${i+1} Appointment Request:
-            URL: ${endpoint}
-            Method: ${ghlEventId ? 'PUT' : 'POST'}
-            Body: ${JSON.stringify(bodyPayload)}
-          `);
+          console.log(`[GHL CALENDAR SYNC] Day ${i+1} Response status: ${resStatus}, Body: ${resText}`);
 
           if (res.ok) {
             let resData: any = {};
@@ -1675,15 +1701,18 @@ Admin Estimate: ${adminEstimateLink}`;
               returnedId = newId;
               daySuccess = true;
               newIds.push(newId);
-              console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. ID: ${returnedId}`);
+              console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. Appointment ID saved for each day: ID=${returnedId}`);
             } else if (mode === 'UPDATE' && ghlEventId) {
               daySuccess = true;
               newIds.push(ghlEventId);
+              console.log(`[GHL CALENDAR SYNC] Day ${i+1} Success. (Updated existing ID: ${ghlEventId})`);
             } else {
               dayError = 'Success response but no ID returned';
+              console.error(`[GHL CALENDAR SYNC] Day ${i+1} Failed: ${dayError}`);
             }
           } else {
             dayError = `HTTP ${resStatus}: ${resText}`;
+            console.error(`[GHL CALENDAR SYNC] Day ${i+1} Failed: ${dayError}`);
           }
         } catch (err: any) {
           dayError = err.message || String(err);
@@ -1724,7 +1753,8 @@ Admin Estimate: ${adminEstimateLink}`;
     const overallSuccess = newIds.length > 0;
     const partialSync = overallSuccess && newIds.length < days;
 
-    await db.collection('estimates').doc(estimateId).set({
+    const { docRef: targetDocRef } = await getEstimateDocRef(estimateId);
+    await targetDocRef.set({
       ghlCalendarEventId: finalIdsStr, // Backwards compatibility
       ghlCalendarEventIds: newIds, // Array as requested
       ghlCalendarSyncDays: syncDaysResults,
@@ -1734,8 +1764,21 @@ Admin Estimate: ${adminEstimateLink}`;
       ghlCalendarSyncDebug: syncDebug
     }, { merge: true });
 
+    // Also update schedule_events with synced GHL event IDs
+    try {
+      const scheduleEventId = "install-" + estimateId;
+      await db.collection('schedule_events').doc(scheduleEventId).set({
+        ghlCalendarEventId: finalIdsStr,
+        ghlCalendarEventIds: newIds,
+        ghlCalendarSyncStatus: overallSuccess ? 'synced' : 'failed'
+      }, { merge: true });
+      console.log(`[GHL CALENDAR SYNC] Saved GHL IDs to schedule_events for ${scheduleEventId}`);
+    } catch (e) {
+      console.error('Failed updating schedule_events with GHL IDs:', e);
+    }
+
     if (overallSuccess) {
-      return { success: true, ghlCalendarEventId: finalIdsStr, ghlContactId };
+      return { success: true, ghlCalendarEventId: finalIdsStr, ghlCalendarEventIds: newIds, ghlContactId };
     } else {
       return { success: false, error: `GHL API Sync Failed. See sync details in admin.` };
     }
@@ -5411,11 +5454,22 @@ export default async function handler(req: any, res: any) {
 
         const nowIso = new Date().toISOString();
 
+        const scheduleEventId = "install-" + estimateId;
+        console.log(`[REAL SCHEDULE ACTION] real schedule action called: schedule-job-start
+          estimateId: ${estimateId}
+          scheduleEventId: ${scheduleEventId}
+          selected install start date: ${startDate}
+          selected install days/duration: ${duration}
+          calling GHL sync yes/no: YES
+          GHL sync helper name: syncEstimateToGhlCalendar
+        `);
+
         // Sync to GHL Calendar
         const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, token);
         const syncSuccess = calSync.success;
         const syncErrorMsg = calSync.error || '';
         const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlCalendarEventIds = calSync.ghlCalendarEventIds || (ghlCalendarEventId ? [ghlCalendarEventId] : []);
         const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
@@ -5455,6 +5509,7 @@ export default async function handler(req: any, res: any) {
 
         if (syncSuccess && ghlCalendarEventId) {
           updates.ghlCalendarEventId = ghlCalendarEventId;
+          updates.ghlCalendarEventIds = ghlCalendarEventIds;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
@@ -5538,11 +5593,22 @@ export default async function handler(req: any, res: any) {
         const estimateData = snap.data() || {};
         const nowIso = new Date().toISOString();
 
+        const scheduleEventId = "install-" + estimateId;
+        console.log(`[REAL SCHEDULE ACTION] real schedule action called: admin-update-schedule
+          estimateId: ${estimateId}
+          scheduleEventId: ${scheduleEventId}
+          selected install start date: ${startDate}
+          selected install days/duration: ${duration}
+          calling GHL sync yes/no: YES
+          GHL sync helper name: syncEstimateToGhlCalendar
+        `);
+
         // Sync to GHL Calendar
         const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, estimateData.laborSnapshotToken || '');
         const syncSuccess = calSync.success;
         const syncErrorMsg = calSync.error || '';
         const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlCalendarEventIds = calSync.ghlCalendarEventIds || (ghlCalendarEventId ? [ghlCalendarEventId] : []);
         const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
@@ -5583,6 +5649,7 @@ export default async function handler(req: any, res: any) {
 
         if (syncSuccess && ghlCalendarEventId) {
           updates.ghlCalendarEventId = ghlCalendarEventId;
+          updates.ghlCalendarEventIds = ghlCalendarEventIds;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
@@ -5656,11 +5723,22 @@ export default async function handler(req: any, res: any) {
 
         const nowIso = new Date().toISOString();
 
+        const scheduleEventId = "install-" + estimateId;
+        console.log(`[REAL SCHEDULE ACTION] real schedule action called: resync-ghl-calendar
+          estimateId: ${estimateId}
+          scheduleEventId: ${scheduleEventId}
+          selected install start date: ${startDate}
+          selected install days/duration: ${duration}
+          calling GHL sync yes/no: YES
+          GHL sync helper name: syncEstimateToGhlCalendar
+        `);
+
         // Sync to GHL Calendar
         const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes, estimateData.laborSnapshotToken || '');
         const syncSuccess = calSync.success;
         const syncErrorMsg = calSync.error || '';
         const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+        const ghlCalendarEventIds = calSync.ghlCalendarEventIds || (ghlCalendarEventId ? [ghlCalendarEventId] : []);
         const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
         // 5. Save details back to Firestore
@@ -5682,6 +5760,7 @@ export default async function handler(req: any, res: any) {
 
         if (syncSuccess && ghlCalendarEventId) {
           updates.ghlCalendarEventId = ghlCalendarEventId;
+          updates.ghlCalendarEventIds = ghlCalendarEventIds;
           updates.ghlCalendarSyncStatus = 'synced';
           updates.ghlCalendarLastSyncedAt = nowIso;
           updates.jobPortalHistory = admin.firestore.FieldValue.arrayUnion(logEntry);
@@ -7018,11 +7097,22 @@ Lone Star Fence Works`;
           const estimateData = snap.data() || {};
           const nowIso = new Date().toISOString();
 
+          const scheduleEventId = eventIdFromReq || "install-" + estimateId;
+          console.log(`[REAL SCHEDULE ACTION] real schedule action called: reschedule-job/update-schedule-event
+            estimateId: ${estimateId}
+            scheduleEventId: ${scheduleEventId}
+            selected install start date: ${startDate}
+            selected install days/duration: ${duration}
+            calling GHL sync yes/no: YES
+            GHL sync helper name: syncEstimateToGhlCalendar
+          `);
+
           // Sync to GHL Calendar
           const calSync = await syncEstimateToGhlCalendar(estimateId, estimateData, startDate, duration, notes || '', estimateData.laborSnapshotToken || '');
           const syncSuccess = calSync.success;
           const syncErrorMsg = calSync.error || '';
           const ghlCalendarEventId = calSync.ghlCalendarEventId || null;
+          const ghlCalendarEventIds = calSync.ghlCalendarEventIds || (ghlCalendarEventId ? [ghlCalendarEventId] : []);
           const ghlContactId = calSync.ghlContactId || estimateData.ghlContactId || '';
 
           // Save details back to Firestore
@@ -7050,7 +7140,10 @@ Lone Star Fence Works`;
           };
 
           if (ghlContactId) updates.ghlContactId = ghlContactId;
-          if (ghlCalendarEventId) updates.ghlCalendarEventId = ghlCalendarEventId;
+          if (ghlCalendarEventId) {
+            updates.ghlCalendarEventId = ghlCalendarEventId;
+            updates.ghlCalendarEventIds = ghlCalendarEventIds;
+          }
 
           // Save reminders
           try {
