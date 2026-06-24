@@ -359,6 +359,93 @@ async function resolveGhlCredentials(uid: string, body: any) {
   return { apiKey, locationId };
 }
 
+/**
+ * Helper to log GHL Activity to a central firestore collection
+ */
+async function logGhlActivity(log: {
+  traceId: string;
+  estimateId?: string;
+  customerName?: string;
+  source: string;
+  action: string;
+  endpoint?: string;
+  method?: string;
+  requestHeaders?: any;
+  queryParams?: any;
+  requestBody?: any;
+  responseHeaders?: any;
+  responseBody?: any;
+  statusCode?: number;
+  responseTime?: number;
+  appointmentId?: string;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+  error?: string;
+  duration?: number;
+  steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
+  firestoreUpdated?: boolean;
+  firestoreResult?: string;
+}) {
+  try {
+    const traceId = log.traceId;
+    if (!traceId) return;
+
+    const logRef = db.collection('ghl_integration_logs').doc(traceId);
+    const existingSnap = await logRef.get();
+    
+    let mergedSteps = log.steps || [];
+    if (existingSnap.exists) {
+      const existingData = existingSnap.data() || {};
+      if (existingData.steps && Array.isArray(existingData.steps)) {
+        const stepMap = new Map(existingData.steps.map((s: any) => [s.step, s]));
+        mergedSteps.forEach((s: any) => {
+          stepMap.set(s.step, { ...stepMap.get(s.step), ...s, timestamp: s.timestamp || new Date().toISOString() });
+        });
+        mergedSteps = Array.from(stepMap.values());
+      }
+    } else {
+      mergedSteps = mergedSteps.map((s: any) => ({ ...s, timestamp: s.timestamp || new Date().toISOString() }));
+    }
+
+    const docData = {
+      traceId,
+      estimateId: log.estimateId || existingSnap.data()?.estimateId || '',
+      customerName: log.customerName || existingSnap.data()?.customerName || '',
+      source: log.source || existingSnap.data()?.source || '',
+      action: log.action || existingSnap.data()?.action || '',
+      endpoint: log.endpoint || existingSnap.data()?.endpoint || '',
+      method: log.method || existingSnap.data()?.method || '',
+      requestHeaders: log.requestHeaders || existingSnap.data()?.requestHeaders || null,
+      queryParams: log.queryParams || existingSnap.data()?.queryParams || null,
+      requestBody: log.requestBody || existingSnap.data()?.requestBody || null,
+      responseHeaders: log.responseHeaders || existingSnap.data()?.responseHeaders || null,
+      responseBody: log.responseBody || existingSnap.data()?.responseBody || null,
+      statusCode: log.statusCode !== undefined ? log.statusCode : (existingSnap.data()?.statusCode || null),
+      responseTime: log.responseTime !== undefined ? log.responseTime : (existingSnap.data()?.responseTime || null),
+      appointmentId: log.appointmentId || existingSnap.data()?.appointmentId || '',
+      status: log.status || existingSnap.data()?.status || 'pending',
+      error: log.error || existingSnap.data()?.error || '',
+      duration: log.duration !== undefined ? log.duration : (existingSnap.data()?.duration || 0),
+      timestamp: traceId.startsWith('trace-') ? new Date(parseInt(traceId.split('-')[1])).toISOString() : new Date().toISOString(),
+      steps: mergedSteps,
+      firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
+      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
+    };
+
+    await logRef.set(docData, { merge: true });
+
+    // Keep the last 200 items in history
+    const allLogsSnap = await db.collection('ghl_integration_logs').orderBy('timestamp', 'desc').get();
+    if (allLogsSnap.size > 200) {
+      const docsToDelete = allLogsSnap.docs.slice(200);
+      const batch = db.batch();
+      docsToDelete.forEach((d: any) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('Error writing GHL integration activity log:', err);
+  }
+}
+
 // Map key to label & GHL data types for automatically provisioning missing custom fields
 const REQUIRED_CUSTOM_FIELDS = [
   { key: 'estimateId', label: 'Estimate ID', dataType: 'TEXT' },

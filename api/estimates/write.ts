@@ -1364,6 +1364,93 @@ async function saveGhlSyncLogLocal(estimateId: string | undefined, customerId: s
  * Helper to sync schedule events to GHL Install Calendar
  */
 /**
+ * Helper to log GHL Activity to a central firestore collection
+ */
+async function logGhlActivity(log: {
+  traceId: string;
+  estimateId?: string;
+  customerName?: string;
+  source: string;
+  action: string;
+  endpoint?: string;
+  method?: string;
+  requestHeaders?: any;
+  queryParams?: any;
+  requestBody?: any;
+  responseHeaders?: any;
+  responseBody?: any;
+  statusCode?: number;
+  responseTime?: number;
+  appointmentId?: string;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+  error?: string;
+  duration?: number;
+  steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
+  firestoreUpdated?: boolean;
+  firestoreResult?: string;
+}) {
+  try {
+    const traceId = log.traceId;
+    if (!traceId) return;
+
+    const logRef = db.collection('ghl_integration_logs').doc(traceId);
+    const existingSnap = await logRef.get();
+    
+    let mergedSteps = log.steps || [];
+    if (existingSnap.exists) {
+      const existingData = existingSnap.data() || {};
+      if (existingData.steps && Array.isArray(existingData.steps)) {
+        const stepMap = new Map(existingData.steps.map((s: any) => [s.step, s]));
+        mergedSteps.forEach((s: any) => {
+          stepMap.set(s.step, { ...stepMap.get(s.step), ...s, timestamp: s.timestamp || new Date().toISOString() });
+        });
+        mergedSteps = Array.from(stepMap.values());
+      }
+    } else {
+      mergedSteps = mergedSteps.map((s: any) => ({ ...s, timestamp: s.timestamp || new Date().toISOString() }));
+    }
+
+    const docData = {
+      traceId,
+      estimateId: log.estimateId || existingSnap.data()?.estimateId || '',
+      customerName: log.customerName || existingSnap.data()?.customerName || '',
+      source: log.source || existingSnap.data()?.source || '',
+      action: log.action || existingSnap.data()?.action || '',
+      endpoint: log.endpoint || existingSnap.data()?.endpoint || '',
+      method: log.method || existingSnap.data()?.method || '',
+      requestHeaders: log.requestHeaders || existingSnap.data()?.requestHeaders || null,
+      queryParams: log.queryParams || existingSnap.data()?.queryParams || null,
+      requestBody: log.requestBody || existingSnap.data()?.requestBody || null,
+      responseHeaders: log.responseHeaders || existingSnap.data()?.responseHeaders || null,
+      responseBody: log.responseBody || existingSnap.data()?.responseBody || null,
+      statusCode: log.statusCode !== undefined ? log.statusCode : (existingSnap.data()?.statusCode || null),
+      responseTime: log.responseTime !== undefined ? log.responseTime : (existingSnap.data()?.responseTime || null),
+      appointmentId: log.appointmentId || existingSnap.data()?.appointmentId || '',
+      status: log.status || existingSnap.data()?.status || 'pending',
+      error: log.error || existingSnap.data()?.error || '',
+      duration: log.duration !== undefined ? log.duration : (existingSnap.data()?.duration || 0),
+      timestamp: traceId.startsWith('trace-') ? new Date(parseInt(traceId.split('-')[1])).toISOString() : new Date().toISOString(),
+      steps: mergedSteps,
+      firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
+      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
+    };
+
+    await logRef.set(docData, { merge: true });
+
+    // Keep the last 200 items in history
+    const allLogsSnap = await db.collection('ghl_integration_logs').orderBy('timestamp', 'desc').get();
+    if (allLogsSnap.size > 200) {
+      const docsToDelete = allLogsSnap.docs.slice(200);
+      const batch = db.batch();
+      docsToDelete.forEach((d: any) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('Error writing GHL integration activity log:', err);
+  }
+}
+
+/**
  * Helper to save ghlSyncDebug to Firestore
  */
 async function saveGhlSyncDebug(estimateId: string, debugObj: any) {
@@ -1435,6 +1522,35 @@ async function syncEstimateToGhlCalendar(
 
   await saveGhlSyncDebug(estimateId, ghlSyncDebug);
 
+  let sourceLabel = 'Manual Resync';
+  if (actionName === 'schedule-job-start') sourceLabel = 'Job Scheduler';
+  else if (actionName === 'admin-update-schedule') sourceLabel = 'Job Portal';
+  else if (actionName === 'resync-ghl-calendar') sourceLabel = 'Manual Resync';
+  else if (actionName === 'diagnostic') sourceLabel = 'Diagnostic Test';
+
+  const initialPipelineSteps = [
+    { step: "frontend_save", label: "Frontend Save", status: "success", timestamp: nowIso },
+    { step: "backend_action", label: "Backend Action", status: "success", timestamp: nowIso },
+    { step: "firestore_saved", label: "Firestore Saved", status: "success", timestamp: nowIso },
+    { step: "shared_helper_called", label: "Shared GHL Helper Called", status: "success", timestamp: nowIso },
+    { step: "free_slots_request", label: "Free Slots Request", status: "pending" },
+    { step: "slot_selected", label: "Slot Selected", status: "pending" },
+    { step: "appointment_create", label: "Appointment Create", status: "pending" },
+    { step: "appointment_id_returned", label: "Appointment ID Returned", status: "pending" },
+    { step: "firestore_updated", label: "Firestore Updated", status: "pending" },
+    { step: "ui_updated", label: "UI Updated", status: "pending" }
+  ];
+
+  await logGhlActivity({
+    traceId,
+    estimateId,
+    customerName: estimateData?.customerName || '',
+    source: sourceLabel,
+    action: actionName,
+    status: 'running',
+    steps: initialPipelineSteps
+  });
+
   let syncDebug: any = {
     selectedDate: startDate,
     selectedDuration: duration,
@@ -1482,6 +1598,21 @@ async function syncEstimateToGhlCalendar(
       ];
       await saveGhlSyncDebug(estimateId, ghlSyncDebug);
 
+      await logGhlActivity({
+        traceId,
+        status: 'failed',
+        error: errorMsg,
+        steps: [
+          { step: "shared_helper_called", status: "failed", reason: errorMsg },
+          { step: "free_slots_request", status: "skipped", reason: "Credentials missing" },
+          { step: "slot_selected", status: "skipped" },
+          { step: "appointment_create", status: "skipped" },
+          { step: "appointment_id_returned", status: "skipped" },
+          { step: "firestore_updated", status: "skipped" },
+          { step: "ui_updated", status: "skipped" }
+        ]
+      });
+
       const { docRef: targetDocRef } = await getEstimateDocRef(estimateId);
       await targetDocRef.set({
         ghlCalendarSyncStatus: 'failed',
@@ -1522,6 +1653,22 @@ async function syncEstimateToGhlCalendar(
           { step: "appointment_create_success", status: "skipped", reason: "Contact resolution failed" }
         ];
         await saveGhlSyncDebug(estimateId, ghlSyncDebug);
+
+        await logGhlActivity({
+          traceId,
+          status: 'failed',
+          error: contactErr,
+          steps: [
+            { step: "shared_helper_called", status: "failed", reason: contactErr },
+            { step: "free_slots_request", status: "skipped" },
+            { step: "slot_selected", status: "skipped" },
+            { step: "appointment_create", status: "skipped" },
+            { step: "appointment_id_returned", status: "skipped" },
+            { step: "firestore_updated", status: "skipped" },
+            { step: "ui_updated", status: "skipped" }
+          ]
+        });
+
         return { success: false, error: contactErr };
       }
     }
@@ -1601,6 +1748,18 @@ async function syncEstimateToGhlCalendar(
         errors.push(`Day ${i+1} slots fetch error: ${e.message || String(e)}`);
       }
 
+      // Update Free Slots request step in activity log
+      await logGhlActivity({
+        traceId,
+        endpoint: `https://services.leadconnectorhq.com/calendars/${calendarId}/free-slots`,
+        method: 'GET',
+        statusCode: daySlotsFetchStatus,
+        responseBody: daySlotsFetchText,
+        steps: [
+          { step: "free_slots_request", status: slotsSuccess ? "success" : "failed", reason: slotsSuccess ? undefined : `Fetch returned status ${daySlotsFetchStatus}` }
+        ]
+      });
+
       // 2. Compare and Find Matching Slot (Chicago timezone robust comparison)
       let matchedSlot = daySlots.find(s => {
         const sStart = typeof s === 'string' ? s : (s.startTime || '');
@@ -1638,6 +1797,14 @@ async function syncEstimateToGhlCalendar(
         
         slotMatchDebug.startTimeMatches = true;
       }
+
+      // Update Slot Selected step in activity log
+      await logGhlActivity({
+        traceId,
+        steps: [
+          { step: "slot_selected", status: slotMatchDebug.matchFound ? "success" : (existingIds[i] ? "success" : "failed"), reason: slotMatchDebug.matchFound ? `Selected slot: ${JSON.stringify(matchedSlot)}` : (existingIds[i] ? "Reusing existing event" : "No slot found") }
+        ]
+      });
 
       const customerName = estimateData.customerName || 'N/A';
       const customerCity = estimateData.customerCity || estimateData.city || 'N/A';
@@ -1691,6 +1858,18 @@ Admin Estimate: ${adminEstimateLink}`;
         console.error(`[GHL SYNC TRACE - ${traceId}] Day ${i+1} (${targetDateStr}) Aborted: ${dayError}`);
         errors.push(`Day ${i+1} aborted: ${dayError}`);
         overallSuccess = false;
+
+        await logGhlActivity({
+          traceId,
+          status: 'failed',
+          error: dayError,
+          steps: [
+            { step: "appointment_create", status: "failed", reason: dayError },
+            { step: "appointment_id_returned", status: "failed", reason: "Comparison Failed" },
+            { step: "firestore_updated", status: "skipped" },
+            { step: "ui_updated", status: "skipped" }
+          ]
+        });
       } else {
         console.log(`[GHL SYNC TRACE - ${traceId}] Day ${i+1} (${targetDateStr}) appointment creation attempted: true (Mode=${mode}, ID=${ghlEventId || 'NEW'}, startTime=${finalStart}, endTime=${finalEnd})`);
         try {
@@ -1733,6 +1912,24 @@ Admin Estimate: ${adminEstimateLink}`;
           errors.push(`Day ${i+1} fetch exception: ${dayError}`);
           overallSuccess = false;
         }
+
+        // Update log with Appointment Creation result steps
+        await logGhlActivity({
+          traceId,
+          endpoint,
+          method: ghlEventId ? 'PUT' : 'POST',
+          requestHeaders: { ...headers, Authorization: 'Bearer ' + mask(apiKey) },
+          requestBody: bodyPayload,
+          responseBody: resText,
+          statusCode: resStatus,
+          appointmentId: returnedId || undefined,
+          status: daySuccess ? 'success' : 'failed',
+          error: daySuccess ? undefined : dayError,
+          steps: [
+            { step: "appointment_create", status: daySuccess ? "success" : "failed", reason: daySuccess ? undefined : dayError },
+            { step: "appointment_id_returned", status: daySuccess ? "success" : "failed", reason: daySuccess ? `Returned ID: ${returnedId}` : dayError }
+          ]
+        });
       }
 
       syncDaysResults.push({
@@ -1810,6 +2007,19 @@ Admin Estimate: ${adminEstimateLink}`;
       console.error('Failed updating schedule_events with GHL IDs:', e);
     }
 
+    // Update log with final result and firestore updated steps
+    await logGhlActivity({
+      traceId,
+      status: overallSuccessFinal ? 'success' : 'failed',
+      appointmentId: finalIdsStr || undefined,
+      firestoreUpdated: true,
+      firestoreResult: `Saved to estimate: ${estimateId} and schedule_events: install-${estimateId}`,
+      steps: [
+        { step: "firestore_updated", status: overallSuccessFinal ? "success" : "failed", reason: `Saved event IDs: ${finalIdsStr}` },
+        { step: "ui_updated", status: "success", timestamp: new Date().toISOString() }
+      ]
+    });
+
     if (overallSuccessFinal) {
       return { success: true, ghlCalendarEventId: finalIdsStr, ghlCalendarEventIds: newIds, ghlContactId, ghlSyncDebug };
     } else {
@@ -1833,6 +2043,21 @@ Admin Estimate: ${adminEstimateLink}`;
       ghlSyncDebug.errors = errors;
     }
     await saveGhlSyncDebug(estimateId, ghlSyncDebug);
+
+    await logGhlActivity({
+      traceId,
+      status: 'failed',
+      error: err.message || String(err),
+      steps: [
+        { step: "free_slots_request", status: "failed", reason: err.message || String(err) },
+        { step: "slot_selected", status: "skipped" },
+        { step: "appointment_create", status: "skipped" },
+        { step: "appointment_id_returned", status: "skipped" },
+        { step: "firestore_updated", status: "failed" },
+        { step: "ui_updated", status: "failed" }
+      ]
+    });
+
     return { success: false, error: err.message || String(err) };
   }
 }
