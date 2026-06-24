@@ -349,6 +349,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         
         // GHL configurations
         ghlLocationId: formData.ghlLocationId,
+        ghlApiKey: formData.ghlApiKey,
         ghlInboundWebhookSecret: formData.ghlInboundWebhookSecret,
         ghlPrefillSources: formData.ghlPrefillSources,
         ghlMinChars: formData.ghlMinChars,
