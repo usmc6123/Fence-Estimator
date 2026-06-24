@@ -469,110 +469,157 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const scheduleJob = async (estimateId: string, date: Date) => {
-    // TRIPWIRE A: Scheduler.tsx scheduleJob fired
-    console.log("TRIPWIRE A: Scheduler.tsx scheduleJob fired");
-    alert("TRIPWIRE A: Scheduler.tsx scheduleJob fired");
-
-    const estimate = savedEstimates.find(e => e.id === estimateId);
-    if (!estimate || !user) return;
-
-    const startDateStr = format(date, 'yyyy-MM-dd');
-    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-    
-    // Check for Job Blackouts
-    const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(startDateStr));
-    if (isBlackedOut) {
-        alert("This day is a designated blackout for installs.");
-        return;
-    }
-
-    const duration = selectedDuration; 
-    const endDate = addDays(date, duration - 1);
-    const endDateStr = format(endDate, 'yyyy-MM-dd');
-
-    // STEP 1: Clicked Save Schedule
-    console.log("REAL JOB SCHEDULER SAVE FIRED");
-    console.log({
-      scheduleSyncTraceId: traceId,
-      estimateId,
-      selectedDate: startDateStr,
-      duration,
-      crew: estimate.assignedCrew || 'Crew',
-      endpoint: '/api/estimates/write',
-      action: 'reschedule-job'
-    });
-
-    await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 1, 'success', {
-      installStartDate: startDateStr,
-      installDays: duration,
-      crew: estimate.assignedCrew || 'Crew',
-      timestamp: new Date().toISOString()
-    });
-
-    // STEP 2: Request Payload
-    const payload = {
-      action: 'reschedule-job',
-      estimateId: estimateId,
-      startDate: startDateStr,
-      duration: duration,
-      assignedCrew: estimate.assignedCrew || 'Crew',
-      notes: '',
-      scheduleSyncTraceId: traceId
+    // Initialize trace array
+    if (!(window as any).schedulerTrace) (window as any).schedulerTrace = [];
+    const addTrace = (checkpoint: number, label: string, data: any) => {
+      const entry = { checkpoint, label, time: new Date().toISOString(), data };
+      console.log(`[CHECKPOINT ${checkpoint}] ${label}`, data);
+      alert(`CHECKPOINT ${checkpoint}: ${label}`);
+      (window as any).schedulerTrace.push(entry);
     };
 
-    await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 2, 'success', {
-      payload
-    });
-
     try {
-      const token = localStorage.getItem('company_admin_token');
-      
-      // STEP 3: POST /api/estimates/write
-      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'success', {
-        endpoint: '/api/estimates/write',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? 'Bearer ' + token.substring(0, 10) + '...' : 'none'
-        },
-        payload
-      });
+      // CHECKPOINT 1: Entered scheduleJob()
+      addTrace(1, "Entered scheduleJob()", { estimateId, date: date.toISOString() });
 
-      const response = await fetch('/api/estimates/write', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      const resText = await response.clone().text();
-
-      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, response.ok ? 'success' : 'failed', {
-        endpoint: '/api/estimates/write',
-        method: 'POST',
-        status: response.status,
-        response: resText
-      });
-
-      if (!response.ok) {
-        throw new Error(resText);
+      const estimate = savedEstimates.find(e => e.id === estimateId);
+      if (!estimate || !user) {
+        addTrace(1.1, "Early exit: Missing estimate or user", { hasEstimate: !!estimate, hasUser: !!user });
+        return;
       }
-      setShowEventModal(false);
 
-      // STEP 12: Frontend success
-      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 12, 'success', {
-        schedulerUpdated: true,
-        jobPortalUpdated: true,
+      // CHECKPOINT 2: Estimate selected
+      addTrace(2, "Estimate selected", { estimateId: estimate.id, customer: estimate.customerName });
+
+      const startDateStr = format(date, 'yyyy-MM-dd');
+      const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+      
+      // Check for Job Blackouts
+      const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(startDateStr));
+      if (isBlackedOut) {
+          addTrace(2.1, "Exit: Blackout detected", { startDateStr });
+          alert("This day is a designated blackout for installs.");
+          return;
+      }
+
+      const duration = selectedDuration; 
+      // CHECKPOINT 3: Duration calculated
+      addTrace(3, "Duration calculated", { duration });
+
+      const endDate = addDays(date, duration - 1);
+      const endDateStr = format(endDate, 'yyyy-MM-dd');
+
+      // CHECKPOINT 4: Payload created
+      const payload = {
+        action: 'reschedule-job',
+        estimateId: estimateId,
+        startDate: startDateStr,
+        duration: duration,
+        assignedCrew: estimate.assignedCrew || 'Crew',
+        notes: '',
+        scheduleSyncTraceId: traceId
+      };
+      addTrace(4, "Payload created", { payload });
+
+      // CHECKPOINT 5: Calling /api/estimates/write
+      addTrace(5, "Calling /api/estimates/write", { endpoint: '/api/estimates/write', action: payload.action });
+
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 1, 'success', {
+        installStartDate: startDateStr,
+        installDays: duration,
+        crew: estimate.assignedCrew || 'Crew',
         timestamp: new Date().toISOString()
       });
 
-    } catch (error: any) {
-      console.error('Failed to schedule job:', error);
-      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'failed', {
-        error: error.message || String(error)
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 2, 'success', {
+        payload
       });
+
+      try {
+        const token = localStorage.getItem('company_admin_token');
+        
+        // CHECKPOINT 6: Fetch request sent
+        addTrace(6, "Fetch request sent", { url: '/api/estimates/write', method: 'POST' });
+
+        await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'success', {
+          endpoint: '/api/estimates/write',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? 'Bearer ' + token.substring(0, 10) + '...' : 'none'
+          },
+          payload
+        });
+
+        const response = await fetch('/api/estimates/write', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        const resText = await response.clone().text();
+
+        // CHECKPOINT 7: Fetch response received
+        addTrace(7, "Fetch response received", { status: response.status, body: resText });
+
+        await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, response.ok ? 'success' : 'failed', {
+          endpoint: '/api/estimates/write',
+          method: 'POST',
+          status: response.status,
+          response: resText
+        });
+
+        if (!response.ok) {
+          addTrace(7.1, "Error: Fetch response not OK", { status: response.status, body: resText });
+          throw new Error(resText);
+        }
+
+        const resData = JSON.parse(resText);
+        // CHECKPOINT 8: Response parsed
+        addTrace(8, "Response parsed", { resData });
+
+        setShowEventModal(false);
+
+        // STEP 12: Frontend success
+        await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 12, 'success', {
+          schedulerUpdated: true,
+          jobPortalUpdated: true,
+          timestamp: new Date().toISOString()
+        });
+
+        // Refresh events UI if sync succeeded
+        if (resData.success) {
+            const fetchRes = await fetch(`/api/estimates/write?action=list-schedule-events&token=${token || ''}`);
+            if (fetchRes.ok) {
+                const updatedEvents = await fetchRes.json();
+                if (updatedEvents.events) {
+                    setEvents(updatedEvents.events.map((e: any) => ({
+                        ...e,
+                        startDate: e.startDate,
+                        endDate: e.endDate
+                    })));
+                }
+            }
+        }
+
+        // CHECKPOINT 9: Finished scheduleJob()
+        addTrace(9, "Finished scheduleJob()", { success: true });
+
+      } catch (innerErr: any) {
+        addTrace(99, "Exception in fetch block", { message: innerErr.message, stack: innerErr.stack });
+        console.error('Fetch error:', innerErr);
+        await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'failed', {
+          error: innerErr.message || String(innerErr)
+        });
+        alert(`SCHEDULER ERROR: ${innerErr.message}`);
+      }
+    } catch (outerErr: any) {
+      addTrace(100, "Exception in outer block", { message: outerErr.message, stack: outerErr.stack });
+      console.error('Outer error:', outerErr);
+      alert(`SCHEDULER CRITICAL ERROR: ${outerErr.message}`);
     }
   };
 
