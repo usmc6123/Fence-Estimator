@@ -2,7 +2,7 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
-import { syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar } from '../lib/ghlCalendarSync';
+import { syncEstimateToGhlCalendar as libSyncEstimateToGhlCalendar } from '../lib/ghlCalendarSync.js';
 import { randomBytes } from 'crypto';
 
 function generateSecureToken(): string {
