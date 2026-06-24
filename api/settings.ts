@@ -845,7 +845,15 @@ export default async function handler(req: any, res: any) {
 
           let slotData: any = {};
           try { slotData = JSON.parse(body); } catch(e) {}
-          const availableSlots = slotData.slots || [];
+          
+          // GHL Response shape: { "YYYY-MM-DD": { "slots": [...] }, ... }
+          const availableSlots: any[] = [];
+          Object.keys(slotData).forEach(dateKey => {
+            if (slotData[dateKey]?.slots && Array.isArray(slotData[dateKey].slots)) {
+              availableSlots.push(...slotData[dateKey].slots);
+            }
+          });
+
           const firstSlot = availableSlots[0];
 
           let appointmentDebug: any = null;
@@ -936,6 +944,8 @@ export default async function handler(req: any, res: any) {
             appointmentAttempted,
             appointmentReason: !appointmentAttempted ? appointmentReason : null,
             appointmentDebug,
+            parsedSlotCount: availableSlots.length,
+            parsedSlots: availableSlots,
             debug: {
               function: 'buildFreeSlotsRequest()',
               baseUrl: 'https://services.leadconnectorhq.com',

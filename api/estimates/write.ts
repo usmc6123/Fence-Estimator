@@ -1560,7 +1560,8 @@ async function syncEstimateToGhlCalendar(
         const slotText = await slotRes.text();
         if (slotRes.ok) {
           const slotData = JSON.parse(slotText);
-          daySlots = slotData.slots || slotData[targetDateStr] || [];
+          // GHL Response shape: { "2026-06-29": { "slots": [...] } }
+          daySlots = slotData.slots || (slotData[targetDateStr]?.slots) || slotData[targetDateStr] || [];
           slotMatchDebug.availableSlotsCount = daySlots.length;
         }
       } catch (e) {}

@@ -2285,6 +2285,31 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                               </div>
                             ))}
                           </div>
+
+                          <div className="mt-4 pt-3 border-t border-slate-50 space-y-2">
+                            <h6 className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Parser Result</h6>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-slate-500">Parsed Slot Count:</span>
+                              <span className={cn(
+                                "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                                diagnosticResult.parsedSlotCount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                              )}>
+                                {diagnosticResult.parsedSlotCount || 0}
+                              </span>
+                            </div>
+                            {diagnosticResult.parsedSlots && diagnosticResult.parsedSlots.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] text-slate-400">Parsed Slots:</span>
+                                <div className="max-h-24 overflow-y-auto p-2 bg-slate-50 rounded border border-slate-100">
+                                  {diagnosticResult.parsedSlots.map((s: string, idx: number) => (
+                                    <div key={idx} className="text-[9px] font-mono text-slate-600 border-b border-slate-200/50 py-0.5 last:border-0">
+                                      {s}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* Developer Debug View */}
