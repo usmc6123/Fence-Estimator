@@ -146,6 +146,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
   const [selectedDuration, setSelectedDuration] = useState(2);
+  const [unavailableInstallDays, setUnavailableInstallDays] = useState<string[]>(['Sunday']);
   
   // Rescheduling states
   const [isRescheduling, setIsRescheduling] = useState(false);
@@ -260,6 +261,21 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     };
     loadConfig();
 
+    const loadAvailability = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'companySettings', 'braden-lonestar-uid'));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.unavailableInstallDays) {
+            setUnavailableInstallDays(data.unavailableInstallDays);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load availability settings:', err);
+      }
+    };
+    loadAvailability();
+
     fetchEvents();
     // Refresh schedule events periodically (every 10 seconds)
     const interval = setInterval(fetchEvents, 10000);
@@ -298,6 +314,18 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+
+  const isDateUnavailable = (date: Date | string, duration: number = 1) => {
+    const start = typeof date === 'string' ? parseLocalDate(date) : date;
+    for (let i = 0; i < duration; i++) {
+      const d = addDays(start, i);
+      const dayName = format(d, 'EEEE');
+      if (unavailableInstallDays.includes(dayName)) {
+        return { isUnavailable: true, date: format(d, 'MM/dd/yyyy'), day: dayName };
+      }
+    }
+    return { isUnavailable: false };
+  };
 
   const handlePrint = () => {
     window.print();
@@ -486,6 +514,12 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       // CHECKPOINT 1: Entered scheduleJob()
       addTrace(1, "Entered scheduleJob()", { estimateId, date: date.toISOString() });
 
+      const availability = isDateUnavailable(date, selectedDuration);
+      if (availability.isUnavailable) {
+        alert(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
+        return;
+      }
+
       const estimate = savedEstimates.find(e => e.id === estimateId);
       if (!estimate || !user) {
         addTrace(1.1, "Early exit: Missing estimate or user", { hasEstimate: !!estimate, hasUser: !!user });
@@ -640,6 +674,11 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   };
 
   const handleRescheduleJob = async (estimateId: string, newDateStr: string, newDuration: number) => {
+    const availability = isDateUnavailable(newDateStr, newDuration);
+    if (availability.isUnavailable) {
+      alert(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
+      return;
+    }
     // TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired
     console.log("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
     alert("TRIPWIRE B: Scheduler.tsx handleRescheduleJob fired");
@@ -1460,6 +1499,8 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       const isCurrentMonth = isSameMonth(day, monthStart);
                       const isToday = isSameDay(day, new Date());
                       const isSelected = selectedDate && isSameDay(day, selectedDate);
+                      const dayName = format(day, 'EEEE');
+                      const isUnavailable = unavailableInstallDays.includes(dayName);
                       
                       // Combine events and jobs
                       const dayAllItems = [
@@ -1474,6 +1515,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                           className={cn(
                             "min-h-[110px] bg-white p-2 sm:p-3 cursor-pointer group transition-all flex flex-col justify-between shadow-xs sm:shadow-none rounded-2xl sm:rounded-none",
                             !isCurrentMonth && "bg-[#F8F9FA]/50 opacity-60",
+                            isUnavailable && "bg-slate-50 opacity-50 cursor-not-allowed",
                             isToday && "bg-american-blue/[0.02] ring-2 ring-american-red ring-inset",
                             isSelected && "ring-2 ring-american-blue ring-inset bg-american-blue/[0.01]"
                           )}
@@ -2011,6 +2053,23 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                   "space-y-6 flex-1",
                   isMobile ? "overflow-y-auto pr-1 pb-8 custom-scrollbar" : ""
                 )}>
+                    {(() => {
+                        const dayAvail = isDateUnavailable(selectedDate);
+                        if (dayAvail.isUnavailable) {
+                            return (
+                                <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl mb-2 flex items-start gap-3">
+                                    <AlertCircle className="text-rose-600 shrink-0 mt-0.5" size={18} />
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-rose-700">Installs Unavailable</p>
+                                        <p className="text-[9px] text-rose-600 font-bold uppercase tracking-tight mt-0.5">
+                                            Company policy blocks install scheduling on {dayAvail.day}s.
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
                     {isModalLoading ? (
                         <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
                             <div className="relative w-12 h-12">
@@ -2618,35 +2677,51 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                             <div className="p-4 bg-[#F5F7FA] rounded-2xl border border-[#E5E5E5]">
                                 <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest mb-3 text-center">Set Default Duration (Days)</p>
                                 <div className="flex items-center justify-center gap-3">
-                                    {[1, 2, 3, 4, 5].map(d => (
+                                    {[1, 2, 3, 4, 5].map(d => {
+                                    const durationAvail = isDateUnavailable(selectedDate, d);
+                                    return (
                                     <button 
                                         key={d}
                                         onClick={() => setSelectedDuration(d)}
+                                        disabled={durationAvail.isUnavailable}
+                                        title={durationAvail.isUnavailable ? `Crosses into ${durationAvail.day}` : ''}
                                         className={cn(
                                             "h-11 w-11 flex items-center justify-center rounded-xl font-bold text-xs transition-all min-h-[44px] min-w-[44px]",
                                             selectedDuration === d 
                                                 ? "bg-american-blue text-white shadow-md shadow-american-blue/20" 
-                                                : "bg-white border border-[#E5E5E5] text-american-blue hover:border-american-blue"
+                                                : "bg-white border border-[#E5E5E5] text-american-blue hover:border-american-blue",
+                                            durationAvail.isUnavailable && "opacity-20 cursor-not-allowed grayscale"
                                         )}
                                     >
                                         {d}
                                     </button>
-                                ))}
+                                )})}
                                 </div>
+                                {isDateUnavailable(selectedDate, selectedDuration).isUnavailable && (
+                                    <p className="text-[9px] text-rose-600 font-bold uppercase text-center mt-3 animate-pulse">
+                                        Selected duration crosses into {isDateUnavailable(selectedDate, selectedDuration).day}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar text-left">
                                 {acceptedUnscheduled.length > 0 ? (
-                                    acceptedUnscheduled.map(est => (
+                                    acceptedUnscheduled.map(est => {
+                                        const jobAvail = isDateUnavailable(selectedDate, selectedDuration);
+                                        return (
                                         <button 
                                             key={est.id}
+                                            disabled={jobAvail.isUnavailable}
                                             onClick={() => scheduleJob(est.id, selectedDate)}
-                                            className="w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]"
+                                            className={cn(
+                                                "w-full text-left p-4 rounded-2xl border border-[#E5E5E5] hover:border-american-blue hover:bg-american-blue/5 transition-all group min-h-[48px]",
+                                                jobAvail.isUnavailable && "opacity-50 cursor-not-allowed bg-gray-50"
+                                            )}
                                         >
                                             <p className="text-xs font-black text-[#1A1A1A] group-hover:text-american-blue leading-snug">{est.customerName}</p>
                                             <p className="text-[9px] font-bold text-[#999999] uppercase mt-1 leading-none">{(est.linearFeet || 0).toFixed(0)}' LF • {est.scheduledDuration || 2} Days</p>
                                         </button>
-                                    ))
+                                    )})
                                 ) : (
                                     <p className="text-center py-6 text-xs italic text-[#999999]">No pending job orders available.</p>
                                 )}

@@ -17,6 +17,30 @@ function generateSecureToken(): string {
   }
 }
 
+/**
+ * Checks if any date in an install range falls on an unavailable day (e.g. Sunday).
+ */
+function isInstallOnUnavailableDay(startDate: string, duration: number, unavailableDays: string[]): { isUnavailable: boolean; date?: string; day?: string } {
+  if (!unavailableDays || unavailableDays.length === 0) return { isUnavailable: false };
+  
+  // startDate is 'YYYY-MM-DD'
+  const start = new Date(startDate + 'T00:00:00');
+  
+  for (let i = 0; i < duration; i++) {
+    const current = new Date(start);
+    current.setDate(start.getDate() + i);
+    const dayName = format(current, 'EEEE'); // Sunday, Monday, etc.
+    if (unavailableDays.includes(dayName)) {
+      return { 
+        isUnavailable: true, 
+        date: format(current, 'yyyy-MM-dd'),
+        day: dayName
+      };
+    }
+  }
+  return { isUnavailable: false };
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
 
@@ -1572,6 +1596,32 @@ export default async function handler(req: any, res: any) {
         scheduleEventId: req.body?.id || req.body?.eventId || req.query?.eventId,
         requestBody: req.body
       });
+
+      // Availability Validation
+      const vStartDate = req.body?.startDate || req.query?.startDate;
+      const vDuration = Number(req.body?.duration || req.query?.duration || 1);
+      const vEventType = req.body?.type || 'Job';
+      const vEstId = req.body?.estimateId || req.query?.estimateId;
+
+      if (vStartDate && (vEventType === 'Job' || vEventType === 'Estimate' || vEstId)) {
+        try {
+          const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
+          const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+          const unavailableDays = settings.unavailableInstallDays || ['Sunday'];
+          
+          const validation = isInstallOnUnavailableDay(vStartDate, vDuration, unavailableDays);
+          if (validation.isUnavailable) {
+            console.warn(`[AVAILABILITY BLOCKED] Action ${action} rejected. Reason: ${validation.day} is unavailable. Date: ${validation.date}`);
+            return res.status(400).json({ 
+              success: false, 
+              reason: 'sunday_unavailable',
+              error: `Installs cannot be scheduled on ${validation.day}s. This timeframe includes ${validation.date}.`
+            });
+          }
+        } catch (err) {
+          console.error("Failed to validate install availability:", err);
+        }
+      }
     }
 
     // --- SCHEDULER TRACE REPORT STEP LOGGING ---

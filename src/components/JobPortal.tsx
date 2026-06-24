@@ -237,6 +237,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       return;
     }
 
+    const availability = isDateUnavailable(newScheduleStartDate, newScheduleDuration);
+    if (availability.isUnavailable) {
+      setScheduleError(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
+      setRescheduleSubmitting(false);
+      return;
+    }
+
     setRescheduleSubmitting(true);
     setScheduleError('');
 
@@ -294,6 +301,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     today.setHours(0, 0, 0, 0);
     const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
     minDateLimit.setHours(0, 0, 0, 0);
+
+    const dayName = format(day, 'EEEE');
+    const isUnavailable = (settings?.unavailableInstallDays || ['Sunday']).includes(dayName);
+    if (isUnavailable) {
+      setScheduleError(`Installs are not available on ${dayName}s.`);
+      return;
+    }
 
     if (day.getTime() < minDateLimit.getTime()) {
       setScheduleError(`The soonest start date allowed is 4 calendar days from today (${minDateLimit.toISOString().split('T')[0]}).`);
@@ -956,6 +970,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setLoading(false);
     }
   }, []);
+
+  const isDateUnavailable = (dateStr: string, durationStr: string) => {
+    try {
+      const start = parseISO(dateStr);
+      const duration = parseInt(durationStr) || 1;
+      const unavailableDays = settings?.unavailableInstallDays || ['Sunday'];
+      
+      for (let i = 0; i < duration; i++) {
+        const d = addDays(start, i);
+        const dayName = format(d, 'EEEE');
+        if (unavailableDays.includes(dayName)) {
+          return { isUnavailable: true, date: format(d, 'MM/dd/yyyy'), day: dayName };
+        }
+      }
+    } catch (e) {
+      console.error('Error checking availability:', e);
+    }
+    return { isUnavailable: false };
+  };
 
   const fetchJobDetails = async (estId: string, tok: string) => {
     setLoading(true);
@@ -3411,6 +3444,8 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                   <div className="grid grid-cols-7">
                     {calendarDays.map((day, i) => {
                       const dateKey = format(day, 'yyyy-MM-dd');
+                      const dayName = format(day, 'EEEE');
+                      const isUnavailable = (settings?.unavailableInstallDays || ['Sunday']).includes(dayName);
                       const dayJobs = crewJobs.filter(job => {
                         if (!job.scheduledStartDate) return false;
                         const start = job.scheduledStartDate;
@@ -3437,6 +3472,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                           className={cn(
                             "min-h-[120px] p-2 border-r border-b border-blue-900/5 last:border-r-0 transition-colors relative",
                             !isCurrentMonth && "opacity-20",
+                            isUnavailable && "bg-slate-950/40 opacity-50 cursor-not-allowed",
                             isToday && "bg-blue-900/5",
                             isPast ? "bg-slate-900/10 cursor-not-allowed" : "cursor-pointer hover:bg-blue-600/5"
                           )}

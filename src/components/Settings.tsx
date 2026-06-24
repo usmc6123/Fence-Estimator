@@ -348,7 +348,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     }
   };
 
-  const [activeSection, setActiveSection] = React.useState<'company' | 'integration' | 'smtp' | 'templates' | 'notifications'>('company');
+  const [activeSection, setActiveSection] = React.useState<'company' | 'integration' | 'smtp' | 'templates' | 'notifications' | 'scheduler'>('company');
   
   const [formData, setFormData] = React.useState({
     companyName: COMPANY_INFO.name,
@@ -364,6 +364,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     ghlWebhookEstimateCompleted: '',
     ghlWebhookEstimateDeclined: '',
     autoSyncEstimates: true,
+    unavailableInstallDays: ['Sunday'],
     
     // GHL Inbound and Prefill Configuration
     ghlLocationId: '',
@@ -1639,6 +1640,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const sections = [
     { id: 'company', label: 'Company Profile', icon: Building2 },
     { id: 'integration', label: 'CRM & Integrations', icon: Webhook },
+    { id: 'scheduler', label: 'Scheduler Settings', icon: Calendar },
     { id: 'smtp', label: 'SMTP Mail Server', icon: Mail },
     { id: 'templates', label: 'Email Templates', icon: Settings2 },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -4676,6 +4678,58 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         className="block w-full rounded-xl border border-[#D5D5D5] bg-[#F9F9F9] px-4 py-2.5 text-xs text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-american-blue focus:bg-white transition-all"
                         placeholder="Estimate declined. We will reach out shortly to verify how we can accommodate your requests. Thank you!"
                       />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'scheduler' && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="p-6 rounded-2xl border border-slate-200 bg-white space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#F2F2F2] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="text-american-blue" size={18} />
+                      <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider">Install Schedule Availability</h4>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#666666] block mb-3">
+                        Unavailable Install Days
+                      </label>
+                      <p className="text-xs text-[#999999] mb-4">
+                        Select the days of the week when installations should be blocked in the scheduler and job portal.
+                      </p>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => {
+                          const isSelected = formData.unavailableInstallDays.includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => {
+                                const current = formData.unavailableInstallDays || [];
+                                const updated = isSelected 
+                                  ? current.filter(d => d !== day)
+                                  : [...current, day];
+                                setFormData({ ...formData, unavailableInstallDays: updated });
+                              }}
+                              className={cn(
+                                "flex items-center justify-between p-3 rounded-xl border transition-all text-xs font-bold",
+                                isSelected 
+                                  ? "bg-rose-50 border-rose-200 text-rose-700 shadow-sm"
+                                  : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                              )}
+                            >
+                              <span>{day}</span>
+                              {isSelected ? <XCircle size={14} className="text-rose-500" /> : <CheckCircle2 size={14} className="text-slate-200" />}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
