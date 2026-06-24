@@ -5,7 +5,8 @@ import {
   Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2, XCircle,
   ImageIcon, Server, Settings2, Send, AlertCircle, Terminal,
   Eye, EyeOff, Copy, Plus, Activity, Check, Database, Sparkles,
-  Calendar, Search, Lock, Key, CheckSquare, Square, ChevronDown, ChevronUp, ChevronRight
+  Calendar, Search, Lock, Key, CheckSquare, Square, ChevronDown, ChevronUp, ChevronRight,
+  AlertTriangle, Clock, TerminalSquare, Info
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
@@ -439,6 +440,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [loadingTraces, setLoadingTraces] = React.useState(false);
   const [selectedTrace, setSelectedTrace] = React.useState<any | null>(null);
   const [traceSearchQuery, setTraceSearchQuery] = React.useState("");
+  const [viewingFailureDetails, setViewingFailureDetails] = React.useState(false);
+  const [fallbackDebug, setFallbackDebug] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     async function fetchPrimaryCrew() {
@@ -472,7 +475,25 @@ export default function Settings({ user, adminToken }: SettingsProps) {
         const data = await response.json();
         if (data.success && Array.isArray(data.logs)) {
           // Keep last 100 traces
-          setTraces(data.logs.slice(0, 100));
+          const logs = data.logs.slice(0, 100);
+          setTraces(logs);
+
+          // If no traces, check for fallback
+          if (logs.length === 0) {
+            const fallbackRes = await fetch('/api/settings?action=ghl-get-fallback-debug', {
+              headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+            });
+            if (fallbackRes.ok) {
+              const fbData = await fallbackRes.json();
+              if (fbData.success && fbData.debug) {
+                setFallbackDebug(fbData.debug);
+              } else {
+                setFallbackDebug(null);
+              }
+            }
+          } else {
+            setFallbackDebug(null);
+          }
         }
       }
     } catch (err) {
@@ -3344,10 +3365,62 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                                     <span>Est: {t.estimateId || 'N/A'}</span>
                                     <span>{t.timestamp ? new Date(t.timestamp).toLocaleTimeString() + ' ' + new Date(t.timestamp).toLocaleDateString() : 'N/A'}</span>
                                   </div>
+                                  
+                                  {isFailed && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedTrace(t);
+                                        setViewingFailureDetails(true);
+                                      }}
+                                      className="mt-2 w-full py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
+                                    >
+                                      <Search size={10} />
+                                      View Failure Details
+                                    </button>
+                                  )}
                                 </div>
                               );
                             });
                           })()}
+
+                          {/* Fallback Display if no traces */}
+                          {traces.length === 0 && fallbackDebug && (
+                            <div className="mt-4 p-4 rounded-xl border border-amber-200 bg-amber-50/50 space-y-3">
+                              <div className="flex items-center gap-2 text-amber-800">
+                                <AlertTriangle size={16} />
+                                <span className="text-xs font-bold uppercase tracking-wider">Latest Schedule Debug Fallback</span>
+                              </div>
+                              <p className="text-[10px] text-amber-700">No recent traces found in the central log, but the latest schedule attempt recorded this debug object.</p>
+                              <div className="grid grid-cols-2 gap-2 text-[9px]">
+                                <div className="p-2 bg-white rounded-lg border border-amber-100">
+                                  <p className="text-[#999] uppercase font-bold">Action</p>
+                                  <p className="font-bold text-amber-900">{fallbackDebug.actionName || 'N/A'}</p>
+                                </div>
+                                <div className="p-2 bg-white rounded-lg border border-amber-100">
+                                  <p className="text-[#999] uppercase font-bold">Status</p>
+                                  <p className="font-bold text-red-600 uppercase">{fallbackDebug.status || 'FAILED'}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTrace({ 
+                                    traceId: fallbackDebug.scheduleSyncTraceId || 'fallback-id',
+                                    ghlSyncDebug: fallbackDebug,
+                                    customerName: 'Latest Attempt',
+                                    status: fallbackDebug.status || 'failed'
+                                  });
+                                  setViewingFailureDetails(true);
+                                }}
+                                className="w-full py-2 rounded-xl bg-amber-600 text-white text-[10px] font-bold hover:bg-amber-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                              >
+                                <Activity size={12} />
+                                Explore Fallback Debug Data
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Right Pane: Active Trace Steps detail */}
@@ -3369,9 +3442,20 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                                     <h5 className="text-xs font-bold text-american-blue uppercase tracking-wider">Trace Auditor detail</h5>
                                     <p className="text-[10px] text-[#666666] font-mono mt-0.5">ID: {selectedTrace.traceId}</p>
                                   </div>
-                                  <div className="text-[10px] text-[#666666] md:text-right">
-                                    <p>Customer: <span className="font-bold text-american-blue">{selectedTrace.customerName || 'N/A'}</span></p>
-                                    <p>Estimate ID: <span className="font-bold text-american-blue">{selectedTrace.estimateId || 'N/A'}</span></p>
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-[10px] text-[#666666] text-right">
+                                      <p>Customer: <span className="font-bold text-american-blue">{selectedTrace.customerName || 'N/A'}</span></p>
+                                      <p>Estimate ID: <span className="font-bold text-american-blue">{selectedTrace.estimateId || 'N/A'}</span></p>
+                                    </div>
+                                    {(selectedTrace.ghlSyncDebug || selectedTrace.status === 'failed') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingFailureDetails(true)}
+                                        className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[10px] font-bold hover:bg-red-700 transition-colors shadow-sm"
+                                      >
+                                        Detailed Failure Analysis
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
 
@@ -4665,6 +4749,173 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                 ) : (
                   "Create Fields"
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingFailureDetails && selectedTrace && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in overflow-hidden">
+          <div className="bg-white rounded-[32px] border border-slate-200 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-red-50/40 rounded-t-[32px]">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 border border-red-200 shadow-sm">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-american-blue uppercase tracking-widest font-sans">Detailed Failure Analysis</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[11px] text-red-600 font-black uppercase tracking-widest bg-white border border-red-100 px-2 py-0.5 rounded-md shadow-xs">
+                      Trace ID: {selectedTrace.traceId}
+                    </p>
+                    <span className="h-1 w-1 rounded-full bg-gray-300"></span>
+                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                      {selectedTrace.timestamp ? new Date(selectedTrace.timestamp).toLocaleString() : 'Date N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingFailureDetails(false)}
+                className="p-2.5 hover:bg-gray-100 rounded-2xl transition-all hover:rotate-90 duration-200"
+              >
+                <XCircle size={24} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+              {/* Summary Section */}
+              <section className="space-y-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-american-blue/10 flex items-center justify-center text-american-blue">
+                    <Activity size={12} />
+                  </div>
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-american-blue">Sync Infrastructure Summary</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-3xl bg-[#FAF9F6] border border-gray-100 shadow-xs">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Execution Status</p>
+                    <span className="px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest shadow-sm">Failed</span>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-[#FAF9F6] border border-gray-100 shadow-xs">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Logic Action</p>
+                    <p className="text-xs font-black text-american-blue uppercase tracking-tight">{selectedTrace.ghlSyncDebug?.actionName || selectedTrace.action || 'N/A'}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-[#FAF9F6] border border-gray-100 shadow-xs">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Handshake Start</p>
+                    <p className="text-xs font-bold text-american-blue">{selectedTrace.ghlSyncDebug?.startedAt ? new Date(selectedTrace.ghlSyncDebug.startedAt).toLocaleTimeString() : 'N/A'}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-[#FAF9F6] border border-gray-100 shadow-xs">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Network Latency</p>
+                    <p className="text-xs font-bold text-american-blue">
+                      {selectedTrace.ghlSyncDebug?.startedAt && selectedTrace.ghlSyncDebug?.completedAt 
+                        ? ((new Date(selectedTrace.ghlSyncDebug.completedAt).getTime() - new Date(selectedTrace.ghlSyncDebug.startedAt).getTime()) / 1000).toFixed(2) + 's'
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+                {(selectedTrace.ghlSyncDebug?.errors && selectedTrace.ghlSyncDebug.errors.length > 0) || selectedTrace.error ? (
+                  <div className="p-5 rounded-3xl bg-red-600 text-white shadow-xl shadow-red-200/50">
+                    <div className="flex items-center gap-2 mb-2 opacity-80">
+                      <AlertCircle size={14} />
+                      <p className="text-[9px] font-black uppercase tracking-widest">Primary Exception Trace</p>
+                    </div>
+                    <p className="text-sm font-bold leading-relaxed">
+                      {selectedTrace.ghlSyncDebug?.errors?.[0] || selectedTrace.error || 'Unknown fatal exception occurred during synchronization.'}
+                    </p>
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Steps Timeline */}
+              <section className="space-y-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-5 w-5 rounded-md bg-american-blue/10 flex items-center justify-center text-american-blue">
+                    <Clock size={12} />
+                  </div>
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-american-blue">Step-by-Step Execution Path</h4>
+                </div>
+                <div className="space-y-3">
+                  {(selectedTrace.ghlSyncDebug?.steps || []).length > 0 ? (
+                    selectedTrace.ghlSyncDebug.steps.map((step: any, idx: number) => (
+                      <div key={idx} className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-blue-200 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "h-10 w-10 rounded-2xl flex items-center justify-center text-xs font-black shadow-sm",
+                            step.status === 'success' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
+                            step.status === 'failed' ? "bg-red-50 text-red-600 border border-red-100" :
+                            "bg-gray-50 text-gray-400 border border-gray-100"
+                          )}>
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-american-blue uppercase tracking-wider">{step.step.replace(/_/g, ' ')}</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">{step.timestamp || 'Step timestamp N/A'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em]",
+                            step.status === 'success' ? "bg-emerald-100 text-emerald-700" :
+                            step.status === 'failed' ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"
+                          )}>
+                            {step.status}
+                          </span>
+                          {step.reason && (
+                            <div className="px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-xl text-[10px] text-amber-900 max-w-xs truncate font-medium">
+                              {step.reason}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                      No granular steps recorded for this trace
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Raw JSON Block */}
+              <section className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-5 w-5 rounded-md bg-american-blue/10 flex items-center justify-center text-american-blue">
+                      <Terminal size={12} />
+                    </div>
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-american-blue">Raw Audit JSON Payload</h4>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(selectedTrace.ghlSyncDebug || selectedTrace, null, 2));
+                      alert('Debug payload copied to clipboard');
+                    }}
+                    className="flex items-center gap-1.5 text-[10px] font-black text-blue-600 uppercase tracking-widest hover:bg-blue-50 px-3 py-1.5 rounded-xl transition-all"
+                  >
+                    <Copy size={12} /> Copy Payload
+                  </button>
+                </div>
+                <div className="relative group">
+                  <div className="absolute top-4 right-4 text-[9px] font-black text-emerald-500/50 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">
+                    Format: application/json
+                  </div>
+                  <pre className="p-8 rounded-[32px] bg-[#0a0a0a] text-emerald-400 font-mono text-[11px] overflow-x-auto border border-emerald-900/30 max-h-[500px] shadow-2xl custom-scrollbar leading-relaxed">
+                    {JSON.stringify(selectedTrace.ghlSyncDebug || selectedTrace, null, 2)}
+                  </pre>
+                </div>
+              </section>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="p-8 border-t border-gray-100 flex justify-end bg-gray-50/50 rounded-b-[32px]">
+              <button 
+                onClick={() => setViewingFailureDetails(false)}
+                className="px-10 py-4 bg-american-blue text-white rounded-[20px] text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:scale-95"
+              >
+                Close Analysis
               </button>
             </div>
           </div>

@@ -92,6 +92,7 @@ export async function logGhlActivity(log: {
   steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
   firestoreUpdated?: boolean;
   firestoreResult?: string;
+  ghlSyncDebug?: any;
 }) {
   try {
     const traceId = log.traceId;
@@ -136,7 +137,8 @@ export async function logGhlActivity(log: {
       timestamp: traceId.startsWith('trace-') ? new Date(parseInt(traceId.split('-')[1])).toISOString() : new Date().toISOString(),
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
-      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
+      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || '',
+      ghlSyncDebug: log.ghlSyncDebug || existingSnap.data()?.ghlSyncDebug || null
     });
 
     await logRef.set(docData, { merge: true });
@@ -797,6 +799,6 @@ Admin Estimate: ${adminEstimateLink}`;
       ]
     });
 
-    return { success: false, error: err.message || String(err) };
+    return { success: false, error: err.message || String(err), ghlSyncDebug };
   }
 }

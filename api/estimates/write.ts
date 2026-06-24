@@ -1408,6 +1408,7 @@ async function logGhlActivity(log: {
   steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
   firestoreUpdated?: boolean;
   firestoreResult?: string;
+  ghlSyncDebug?: any;
 }) {
   try {
     const traceId = log.traceId;
@@ -1452,7 +1453,8 @@ async function logGhlActivity(log: {
       timestamp: traceId.startsWith('trace-') ? new Date(parseInt(traceId.split('-')[1])).toISOString() : new Date().toISOString(),
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
-      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
+      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || '',
+      ghlSyncDebug: log.ghlSyncDebug || existingSnap.data()?.ghlSyncDebug || null
     });
 
     await logRef.set(docData, { merge: true });
@@ -7222,6 +7224,14 @@ Lone Star Fence Works`;
             );
             // CHECKPOINT 13: Returned from helper
             console.log("CHECKPOINT 13: Returned from helper", { calSync });
+
+            // Final sync log
+            await logGhlActivity({
+              traceId: scheduleSyncTraceId,
+              status: calSync.success ? 'success' : 'failed',
+              error: calSync.error || '',
+              ghlSyncDebug: calSync.ghlSyncDebug
+            });
 
             return res.status(200).json({ 
               success: true, 

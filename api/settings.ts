@@ -404,6 +404,7 @@ async function logGhlActivity(log: {
   steps?: Array<{ step: string; label?: string; status: string; reason?: string; timestamp?: string }>;
   firestoreUpdated?: boolean;
   firestoreResult?: string;
+  ghlSyncDebug?: any;
 }) {
   try {
     const traceId = log.traceId;
@@ -448,7 +449,8 @@ async function logGhlActivity(log: {
       timestamp: traceId.startsWith('trace-') ? new Date(parseInt(traceId.split('-')[1])).toISOString() : new Date().toISOString(),
       steps: mergedSteps,
       firestoreUpdated: log.firestoreUpdated !== undefined ? log.firestoreUpdated : (existingSnap.data()?.firestoreUpdated || false),
-      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || ''
+      firestoreResult: log.firestoreResult || existingSnap.data()?.firestoreResult || '',
+      ghlSyncDebug: log.ghlSyncDebug || existingSnap.data()?.ghlSyncDebug || null
     });
 
     await logRef.set(docData, { merge: true });
@@ -2314,6 +2316,30 @@ export default async function handler(req: any, res: any) {
           const logsSnap = await db.collection('ghl_integration_logs').orderBy('timestamp', 'desc').limit(200).get();
           const logs = logsSnap.docs.map((doc: any) => doc.data());
           return res.status(200).json({ success: true, logs });
+        } catch (err: any) {
+          return res.status(500).json({ success: false, error: err.message || String(err) });
+        }
+      } else if (action === 'ghl-get-fallback-debug') {
+        try {
+          // Check latest schedule event for ghlSyncDebug
+          const eventsSnap = await db.collection('schedule_events').orderBy('updatedAt', 'desc').limit(1).get();
+          if (!eventsSnap.empty) {
+            const data = eventsSnap.docs[0].data();
+            if (data.ghlSyncDebug) {
+              return res.status(200).json({ success: true, source: 'Schedule Event', debug: data.ghlSyncDebug });
+            }
+          }
+          
+          // Or check latest estimate
+          const estimatesSnap = await db.collection('estimates').orderBy('updatedAt', 'desc').limit(5).get();
+          for (const doc of estimatesSnap.docs) {
+            const data = doc.data();
+            if (data.ghlSyncDebug) {
+              return res.status(200).json({ success: true, source: 'Estimate', debug: data.ghlSyncDebug });
+            }
+          }
+
+          return res.status(200).json({ success: false, message: 'No fallback debug found' });
         } catch (err: any) {
           return res.status(500).json({ success: false, error: err.message || String(err) });
         }
