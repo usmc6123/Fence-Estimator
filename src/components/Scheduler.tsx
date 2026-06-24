@@ -483,6 +483,17 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
     // STEP 1: Clicked Save Schedule
+    console.log("REAL JOB SCHEDULER SAVE FIRED");
+    console.log({
+      scheduleSyncTraceId: traceId,
+      estimateId,
+      selectedDate: startDateStr,
+      duration,
+      crew: estimate.assignedCrew || 'Crew',
+      endpoint: '/api/estimates/write',
+      action: 'reschedule-job'
+    });
+
     await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 1, 'success', {
       installStartDate: startDateStr,
       installDays: duration,
@@ -574,6 +585,17 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       }
 
       // STEP 1: Clicked Save Schedule
+      console.log("REAL JOB SCHEDULER SAVE FIRED");
+      console.log({
+        scheduleSyncTraceId: traceId,
+        estimateId,
+        selectedDate: newDateStr,
+        duration: newDuration,
+        crew: estimate?.assignedCrew || 'Crew',
+        endpoint: '/api/estimates/write',
+        action: 'reschedule-job'
+      });
+
       await traceSchedulerStep(traceId, estimateId, customerName, 1, 'success', {
         installStartDate: newDateStr,
         installDays: newDuration,

@@ -7050,6 +7050,9 @@ Lone Star Fence Works`;
         console.log(`[BACKEND ACTION] ${action}: estimateId=${estimateId}, startDate=${startDate}, duration=${duration}, eventId=${eventIdFromReq}`);
 
         if (action === 'reschedule-job' || ((action === 'update-schedule-event' || action === 'create-schedule-event') && estimateId)) {
+          if (action === 'reschedule-job') {
+            console.log("REAL JOB SCHEDULER BACKEND ACTION RECEIVED");
+          }
           // If duration is missing, default to 1 (common for estimate appointments)
           const finalDuration = duration || 1;
           
@@ -7066,6 +7069,15 @@ Lone Star Fence Works`;
 
           const scheduleEventId = eventIdFromReq || "install-" + estimateId;
           const scheduleSyncTraceId = req.body.scheduleSyncTraceId || ("trace-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
+
+          // Ensure trace row exists immediately
+          await logGhlActivity({
+            traceId: scheduleSyncTraceId,
+            estimateId,
+            customerName: estimateData.customerName || '',
+            status: 'running',
+            action: action
+          });
 
           // Use the JWT token for the GHL helper if body token is missing
           const jwtToken = req.headers.authorization ? req.headers.authorization.split(' ')[1] : '';
