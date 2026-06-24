@@ -5570,7 +5570,9 @@ export default async function handler(req: any, res: any) {
           scheduledDuration: duration,
           ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
           ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg,
-          ghlSyncDebug: calSync.ghlSyncDebug || null
+          ghlSyncDebug: calSync.ghlSyncDebug || null,
+          ghlSyncSuccess: calSync.success,
+          ghlSyncError: calSync.error,
         });
       }
 
@@ -5698,7 +5700,9 @@ export default async function handler(req: any, res: any) {
           scheduledDuration: duration,
           ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
           ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg,
-          ghlSyncDebug: calSync.ghlSyncDebug || null
+          ghlSyncDebug: calSync.ghlSyncDebug || null,
+          ghlSyncSuccess: calSync.success,
+          ghlSyncError: calSync.error,
         });
       }
 
@@ -5785,7 +5789,9 @@ export default async function handler(req: any, res: any) {
           scheduledDuration: duration,
           ghlCalendarSyncStatus: syncSuccess ? 'synced' : 'failed',
           ghlCalendarSyncError: syncSuccess ? null : syncErrorMsg,
-          ghlSyncDebug: calSync.ghlSyncDebug || null
+          ghlSyncDebug: calSync.ghlSyncDebug || null,
+          ghlSyncSuccess: calSync.success,
+          ghlSyncError: calSync.error,
         });
       }
 
@@ -7237,6 +7243,10 @@ Lone Star Fence Works`;
               success: true, 
               message: 'Schedule updated and synced to GHL.',
               ghlResult: calSync,
+              // Explicitly included failure details as requested
+              ghlSyncSuccess: calSync.success,
+              ghlSyncError: calSync.error,
+              ghlSyncDebug: calSync.ghlSyncDebug,
               id: scheduleEventId
             });
 

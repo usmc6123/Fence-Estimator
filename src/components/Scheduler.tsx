@@ -581,6 +581,18 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         // CHECKPOINT 8: Response parsed
         addTrace(8, "Response parsed", { resData });
 
+        // EXPOSE GHL FAILURE DETAILS IF PRESENT
+        if (resData.ghlResult && !resData.ghlResult.success) {
+          const ghlDebug = resData.ghlResult.ghlSyncDebug;
+          const failedStep = ghlDebug?.steps?.find((s: any) => s.status === 'failed')?.step || 'unknown';
+          const firstError = ghlDebug?.errors?.[0];
+          const errorMsg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Unknown error');
+          const errorBody = firstError?.responseBody ? JSON.stringify(firstError.responseBody) : 'N/A';
+          
+          console.warn('GHL Sync Failure Details (Checkpoint 7/8):', { failedStep, errorMsg, errorBody });
+          alert(`GHL SYNC FAILURE: \nStep: ${failedStep}\nError: ${errorMsg}\nResponse: ${errorBody}`);
+        }
+
         setShowEventModal(false);
 
         // STEP 12: Frontend success
@@ -711,6 +723,20 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         throw new Error(resText);
       }
       
+      const resData = JSON.parse(resText);
+
+      // EXPOSE GHL FAILURE DETAILS IF PRESENT
+      if (resData.ghlResult && !resData.ghlResult.success) {
+        const ghlDebug = resData.ghlResult.ghlSyncDebug;
+        const failedStep = ghlDebug?.steps?.find((s: any) => s.status === 'failed')?.step || 'unknown';
+        const firstError = ghlDebug?.errors?.[0];
+        const errorMsg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Unknown error');
+        const errorBody = firstError?.responseBody ? JSON.stringify(firstError.responseBody) : 'N/A';
+        
+        console.warn('GHL Sync Failure Details (Reschedule):', { failedStep, errorMsg, errorBody });
+        alert(`GHL SYNC FAILURE (Reschedule): \nStep: ${failedStep}\nError: ${errorMsg}\nResponse: ${errorBody}`);
+      }
+
       setIsRescheduling(false);
       setShowEventModal(false);
 

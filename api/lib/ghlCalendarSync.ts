@@ -764,6 +764,25 @@ Admin Estimate: ${adminEstimateLink}`;
     if (overallSuccessFinal) {
       return { success: true, ghlCalendarEventId: finalIdsStr, ghlCalendarEventIds: newIds, ghlContactId, ghlSyncDebug };
     } else {
+      ghlSyncDebug.status = 'failed';
+      ghlSyncDebug.completedAt = new Date().toISOString();
+      
+      console.log(`GHL_SYNC_FAILED_TRACE_ID: ${ghlSyncDebug.scheduleSyncTraceId}`);
+      console.log(`GHL_SYNC_FAILED_STATUS: ${ghlSyncDebug.status}`);
+      console.log(`GHL_SYNC_FAILED_ACTION: ${ghlSyncDebug.actionName}`);
+
+      (ghlSyncDebug.steps || []).forEach((step: any, idx: number) => {
+        console.log(`GHL_SYNC_STEP_${idx}: ${JSON.stringify(step)}`);
+      });
+
+      (ghlSyncDebug.errors || []).forEach((error: any, idx: number) => {
+        console.log(`GHL_SYNC_ERROR_${idx}: ${JSON.stringify(error)}`);
+      });
+
+      console.log("GHL_SYNC_DEBUG_FULL_JSON_START");
+      console.log(JSON.stringify(ghlSyncDebug));
+      console.log("GHL_SYNC_DEBUG_FULL_JSON_END");
+
       return { success: false, error: `GHL API Sync Failed. See sync details in admin.`, ghlSyncDebug };
     }
 
@@ -799,14 +818,21 @@ Admin Estimate: ${adminEstimateLink}`;
       ]
     });
 
-    console.log("=========================");
-    console.log("BEGIN GHL SYNC DEBUG");
-    console.log("=========================");
-    console.dir(ghlSyncDebug, { depth: null });
-    console.log(JSON.stringify(ghlSyncDebug, null, 2));
-    console.log("=========================");
-    console.log("END GHL SYNC DEBUG");
-    console.log("=========================");
+    console.log(`GHL_SYNC_FAILED_TRACE_ID: ${ghlSyncDebug.scheduleSyncTraceId}`);
+    console.log(`GHL_SYNC_FAILED_STATUS: ${ghlSyncDebug.status}`);
+    console.log(`GHL_SYNC_FAILED_ACTION: ${ghlSyncDebug.actionName}`);
+
+    (ghlSyncDebug.steps || []).forEach((step: any, idx: number) => {
+      console.log(`GHL_SYNC_STEP_${idx}: ${JSON.stringify(step)}`);
+    });
+
+    (ghlSyncDebug.errors || []).forEach((error: any, idx: number) => {
+      console.log(`GHL_SYNC_ERROR_${idx}: ${JSON.stringify(error)}`);
+    });
+
+    console.log("GHL_SYNC_DEBUG_FULL_JSON_START");
+    console.log(JSON.stringify(ghlSyncDebug));
+    console.log("GHL_SYNC_DEBUG_FULL_JSON_END");
 
     return { success: false, error: err.message || String(err), ghlSyncDebug };
   }
