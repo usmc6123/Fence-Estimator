@@ -908,24 +908,58 @@ export async function cancelGhlCalendarAppointmentsForSchedule(scheduleEventId: 
     const eventData = eventSnap.data() || {};
     const estimateId = eventData.estimateId;
 
-    // 2. Collect IDs
+    // 2. Collect IDs from schedule event and associate estimate
     const ghlIds: string[] = [];
-    if (eventData.ghlCalendarEventId) {
-      ghlIds.push(eventData.ghlCalendarEventId);
-    }
-    if (Array.isArray(eventData.ghlCalendarEventIds)) {
-      eventData.ghlCalendarEventIds.forEach((item: any) => {
-        if (item && item.ghlCalendarEventId) {
-          ghlIds.push(item.ghlCalendarEventId);
+    
+    // Helper to extract IDs from various formats
+    const extractIds = (data: any) => {
+      if (data.ghlCalendarEventId) {
+        if (typeof data.ghlCalendarEventId === 'string' && data.ghlCalendarEventId.includes(',')) {
+          ghlIds.push(...data.ghlCalendarEventId.split(','));
+        } else {
+          ghlIds.push(String(data.ghlCalendarEventId));
         }
-      });
+      }
+      if (Array.isArray(data.ghlCalendarEventIds)) {
+        data.ghlCalendarEventIds.forEach((item: any) => {
+          if (typeof item === 'string') {
+            ghlIds.push(item);
+          } else if (item && item.ghlCalendarEventId) {
+            ghlIds.push(String(item.ghlCalendarEventId));
+          } else if (item && item.id) {
+            ghlIds.push(String(item.id));
+          }
+        });
+      }
+      // Also check ghlSyncDebug for any successful appointment IDs
+      if (data.ghlSyncDebug?.steps) {
+        data.ghlSyncDebug.steps.forEach((s: any) => {
+          if (s.step === 'appointment_id_returned_success' && s.reason?.includes('Returned ID:')) {
+            const id = s.reason.split('Returned ID:')[1].trim();
+            if (id) ghlIds.push(id);
+          }
+        });
+      }
+    };
+
+    extractIds(eventData);
+
+    // Also fetch estimate to see if it has more IDs
+    if (estimateId) {
+      const { snap: estimateSnap } = await getEstimateDocRef(estimateId);
+      if (estimateSnap.exists) {
+        console.log(`[GHL SYNC TRACE - ${traceId}] Checking estimate ${estimateId} for additional GHL IDs`);
+        extractIds(estimateSnap.data() || {});
+      }
     }
 
-    const uniqueIds = Array.from(new Set(ghlIds)).filter(Boolean);
+    const uniqueIds = Array.from(new Set(ghlIds.map(id => String(id).trim()))).filter(Boolean);
     if (uniqueIds.length === 0) {
-      console.log(`[GHL SYNC TRACE - ${traceId}] No GHL appointment IDs found to cancel.`);
+      console.log(`[GHL SYNC TRACE - ${traceId}] No GHL appointment IDs found to cancel in schedule event or estimate.`);
       return { success: true, message: 'No GHL appointments found to cancel.' };
     }
+
+    console.log(`[GHL SYNC TRACE - ${traceId}] Collected ${uniqueIds.length} unique IDs for cancellation: ${uniqueIds.join(', ')}`);
 
     // 3. Fetch settings
     const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();

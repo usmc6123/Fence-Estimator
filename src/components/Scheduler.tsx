@@ -190,18 +190,22 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     if (!selectedDate) return [];
     const dateKey = format(selectedDate, 'yyyy-MM-dd');
     const dayEvents = events.filter(e => {
-      if (e.startDate !== dateKey) return false;
-      const view = config.viewFilter;
-      if (view === 'both') return true;
-      if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
-      if (view === 'jobs') return e.type === 'Job' || e.type === 'Blackout';
-      return true;
+      const start = e.startDate;
+      const end = e.endDate || start;
+      return dateKey >= start && dateKey <= end;
     });
     const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
     const dayJobs = showJobs ? scheduledEstimates.filter(est => {
       const start = est.scheduledStartDate!;
-      const end = est.scheduledEndDate || start;
-      return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+      let end = est.scheduledEndDate;
+      const durationNum = Number(est.scheduledDuration);
+      if (!end && durationNum && durationNum > 1) {
+        const d = parseLocalDate(start.substring(0, 10));
+        d.setDate(d.getDate() + (durationNum - 1));
+        end = format(d, 'yyyy-MM-dd');
+      }
+      const finalEnd = end || start;
+      return dateKey >= start.substring(0, 10) && dateKey <= finalEnd.substring(0, 10);
     }) : [];
 
     return [
@@ -935,9 +939,10 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const targetDate = selectedDate || new Date();
     const dateKey = format(targetDate, 'yyyy-MM-dd');
     
-    // Day scheduled events
     const dayEvents = events.filter(e => {
-      if (e.startDate !== dateKey) return false;
+      const start = e.startDate;
+      const end = e.endDate || start;
+      if (!(dateKey >= start && dateKey <= end)) return false;
       const view = config.viewFilter;
       if (view === 'both') return true;
       if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
@@ -958,8 +963,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
     const activeJobs = showJobs ? scheduledEstimates.filter(est => {
       const start = est.scheduledStartDate!;
-      const end = est.scheduledEndDate || start;
-      return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+      let end = est.scheduledEndDate;
+      const durationNum = Number(est.scheduledDuration);
+      if (!end && durationNum && durationNum > 1) {
+        const d = parseLocalDate(start.substring(0, 10));
+        d.setDate(d.getDate() + (durationNum - 1));
+        end = format(d, 'yyyy-MM-dd');
+      }
+      const finalEnd = end || start;
+      return dateKey >= start.substring(0, 10) && dateKey <= finalEnd.substring(0, 10);
     }) : [];
 
     activeJobs.forEach(job => {
@@ -1149,7 +1161,9 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                     .map((day) => {
                       const dateKey = format(day, 'yyyy-MM-dd');
                       const dayEvents = events.filter(e => {
-                        if (e.startDate !== dateKey) return false;
+                        const start = e.startDate;
+                        const end = e.endDate || start;
+                        if (!(dateKey >= start && dateKey <= end)) return false;
                         const view = config.viewFilter;
                         if (view === 'both') return true;
                         if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
@@ -1159,8 +1173,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
                       const jobs = showJobs ? scheduledEstimates.filter(est => {
                         const start = est.scheduledStartDate!;
-                        const end = est.scheduledEndDate || start;
-                        return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+                        let end = est.scheduledEndDate;
+                        const durationNum = Number(est.scheduledDuration);
+                        if (!end && durationNum && durationNum > 1) {
+                          const d = parseLocalDate(start.substring(0, 10));
+                          d.setDate(d.getDate() + (durationNum - 1));
+                          end = format(d, 'yyyy-MM-dd');
+                        }
+                        const finalEnd = end || start;
+                        return dateKey >= start.substring(0, 10) && dateKey <= finalEnd.substring(0, 10);
                       }) : [];
 
                       const isToday = isSameDay(day, new Date());
@@ -1414,7 +1435,9 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                     .map((day, idx) => {
                       const dateKey = format(day, 'yyyy-MM-dd');
                       const dayEvents = events.filter(e => {
-                        if (e.startDate !== dateKey) return false;
+                        const start = e.startDate;
+                        const end = e.endDate || start;
+                        if (!(dateKey >= start && dateKey <= end)) return false;
                         const view = config.viewFilter;
                         if (view === 'both') return true;
                         if (view === 'estimates') return e.type === 'Estimate' || e.type === 'Busy';
@@ -1424,8 +1447,15 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
                       const showJobs = config.viewFilter === 'jobs' || config.viewFilter === 'both';
                       const jobs = showJobs ? scheduledEstimates.filter(est => {
                         const start = est.scheduledStartDate!;
-                        const end = est.scheduledEndDate || start;
-                        return dateKey >= start.substring(0, 10) && dateKey <= end.substring(0, 10);
+                        let end = est.scheduledEndDate;
+                        const durationNum = Number(est.scheduledDuration);
+                        if (!end && durationNum && durationNum > 1) {
+                          const d = parseLocalDate(start.substring(0, 10));
+                          d.setDate(d.getDate() + (durationNum - 1));
+                          end = format(d, 'yyyy-MM-dd');
+                        }
+                        const finalEnd = end || start;
+                        return dateKey >= start.substring(0, 10) && dateKey <= finalEnd.substring(0, 10);
                       }) : [];
                       const isCurrentMonth = isSameMonth(day, monthStart);
                       const isToday = isSameDay(day, new Date());
