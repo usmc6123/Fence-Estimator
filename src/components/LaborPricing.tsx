@@ -6,12 +6,14 @@ interface LaborPricingProps {
   laborRates: LaborRates;
   setLaborRates: (rates: LaborRates) => void;
   onSave?: (rates: LaborRates) => Promise<boolean>;
+  diagnosticData?: any;
 }
 
-export default function LaborPricing({ laborRates, setLaborRates, onSave }: LaborPricingProps) {
+export default function LaborPricing({ laborRates, setLaborRates, onSave, diagnosticData }: LaborPricingProps) {
   const [localRates, setLocalRates] = React.useState<LaborRates>(laborRates);
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
+  const [showInspector, setShowInspector] = React.useState(false);
 
   // Sync local rates if props change (e.g. from firestore load)
   React.useEffect(() => {
@@ -62,6 +64,14 @@ export default function LaborPricing({ laborRates, setLaborRates, onSave }: Labo
         </div>
 
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowInspector(!showInspector)}
+            className="p-3 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all border border-slate-200 flex items-center gap-2"
+            title="Labor Rate Save Inspector"
+          >
+            <div className={`h-2 w-2 rounded-full ${diagnosticData ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span className="text-[10px] font-black uppercase tracking-widest">Inspector</span>
+          </button>
           {saveSuccess && (
             <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-600 rounded-xl animate-in fade-in slide-in-from-right-4 duration-300">
               <CheckCircle2 size={18} />
@@ -82,6 +92,70 @@ export default function LaborPricing({ laborRates, setLaborRates, onSave }: Labo
           </button>
         </div>
       </div>
+
+      {showInspector && (
+        <div className="bg-slate-900 text-slate-100 rounded-3xl p-8 font-mono text-xs overflow-auto max-h-[600px] border-4 border-american-blue/20 shadow-2xl animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-2 w-2 rounded-full bg-american-red animate-pulse" />
+              <h3 className="text-sm font-black text-white uppercase tracking-widest">Labor Rate Save Inspector</h3>
+            </div>
+            <button onClick={() => setShowInspector(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
+          </div>
+          <div className="space-y-6">
+            <section>
+              <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-tighter">1. UI State (Local)</h4>
+              <pre className="p-4 bg-black/40 rounded-xl border border-white/5">{JSON.stringify(localRates, null, 2)}</pre>
+            </section>
+            <section>
+              <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-tighter">2. Last Payload Sent</h4>
+              <pre className="p-4 bg-black/40 rounded-xl border border-white/5">{JSON.stringify(diagnosticData?.payloadSent, null, 2) || 'No data'}</pre>
+            </section>
+            <section>
+              <h4 className="text-blue-400 font-bold mb-2 uppercase tracking-tighter">3. API & Endpoints</h4>
+              <div className="grid grid-cols-2 gap-4 p-4 bg-black/40 rounded-xl border border-white/5">
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Endpoint</p>
+                  <p className="font-bold text-white mt-1">{diagnosticData?.endpoint || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Path Match</p>
+                  <p className={`font-bold mt-1 ${diagnosticData?.pathMatch ? 'text-emerald-400' : 'text-american-red'}`}>
+                    {diagnosticData?.pathMatch ? 'YES (main)' : 'NO'}
+                  </p>
+                </div>
+              </div>
+            </section>
+            <section>
+              <h4 className="text-amber-400 font-bold mb-2 uppercase tracking-tighter">4. Backend Response</h4>
+              <pre className="p-4 bg-black/40 rounded-xl border border-white/5">{JSON.stringify(diagnosticData?.backendResponse, null, 2) || 'No response yet'}</pre>
+            </section>
+            <section>
+              <h4 className="text-purple-400 font-bold mb-2 uppercase tracking-tighter">5. Firestore Verification</h4>
+              <div className="space-y-4 p-4 bg-black/40 rounded-xl border border-white/5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Write Path</p>
+                    <p className="font-bold text-white mt-1">{diagnosticData?.firestoreWritePath || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Load Path</p>
+                    <p className="font-bold text-white mt-1">{diagnosticData?.firestoreLoadPath || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-white/5">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Value After Write (Read-After-Write)</p>
+                  <pre className="mt-2 text-[10px] text-slate-300">{JSON.stringify(diagnosticData?.firestoreValueAfterWrite, null, 2) || 'No data'}</pre>
+                </div>
+                <div className="pt-4 border-t border-white/5">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Value Loaded on Refresh/Init</p>
+                  <pre className="mt-2 text-[10px] text-slate-300">{JSON.stringify(diagnosticData?.firestoreValueLoaded, null, 2) || 'No data'}</pre>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-[50px] p-12 shadow-2xl border-2 border-american-blue/5">
         <div className="grid gap-x-12 gap-y-16 md:grid-cols-2">

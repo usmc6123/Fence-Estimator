@@ -901,6 +901,29 @@ export default async function handler(req: any, res: any) {
         await settingsDocRef.set(updatedSettings, { merge: true });
         return res.status(200).json({ success: true, message: 'Settings saved successfully.' });
 
+      } else if (action === 'save-labor-rates') {
+        const { laborRates } = req.body;
+        const targetId = 'main'; // Use 'main' as requested
+        const settingsDocRef = db.collection('companySettings').doc(targetId);
+        
+        await settingsDocRef.set({
+          id: targetId,
+          laborRates: sanitizeForFirestore(laborRates),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        // Read after write
+        const updatedSnap = await settingsDocRef.get();
+        const updatedData = updatedSnap.data() || {};
+
+        return res.status(200).json({
+          success: true,
+          message: 'Labor rates saved successfully.',
+          savedLaborRatesFromFirestore: updatedData.laborRates,
+          writePath: `companySettings/${targetId}`,
+          readPath: `companySettings/${targetId}`
+        });
+
       } else if (action === 'ghl-test-calendar-slots') {
         const { ghlApiKey, ghlLocationId, calendarId } = req.body;
         

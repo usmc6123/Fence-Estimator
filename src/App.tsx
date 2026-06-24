@@ -383,6 +383,7 @@ export default function App() {
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
     return getInitialValue('laborRates', 'fence_pro_labor_rates', DEFAULT_LABOR_RATES);
   });
+  const [laborRateDiagnostic, setLaborRateDiagnostic] = React.useState<any>(null);
 
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
     const initial = getInitialValue('estimate', 'fence_pro_estimate', DEFAULT_ESTIMATE);
@@ -611,12 +612,22 @@ export default function App() {
         const docRef = doc(db, 'companySettings', 'main');
         const dSnap = await getDoc(docRef);
         console.log('[DIAGNOSTIC] Loading laborRates from:', docRef.path);
+        
+        setLaborRateDiagnostic((prev: any) => ({
+          ...(prev || {}),
+          firestoreLoadPath: 'companySettings/main'
+        }));
+
         if (dSnap.exists()) {
           const sData = dSnap.data();
           console.log('[DIAGNOSTIC] Data found in main:', Object.keys(sData));
           if (sData.laborRates) {
             console.log('[DIAGNOSTIC] laborRates found in main, updating state');
             setLaborRates(sData.laborRates);
+            setLaborRateDiagnostic((prev: any) => ({
+              ...(prev || {}),
+              firestoreValueLoaded: sData.laborRates
+            }));
           } else {
             console.log('[DIAGNOSTIC] No laborRates key in main document');
           }
@@ -641,20 +652,52 @@ export default function App() {
     setLaborRates(newRates);
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(newRates));
     
+    const diagnostic: any = {
+      uiState: newRates,
+      payloadSent: { action: 'save-labor-rates', laborRates: newRates },
+      endpoint: '/api/settings',
+      firestoreWritePath: 'companySettings/main',
+      firestoreLoadPath: 'companySettings/main',
+      pathMatch: true
+    };
+    setLaborRateDiagnostic(diagnostic);
+
     if (user) {
       try {
-        const docRef = doc(db, 'companySettings', 'main');
-        console.log('[DIAGNOSTIC] Saving laborRates to:', docRef.path);
-        console.log('[DIAGNOSTIC] Keys being saved:', Object.keys(newRates));
-        await setDoc(docRef, {
-          id: 'main', // Ensure validation passes for Firestore rules
-          laborRates: newRates,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        console.log('[DIAGNOSTIC] Labor rates save SUCCESS');
-        return true;
+        const token = localStorage.getItem('company_admin_token');
+        console.log('[DIAGNOSTIC] Saving laborRates via API...');
+        
+        const response = await fetch('/api/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify(diagnostic.payloadSent)
+        });
+
+        const resData = await response.json();
+        console.log('[DIAGNOSTIC] API Response:', resData);
+        
+        setLaborRateDiagnostic((prev: any) => ({
+          ...prev,
+          backendResponse: resData,
+          firestoreValueAfterWrite: resData.savedLaborRatesFromFirestore
+        }));
+
+        if (response.ok && resData.success) {
+          if (resData.savedLaborRatesFromFirestore) {
+            setLaborRates(resData.savedLaborRatesFromFirestore);
+          }
+          return true;
+        }
+        return false;
       } catch (err) {
         console.error('[DIAGNOSTIC] Labor rates save FAILURE:', err);
+        setLaborRateDiagnostic((prev: any) => ({
+          ...prev,
+          backendResponse: { error: String(err) }
+        }));
         return false;
       }
     }
@@ -1134,6 +1177,7 @@ export default function App() {
               laborRates={laborRates} 
               setLaborRates={setLaborRates} 
               onSave={handleSaveLaborRates}
+              diagnosticData={laborRateDiagnostic}
             />
           )}
           {activeTab === 'takeoff' && (
