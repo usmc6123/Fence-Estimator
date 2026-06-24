@@ -426,16 +426,19 @@ export async function syncEstimateToGhlCalendar(
 
     // RESCHEDULING RULE: If duration changes, delete old appointments first
     if (existingIds.length > 0 && existingIds.length !== days) {
-      console.log(`[GHL SYNC TRACE - ${traceId}] Duration changed from ${existingIds.length} to ${days}. Cleaning up old appointments first.`);
+      console.log(`[GHL SYNC TRACE - ${traceId}] Duration changed from ${existingIds.length} to ${days}. Cancelling old appointments via status update.`);
       for (const oldId of existingIds) {
         try {
-          console.log(`[GHL SYNC TRACE - ${traceId}] Deleting old appointment during reschedule: ${oldId}`);
+          console.log(`[GHL SYNC TRACE - ${traceId}] Cancelling old appointment during reschedule: ${oldId}`);
           await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${oldId}`, {
-            method: 'DELETE',
-            headers
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({
+              appointmentStatus: 'cancelled'
+            })
           });
         } catch (err) {
-          console.error(`[GHL SYNC TRACE - ${traceId}] Failed to delete old appointment ${oldId}:`, err);
+          console.error(`[GHL SYNC TRACE - ${traceId}] Failed to cancel old appointment ${oldId}:`, err);
         }
       }
       existingIds = []; // Clear them so the loop below creates new ones
@@ -943,23 +946,40 @@ export async function cancelGhlCalendarAppointmentsForSchedule(scheduleEventId: 
     const results: any[] = [];
     let allSucceeded = true;
 
-    // 4. Delete each appointment
+    // 4. Cancel each appointment by updating status
     for (const idToDelete of uniqueIds) {
       try {
-        console.log(`[GHL SYNC TRACE - ${traceId}] Deleting GHL appointment: ${idToDelete}`);
-        const res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${idToDelete}`, {
-          method: 'DELETE',
-          headers
+        console.log(`[GHL SYNC TRACE - ${traceId}] Cancelling GHL appointment: ${idToDelete}`);
+        const payload = {
+          appointmentStatus: 'cancelled'
+        };
+        
+        console.log(`[GHL SYNC DEBUG - ${traceId}] Cancellation Request:`, {
+          endpoint: `https://services.leadconnectorhq.com/calendars/events/appointments/${idToDelete}`,
+          method: 'PUT',
+          body: payload
         });
+
+        const res = await fetch(`https://services.leadconnectorhq.com/calendars/events/appointments/${idToDelete}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(payload)
+        });
+
         const resStatus = res.status;
         const resText = await res.text();
+        
+        console.log(`[GHL SYNC DEBUG - ${traceId}] Cancellation Response for ${idToDelete}:`, {
+          status: resStatus,
+          body: resText
+        });
         
         results.push({ id: idToDelete, status: resStatus, response: resText });
         if (resStatus !== 200 && resStatus !== 204 && resStatus !== 404) {
           allSucceeded = false;
         }
       } catch (err) {
-        console.error(`[GHL SYNC TRACE - ${traceId}] Failed to delete ${idToDelete}:`, err);
+        console.error(`[GHL SYNC TRACE - ${traceId}] Failed to cancel ${idToDelete}:`, err);
         results.push({ id: idToDelete, error: String(err) });
         allSucceeded = false;
       }
