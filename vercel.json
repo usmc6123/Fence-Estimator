@@ -2,6 +2,22 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/api/admin/users",
+      "destination": "/api/admin"
+    },
+    {
+      "source": "/api/expenses/list",
+      "destination": "/api/expenses/write"
+    },
+    {
+      "source": "/api/quotes/list",
+      "destination": "/api/quotes/write"
+    },
+    {
+      "source": "/api/estimates/list",
+      "destination": "/api/estimates/write"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

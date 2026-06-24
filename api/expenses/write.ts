@@ -36,15 +36,30 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore(admin.app(), CUSTOM_DB_ID);
 
+function cleanTimestamp(val: any): string {
+  if (!val) return new Date().toISOString();
+  if (typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (val && typeof val === 'object') {
+    const secs = val._seconds || val.seconds;
+    if (secs !== undefined) {
+      return new Date(secs * 1000).toISOString();
+    }
+  }
+  if (typeof val === 'string') return val;
+  return new Date().toISOString();
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const allowedMethods = ['POST', 'DELETE'];
+  const allowedMethods = ['GET', 'POST', 'DELETE'];
   if (!allowedMethods.includes(req.method)) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -66,6 +81,48 @@ export default async function handler(req: any, res: any) {
 
     if (!decoded || !decoded.uid) {
       return res.status(401).json({ error: 'Unauthorized: Missing user UID in token' });
+    }
+
+    if (req.method === 'GET') {
+      const uid = decoded.uid;
+      const isAdmin = decoded.isAdmin || uid === 'braden-lonestar-uid';
+
+      const expensesList: any[] = [];
+
+      if (isAdmin) {
+        const snap = await db.collection('expenses').get();
+        snap.forEach(doc => {
+          expensesList.push({ id: doc.id, ...doc.data() });
+        });
+      } else {
+        const snap = await db.collection('expenses').where('userId', '==', uid).get();
+        snap.forEach(doc => {
+          expensesList.push({ id: doc.id, ...doc.data() });
+        });
+      }
+
+      expensesList.sort((a, b) => {
+        const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+        const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+        
+        if (timeB === timeA) {
+          const dateA = a.date ? new Date(a.date).getTime() : 0;
+          const dateB = b.date ? new Date(b.date).getTime() : 0;
+          return dateB - dateA;
+        }
+        return timeB - timeA;
+      });
+
+      const cleanExpensesList = expensesList.map(exp => {
+        return {
+          ...exp,
+          createdAt: cleanTimestamp(exp.createdAt),
+          updatedAt: cleanTimestamp(exp.updatedAt || exp.createdAt),
+          date: exp.date || new Date().toISOString().split('T')[0]
+        };
+      });
+
+      return res.status(200).json(cleanExpensesList);
     }
 
     const isDeleteAction = req.method === 'DELETE' || (req.method === 'POST' && req.body.action === 'delete');

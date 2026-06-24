@@ -12,11 +12,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 
 // Modular Admin APIs
-import { listUsers, createUser, updateUser, deleteUser } from './api/admin/users';
 import adminHandler from './api/admin';
-import listEstimates from './api/estimates/list';
-import listExpenses from './api/expenses/list';
-import listQuotes from './api/quotes/list';
 import listMaterials from './api/materials/list';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
@@ -312,95 +308,21 @@ async function startServer() {
   });
 
   // GET /api/admin/users - Get all users (admin only)
-  app.get('/api/admin/users', listUsers);
+  app.get('/api/admin/users', adminHandler);
 
-  // GET /api/admin/users/:userId - Get specific user details
-  app.get('/api/admin/users/:userId', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const uRef = doc(db, 'users', userId);
-      const snap = await getDoc(uRef);
-      if (!snap.exists()) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      res.json({ uid: snap.id, ...snap.data() });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+  // All other admin users endpoints routed to the unified adminHandler with param translation
+  app.all('/api/admin/users/:userId', (req: any, res: any) => {
+    if (!req.query) req.query = {};
+    req.query.userId = req.params.userId;
+    return adminHandler(req, res);
   });
 
-  // GET /api/admin/users/:userId/estimates - Get all user's estimates
-  app.get('/api/admin/users/:userId/estimates', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const estRef = collection(db, 'users', userId, 'estimates');
-      const snap = await getDocs(estRef);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      res.json(list);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+  app.all('/api/admin/users/:userId/:action', (req: any, res: any) => {
+    if (!req.query) req.query = {};
+    req.query.userId = req.params.userId;
+    req.query.action = req.params.action;
+    return adminHandler(req, res);
   });
-
-  // POST /api/admin/users/:userId/tier - Change user's subscription
-  app.post('/api/admin/users/:userId/tier', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { tier } = req.body;
-      if (!tier || !['free', 'paid'].includes(tier)) {
-        return res.status(400).json({ error: 'Invalid subscription tier' });
-      }
-
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
-      res.json({ success: true, tier });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // POST /api/admin/users/:userId/disable - Disable user
-  app.post('/api/admin/users/:userId/disable', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { isDisabled: true, updatedAt: new Date().toISOString() });
-      res.json({ success: true, isDisabled: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // POST /api/admin/users/:userId/enable - Enable user
-  app.post('/api/admin/users/:userId/enable', authenticateAdmin, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!db) return res.status(503).json({ error: 'Database offline' });
-
-      const uRef = doc(db, 'users', userId);
-      await updateDoc(uRef, { isDisabled: false, updatedAt: new Date().toISOString() });
-      res.json({ success: true, isDisabled: false });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // DELETE /api/admin/users/:userId - Delete user
-  app.delete('/api/admin/users/:userId', authenticateAdmin, (req, res) => deleteUser(req, res, db));
-
-  // POST /api/admin/users - Create new user (admin only)
-  app.post('/api/admin/users', authenticateAdmin, (req, res) => createUser(req, res, db));
-
-  // PUT /api/admin/users/:userId - Edit user details (admin only)
-  app.put('/api/admin/users/:userId', authenticateAdmin, (req, res) => updateUser(req, res, db));
 
   // POST /api/admin/change-password - Change admin password
   app.post('/api/admin/change-password', authenticateAdmin, async (req, res) => {
@@ -498,7 +420,7 @@ async function startServer() {
   });
 
   // GET /api/estimates/list - Get estimate list via JWT authorization
-  app.get('/api/estimates/list', listEstimates);
+  app.get('/api/estimates/list', writeEstimate);
 
   // Settings Endpoints
   app.get('/api/settings/get', (req, res) => {
@@ -559,14 +481,14 @@ async function startServer() {
   });
 
   // GET /api/expenses/list - Get expenses list via JWT authorization
-  app.get('/api/expenses/list', listExpenses);
+  app.get('/api/expenses/list', writeExpense);
 
   // Consolidated write endpoint for expenses (POST for saves/creates, DELETE/POST for deletes)
   app.post('/api/expenses/write', writeExpense);
   app.delete('/api/expenses/write', writeExpense);
 
   // GET /api/quotes/list - Get quotes list via JWT authorization
-  app.get('/api/quotes/list', listQuotes);
+  app.get('/api/quotes/list', writeQuote);
 
   // Consolidated write endpoint for quotes (POST, PUT, DELETE)
   app.post('/api/quotes/write', writeQuote);

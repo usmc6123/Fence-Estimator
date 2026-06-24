@@ -146,11 +146,259 @@ function verifyAdminToken(req: any): { email: string; uid: string } | null {
   return null;
 }
 
+function cleanTimestamp(val: any): string {
+  if (!val) return new Date().toISOString();
+  if (typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (val && typeof val === 'object') {
+    const secs = val._seconds || val.seconds;
+    if (secs !== undefined) {
+      return new Date(secs * 1000).toISOString();
+    }
+  }
+  if (typeof val === 'string') return val;
+  return new Date().toISOString();
+}
+
+function authenticateAdminToken(req: any) {
+  const authHeader = req.headers['x-admin-token'] || req.headers.authorization;
+  console.log('[Auth Log Unified] Received Authorization header:', authHeader ? 'Present' : 'Missing');
+
+  if (!authHeader) {
+    console.warn('[Auth Log Unified] Denying request: No Authorization or x-admin-token header found');
+    throw new Error('Admin authentication is required. Token is missing.');
+  }
+
+  const authStr = typeof authHeader === 'string' ? authHeader : String(authHeader);
+  const token = authStr.toLowerCase().startsWith('bearer ')
+    ? authStr.substring(7).trim()
+    : authStr.trim();
+
+  if (!token || token === 'null' || token === 'undefined' || token === '') {
+    console.warn('[Auth Log Unified] Denying request: Token resolved to empty/null/undefined.');
+    throw new Error('Admin authentication is required. Token is invalid.');
+  }
+
+  let decoded: any = null;
+
+  if (process.env.JWT_SECRET) {
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err: any) {
+      console.warn('[Auth Log Unified] Verification failed with custom process.env.JWT_SECRET:', err.message || err);
+    }
+  }
+
+  if (!decoded) {
+    try {
+      decoded = jwt.verify(token, 'lone-star-fence-secret');
+    } catch (err: any) {
+      console.error('[Auth Log Unified] Both custom and fallback JWT verification failed.');
+      throw new Error(`Access denied. Invalid or expired admin token. Reason: ${err.message || 'unknown'}`);
+    }
+  }
+
+  if (decoded && typeof decoded === 'object' && (decoded as any).isAdmin) {
+    return decoded;
+  }
+
+  console.warn('[Auth Log Unified] Valid token but missing isAdmin privilege. Decoded payload:', decoded);
+  throw new Error('Access denied. Invalid or expired admin token.');
+}
+
+async function listUsers(req: any, res: any) {
+  try {
+    const isEmployeesReq = req.query?.type === 'employees' || req.query?.role === 'employee';
+    if (isEmployeesReq) {
+      const employeesSnap = await db.collection('employees').get();
+      const employeesList: any[] = [];
+      employeesSnap.forEach(doc => {
+        const data = doc.data();
+        if (doc.id !== '_trigger') {
+          employeesList.push({
+            email: data.email || doc.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            role: data.role || '',
+            password: data.password || '',
+            permission: data.permission || data.permissionLevel || 'View Only',
+            permissionLevel: data.permissionLevel || data.permission || 'View Only',
+            isActive: data.isActive !== false,
+            active: data.active !== false,
+            canReceiveCrewDispatch: data.canReceiveCrewDispatch !== false,
+            canReceiveCrewDispatchEmails: data.canReceiveCrewDispatchEmails !== false,
+            isPrimaryCrewContact: !!data.isPrimaryCrewContact,
+            primaryCrewContact: !!data.primaryCrewContact,
+            createdAt: cleanTimestamp(data.createdAt),
+            updatedAt: cleanTimestamp(data.updatedAt)
+          });
+        }
+      });
+      employeesList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return res.status(200).json(employeesList);
+    }
+
+    const adminsList: any[] = [];
+    const adminsSnap = await db.collection('admins').get();
+    adminsSnap.forEach(doc => {
+      const data = doc.data();
+      adminsList.push({
+        uid: doc.id,
+        email: data.email || '',
+        name: data.name || data.displayName || data.email?.split('@')[0] || 'No Name',
+        displayName: data.displayName || data.name || data.email?.split('@')[0] || 'No Name',
+        tier: data.tier || data.subscriptionTier || 'paid',
+        subscriptionTier: data.subscriptionTier || data.tier || 'paid',
+        isAdmin: true,
+        isDisabled: !!data.isDisabled,
+        createdAt: cleanTimestamp(data.createdAt),
+        estimatesCount: 0
+      });
+    });
+
+    const usersSnap = await db.collection('users').get();
+    const usersPromises = usersSnap.docs.map(async (doc) => {
+      const data = doc.data();
+      const estSnap = await db.collection('users').doc(doc.id).collection('estimates').select().get();
+      return {
+        uid: doc.id,
+        email: data.email || '',
+        name: data.name || data.displayName || data.email?.split('@')[0] || 'No Name',
+        displayName: data.displayName || data.name || data.email?.split('@')[0] || 'No Name',
+        tier: data.tier || data.subscriptionTier || 'free',
+        subscriptionTier: data.subscriptionTier || data.tier || 'free',
+        isAdmin: false,
+        isDisabled: !!data.isDisabled,
+        createdAt: cleanTimestamp(data.createdAt),
+        estimatesCount: estSnap.size
+      };
+    });
+
+    const resolvedUsers = await Promise.all(usersPromises);
+    const combined = [...adminsList, ...resolvedUsers];
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return res.status(200).json(combined);
+  } catch (error: any) {
+    console.error('Error listing users:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+}
+
+async function createUser(req: any, res: any, dbInstance?: any) {
+  try {
+    const firestoreDb = dbInstance || db;
+    const { email, name, subscriptionTier, password } = req.body;
+    if (!email || !name) {
+      return res.status(400).json({ error: 'Email and Name are required' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'Initial Password is required' });
+    }
+    if (!firestoreDb) {
+      return res.status(503).json({ error: 'Database offline' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const userId = `usr-${Math.random().toString(36).substring(2, 11)}`;
+    const finalTier = subscriptionTier || 'free';
+
+    const newUser = {
+      uid: userId,
+      email: email.toLowerCase().trim(),
+      name: name.trim(),
+      displayName: name.trim(),
+      tier: finalTier,
+      subscriptionTier: finalTier,
+      passwordHash: passwordHash,
+      createdAt: new Date().toISOString(),
+      isDisabled: false,
+      isAdmin: false
+    };
+
+    await firestoreDb.collection('users').doc(userId).set(newUser);
+    return res.status(200).json({ success: true, user: newUser });
+  } catch (error: any) {
+    console.error('Error creating user:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+}
+
+async function updateUser(req: any, res: any, dbInstance?: any) {
+  try {
+    const firestoreDb = dbInstance || db;
+    const userId = req.params?.userId || req.body.userId || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const { email, name, subscriptionTier, isDisabled, password } = req.body;
+    if (!firestoreDb) {
+      return res.status(503).json({ error: 'Database offline' });
+    }
+
+    const updateData: any = {
+      updatedAt: new Date().toISOString()
+    };
+
+    if (email !== undefined) updateData.email = email.toLowerCase().trim();
+    if (name !== undefined) {
+      updateData.name = name.trim();
+      updateData.displayName = name.trim();
+    }
+    if (subscriptionTier !== undefined) {
+      updateData.tier = subscriptionTier;
+      updateData.subscriptionTier = subscriptionTier;
+    }
+    if (isDisabled !== undefined) {
+      updateData.isDisabled = isDisabled;
+    }
+    if (password !== undefined && password !== '') {
+      const salt = await bcrypt.genSalt(10);
+      updateData.passwordHash = await bcrypt.hash(password, salt);
+    }
+
+    await firestoreDb.collection('users').doc(userId).update(updateData);
+    return res.status(200).json({ success: true, user: { uid: userId, email, name, subscriptionTier, isDisabled } });
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+}
+
+async function deleteUser(req: any, res: any, dbInstance?: any) {
+  try {
+    const firestoreDb = dbInstance || db;
+    const userId = req.params?.userId || req.body.userId || req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    if (!firestoreDb) {
+      return res.status(503).json({ error: 'Database offline' });
+    }
+
+    const estSnap = await firestoreDb.collection('users').doc(userId).collection('estimates').get();
+    const batch = firestoreDb.batch();
+    estSnap.docs.forEach((doc: any) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    await firestoreDb.collection('users').doc(userId).delete();
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+}
+
 export default async function handler(req: any, res: any) {
   // CORS setup
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-Admin-Token, Authorization'
@@ -160,18 +408,77 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
+  const allowedMethods = ['GET', 'POST', 'PUT', 'DELETE'];
+  if (!allowedMethods.includes(req.method)) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Route by req.body.action
+  const method = req.method;
   const action = req.body?.action || req.query?.action;
 
-  if (!action) {
-    return res.status(400).json({ error: 'Missing action field inside payload.' });
-  }
-
   try {
+    const isUserMgmt = 
+      method === 'GET' || 
+      method === 'PUT' || 
+      method === 'DELETE' || 
+      (method === 'POST' && (action === 'create' || action === 'disable' || action === 'enable' || action === 'tier' || (action === undefined && req.body?.password)));
+
+    if (isUserMgmt) {
+      try {
+        authenticateAdminToken(req);
+      } catch (authErr: any) {
+        return res.status(401).json({ error: authErr.message || 'Unauthorized' });
+      }
+
+      const userId = req.body?.userId || req.query?.userId || (req.query?.params ? req.query.params[0] : null);
+      const userAction = action || (req.query?.params ? req.query.params[1] : null);
+
+      if (method === 'GET') {
+        if (userId) {
+          if (userAction === 'estimates') {
+            const estSnap = await db.collection('users').doc(userId).collection('estimates').get();
+            const list = estSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+            return res.status(200).json(list);
+          } else {
+            const uRef = await db.collection('users').doc(userId).get();
+            if (!uRef.exists) {
+              return res.status(404).json({ error: 'User not found' });
+            }
+            return res.status(200).json({ uid: uRef.id, ...uRef.data() });
+          }
+        } else {
+          return await listUsers(req, res);
+        }
+      } else if (method === 'POST') {
+        if (userAction === 'create' || req.body?.password) {
+          return await createUser(req, res);
+        } else if (userAction === 'tier') {
+          const { tier } = req.body;
+          if (!tier || !['free', 'paid'].includes(tier)) {
+            return res.status(400).json({ error: 'Invalid subscription tier' });
+          }
+          await db.collection('users').doc(userId).update({ tier: tier, subscriptionTier: tier, updatedAt: new Date().toISOString() });
+          return res.status(200).json({ success: true, tier });
+        } else if (userAction === 'disable') {
+          await db.collection('users').doc(userId).update({ isDisabled: true, updatedAt: new Date().toISOString() });
+          return res.status(200).json({ success: true, isDisabled: true });
+        } else if (userAction === 'enable') {
+          await db.collection('users').doc(userId).update({ isDisabled: false, updatedAt: new Date().toISOString() });
+          return res.status(200).json({ success: true, isDisabled: false });
+        } else {
+          return res.status(400).json({ error: 'Invalid POST action or payload' });
+        }
+      } else if (method === 'PUT') {
+        return await updateUser(req, res);
+      } else if (method === 'DELETE') {
+        return await deleteUser(req, res);
+      }
+    }
+
+    if (!action) {
+      return res.status(400).json({ error: 'Missing action field inside payload.' });
+    }
+
     if (action === 'login') {
       const { email, password } = req.body;
       if (!email || !password) {

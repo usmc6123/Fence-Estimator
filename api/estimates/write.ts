@@ -1662,13 +1662,87 @@ export default async function handler(req: any, res: any) {
       return res.status(404).json({ error: 'Customer or estimate prefill record not found.' });
     }
 
+    function cleanTimestamp(val: any): string {
+      if (!val) return new Date().toISOString();
+      if (typeof val.toDate === 'function') {
+        return val.toDate().toISOString();
+      }
+      if (val && typeof val === 'object') {
+        const secs = val._seconds || val.seconds;
+        if (secs !== undefined) {
+          return new Date(secs * 1000).toISOString();
+        }
+      }
+      if (typeof val === 'string') return val;
+      return new Date().toISOString();
+    }
+
     if (req.method === 'GET') {
       if (!action) {
-        return res.status(400).json({
-          success: false,
-          error: "Missing public estimate action",
-          expected: "action=get-public-estimate&estimateId=..."
+        // Handle listing estimates (integrated from api/estimates/list.ts)
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return res.status(401).json({ error: 'Unauthorized: Missing or invalid token format' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        let decoded: any;
+        try {
+          decoded = jwt.verify(token, JWT_SECRET);
+        } catch (err: any) {
+          console.error('JWT verification error in estimates list:', err.message);
+          return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+        }
+
+        const uid = decoded.uid;
+        const decodedEmail = decoded.email?.toLowerCase();
+        const isAdmin = decoded.isAdmin || 
+                        uid === 'braden-lonestar-uid' || 
+                        decodedEmail === 'bradens@lonestarfenceworks.com' || 
+                        decodedEmail === 'usmc6123@gmail.com';
+
+        const list: any[] = [];
+
+        if (isAdmin) {
+          const snap = await db.collection('estimates').get();
+          snap.forEach(doc => {
+            list.push({ id: doc.id, ...doc.data() });
+          });
+        } else {
+          const queryByUid = await db.collection('estimates').where('uid', '==', uid).get();
+          const queryByUserId = await db.collection('estimates').where('userId', '==', uid).get();
+
+          const mergedMap = new Map();
+          queryByUid.forEach(doc => mergedMap.set(doc.id, doc));
+          queryByUserId.forEach(doc => mergedMap.set(doc.id, doc));
+
+          try {
+            const querySub = await db.collection('users').doc(uid).collection('estimates').get();
+            querySub.forEach(doc => mergedMap.set(doc.id, doc));
+          } catch (err) {
+            console.warn('Subcollection fetch fallback failed or empty:', err);
+          }
+
+          mergedMap.forEach(doc => {
+            list.push({ id: doc.id, ...doc.data() });
+          });
+        }
+
+        list.sort((a, b) => {
+          const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+          const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+          return timeB - timeA;
         });
+
+        const cleanList = list.map(est => {
+          return {
+            ...est,
+            createdAt: cleanTimestamp(est.createdAt),
+            lastModified: cleanTimestamp(est.lastModified || est.createdAt)
+          };
+        });
+
+        return res.status(200).json(cleanList);
       }
       if (action === 'get-public-estimate' || action === 'view-public-estimate') {
         const estimateId = req.query?.estimateId || req.body?.estimateId;
