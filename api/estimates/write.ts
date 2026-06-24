@@ -1526,6 +1526,23 @@ export default async function handler(req: any, res: any) {
   try {
     const action = req.query?.action || req.body?.action;
 
+    // --- SCHEDULER TRACE REPORT STEP LOGGING ---
+    if (action === 'write-scheduler-trace') {
+      try {
+        const { traceId, logData } = req.body || {};
+        if (!traceId) {
+          return res.status(400).json({ error: 'Missing traceId' });
+        }
+        await logGhlActivity({
+          traceId,
+          ...logData
+        });
+        return res.status(200).json({ success: true });
+      } catch (err: any) {
+        return res.status(500).json({ success: false, error: err.message || String(err) });
+      }
+    }
+
     // --- CUSTOMER LOOKUP & PREFILL SEARCH ENDPOINTS ---
     if (action === 'search-customer-prefill' || action === 'search-customers') {
       const searchQuery = (req.body?.query || req.query?.query || '').toString().trim().toLowerCase();
@@ -6928,6 +6945,26 @@ Lone Star Fence Works`;
           const scheduleEventId = eventIdFromReq || "install-" + estimateId;
           const scheduleSyncTraceId = req.body.scheduleSyncTraceId || ("trace-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
 
+          try {
+            await logGhlActivity({
+              traceId: scheduleSyncTraceId,
+              estimateId,
+              customerName: estimateData.customerName || '',
+              steps: [
+                {
+                  step: 'STEP_4',
+                  label: 'Backend router entered',
+                  status: 'success',
+                  actionMatched: action,
+                  handler: 'estimates/write handler (schedule/reschedule event)',
+                  timestamp: new Date().toISOString()
+                }
+              ]
+            });
+          } catch (err) {
+            console.error('Failed to log STEP_4 trace:', err);
+          }
+
           console.log(`[BACKEND ACTION TRACE] action_received: reschedule-job/update-schedule-event
             scheduleSyncTraceId: ${scheduleSyncTraceId}
             action: reschedule-job/update-schedule-event
@@ -7016,6 +7053,37 @@ Lone Star Fence Works`;
             }, { merge: true });
             
             await docRef.update({ scheduledEndDate: endDate });
+
+            try {
+              await logGhlActivity({
+                traceId: scheduleSyncTraceId,
+                estimateId,
+                customerName: estimateData.customerName || '',
+                steps: [
+                  {
+                    step: 'STEP_5',
+                    label: 'Schedule event updated',
+                    status: 'success',
+                    docPath: `schedule_events/${evId}`,
+                    docId: evId,
+                    fieldsWritten: {
+                      start: startDate,
+                      startDate,
+                      end: endDate,
+                      endDate,
+                      title: `INSTALL: ${estimateData.customerName || 'Customer'}`,
+                      crew: assignedCrew || estimateData.assignedCrew || 'N/A',
+                      estimateId: estimateId,
+                      type: 'Job',
+                      notes: `Updated via ${action}. Notes: ${notes || 'None'}`
+                    },
+                    timestamp: new Date().toISOString()
+                  }
+                ]
+              });
+            } catch (err) {
+              console.error('Failed to log STEP_5 trace:', err);
+            }
           } catch (evErr) {
             console.error(`Failed to update schedule_events in ${action}:`, evErr);
           }

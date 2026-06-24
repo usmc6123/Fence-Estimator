@@ -61,6 +61,63 @@ const parseLocalDate = (dateStr: string) => {
   return new Date(dateStr);
 };
 
+const traceSchedulerStep = async (
+  traceId: string,
+  estimateId: string,
+  customerName: string,
+  stepNum: number,
+  status: 'success' | 'failed' | 'skipped',
+  details: any
+) => {
+  try {
+    const token = localStorage.getItem('company_admin_token');
+    const getStepLabel = (num: number) => {
+      const labels: Record<number, string> = {
+        1: 'User clicked Save Schedule',
+        2: 'Frontend created request payload',
+        3: 'POST /api/estimates/write',
+        4: 'Backend router entered',
+        5: 'Schedule event updated',
+        6: 'Shared GHL helper called?',
+        7: 'Settings loaded',
+        8: 'Free Slots request',
+        9: 'Slot selected',
+        10: 'Appointment Create request',
+        11: 'Firestore updated',
+        12: 'Frontend success'
+      };
+      return labels[num] || `Step ${num}`;
+    };
+
+    await fetch('/api/estimates/write?action=write-scheduler-trace', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        traceId,
+        logData: {
+          estimateId,
+          customerName,
+          status: status === 'failed' ? 'failed' : 'running',
+          steps: [
+            {
+              step: `STEP_${stepNum}`,
+              label: getStepLabel(stepNum),
+              status,
+              timestamp: new Date().toISOString(),
+              ...details
+            }
+          ]
+        }
+      })
+    });
+  } catch (err) {
+    console.error(`Failed to log trace step ${stepNum}:`, err);
+  }
+};
+
 interface SchedulerProps {
   savedEstimates: SavedEstimate[];
   user: any;
@@ -410,6 +467,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     if (!estimate || !user) return;
 
     const startDateStr = format(date, 'yyyy-MM-dd');
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     
     // Check for Job Blackouts
     const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(startDateStr));
@@ -422,33 +480,86 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
     const endDate = addDays(date, duration - 1);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
+    // STEP 1: Clicked Save Schedule
+    await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 1, 'success', {
+      installStartDate: startDateStr,
+      installDays: duration,
+      crew: estimate.assignedCrew || 'Crew',
+      timestamp: new Date().toISOString()
+    });
+
+    // STEP 2: Request Payload
+    const payload = {
+      action: 'reschedule-job',
+      estimateId: estimateId,
+      startDate: startDateStr,
+      duration: duration,
+      assignedCrew: estimate.assignedCrew || 'Crew',
+      notes: '',
+      scheduleSyncTraceId: traceId
+    };
+
+    await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 2, 'success', {
+      payload
+    });
+
     try {
       const token = localStorage.getItem('company_admin_token');
+      
+      // STEP 3: POST /api/estimates/write
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'success', {
+        endpoint: '/api/estimates/write',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? 'Bearer ' + token.substring(0, 10) + '...' : 'none'
+        },
+        payload
+      });
+
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
-        body: JSON.stringify({
-          action: 'reschedule-job',
-          estimateId: estimateId,
-          startDate: startDateStr,
-          duration: duration,
-          assignedCrew: estimate.assignedCrew || 'Crew',
-          notes: ''
-        })
+        body: JSON.stringify(payload)
       });
+      
+      const resText = await response.clone().text();
+
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, response.ok ? 'success' : 'failed', {
+        endpoint: '/api/estimates/write',
+        method: 'POST',
+        status: response.status,
+        response: resText
+      });
+
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(resText);
       }
       setShowEventModal(false);
-    } catch (error) {
+
+      // STEP 12: Frontend success
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 12, 'success', {
+        schedulerUpdated: true,
+        jobPortalUpdated: true,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
       console.error('Failed to schedule job:', error);
+      await traceSchedulerStep(traceId, estimateId, estimate.customerName || '', 3, 'failed', {
+        error: error.message || String(error)
+      });
     }
   };
 
   const handleRescheduleJob = async (estimateId: string, newDateStr: string, newDuration: number) => {
+    const estimate = savedEstimates.find(e => e.id === estimateId);
+    const customerName = estimate?.customerName || 'N/A';
+    const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
     try {
       const parsed = parseLocalDate(newDateStr);
       const end = addDays(parsed, newDuration - 1);
@@ -460,29 +571,77 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           return;
       }
 
+      // STEP 1: Clicked Save Schedule
+      await traceSchedulerStep(traceId, estimateId, customerName, 1, 'success', {
+        installStartDate: newDateStr,
+        installDays: newDuration,
+        crew: estimate?.assignedCrew || 'Crew',
+        timestamp: new Date().toISOString()
+      });
+
+      // STEP 2: Request Payload
+      const payload = {
+        action: 'reschedule-job',
+        estimateId: estimateId,
+        startDate: newDateStr,
+        duration: newDuration,
+        notes: 'Rescheduled via calendar',
+        scheduleSyncTraceId: traceId
+      };
+
+      await traceSchedulerStep(traceId, estimateId, customerName, 2, 'success', {
+        payload
+      });
+
       const token = localStorage.getItem('company_admin_token');
+
+      // STEP 3: POST /api/estimates/write
+      await traceSchedulerStep(traceId, estimateId, customerName, 3, 'success', {
+        endpoint: '/api/estimates/write',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? 'Bearer ' + token.substring(0, 10) + '...' : 'none'
+        },
+        payload
+      });
+
       const response = await fetch('/api/estimates/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || ''}`
         },
-        body: JSON.stringify({
-          action: 'reschedule-job',
-          estimateId: estimateId,
-          startDate: newDateStr,
-          duration: newDuration,
-          notes: 'Rescheduled via calendar'
-        })
+        body: JSON.stringify(payload)
       });
+
+      const resText = await response.clone().text();
+
+      await traceSchedulerStep(traceId, estimateId, customerName, 3, response.ok ? 'success' : 'failed', {
+        endpoint: '/api/estimates/write',
+        method: 'POST',
+        status: response.status,
+        response: resText
+      });
+
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(resText);
       }
       
       setIsRescheduling(false);
       setShowEventModal(false);
-    } catch (error) {
+
+      // STEP 12: Frontend success
+      await traceSchedulerStep(traceId, estimateId, customerName, 12, 'success', {
+        schedulerUpdated: true,
+        jobPortalUpdated: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
       console.error('Failed to reschedule job:', error);
+      await traceSchedulerStep(traceId, estimateId, customerName, 3, 'failed', {
+        error: error.message || String(error)
+      });
     }
   };
 

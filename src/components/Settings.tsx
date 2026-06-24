@@ -5,13 +5,305 @@ import {
   Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2, XCircle,
   ImageIcon, Server, Settings2, Send, AlertCircle, Terminal,
   Eye, EyeOff, Copy, Plus, Activity, Check, Database, Sparkles,
-  Calendar, Search, Lock, Key, CheckSquare, Square
+  Calendar, Search, Lock, Key, CheckSquare, Square, ChevronDown, ChevronUp, ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import GhlIntegrationCenter from './GhlIntegrationCenter';
+
+const getMappedSteps = (trace: any, formData: any) => {
+  if (!trace) return [];
+
+  const findStep = (name: string) => {
+    return (trace.steps || []).find((s: any) => s.step === name);
+  };
+
+  const stepsList = [
+    // 1. STEP 1: User clicked Save Schedule
+    {
+      stepNum: 1,
+      title: 'User clicked Save Schedule',
+      status: 'success' as const,
+      details: (() => {
+        const s1 = findStep('STEP_1');
+        return {
+          timestamp: s1?.timestamp || trace.timestamp,
+          estimateId: trace.estimateId,
+          customer: trace.customerName,
+          installStartDate: s1?.installStartDate || trace.selectedDate,
+          installDays: s1?.installDays || trace.selectedDuration,
+          crew: s1?.crew || 'N/A'
+        };
+      })()
+    },
+    // 2. STEP 2: Frontend created request payload
+    {
+      stepNum: 2,
+      title: 'Frontend created request payload',
+      status: 'success' as const,
+      details: (() => {
+        const s2 = findStep('STEP_2');
+        return {
+          payload: s2?.payload || {
+            action: trace.action || 'reschedule-job',
+            estimateId: trace.estimateId,
+            startDate: trace.selectedDate || 'N/A',
+            duration: trace.selectedDuration || 1,
+            assignedCrew: trace.crew || 'N/A'
+          }
+        };
+      })()
+    },
+    // 3. STEP 3: POST /api/estimates/write
+    {
+      stepNum: 3,
+      title: 'POST /api/estimates/write',
+      status: (() => {
+        const s3 = findStep('STEP_3');
+        if (s3) return s3.status as 'success' | 'failed' | 'skipped';
+        return trace.status === 'failed' && !findStep('STEP_4') ? 'failed' as const : 'success' as const;
+      })(),
+      details: (() => {
+        const s3 = findStep('STEP_3');
+        return {
+          endpoint: s3?.endpoint || '/api/estimates/write',
+          method: s3?.method || 'POST',
+          headers: s3?.headers || { 'Content-Type': 'application/json' },
+          payload: s3?.payload || findStep('STEP_2')?.payload,
+          responseStatus: s3?.status || (trace.statusCode ? trace.statusCode : undefined),
+          responseBody: s3?.response || (trace.responseBody ? trace.responseBody : undefined)
+        };
+      })()
+    },
+    // 4. STEP 4: Backend router entered
+    {
+      stepNum: 4,
+      title: 'Backend router entered',
+      status: (() => {
+        const s4 = findStep('STEP_4');
+        if (s4) return s4.status as 'success' | 'failed' | 'skipped';
+        return (findStep('STEP_5') || findStep('shared_helper_called')) ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const s4 = findStep('STEP_4');
+        return {
+          actionMatched: s4?.actionMatched || trace.action || 'reschedule-job',
+          handler: s4?.handler || 'estimates/write handler',
+          timestamp: s4?.timestamp || trace.timestamp
+        };
+      })()
+    },
+    // 5. STEP 5: Schedule event updated
+    {
+      stepNum: 5,
+      title: 'Schedule event updated',
+      status: (() => {
+        const s5 = findStep('STEP_5');
+        if (s5) return s5.status as 'success' | 'failed' | 'skipped';
+        return findStep('shared_helper_called') ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const s5 = findStep('STEP_5');
+        return {
+          docPath: s5?.docPath || `schedule_events/install-${trace.estimateId}`,
+          docId: s5?.docId || `install-${trace.estimateId}`,
+          fieldsWritten: s5?.fieldsWritten || {
+            startDate: trace.selectedDate,
+            estimateId: trace.estimateId,
+            type: 'Job'
+          }
+        };
+      })()
+    },
+    // 6. STEP 6: Shared GHL helper called?
+    {
+      stepNum: 6,
+      title: 'Shared GHL helper called?',
+      status: (() => {
+        const sh = findStep('shared_helper_called');
+        if (sh) return sh.status as 'success' | 'failed' | 'skipped';
+        const anyGhlStep = findStep('free_slots_request') || findStep('slot_selected') || findStep('appointment_create');
+        if (anyGhlStep) return 'success' as const;
+        return 'failed' as const;
+      })(),
+      details: (() => {
+        const sh = findStep('shared_helper_called');
+        if (!sh && !findStep('free_slots_request') && !findStep('slot_selected')) {
+          return {
+            called: false,
+            error: 'Scheduler never entered GHL helper. This is likely the bug.'
+          };
+        }
+        return {
+          called: true,
+          reason: sh?.reason || undefined,
+          timestamp: sh?.timestamp || trace.timestamp
+        };
+      })()
+    },
+    // 7. STEP 7: Settings loaded
+    {
+      stepNum: 7,
+      title: 'Settings loaded',
+      status: (() => {
+        const sh = findStep('shared_helper_called');
+        if (sh && sh.status === 'failed' && sh.reason?.includes('CRM credentials')) return 'failed' as const;
+        return findStep('free_slots_request') ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const sh = findStep('shared_helper_called');
+        const isMissingCreds = sh?.status === 'failed' && sh.reason?.includes('CRM credentials');
+        return {
+          settingsDocPath: 'companySettings/braden-lonestar-uid',
+          calendarId: trace.calendarId || 'mLZAlEmZ3Y2QyByYTFQh (Default Fallback)',
+          locationId: isMissingCreds ? 'Missing' : 'Loaded successfully',
+          apiKeyLoaded: !isMissingCreds,
+          missingFields: isMissingCreds ? ['ghlApiKey', 'ghlLocationId'].filter(f => !formData[f as keyof typeof formData]) : []
+        };
+      })()
+    },
+    // 8. STEP 8: Free Slots request
+    {
+      stepNum: 8,
+      title: 'Free Slots request',
+      status: (() => {
+        const fs = findStep('free_slots_request');
+        if (fs) return fs.status as 'success' | 'failed' | 'skipped';
+        return findStep('slot_selected') ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const fs = findStep('free_slots_request');
+        return {
+          url: trace.endpoint || `https://services.leadconnectorhq.com/calendars/${trace.calendarId || 'mLZAlEmZ3Y2QyByYTFQh'}/free-slots`,
+          method: trace.method || 'GET',
+          headers: trace.requestHeaders || { 'Version': '2021-04-15' },
+          response: trace.responseBody || fs?.reason,
+          statusCode: trace.statusCode || undefined
+        };
+      })()
+    },
+    // 9. STEP 9: Slot selected
+    {
+      stepNum: 9,
+      title: 'Slot selected',
+      status: (() => {
+        const ss = findStep('slot_selected');
+        if (ss) return ss.status as 'success' | 'failed' | 'skipped';
+        return findStep('appointment_create') ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const ss = findStep('slot_selected');
+        return {
+          selectionResult: ss?.reason || 'No slot comparison logged'
+        };
+      })()
+    },
+    // 10. STEP 10: Appointment Create request
+    {
+      stepNum: 10,
+      title: 'Appointment Create request',
+      status: (() => {
+        const ac = findStep('appointment_create');
+        if (ac) return ac.status as 'success' | 'failed' | 'skipped';
+        return trace.appointmentId ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const ac = findStep('appointment_create');
+        return {
+          url: trace.endpoint || 'https://services.leadconnectorhq.com/calendars/events/appointments',
+          method: trace.method || 'POST',
+          requestBody: trace.requestBody || undefined,
+          responseBody: trace.responseBody || ac?.reason,
+          appointmentId: trace.appointmentId || undefined
+        };
+      })()
+    },
+    // 11. STEP 11: Firestore updated
+    {
+      stepNum: 11,
+      title: 'Firestore updated',
+      status: (() => {
+        const fu = findStep('firestore_updated');
+        if (fu) return fu.status as 'success' | 'failed' | 'skipped';
+        return trace.firestoreUpdated ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const fu = findStep('firestore_updated');
+        return {
+          result: trace.firestoreResult || fu?.reason || 'Updated GHL IDs and sync status on Estimate document.'
+        };
+      })()
+    },
+    // 12. STEP 12: Frontend success
+    {
+      stepNum: 12,
+      title: 'Frontend success',
+      status: (() => {
+        const s12 = findStep('STEP_12');
+        if (s12) return s12.status as 'success' | 'failed' | 'skipped';
+        return trace.status === 'success' ? 'success' : 'skipped';
+      })(),
+      details: (() => {
+        const s12 = findStep('STEP_12');
+        return {
+          schedulerUpdated: s12?.schedulerUpdated || trace.status === 'success',
+          jobPortalUpdated: s12?.jobPortalUpdated || trace.status === 'success',
+          timestamp: s12?.timestamp || trace.timestamp
+        };
+      })()
+    }
+  ];
+
+  return stepsList;
+};
+
+const getFailureAnalysis = (mappedSteps: any[]) => {
+  const failedStep = mappedSteps.find(s => s.status === 'failed');
+  if (!failedStep) {
+    return {
+      hasFailed: false,
+      firstFailedStep: 'None',
+      probableCause: 'All steps completed successfully. GHL Calendar sync was successfully recorded.',
+      suggestedFix: 'No corrective action needed.'
+    };
+  }
+
+  const num = failedStep.stepNum;
+  let probableCause = 'An unexpected failure occurred at this step.';
+  let suggestedFix = 'Review the raw JSON log details below for more information.';
+
+  if (num === 3) {
+    probableCause = 'The backend API at /api/estimates/write returned an error status or failed to respond.';
+    suggestedFix = 'Verify if your server container has sufficient memory, is running correctly, and check the Cloud Run / container console logs for fatal unhandled exceptions.';
+  } else if (num === 6) {
+    probableCause = 'The scheduler never entered the GHL sync helper function. The execution path aborted prematurely.';
+    suggestedFix = 'Ensure that the "Enable Direct API Synchronization" toggle under CRM settings is toggled ON and that the CRM credentials (API Key and Location ID) are correct.';
+  } else if (num === 7) {
+    probableCause = 'Failed to load the settings or the settings are missing essential CRM credentials.';
+    suggestedFix = 'Check your GoHighLevel integration details. Set and save a valid GHL API Key and Location ID inside the CRM & Integrations settings tab.';
+  } else if (num === 8) {
+    probableCause = 'The free slots query request to GHL (LeadConnector) returned an error or failed to authenticate.';
+    suggestedFix = 'Verify that the GoHighLevel API Key is valid and hasn\'t expired. Also ensure the GHL Calendar ID is correct and active on your GHL dashboard.';
+  } else if (num === 9) {
+    probableCause = 'Could not select or match a slot. This usually happens when there are no free slots available on the GHL calendar for the requested day.';
+    suggestedFix = 'Make sure the slot is open on the GHL Calendar or choose a different install start date in the Job Scheduler.';
+  } else if (num === 10) {
+    probableCause = 'The LeadConnector API rejected the request to create or update the calendar appointment.';
+    suggestedFix = 'Verify that the customer has a valid GHL Contact ID. Ensure their phone and email meet GHL requirements, and check if the GHL calendar configuration accepts duplicates.';
+  } else if (num === 11) {
+    probableCause = 'The GHL appointment was created successfully, but the system failed to write the returned appointment ID back to Firestore.';
+    suggestedFix = 'Check Firestore security rules and confirm that the database is active and online with write permissions configured for the estimates collection.';
+  }
+
+  return {
+    hasFailed: true,
+    firstFailedStep: `Step ${num}: ${failedStep.title}`,
+    probableCause,
+    suggestedFix
+  };
+};
 
 interface SettingsProps {
   user?: any;
@@ -141,6 +433,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
   const [primaryCrewEmail, setPrimaryCrewEmail] = React.useState<string | null>(null);
   const [primaryCrewName, setPrimaryCrewName] = React.useState<string | null>(null);
 
+  // Scheduler Sync Trace states
+  const [traceSectionOpen, setTraceSectionOpen] = React.useState(false);
+  const [traces, setTraces] = React.useState<any[]>([]);
+  const [loadingTraces, setLoadingTraces] = React.useState(false);
+  const [selectedTrace, setSelectedTrace] = React.useState<any | null>(null);
+  const [traceSearchQuery, setTraceSearchQuery] = React.useState("");
+
   React.useEffect(() => {
     async function fetchPrimaryCrew() {
       try {
@@ -159,6 +458,35 @@ export default function Settings({ user, adminToken }: SettingsProps) {
     }
     fetchPrimaryCrew();
   }, []);
+
+  const fetchTraces = async () => {
+    setLoadingTraces(true);
+    try {
+      const token = adminToken || localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/settings?action=ghl-get-activity-logs', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.logs)) {
+          // Keep last 100 traces
+          setTraces(data.logs.slice(0, 100));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch activity logs for scheduler sync trace:', err);
+    } finally {
+      setLoadingTraces(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (traceSectionOpen) {
+      fetchTraces();
+    }
+  }, [traceSectionOpen]);
 
   // Load settings on mount
   React.useEffect(() => {
@@ -2904,6 +3232,419 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Section 11: Scheduler Sync Trace Report */}
+                <div className="p-6 rounded-2xl border border-[#E5E5E5] bg-white space-y-6">
+                  <div 
+                    onClick={() => setTraceSectionOpen(!traceSectionOpen)}
+                    className="flex items-center justify-between cursor-pointer select-none"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-200 shadow-xs pb-0.5">
+                        <Activity size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-american-blue uppercase tracking-wider font-sans">Scheduler Sync Trace Report</h4>
+                        <p className="text-[10px] text-[#666666]">Enterprise-grade recorder tracing every step from Save Schedule button clicks to GoHighLevel CRM syncing.</p>
+                      </div>
+                    </div>
+                    <div>
+                      {traceSectionOpen ? (
+                        <span className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                          Hide <ChevronUp size={16} />
+                        </span>
+                      ) : (
+                        <span className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                          Expand <ChevronDown size={16} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {traceSectionOpen && (
+                    <div className="space-y-6 pt-4 border-t border-[#F2F2F2] animate-fade-in">
+                      {/* Search and Refresh bar */}
+                      <div className="flex flex-col md:flex-row items-center gap-3 justify-between">
+                        <div className="relative w-full md:w-72">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999999]" />
+                          <input 
+                            type="text"
+                            placeholder="Search by Estimate, Customer, Trace ID, Date..."
+                            value={traceSearchQuery}
+                            onChange={(e) => setTraceSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 border border-[#E5E5E5] rounded-xl text-xs font-sans focus:outline-none focus:border-american-blue text-american-blue bg-[#FAF9F6] placeholder-[#999999]"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                          <button
+                            type="button"
+                            onClick={fetchTraces}
+                            disabled={loadingTraces}
+                            className="px-4 py-2 rounded-xl bg-[#FAF9F6] border border-[#E5E5E5] text-american-blue hover:bg-gray-100 font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
+                          >
+                            <RefreshCw size={12} className={cn(loadingTraces && "animate-spin")} />
+                            Refresh Traces
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Split view: Traces List (Left) and Active Trace Steps Detail (Right) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        {/* Left Pane: Trace List */}
+                        <div className="lg:col-span-5 space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                          <p className="text-[10px] font-bold text-american-blue uppercase tracking-wider px-1">Recorded Sync Traces ({traces.length})</p>
+                          {loadingTraces && traces.length === 0 ? (
+                            <div className="p-12 text-center text-[#999] text-xs">
+                              <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#999]" />
+                              Loading traces...
+                            </div>
+                          ) : (() => {
+                            const filtered = traces.filter(t => {
+                              if (!traceSearchQuery) return true;
+                              const query = traceSearchQuery.toLowerCase();
+                              return (
+                                (t.traceId || '').toLowerCase().includes(query) ||
+                                (t.estimateId || '').toLowerCase().includes(query) ||
+                                (t.customerName || '').toLowerCase().includes(query) ||
+                                (t.timestamp || '').toLowerCase().includes(query) ||
+                                (t.status || '').toLowerCase().includes(query)
+                              );
+                            });
+
+                            if (filtered.length === 0) {
+                              return <div className="p-8 text-center text-[#999] border border-dashed border-[#E5E5E5] rounded-2xl text-xs">No matching traces found.</div>;
+                            }
+
+                            return filtered.slice(0, 100).map((t, idx) => {
+                              const isSelected = selectedTrace?.traceId === t.traceId;
+                              const isFailed = t.status === 'failed' || (t.steps && t.steps.some((s: any) => s.status === 'failed'));
+                              return (
+                                <div
+                                  key={t.traceId || idx}
+                                  onClick={() => setSelectedTrace(t)}
+                                  className={cn(
+                                    "p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-1 text-left",
+                                    isSelected 
+                                      ? "bg-blue-50 border-blue-200 shadow-xs" 
+                                      : "bg-[#FAF9F6] border-[#E5E5E5] hover:border-american-blue"
+                                  )}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-mono text-[9px] font-bold text-gray-500 max-w-[140px] truncate">{t.traceId || 'trace-unknown'}</span>
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
+                                      isFailed ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    )}>
+                                      {isFailed ? "Failed" : "Success"}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs font-bold text-american-blue truncate">{t.customerName || 'N/A'}</p>
+                                  <div className="flex items-center justify-between text-[10px] text-[#666666]">
+                                    <span>Est: {t.estimateId || 'N/A'}</span>
+                                    <span>{t.timestamp ? new Date(t.timestamp).toLocaleTimeString() + ' ' + new Date(t.timestamp).toLocaleDateString() : 'N/A'}</span>
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+
+                        {/* Right Pane: Active Trace Steps detail */}
+                        <div className="lg:col-span-7 bg-[#FAF9F6] border border-[#E5E5E5] rounded-2xl p-4 min-h-[400px] flex flex-col">
+                          {!selectedTrace ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-[#999] text-xs p-12 text-center border-2 border-dashed border-[#E5E5E5] rounded-xl bg-white/50">
+                              <Activity size={32} className="text-gray-300 mb-2 animate-pulse" />
+                              <p className="font-bold text-gray-400">No Trace Selected</p>
+                              <p className="text-[10px] max-w-[240px] mt-1 text-gray-400">Click a recorded trace on the left to see the step-by-step audit logs and failure analysis.</p>
+                            </div>
+                          ) : (() => {
+                            const mappedSteps = getMappedSteps(selectedTrace, formData);
+                            const analysis = getFailureAnalysis(mappedSteps);
+                            return (
+                              <div className="space-y-6 text-left flex-1 flex flex-col">
+                                {/* Trace Header Details */}
+                                <div className="border-b border-gray-200 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                  <div>
+                                    <h5 className="text-xs font-bold text-american-blue uppercase tracking-wider">Trace Auditor detail</h5>
+                                    <p className="text-[10px] text-[#666666] font-mono mt-0.5">ID: {selectedTrace.traceId}</p>
+                                  </div>
+                                  <div className="text-[10px] text-[#666666] md:text-right">
+                                    <p>Customer: <span className="font-bold text-american-blue">{selectedTrace.customerName || 'N/A'}</span></p>
+                                    <p>Estimate ID: <span className="font-bold text-american-blue">{selectedTrace.estimateId || 'N/A'}</span></p>
+                                  </div>
+                                </div>
+
+                                {/* Dynamic 12-Step Timeline */}
+                                <div className="space-y-4 flex-1">
+                                  <p className="text-[10px] font-bold text-american-blue uppercase tracking-widest">Step-by-Step execution path</p>
+                                  <div className="relative border-l border-gray-200 pl-4 ml-2 space-y-6">
+                                    {mappedSteps.map((step, idx) => {
+                                      const isSuccess = step.status === 'success';
+                                      const isFailed = step.status === 'failed';
+                                      const isSkipped = step.status === 'skipped';
+                                      const [isExpanded, setIsExpanded] = React.useState(false);
+
+                                      return (
+                                        <div key={step.stepNum} className="relative">
+                                          {/* Step Badge Indicator */}
+                                          <div className={cn(
+                                            "absolute -left-[25px] top-0 h-4 w-4 rounded-full border-2 bg-white flex items-center justify-center text-[8px] font-bold",
+                                            isSuccess ? "border-emerald-500 text-emerald-500" :
+                                            isFailed ? "border-red-500 text-red-500" : "border-gray-300 text-gray-300"
+                                          )}>
+                                            {isSuccess ? "✓" : isFailed ? "✗" : "•"}
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                              <p className="text-xs font-bold text-american-blue">
+                                                STEP {step.stepNum}: {step.title}
+                                              </p>
+                                              <span className={cn(
+                                                "px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
+                                                isSuccess ? "bg-emerald-50 text-emerald-700" :
+                                                isFailed ? "bg-red-50 text-red-700 font-bold animate-pulse" : "bg-gray-100 text-gray-500"
+                                              )}>
+                                                {step.status}
+                                              </span>
+                                            </div>
+
+                                            {/* Step Metadata & Details */}
+                                            <div className="bg-white border border-gray-200/80 rounded-xl p-3 text-[10px] space-y-2 shadow-xs">
+                                              {step.stepNum === 1 && (
+                                                <div className="grid grid-cols-2 gap-2 text-gray-600">
+                                                  <p>Start Date: <span className="font-bold text-american-blue">{step.details.installStartDate || 'N/A'}</span></p>
+                                                  <p>Days: <span className="font-bold text-american-blue">{step.details.installDays || 1}</span></p>
+                                                  <p>Crew: <span className="font-bold text-american-blue">{step.details.crew || 'N/A'}</span></p>
+                                                  <p>Triggered: <span className="font-mono text-[9px]">{step.details.timestamp ? new Date(step.details.timestamp).toLocaleTimeString() : 'N/A'}</span></p>
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 2 && (
+                                                <div className="space-y-1">
+                                                  <p className="text-gray-600">Frontend Request Body Payload:</p>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setIsExpanded(!isExpanded)}
+                                                    className="text-[9px] text-blue-600 font-bold flex items-center gap-0.5 hover:underline"
+                                                  >
+                                                    {isExpanded ? "Hide" : "View"} Payload {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                  </button>
+                                                  {isExpanded && (
+                                                    <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-36 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                      {JSON.stringify(step.details.payload, null, 2)}
+                                                    </pre>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 3 && (
+                                                <div className="space-y-2">
+                                                  <div className="grid grid-cols-2 gap-1 text-gray-600">
+                                                    <p>Endpoint: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.endpoint}</span></p>
+                                                    <p>Method: <span className="font-bold text-american-blue">{step.details.method}</span></p>
+                                                    {step.details.responseStatus !== undefined && (
+                                                      <p>Status Code: <span className={cn("font-bold", isSuccess ? "text-emerald-600" : "text-red-600")}>{step.details.responseStatus}</span></p>
+                                                    )}
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setIsExpanded(!isExpanded)}
+                                                    className="text-[9px] text-blue-600 font-bold flex items-center gap-0.5 hover:underline"
+                                                  >
+                                                    {isExpanded ? "Hide" : "View"} Request & Response {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                  </button>
+                                                  {isExpanded && (
+                                                    <div className="space-y-2 pt-1 border-t border-gray-100">
+                                                      <p className="text-gray-500 font-bold">Request Payload:</p>
+                                                      <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-24 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                        {JSON.stringify(step.details.payload, null, 2)}
+                                                      </pre>
+                                                      {step.details.responseBody && (
+                                                        <>
+                                                          <p className="text-gray-500 font-bold">Response Body:</p>
+                                                          <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-32 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                            {step.details.responseBody}
+                                                          </pre>
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 4 && (
+                                                <div className="text-gray-600 space-y-1">
+                                                  <p>Action Matched: <span className="font-bold text-american-blue">"{step.details.actionMatched}"</span></p>
+                                                  <p>Backend Handler: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.handler}</span></p>
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 5 && (
+                                                <div className="space-y-2 text-gray-600">
+                                                  <p>Target Document: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.docPath}</span></p>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setIsExpanded(!isExpanded)}
+                                                    className="text-[9px] text-blue-600 font-bold flex items-center gap-0.5 hover:underline"
+                                                  >
+                                                    {isExpanded ? "Hide" : "View"} Fields Written {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                  </button>
+                                                  {isExpanded && (
+                                                    <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-32 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                      {JSON.stringify(step.details.fieldsWritten, null, 2)}
+                                                    </pre>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 6 && (
+                                                <div className="text-gray-600 space-y-1">
+                                                  {step.details.called ? (
+                                                    <p className="text-emerald-700 font-bold">✓ Successfully invoked syncEstimateToGhlCalendar helper.</p>
+                                                  ) : (
+                                                    <p className="text-red-700 font-bold">✗ {step.details.error}</p>
+                                                  )}
+                                                  {step.details.reason && (
+                                                    <p className="font-mono text-[9px] text-red-600">Reason: {step.details.reason}</p>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 7 && (
+                                                <div className="space-y-2 text-gray-600">
+                                                  <p>Settings Doc Path: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.settingsDocPath}</span></p>
+                                                  <div className="grid grid-cols-2 gap-1 text-[9px]">
+                                                    <p>Calendar ID: <span className="font-bold">{step.details.calendarId}</span></p>
+                                                    <p>API Key Loaded? <span className={cn("font-bold", step.details.apiKeyLoaded ? "text-emerald-600" : "text-red-600")}>{step.details.apiKeyLoaded ? "YES" : "NO"}</span></p>
+                                                  </div>
+                                                  {step.details.missingFields.length > 0 && (
+                                                    <p className="text-red-600 font-bold text-[9px]">Missing credentials: {step.details.missingFields.join(', ')}</p>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 8 && (
+                                                <div className="space-y-2 text-gray-600">
+                                                  <div className="text-[9px]">
+                                                    <p className="truncate">URL: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.url}</span></p>
+                                                    <p>Status Code: <span className="font-bold text-american-blue">{step.details.statusCode || 'N/A'}</span></p>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setIsExpanded(!isExpanded)}
+                                                    className="text-[9px] text-blue-600 font-bold flex items-center gap-0.5 hover:underline"
+                                                  >
+                                                    {isExpanded ? "Hide" : "View"} API Request / Response {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                  </button>
+                                                  {isExpanded && (
+                                                    <div className="space-y-2 pt-1 border-t border-gray-100">
+                                                      <p className="font-bold">Headers:</p>
+                                                      <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-16 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                        {JSON.stringify(step.details.headers, null, 2)}
+                                                      </pre>
+                                                      {step.details.response && (
+                                                        <>
+                                                          <p className="font-bold">Response JSON:</p>
+                                                          <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-36 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                            {step.details.response}
+                                                          </pre>
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 9 && (
+                                                <div className="text-gray-600 text-[9px]">
+                                                  <p className="font-mono whitespace-pre-wrap">{step.details.selectionResult}</p>
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 10 && (
+                                                <div className="space-y-2 text-gray-600">
+                                                  <div className="text-[9px]">
+                                                    <p>Endpoint: <span className="font-mono text-[9px] bg-gray-100 px-1 py-0.5 rounded">{step.details.url}</span></p>
+                                                    {step.details.appointmentId && (
+                                                      <p>Created Appointment ID: <span className="font-mono font-bold bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded">{step.details.appointmentId}</span></p>
+                                                    )}
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setIsExpanded(!isExpanded)}
+                                                    className="text-[9px] text-blue-600 font-bold flex items-center gap-0.5 hover:underline"
+                                                  >
+                                                    {isExpanded ? "Hide" : "View"} Payload & Response {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                  </button>
+                                                  {isExpanded && (
+                                                    <div className="space-y-2 pt-1 border-t border-gray-100">
+                                                      {step.details.requestBody && (
+                                                        <>
+                                                          <p className="font-bold">Request Payload:</p>
+                                                          <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-24 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                            {JSON.stringify(step.details.requestBody, null, 2)}
+                                                          </pre>
+                                                        </>
+                                                      )}
+                                                      {step.details.responseBody && (
+                                                        <>
+                                                          <p className="font-bold">Response Body:</p>
+                                                          <pre className="p-2 bg-gray-50 border border-gray-200 rounded-lg overflow-x-auto max-h-36 font-mono text-[9px] whitespace-pre-wrap select-all">
+                                                            {step.details.responseBody}
+                                                          </pre>
+                                                        </>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 11 && (
+                                                <div className="text-gray-600 text-[9px]">
+                                                  <p className="font-mono">{step.details.result}</p>
+                                                </div>
+                                              )}
+
+                                              {step.stepNum === 12 && (
+                                                <div className="text-gray-600 space-y-1 text-[9px]">
+                                                  <p>Job Scheduler updated successfully: <span className="font-bold text-emerald-600">{step.details.schedulerUpdated ? "YES" : "NO"}</span></p>
+                                                  <p>Job Portal link synced successfully: <span className="font-bold text-emerald-600">{step.details.jobPortalUpdated ? "YES" : "NO"}</span></p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Automatic Failure Analysis Panel */}
+                                <div className={cn(
+                                  "p-4 rounded-xl border mt-auto space-y-2",
+                                  analysis.hasFailed 
+                                    ? "bg-amber-50/70 border-amber-200 text-amber-900" 
+                                    : "bg-emerald-50/50 border-emerald-200 text-emerald-900"
+                                )}>
+                                  <div className="flex items-center gap-2">
+                                    <AlertCircle size={16} className={analysis.hasFailed ? "text-amber-600" : "text-emerald-600"} />
+                                    <h6 className="text-xs font-bold uppercase tracking-wider font-sans">Automatic Failure Analysis</h6>
+                                  </div>
+                                  <div className="text-[10px] space-y-1.5 font-sans">
+                                    <p><span className="font-bold">First Failed Step:</span> {analysis.firstFailedStep}</p>
+                                    <p><span className="font-bold">Probable Cause:</span> {analysis.probableCause}</p>
+                                    <p><span className="font-bold">Suggested Fix:</span> {analysis.suggestedFix}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 5: Webhook Testing sandbox */}
