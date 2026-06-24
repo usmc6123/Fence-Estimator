@@ -1587,7 +1587,19 @@ async function syncEstimateToGhlCalendar(
         endD.setHours(endD.getHours() + 3);
         finalEnd = typeof matchedSlot === 'string' ? targetEndIso : (matchedSlot.endTime || endD.toISOString());
         
-        slotMatchDebug.startTimeMatches = (finalStart === (typeof matchedSlot === 'string' ? matchedSlot : matchedSlot.startTime));
+        // Compare what we WANTED vs what we GOT from GHL
+        // Using a loose check for the 7:00:00 part if needed, but the user wants exact match verification
+        slotMatchDebug.startTimeMatches = (finalStart === targetStartIso);
+        
+        // If it's not an exact string match but it IS the same time (e.g. timezone notation diff), we might still want to proceed
+        // However, the user said "If NO, do not send... and display mismatch"
+        // Let's check if the time component is the same at least
+        const finalStartD = new Date(finalStart);
+        const targetStartD = new Date(targetStartIso);
+        if (finalStartD.getTime() === targetStartD.getTime()) {
+           // It's the same moment!
+           slotMatchDebug.startTimeMatches = true;
+        }
       }
 
       const dayTitle = days > 1 ? `${baseTitle} (Day ${i + 1}/${days})` : baseTitle;

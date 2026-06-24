@@ -2397,6 +2397,86 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                                 </pre>
                               </div>
                             </div>
+
+                            {/* Appointment Creation Debug Section */}
+                            <div className="pt-4 border-t border-slate-800">
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                  <Calendar size={12} className="text-sky-400" />
+                                  <span className="text-[10px] font-black uppercase tracking-widest text-sky-400">Appointment Creation Debug</span>
+                                </div>
+                                {diagnosticResult.appointmentAttempted ? (
+                                  <span className="px-1.5 py-0.5 bg-sky-500/10 text-sky-400 rounded text-[8px] font-bold uppercase">Attempted</span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded text-[8px] font-bold uppercase">Not Attempted</span>
+                                )}
+                              </div>
+
+                              {!diagnosticResult.appointmentAttempted ? (
+                                <div className="p-3 bg-slate-950/50 rounded border border-slate-800">
+                                  <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Reason:</div>
+                                  <div className="text-[10px] text-slate-400 italic">{diagnosticResult.appointmentReason}</div>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  {/* Slot Comparison */}
+                                  <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 space-y-2">
+                                    <h6 className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Slot Comparison</h6>
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400">GHL Returned Slot:</span>
+                                        <span className="text-[10px] text-slate-300 font-mono">{diagnosticResult.appointmentDebug.selectedSlot}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400">Appointment Start Sent:</span>
+                                        <span className="text-[10px] text-slate-300 font-mono">{diagnosticResult.appointmentDebug.startTimeSent}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between pt-1 border-t border-slate-700/50">
+                                        <span className="text-[10px] text-slate-400">Exact Match:</span>
+                                        <span className={cn("text-[10px] font-bold", diagnosticResult.appointmentDebug.exactMatch ? "text-emerald-400" : "text-rose-400")}>
+                                          {diagnosticResult.appointmentDebug.exactMatch ? "YES" : "NO"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Request Details */}
+                                  <div className="space-y-2 font-mono text-[10px]">
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 min-w-[80px]">Endpoint:</span>
+                                      <span className="text-slate-300 break-all">{diagnosticResult.appointmentDebug.url}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 min-w-[80px]">Method:</span>
+                                      <span className="text-sky-400 font-bold">{diagnosticResult.appointmentDebug.method}</span>
+                                    </div>
+                                    <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Request Body</div>
+                                    <pre className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[9px] overflow-x-auto">
+                                      {JSON.stringify(diagnosticResult.appointmentDebug.body, null, 2)}
+                                    </pre>
+                                  </div>
+
+                                  {/* Response Details */}
+                                  <div className="space-y-2 font-mono text-[10px]">
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 min-w-[80px]">Status:</span>
+                                      <span className={cn(
+                                        "font-bold",
+                                        diagnosticResult.appointmentDebug.response.status < 300 ? "text-emerald-400" : "text-rose-400"
+                                      )}>{diagnosticResult.appointmentDebug.response.status}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <span className="text-slate-500 min-w-[80px]">Trace ID:</span>
+                                      <span className="text-slate-300">{diagnosticResult.appointmentDebug.response.traceId}</span>
+                                    </div>
+                                    <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Response Body</div>
+                                    <pre className="p-3 bg-slate-950 rounded border border-slate-800 text-slate-300 text-[9px] overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                                      {diagnosticResult.appointmentDebug.response.body}
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

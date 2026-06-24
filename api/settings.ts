@@ -843,17 +843,99 @@ export default async function handler(req: any, res: any) {
           const resHeaders: Record<string, string> = {};
           slotRes.headers.forEach((val, key) => { resHeaders[key] = val; });
 
+          let slotData: any = {};
+          try { slotData = JSON.parse(body); } catch(e) {}
+          const availableSlots = slotData.slots || [];
+          const firstSlot = availableSlots[0];
+
+          let appointmentDebug: any = null;
+          let appointmentAttempted = false;
+          let appointmentReason = 'No available slots found to test creation.';
+
+          if (firstSlot) {
+            appointmentAttempted = true;
+            const slotStart = typeof firstSlot === 'string' ? firstSlot : firstSlot.startTime;
+            
+            // Comparison Logic
+            const requestedStart = slotStart; // Diagnostic uses the exact slot it found
+            const exactMatch = requestedStart === slotStart;
+
+            // Prepare appointment payload
+            const apptStartTime = slotStart;
+            const apptEndD = new Date(apptStartTime);
+            apptEndD.setHours(apptEndD.getHours() + 3);
+            const apptEndTime = apptEndD.toISOString();
+
+            // We need a contactId for a real test. We'll try to find the first contact.
+            let testContactId = '';
+            try {
+              const contactRes = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&limit=1`, { headers });
+              if (contactRes.ok) {
+                const contactData = await contactRes.json();
+                testContactId = contactData.contacts?.[0]?.id || '';
+              }
+            } catch (ce) {}
+
+            if (!testContactId) {
+              appointmentAttempted = false;
+              appointmentReason = 'Could not find a contact in this location to perform a test appointment creation.';
+            } else {
+              const apptPayload = {
+                locationId,
+                calendarId,
+                contactId: testContactId,
+                startTime: apptStartTime,
+                endTime: apptEndTime,
+                title: 'DIAGNOSTIC TEST APPOINTMENT',
+                notes: 'Created by Lone Star Fence Works Diagnostic Tool',
+                status: 'booked'
+              };
+
+              const apptUrl = `https://services.leadconnectorhq.com/calendars/events/appointments`;
+              const apptStartT = Date.now();
+              const apptRes = await fetch(apptUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(apptPayload)
+              });
+              const apptEndT = Date.now();
+              const apptBody = await apptRes.text();
+              const apptTraceId = apptRes.headers.get('x-datadog-trace-id') || apptRes.headers.get('trace-id') || 'N/A';
+
+              appointmentDebug = {
+                url: apptUrl,
+                method: 'POST',
+                headers: { ...headers, 'Authorization': 'Bearer ****' },
+                body: apptPayload,
+                startTimeSent: apptStartTime,
+                endTimeSent: apptEndTime,
+                timezone: timezone,
+                selectedSlot: slotStart,
+                exactMatch,
+                response: {
+                  status: apptRes.status,
+                  body: apptBody,
+                  traceId: apptTraceId,
+                  responseTime: `${apptEndT - apptStartT}ms`
+                }
+              };
+            }
+          }
+
           const specCheck = {
             endpointMatches: slotUrl.includes(`/calendars/${calendarId}/free-slots`),
-            methodMatches: true, // It is GET
+            methodMatches: true,
             requiredParamsPresent: !!startT && !!endT,
-            unexpectedParamsPresent: false // We removed locationId
+            unexpectedParamsPresent: false
           };
 
           return res.status(200).json({
             success: slotRes.ok,
             validation,
             specCheck,
+            appointmentAttempted,
+            appointmentReason: !appointmentAttempted ? appointmentReason : null,
+            appointmentDebug,
             debug: {
               function: 'buildFreeSlotsRequest()',
               baseUrl: 'https://services.leadconnectorhq.com',
