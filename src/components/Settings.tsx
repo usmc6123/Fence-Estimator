@@ -2,8 +2,8 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Save, Globe, Mail, Building2, Phone, MapPin, 
-  Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2,
-  ImageIcon, Server, Settings2, Send, AlertCircle,
+  Webhook, ShieldCheck, Bell, RefreshCw, CheckCircle2, XCircle,
+  ImageIcon, Server, Settings2, Send, AlertCircle, Terminal,
   Eye, EyeOff, Copy, Plus, Activity, Check, Database, Sparkles,
   Calendar, Search, Lock, Key, CheckSquare, Square
 } from 'lucide-react';
@@ -2259,56 +2259,93 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                     </p>
 
                     {diagnosticResult && (
-                      <div className="mt-3 p-3 bg-white rounded-lg border border-rose-100 font-mono text-[10px] space-y-2 overflow-hidden">
-                        <div className="flex items-center justify-between border-b border-rose-50 pb-1 mb-1">
-                          <span className="font-bold text-slate-700 uppercase">Diagnostic Result</span>
-                          <span className={cn(
-                            "px-1.5 py-0.5 rounded text-[8px] font-black uppercase",
-                            diagnosticResult.success ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                          )}>
-                            {diagnosticResult.success ? "Passed" : "Failed"}
-                          </span>
-                        </div>
-                        
-                        {diagnosticResult.debug && (
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between">
-                              <span className="text-slate-400">Status:</span>
-                              <span className="text-slate-800">{diagnosticResult.debug.status}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-400">Method:</span>
-                              <span className="text-slate-800 font-bold">{diagnosticResult.debug.method}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-400">Calendar ID:</span>
-                              <span className="text-slate-800">{diagnosticResult.debug.calendarId}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-400">Location ID:</span>
-                              <span className="text-slate-800">{diagnosticResult.debug.locationIdMasked}</span>
-                            </div>
-                            {diagnosticResult.debug.traceId && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Trace ID:</span>
-                                <span className="text-slate-800">{diagnosticResult.debug.traceId}</span>
+                      <div className="mt-3 space-y-4">
+                        {/* Validation Checklist */}
+                        <div className="p-3 bg-white rounded-lg border border-slate-100 space-y-2">
+                          <h6 className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-2">Pre-flight Validation</h6>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            {[
+                              { label: 'Calendar ID', valid: diagnosticResult.validation?.calendarId },
+                              { label: 'API Token', valid: diagnosticResult.validation?.apiKey },
+                              { label: 'Location ID', valid: diagnosticResult.validation?.locationId },
+                              { label: 'Timezone', valid: diagnosticResult.validation?.timezone },
+                              { label: 'Endpoint Format', valid: diagnosticResult.validation?.endpoint },
+                              { label: 'HTTP Method', valid: diagnosticResult.validation?.method },
+                            ].map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                {item.valid ? (
+                                  <CheckCircle2 size={10} className="text-emerald-500" />
+                                ) : (
+                                  <XCircle size={10} className="text-rose-500" />
+                                )}
+                                <span className={cn(
+                                  "text-[10px] font-medium",
+                                  item.valid ? "text-slate-600" : "text-rose-500"
+                                )}>{item.label}</span>
                               </div>
-                            )}
-                            <div className="mt-2 text-slate-500 font-bold uppercase text-[8px]">Request URL:</div>
-                            <div className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 break-all leading-tight">
-                              {diagnosticResult.debug.url}
-                            </div>
-                            <div className="mt-2 text-slate-500 font-bold uppercase text-[8px]">Response Body:</div>
-                            <pre className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
-                              {diagnosticResult.debug.body || JSON.stringify(diagnosticResult, null, 2)}
-                            </pre>
+                            ))}
                           </div>
-                        )}
-                        {!diagnosticResult.debug && (
-                           <pre className="text-rose-500 whitespace-pre-wrap break-all">
-                             {JSON.stringify(diagnosticResult, null, 2)}
-                           </pre>
-                        )}
+                        </div>
+
+                        {/* Developer Debug View */}
+                        <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden">
+                          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+                            <div className="flex items-center gap-2">
+                              <Terminal size={12} className="text-emerald-400" />
+                              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Developer Debug Mode</span>
+                            </div>
+                            {diagnosticResult.debug?.response?.responseTime && (
+                              <span className="text-[9px] font-mono text-slate-500">Latency: {diagnosticResult.debug.response.responseTime}</span>
+                            )}
+                          </div>
+
+                          <div className="space-y-4">
+                            {/* Request Section */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded text-[8px] font-bold uppercase">Request</span>
+                                <span className="text-[9px] text-slate-500 font-mono italic">{diagnosticResult.debug?.function}</span>
+                              </div>
+                              <div className="space-y-2 font-mono text-[10px]">
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[60px]">Method:</span>
+                                  <span className="text-emerald-400 font-bold">{diagnosticResult.debug?.request?.method || 'GET'}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <span className="text-slate-500 min-w-[60px]">URL:</span>
+                                  <span className="text-slate-300 break-all">{diagnosticResult.debug?.request?.url}</span>
+                                </div>
+                                <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Headers</div>
+                                <pre className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-400 text-[9px] overflow-x-auto">
+                                  {JSON.stringify(diagnosticResult.debug?.request?.headers, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+
+                            {/* Response Section */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
+                                  diagnosticResult.success ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                                )}>Response</span>
+                                <span className="text-[9px] text-slate-500 font-mono">{diagnosticResult.debug?.response?.status} {diagnosticResult.debug?.response?.statusText}</span>
+                              </div>
+                              <div className="space-y-2 font-mono text-[10px]">
+                                {diagnosticResult.debug?.response?.traceId && (
+                                  <div className="flex gap-2">
+                                    <span className="text-slate-500 min-w-[60px]">Trace ID:</span>
+                                    <span className="text-slate-300">{diagnosticResult.debug.response.traceId}</span>
+                                  </div>
+                                )}
+                                <div className="mt-2 text-[9px] text-slate-600 font-bold uppercase tracking-tight">Body</div>
+                                <pre className="p-3 bg-slate-950 rounded border border-slate-800 text-slate-300 text-[9px] overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                                  {diagnosticResult.debug?.response?.body || JSON.stringify(diagnosticResult, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -797,10 +797,20 @@ export default async function handler(req: any, res: any) {
         
         const { apiKey, locationId } = await resolveGhlCredentials(uid, { ghlApiKey, ghlLocationId });
         
-        if (!apiKey || !locationId || !calendarId || calendarId === 'free-slots') {
+        const validation = {
+          calendarId: !!calendarId && calendarId !== 'free-slots',
+          apiKey: !!apiKey,
+          locationId: !!locationId,
+          timezone: true, // Hardcoded for now
+          endpoint: true,
+          method: true
+        };
+
+        if (!validation.apiKey || !validation.locationId || !validation.calendarId) {
           return res.status(400).json({ 
             success: false, 
-            error: 'Missing credentials or invalid calendar ID for slot test.',
+            error: 'Validation failed for slot test.',
+            validation,
             details: { apiKeyExists: !!apiKey, locationIdExists: !!locationId, calendarIdExists: !!calendarId, calendarId }
           });
         }
@@ -820,31 +830,60 @@ export default async function handler(req: any, res: any) {
         
         const mask = (str: string) => str && str.length > 8 ? `${str.substring(0, 4)}...${str.substring(str.length - 4)}` : (str || 'null');
 
+        const startTime = Date.now();
         try {
           const slotRes = await fetch(slotUrl, { headers });
+          const endTime = Date.now();
+          const responseTime = endTime - startTime;
+          
           const traceId = slotRes.headers.get('x-datadog-trace-id') || slotRes.headers.get('trace-id') || 'N/A';
           const body = await slotRes.text();
           
+          // Capture response headers
+          const resHeaders: Record<string, string> = {};
+          slotRes.headers.forEach((val, key) => { resHeaders[key] = val; });
+
           return res.status(200).json({
             success: slotRes.ok,
+            validation,
             debug: {
-              method: 'GET',
-              status: slotRes.status,
-              traceId,
-              body,
-              url: slotUrl,
-              calendarId,
-              locationIdMasked: mask(locationId),
-              timezone,
-              startDateSent: new Date(startT).toISOString(),
-              endDateSent: new Date(endT).toISOString()
+              function: 'buildFreeSlotsRequest()',
+              request: {
+                method: 'GET',
+                url: slotUrl,
+                headers: {
+                  ...headers,
+                  'Authorization': 'Bearer ****' + (apiKey?.slice(-4) || '')
+                },
+                params: {
+                  calendarId,
+                  locationId: mask(locationId),
+                  startDate: startT,
+                  endDate: endT,
+                  timezone
+                }
+              },
+              response: {
+                status: slotRes.status,
+                statusText: slotRes.statusText,
+                responseTime: `${responseTime}ms`,
+                traceId,
+                headers: resHeaders,
+                body
+              }
             }
           });
         } catch (err: any) {
+          const endTime = Date.now();
           return res.status(500).json({
             success: false,
+            validation,
             error: `Failed to fetch slots from GHL: ${err.message}`,
-            debug: { error: err.message, stack: err.stack }
+            debug: { 
+              error: err.message, 
+              stack: err.stack,
+              responseTime: `${endTime - startTime}ms`
+            }
           });
         }
 
