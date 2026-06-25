@@ -638,9 +638,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const handleRefreshLaborCost = async () => {
     setIsRefreshingLabor(true);
     try {
-      // Calculate current labor cost from the data
-      const takeoff = calculateDetailedTakeOff(jobData, materials, laborRates);
-      const laborCost = takeoff.summary.reduce((sum, item) => item.category === 'Labor' ? sum + item.total : sum, 0);
+      // Priority logic for labor cost as requested by user
+      let laborCost = 0;
+      let source = 'Calculation Fallback';
+
+      if (snapshot && (snapshot.totalDirectLaborPayout !== undefined || snapshot.laborTotal !== undefined || snapshot.total !== undefined)) {
+        laborCost = Number(snapshot.totalDirectLaborPayout || snapshot.laborTotal || snapshot.total || 0);
+        source = 'Labor Breakdown Snapshot';
+      } else if (jobData.laborBreakdown?.total !== undefined) {
+        laborCost = Number(jobData.laborBreakdown.total);
+        source = 'laborBreakdown.total';
+      } else if (jobData.laborBreakdown?.laborTotal !== undefined) {
+        laborCost = Number(jobData.laborBreakdown.laborTotal);
+        source = 'laborBreakdown.laborTotal';
+      } else {
+        // Fallback to calculation if no saved breakdown exists
+        const takeoff = calculateDetailedTakeOff(jobData, materials, laborRates);
+        laborCost = takeoff.summary.reduce((sum, item) => item.category === 'Labor' ? sum + item.total : sum, 0);
+        source = 'Dynamic Calculation';
+      }
 
       const adminToken = localStorage.getItem('company_admin_token') || localStorage.getItem('token') || '';
       const response = await fetch('/api/estimates/write', {
@@ -652,7 +668,8 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
         body: JSON.stringify({
           action: 'refresh-labor-cost',
           estimateId,
-          laborCost
+          laborCost,
+          laborCostSource: source
         })
       });
       if (response.ok) {
@@ -3221,7 +3238,12 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </div>
                       <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
                         <span className="text-[10px] font-bold text-slate-300 uppercase">Labor (Snapshot)</span>
-                        <span className="text-xs font-black text-white font-mono">${(jobData.financialSummary?.laborCostFromBreakdown || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-white font-mono block">${(jobData.financialSummary?.laborCostFromBreakdown || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="text-[8px] font-black uppercase text-blue-400 tracking-widest mt-0.5 block">
+                            Source: {jobData.financialSummary?.laborCostSource || 'Calculated Fallback'}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex justify-between items-center p-4 bg-[#111A2E] rounded-xl border border-blue-900/5">
                         <span className="text-[10px] font-bold text-slate-300 uppercase">Labor Adjustments</span>

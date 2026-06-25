@@ -4882,7 +4882,21 @@ export default async function handler(req: any, res: any) {
           .filter((c: any) => c.category === 'Manual Material Cost')
           .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
           
-        const laborCostFromBreakdown = Number(estimateData.laborCostFromBreakdown) || 0;
+        // Prioritize labor cost from snapshot if it exists
+        let laborCostFromBreakdown = Number(estimateData.laborCostFromBreakdown) || 0;
+        let laborCostSource = estimateData.laborCostSource || 'Calculated Fallback';
+
+        // Automatic backfill if missing: try to pull from snapshot if it exists
+        if (!laborCostFromBreakdown || laborCostFromBreakdown === 0) {
+          const snapshot = estimateData.laborContractSnapshot;
+          if (snapshot && (snapshot.totalDirectLaborPayout !== undefined || snapshot.laborTotal !== undefined || snapshot.total !== undefined)) {
+            laborCostFromBreakdown = Number(snapshot.totalDirectLaborPayout || snapshot.laborTotal || snapshot.total || 0);
+            laborCostSource = 'Labor Breakdown Snapshot (Auto-Backfill)';
+          } else if (estimateData.laborBreakdown && (estimateData.laborBreakdown.total !== undefined || estimateData.laborBreakdown.laborTotal !== undefined)) {
+            laborCostFromBreakdown = Number(estimateData.laborBreakdown.total || estimateData.laborBreakdown.laborTotal || 0);
+            laborCostSource = 'Labor Breakdown Object (Auto-Backfill)';
+          }
+        }
         
         const manualLaborCostAdjustments = manualCharges
           .filter((c: any) => c.category === 'Manual Labor Adjustment')
@@ -4903,6 +4917,7 @@ export default async function handler(req: any, res: any) {
           materialCostFromSalesOrders,
           manualMaterialCost,
           laborCostFromBreakdown,
+          laborCostSource,
           manualLaborCostAdjustments,
           otherManualCosts,
           totalJobCost,
@@ -4946,7 +4961,7 @@ export default async function handler(req: any, res: any) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
         
-        const { estimateId, laborCost } = req.body || {};
+        const { estimateId, laborCost, laborCostSource } = req.body || {};
         if (!estimateId) return res.status(400).json({ error: 'Missing estimateId' });
 
         const { docRef, snap } = await getEstimateDocRef(estimateId);
@@ -4957,11 +4972,12 @@ export default async function handler(req: any, res: any) {
           event: 'Labor Cost Refreshed',
           timestamp: new Date().toISOString(),
           user: decoded.email || 'Office',
-          notes: `Refreshed labor snapshot cost to $${Number(laborCost).toFixed(2)}`
+          notes: `Refreshed labor snapshot cost to $${Number(laborCost).toFixed(2)} (Source: ${laborCostSource || 'Manual Refresh'})`
         };
 
         await docRef.update({
           laborCostFromBreakdown: Number(laborCost),
+          laborCostSource: laborCostSource || 'Refreshed',
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
 
