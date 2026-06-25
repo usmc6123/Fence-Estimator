@@ -124,6 +124,92 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [overrideSubmitting, setOverrideSubmitting] = useState(false);
   const [overrideError, setOverrideError] = useState('');
 
+  // Navigation & Highlighting States for progression menu
+  const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
+  const [progressionBannerMessage, setProgressionBannerMessage] = useState<string | null>(null);
+
+  const navigateToSection = (tab: 'overview' | 'labor' | 'materials' | 'checklists' | 'reports' | 'history' | 'financials' | 'schedule', elementId: string, customAction?: () => void) => {
+    setActiveTab(tab);
+    if (customAction) {
+      customAction();
+    }
+    setTimeout(() => {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedSection(elementId);
+        setTimeout(() => {
+          setHighlightedSection(null);
+        }, 2000);
+      } else {
+        const tabContent = document.querySelector('.bg-\\[\\#111A2E\\]\\.rounded-3xl');
+        if (tabContent) {
+          tabContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }, 150);
+  };
+
+  const handleStepClick = (stepNum: number) => {
+    let isLocked = false;
+    let missingPrereqMessage = '';
+
+    if (stepNum >= 2 && !isScheduled) {
+      isLocked = true;
+      missingPrereqMessage = 'Step 1: Schedule Start';
+    } else if (stepNum >= 3 && !isMaterialsConfirmed) {
+      isLocked = true;
+      missingPrereqMessage = 'Step 2: Confirm Materials';
+    } else if (stepNum >= 4 && !isPreBuildComplete) {
+      isLocked = true;
+      missingPrereqMessage = 'Step 3: Pre-Build Site Check';
+    } else if (stepNum >= 5 && !isCompletionComplete) {
+      isLocked = true;
+      missingPrereqMessage = 'Step 4: Completion Sign-Off';
+    }
+
+    if (isLocked) {
+      setProgressionBannerMessage(`Complete the previous step (${missingPrereqMessage}) before this task can be completed.`);
+    } else {
+      setProgressionBannerMessage(null);
+    }
+
+    if (stepNum === 1) {
+      navigateToSection('schedule', 'crew-schedule-section');
+    } else if (stepNum === 2) {
+      const hasSalesOrder = jobData.vendorDocuments && jobData.vendorDocuments.length > 0;
+      if (isAdmin && !hasSalesOrder) {
+        navigateToSection('financials', 'sales-orders-section', () => {
+          setShowUploadDocPanel(true);
+        });
+      } else {
+        navigateToSection('materials', 'materials-checklist-section');
+      }
+    } else if (stepNum === 3) {
+      let elementId = 'prebuild-section';
+      if (!isLocked) {
+        if (!crewLeaderName) {
+          elementId = 'prebuild-crew-leader-name';
+        } else if (uploadedPhotos.length < 3) {
+          elementId = 'prebuild-photos-upload-area';
+        }
+      }
+      navigateToSection('checklists', elementId);
+    } else if (stepNum === 4) {
+      let elementId = 'completion-section';
+      if (!isLocked) {
+        if (!crewLeaderName) {
+          elementId = 'completion-crew-leader-name';
+        } else if (uploadedPhotos.length < 5) {
+          elementId = 'completion-photos-upload-area';
+        }
+      }
+      navigateToSection('checklists', elementId);
+    } else if (stepNum === 5) {
+      navigateToSection('checklists', jobData.completionChecklist ? 'completion-status-card' : 'completion-section');
+    }
+  };
+
   // --- JOB PORTAL INITIAL SCHEDULING STATES & HANDLERS ---
   const [scheduleStartDate, setScheduleStartDate] = useState('');
   const [scheduleDuration, setScheduleDuration] = useState('1 day');
@@ -1677,12 +1763,23 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-2">
             
             {/* Step 1: Schedule Start Date */}
-            <div className={cn(
-              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isScheduled 
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : "bg-[#0A1120] border-rose-500/30 text-rose-400 animate-pulse"
-            )}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={() => handleStepClick(1)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleStepClick(1);
+                }
+              }}
+              className={cn(
+                "p-3.5 rounded-xl border flex flex-col justify-between gap-1 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#E63946]",
+                isScheduled 
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/30" 
+                  : "bg-[#0A1120] border-rose-500/30 text-rose-400 animate-pulse hover:bg-rose-950/10"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider">1. Schedule Start</span>
                 {isScheduled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
@@ -1693,16 +1790,27 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             </div>
 
             {/* Step 2: Material Pickup Confirmation */}
-            <div className={cn(
-              "relative p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              !isScheduled
-                ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed"
-                : isMaterialsConfirmed 
-                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                  : currentStatusKey === 'material_issue_reported'
-                    ? "bg-rose-950/20 border-rose-500/30 text-rose-400 animate-pulse"
-                    : "bg-[#0A1120] border-amber-500/30 text-amber-400"
-            )}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={() => handleStepClick(2)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleStepClick(2);
+                }
+              }}
+              className={cn(
+                "relative p-3.5 rounded-xl border flex flex-col justify-between gap-1 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#E63946]",
+                !isScheduled
+                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 hover:bg-[#0A1120]/50"
+                  : isMaterialsConfirmed 
+                    ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/30" 
+                    : currentStatusKey === 'material_issue_reported'
+                      ? "bg-rose-950/20 border-rose-500/30 text-rose-400 animate-pulse hover:bg-rose-950/30"
+                      : "bg-[#0A1120] border-amber-500/30 text-amber-400 hover:bg-[#0A1120]/80"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider">2. Confirm Materials</span>
                 {isMaterialsConfirmed ? <CheckCircle2 size={14} /> : !isScheduled ? <Lock size={12} /> : <AlertTriangle size={14} />}
@@ -1719,14 +1827,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             </div>
 
             {/* Step 3: Pre-Build Site Check */}
-            <div className={cn(
-              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isPreBuildComplete 
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : (!isScheduled || !isMaterialsConfirmed) 
-                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
-                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
-            )}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={() => handleStepClick(3)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleStepClick(3);
+                }
+              }}
+              className={cn(
+                "p-3.5 rounded-xl border flex flex-col justify-between gap-1 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#E63946]",
+                isPreBuildComplete 
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/30" 
+                  : (!isScheduled || !isMaterialsConfirmed) 
+                    ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 hover:bg-[#0A1120]/50" 
+                    : "bg-[#0A1120] border-amber-500/30 text-amber-400 hover:bg-[#0A1120]/80"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider">3. Pre-Build Site Check</span>
                 {isPreBuildComplete ? <CheckCircle2 size={14} /> : (!isScheduled || !isMaterialsConfirmed) ? <Lock size={12} /> : <AlertTriangle size={14} />}
@@ -1741,14 +1860,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             </div>
 
             {/* Step 4: Completion Sign-Off */}
-            <div className={cn(
-              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isCompletionComplete 
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) 
-                  ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 cursor-not-allowed" 
-                  : "bg-[#0A1120] border-amber-500/30 text-amber-400"
-            )}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={() => handleStepClick(4)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleStepClick(4);
+                }
+              }}
+              className={cn(
+                "p-3.5 rounded-xl border flex flex-col justify-between gap-1 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#E63946]",
+                isCompletionComplete 
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/30" 
+                  : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) 
+                    ? "bg-[#0A1120]/40 border-slate-800 text-slate-500 hover:bg-[#0A1120]/50" 
+                    : "bg-[#0A1120] border-amber-500/30 text-amber-400 hover:bg-[#0A1120]/80"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider">4. Completion Sign-Off</span>
                 {isCompletionComplete ? <CheckCircle2 size={14} /> : (!isScheduled || !isMaterialsConfirmed || !isPreBuildComplete) ? <Lock size={12} /> : <AlertTriangle size={14} />}
@@ -1763,14 +1893,25 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
             </div>
 
             {/* Step 5: Office Review */}
-            <div className={cn(
-              "p-3.5 rounded-xl border flex flex-col justify-between gap-1",
-              isOfficeApproved 
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400" 
-                : currentStatusKey === 'completion_submitted'
-                  ? "bg-amber-950/20 border-amber-500/30 text-amber-400"
-                  : "bg-[#0A1120]/40 border-slate-800 text-slate-500"
-            )}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={() => handleStepClick(5)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleStepClick(5);
+                }
+              }}
+              className={cn(
+                "p-3.5 rounded-xl border flex flex-col justify-between gap-1 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[#E63946]",
+                isOfficeApproved 
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/30" 
+                  : currentStatusKey === 'completion_submitted'
+                    ? "bg-amber-950/20 border-amber-500/30 text-amber-400 hover:bg-amber-950/30"
+                    : "bg-[#0A1120]/40 border-slate-800 text-slate-500 hover:bg-[#0A1120]/50"
+              )}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider">5. Office Review</span>
                 {isOfficeApproved ? <CheckCircle2 size={14} /> : currentStatusKey === 'completion_submitted' ? <Clock size={14} /> : <Lock size={12} />}
@@ -1876,6 +2017,29 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
         {/* Tab Contents */}
         <div className="bg-[#111A2E] rounded-3xl p-6 sm:p-8 border border-blue-900/10 shadow-xl min-h-[400px]">
+          
+          <AnimatePresence>
+            {progressionBannerMessage && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 mb-6 flex items-start gap-3 text-rose-400 relative"
+              >
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <div className="space-y-1 pr-6">
+                  <p className="text-xs font-black uppercase tracking-wider">Sequential Workflow Requirement</p>
+                  <p className="text-xs text-rose-300 font-medium">{progressionBannerMessage}</p>
+                </div>
+                <button 
+                  onClick={() => setProgressionBannerMessage(null)}
+                  className="absolute top-4 right-4 hover:text-white transition-colors p-1"
+                >
+                  <X size={14} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -2149,7 +2313,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           {activeTab === 'materials' && (
             <div className="space-y-6">
               {/* ----------------- VENDOR SALES ORDERS & MATERIAL PICKUP SECTION ----------------- */}
-              <div className="bg-[#111A2E]/50 border border-blue-900/15 rounded-3xl p-6 space-y-6">
+              <div id="materials-checklist-section" className={cn("bg-[#111A2E]/50 border border-blue-900/15 rounded-3xl p-6 space-y-6 transition-all duration-300", highlightedSection === 'materials-checklist-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-blue-900/10 pb-4">
                   <div>
                     <h3 className="text-base font-black uppercase text-white tracking-tight flex items-center gap-2">
@@ -2730,7 +2894,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-blue-900/10">
                 
                 {/* 1. PRE-BUILD CHECKLIST */}
-                <div className="space-y-6 pb-6 lg:pb-0">
+                <div id="prebuild-section" className={cn("space-y-6 pb-6 lg:pb-0 transition-all duration-300 p-4 rounded-3xl", highlightedSection === 'prebuild-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                   <div>
                     <h3 className="text-base font-black uppercase text-white tracking-tight flex items-center gap-2">
                       <Play className="text-emerald-400 shrink-0" size={18} />
@@ -2795,12 +2959,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       <div className="space-y-1.5">
                         <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Crew Leader Name *</label>
                         <input
+                          id="prebuild-crew-leader-name"
                           type="text"
                           required
                           value={crewLeaderName}
                           onChange={(e) => setCrewLeaderName(e.target.value)}
                           placeholder="Enter your name"
-                          className="w-full text-xs bg-[#0A1120] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                          className={cn("w-full text-xs bg-[#0A1120] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-all duration-300", highlightedSection === 'prebuild-crew-leader-name' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}
                         />
                       </div>
 
@@ -2816,7 +2981,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </div>
 
                       {/* Photo Upload Section */}
-                      <div className="space-y-2">
+                      <div id="prebuild-photos-upload-area" className={cn("space-y-2 p-2 rounded-xl transition-all duration-300", highlightedSection === 'prebuild-photos-upload-area' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}>
                         <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Upload Site Photos (At least 3 required) *</label>
                         
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -2880,7 +3045,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                 </div>
 
                 {/* 2. COMPLETION CHECKLIST */}
-                <div className="space-y-6 pt-6 lg:pt-0 lg:pl-8">
+                <div id="completion-section" className={cn("space-y-6 pt-6 lg:pt-0 lg:pl-8 transition-all duration-300 p-4 rounded-3xl", highlightedSection === 'completion-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                   <div>
                     <h3 className="text-base font-black uppercase text-white tracking-tight flex items-center gap-2">
                       <CheckCircle2 className="text-[#E63946] shrink-0" size={18} />
@@ -2891,7 +3056,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                   {/* Complete states check */}
                   {jobData.completionChecklist ? (
-                    <div className="bg-[#E63946]/5 border border-[#E63946]/20 p-5 rounded-2xl space-y-4">
+                    <div id="completion-status-card" className={cn("bg-[#E63946]/5 border border-[#E63946]/20 p-5 rounded-2xl space-y-4 transition-all duration-300", highlightedSection === 'completion-status-card' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                       <div className="flex items-center gap-2 text-[#E63946]">
                         <CheckCircle2 size={18} />
                         <span className="text-xs font-black uppercase">Completion Checklist Submitted</span>
@@ -2945,12 +3110,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       <div className="space-y-1.5">
                         <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Crew Leader Name *</label>
                         <input
+                          id="completion-crew-leader-name"
                           type="text"
                           required
                           value={crewLeaderName}
                           onChange={(e) => setCrewLeaderName(e.target.value)}
                           placeholder="Enter your name"
-                          className="w-full text-xs bg-[#0A1120] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                          className={cn("w-full text-xs bg-[#0A1120] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-all duration-300", highlightedSection === 'completion-crew-leader-name' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}
                         />
                       </div>
 
@@ -2978,7 +3144,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                       </label>
 
                       {/* Photo Upload Section */}
-                      <div className="space-y-2">
+                      <div id="completion-photos-upload-area" className={cn("space-y-2 p-2 rounded-xl transition-all duration-300", highlightedSection === 'completion-photos-upload-area' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}>
                         <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Finalized Workmanship Photos (At least 5 required) *</label>
                         
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -3320,18 +3486,259 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
               </div>
 
               {/* Vendor Sales Orders Cost Tracking */}
-              <div className="space-y-4">
+              <div id="sales-orders-section" className={cn("space-y-4 transition-all duration-300 p-4 rounded-3xl", highlightedSection === 'sales-orders-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-black uppercase text-white tracking-tight">Material Sales Orders</h3>
                   <button
-                    onClick={() => setShowUploadDocPanel(true)}
+                    onClick={() => setShowUploadDocPanel(!showUploadDocPanel)}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg shadow-emerald-950/20"
                   >
-                    <Plus size={14} /> New Sales Order
+                    <Plus size={14} /> {showUploadDocPanel ? 'Close Upload Form' : 'New Sales Order'}
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {/* Admin upload form in Financials tab */}
+                {localStorage.getItem('company_admin_token') && showUploadDocPanel && (
+                  <form onSubmit={handleUploadVendorDoc} className="bg-[#0A1120] border border-blue-900/20 p-5 rounded-2xl space-y-4">
+                    <h4 className="text-xs font-black uppercase text-white tracking-wider border-b border-blue-900/15 pb-2 flex justify-between items-center">
+                      <span>Upload New Vendor Sales Order / Pickup Document</span>
+                      <button type="button" onClick={() => setShowUploadDocPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                    </h4>
+                    
+                    {uploadDocError && (
+                      <div className="p-3 bg-rose-950/40 border border-rose-900/30 text-rose-400 text-xs font-bold rounded-xl">
+                        ⚠️ {uploadDocError}
+                      </div>
+                    )}
+                    {uploadDocSuccess && (
+                      <div className="p-3 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl">
+                        ✓ {uploadDocSuccess}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Vendor Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newVendorName}
+                          onChange={(e) => setNewVendorName(e.target.value)}
+                          placeholder="e.g. Cedar Supply Depot"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">SO / Ticket Number *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newSalesOrderNumber}
+                          onChange={(e) => setNewSalesOrderNumber(e.target.value)}
+                          placeholder="e.g. SO-98421"
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Order Date *</label>
+                        <input
+                          type="date"
+                          required
+                          value={newOrderDate}
+                          onChange={(e) => setNewOrderDate(e.target.value)}
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Pickup Date (Defaults to Job Start) *</label>
+                        <input
+                          type="date"
+                          required
+                          value={newPickupDateTime || jobData.scheduledStartDate || ''}
+                          onChange={(e) => setNewPickupDateTime(e.target.value)}
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Payment Status</label>
+                        <select
+                          value={newPaymentStatus}
+                          onChange={(e: any) => setNewPaymentStatus(e.target.value)}
+                          className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        >
+                          <option value="Not Paid">Not Paid</option>
+                          <option value="Paid">Paid</option>
+                          <option value="To Be Paid at Pickup">To Be Paid at Pickup</option>
+                          <option value="Charged to Account">Charged to Account</option>
+                          <option value="Unknown">Unknown</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-[#E63946] tracking-wider">Grand Total ($) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={newTotalCost}
+                          onChange={(e) => setNewTotalCost(Number(e.target.value))}
+                          className="w-full text-xs font-mono bg-[#070D19] text-[#E63946] border-2 border-[#E63946]/20 rounded-xl px-4 py-3 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes for Crew (Visibility Defaulted to True)</label>
+                      <textarea
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        placeholder="Include pickup codes, yard instructions, or contact info..."
+                        className="w-full text-xs bg-[#070D19] text-white border-2 border-blue-900/10 focus:border-blue-900 rounded-xl px-4 py-3 focus:outline-none transition-colors"
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Upload Document File *</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="file"
+                            required
+                            onChange={handleVendorDocFileChange}
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            className="flex-1 text-xs text-slate-300 bg-[#070D19] border-2 border-blue-900/10 rounded-xl p-2.5 cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            disabled={isAnalyzingSO || !newDocBase64}
+                            onClick={handleAnalyzeSalesOrder}
+                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                          >
+                            {isAnalyzingSO ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                            AI Analyze
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Manual line items editor */}
+                    <div className="space-y-3 pt-4 border-t border-blue-900/10">
+                      <span className="block text-[10px] font-black uppercase text-slate-300 tracking-wider">
+                        Detailed Item Breakdown (Optional - For Crew Confirmation)
+                      </span>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <div className="sm:col-span-5">
+                          <input
+                            type="text"
+                            value={newLineItemDesc}
+                            onChange={(e) => setNewLineItemDesc(e.target.value)}
+                            placeholder="Description"
+                            className="w-full text-xs bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <input
+                            type="number"
+                            value={newLineItemQty}
+                            onChange={(e) => setNewLineItemQty(Number(e.target.value))}
+                            placeholder="Qty"
+                            className="w-full text-xs bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={newLineItemCost}
+                              onChange={(e) => setNewLineItemCost(Number(e.target.value))}
+                              placeholder="Unit Cost"
+                              className="w-full text-xs pl-6 bg-[#070D19] text-white border border-blue-900/20 rounded-xl px-3 py-2.5 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="button"
+                            onClick={handleAddLineItemToNewDoc}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+
+                      {newDocLineItems.length > 0 ? (
+                        <div className="bg-[#070D19] rounded-xl overflow-hidden border border-blue-900/15">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-blue-950/20 text-[9px] text-slate-400 font-extrabold uppercase tracking-wider border-b border-blue-900/10">
+                                <th className="p-3">Item Description</th>
+                                <th className="p-3 w-20 text-center">Qty</th>
+                                <th className="p-3 w-28 text-right">Cost</th>
+                                <th className="p-3 w-28 text-right">Total</th>
+                                <th className="p-3 w-16 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {newDocLineItems.map((item) => (
+                                <tr key={item.id} className="border-b border-blue-900/5 text-xs">
+                                  <td className="p-3 font-bold text-slate-200">{item.description}</td>
+                                  <td className="p-3 text-center font-mono text-slate-300">{item.qty}</td>
+                                  <td className="p-3 text-right font-mono text-slate-400">${Number(item.unitCost).toFixed(2)}</td>
+                                  <td className="p-3 text-right font-black text-white font-mono">${Number(item.lineTotal).toFixed(2)}</td>
+                                  <td className="p-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveLineItemFromNewDoc(item.id)}
+                                      className="text-rose-500 hover:text-rose-400 p-1"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic px-1">Optional itemized breakdown for accurate material audit by crew.</p>
+                      )}
+                    </div>
+
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        disabled={isUploadingVendorDoc || !newDocFilename}
+                        className={cn(
+                          "w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2",
+                          (isUploadingVendorDoc || !newDocFilename) && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {isUploadingVendorDoc ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Processing Document...
+                          </>
+                        ) : (
+                          <>
+                            <Send size={14} />
+                            Save & Upload Sales Order
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div id="sales-orders-container" className={cn("grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 transition-all duration-300 p-2 rounded-2xl", highlightedSection === 'sales-orders-section' && "ring-4 ring-emerald-500/50 ring-offset-4 ring-offset-slate-900 scale-[1.01]")}>
                   {(!jobData.vendorDocuments || jobData.vendorDocuments.length === 0) ? (
                     <div className="col-span-full p-12 bg-[#0A1120] rounded-[32px] border-2 border-dashed border-blue-900/10 text-center">
                       <Package className="mx-auto text-slate-700 mb-4" size={48} />
@@ -3406,7 +3813,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           {/* TAB 6: JOB HISTORY TIMELINE */}
           {activeTab === 'schedule' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-6 rounded-3xl border border-blue-900/15 shadow-2xl">
+              <div id="crew-schedule-section" className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-6 rounded-3xl border border-blue-900/15 shadow-2xl transition-all duration-300", highlightedSection === 'crew-schedule-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-500">
                     <CalendarIcon size={24} />
