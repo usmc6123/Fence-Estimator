@@ -927,15 +927,8 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           if (!itemState.notes || !itemState.notes.trim()) {
             throw new Error(`Notes are required for item "${itemDesc}" because it is marked as ${itemState.status}.`);
           }
-          if (!itemState.photoUrl) {
-            throw new Error(`A photo is required for item "${itemDesc}" because it is marked as ${itemState.status}.`);
-          }
           problemList.push(`${itemDesc}: ${itemState.status} - Notes: ${itemState.notes}`);
         }
-      }
-
-      if (pickupGeneralPhotos.length === 0) {
-        throw new Error('At least one general photo of the loaded material or sales order is required to submit.');
       }
 
       const problemSummary = problemList.join('\n');
@@ -4469,7 +4462,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                             {/* Additional inputs if NOT Confirmed */}
                             {statusObj.status !== 'Confirmed' && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 animate-fadeIn">
+                              <div className={cn("grid gap-4 pt-1 animate-fadeIn", statusObj.photoUrl ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1")}>
                                 <div className="space-y-1">
                                   <label className="block text-[8px] font-black uppercase text-[#E63946] tracking-wider">
                                     Describe the {statusObj.status} issue *
@@ -4484,39 +4477,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                                   />
                                 </div>
 
-                                <div className="space-y-1">
-                                  <label className="block text-[8px] font-black uppercase text-[#E63946] tracking-wider">
-                                    Upload Photo of {statusObj.status} Issue *
-                                  </label>
-                                  
-                                  <div className="flex items-center gap-3">
-                                    <label className="flex-1 flex flex-col items-center justify-center aspect-[4/1] border border-dashed border-rose-500/20 hover:border-rose-500 rounded-xl bg-[#0c1322] cursor-pointer text-slate-400 hover:text-white transition-all relative overflow-hidden">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleUploadLineItemPhoto(itemId, e)}
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                      />
-                                      {uploadingLineItemPhotoId === itemId ? (
-                                        <div className="flex items-center gap-1 text-[9px] font-bold text-rose-400">
-                                          <Loader2 size={12} className="animate-spin" /> Uploading...
-                                        </div>
-                                      ) : statusObj.photoUrl ? (
-                                        <span className="text-[9px] font-bold text-emerald-400">✓ Photo Uploaded (Click to change)</span>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider">
-                                          <Camera size={12} /> Upload Photo
-                                        </div>
-                                      )}
+                                {statusObj.photoUrl && (
+                                  <div className="space-y-1">
+                                    <label className="block text-[8px] font-black uppercase text-[#888888] tracking-wider">
+                                      Attached Photo
                                     </label>
-                                    
-                                    {statusObj.photoUrl && (
-                                      <a href={statusObj.photoUrl} target="_blank" rel="noopener noreferrer" className="h-10 w-10 shrink-0 border border-emerald-500/20 rounded-xl overflow-hidden block">
-                                        <img src={statusObj.photoUrl} alt="issue" className="h-full w-full object-cover" />
-                                      </a>
-                                    )}
+                                    <a href={statusObj.photoUrl} target="_blank" rel="noopener noreferrer" className="h-12 w-12 border border-blue-900/10 rounded-xl overflow-hidden block hover:scale-105 transition-transform">
+                                      <img src={statusObj.photoUrl} alt="issue" className="h-full w-full object-cover" />
+                                    </a>
                                   </div>
-                                </div>
+                                )}
                               </div>
                             )}
 
@@ -4529,47 +4499,29 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                   )}
                 </div>
 
-                {/* General Pickup Documentation Photos */}
-                <div className="space-y-3 pt-2 border-t border-blue-900/10">
-                  <span className="block text-xs font-black uppercase text-slate-300 tracking-wider">
-                    General Loaded Material or Sales Order Photos * (Min 1 photo required)
-                  </span>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-blue-900/20 hover:border-[#E63946] rounded-2xl bg-[#070D19]/40 cursor-pointer text-slate-400 hover:text-white transition-all relative overflow-hidden">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUploadPickupPhoto}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                      />
-                      {isUploadingPickupPhoto ? (
-                        <div className="text-center space-y-1">
-                          <Loader2 size={18} className="animate-spin mx-auto text-[#E63946]" />
-                          <span className="text-[9px] font-bold text-slate-500">Uploading...</span>
+                {/* General Pickup Documentation Photos - Only visible if there are pre-existing photos */}
+                {pickupGeneralPhotos.length > 0 && (
+                  <div className="space-y-3 pt-2 border-t border-blue-900/10">
+                    <span className="block text-xs font-black uppercase text-slate-300 tracking-wider">
+                      General Loaded Material Photos
+                    </span>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {pickupGeneralPhotos.map((url, index) => (
+                        <div key={index} className="aspect-square rounded-2xl overflow-hidden border border-blue-900/10 relative group bg-[#070D19]">
+                          <img src={url} alt={`General pickup ${index}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveGeneralPhoto(index)}
+                            className="absolute top-1.5 right-1.5 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
-                      ) : (
-                        <div className="text-center space-y-1">
-                          <Camera size={18} className="mx-auto" />
-                          <span className="text-[9px] font-black uppercase tracking-wider block">Add Photo</span>
-                        </div>
-                      )}
-                    </label>
-
-                    {pickupGeneralPhotos.map((url, index) => (
-                      <div key={index} className="aspect-square rounded-2xl overflow-hidden border border-blue-900/10 relative group bg-[#070D19]">
-                        <img src={url} alt={`General pickup ${index}`} className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveGeneralPhoto(index)}
-                          className="absolute top-1.5 right-1.5 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* General notes */}
                 <div className="space-y-1.5">
@@ -4597,11 +4549,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                 <button
                   type="button"
-                  disabled={confirmSubmitting || isUploadingPickupPhoto || !pickupLeaderName.trim() || pickupGeneralPhotos.length < 1}
+                  disabled={confirmSubmitting || !pickupLeaderName.trim()}
                   onClick={handleSubmitMaterialConfirmation}
                   className={cn(
                     "px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center gap-1.5",
-                    (confirmSubmitting || isUploadingPickupPhoto || !pickupLeaderName.trim() || pickupGeneralPhotos.length < 1) && "opacity-50 cursor-not-allowed"
+                    (confirmSubmitting || !pickupLeaderName.trim()) && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   {confirmSubmitting ? (
