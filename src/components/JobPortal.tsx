@@ -1086,6 +1086,16 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [preBuildVerifiedMaterials, setPreBuildVerifiedMaterials] = useState(false);
   const [preBuildNotifiedNeighbors, setPreBuildNotifiedNeighbors] = useState(false);
 
+  // Completion checklist items states
+  const [compPostsSturdyLevelClean, setCompPostsSturdyLevelClean] = useState(false);
+  const [compPostsHaveCaps, setCompPostsHaveCaps] = useState(false);
+  const [compCutsWeldsTouchedUp, setCompCutsWeldsTouchedUp] = useState(false);
+  const [compProtrudingNailsScrews, setCompProtrudingNailsScrews] = useState(false);
+  const [compHardwareTight, setCompHardwareTight] = useState(false);
+  const [compGatesOperateSmoothly, setCompGatesOperateSmoothly] = useState(false);
+  const [compSiteCleanWalked, setCompSiteCleanWalked] = useState(false);
+  const [compDirtSpoilsSpread, setCompDirtSpoilsSpread] = useState(false);
+
   // Incident reports states
   const [reportType, setReportType] = useState<'issue' | 'shortage' | 'delay'>('issue');
   const [reportDetails, setReportDetails] = useState('');
@@ -1268,8 +1278,12 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setChecklistError('Crew Leader Name is required.');
       return;
     }
-    if (uploadedPhotos.length < 5) {
-      setChecklistError('At least 5 completion photos are required to document finalized workmanship.');
+    if (!compPostsSturdyLevelClean || !compPostsHaveCaps || !compCutsWeldsTouchedUp || !compProtrudingNailsScrews || !compHardwareTight || !compGatesOperateSmoothly || !compSiteCleanWalked || !compDirtSpoilsSpread) {
+      setChecklistError('Please verify and check all Completion Checklist items before submitting.');
+      return;
+    }
+    if (uploadedPhotos.length < 3) {
+      setChecklistError('At least 3 completion photos are required to document finalized workmanship.');
       return;
     }
 
@@ -1291,7 +1305,15 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           completionTime: new Date().toISOString(),
           notes,
           issuesDocumented,
-          photos: uploadedPhotos
+          photos: uploadedPhotos,
+          postsSturdyLevelClean: compPostsSturdyLevelClean,
+          postsHaveCaps: compPostsHaveCaps,
+          cutsWeldsTouchedUp: compCutsWeldsTouchedUp,
+          protrudingNailsScrews: compProtrudingNailsScrews,
+          hardwareTight: compHardwareTight,
+          gatesOperateSmoothly: compGatesOperateSmoothly,
+          siteCleanWalked: compSiteCleanWalked,
+          dirtSpoilsSpread: compDirtSpoilsSpread
         })
       });
 
@@ -1306,6 +1328,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setNotes('');
       setUploadedPhotos([]);
       setIssuesDocumented(false);
+      setCompPostsSturdyLevelClean(false);
+      setCompPostsHaveCaps(false);
+      setCompCutsWeldsTouchedUp(false);
+      setCompProtrudingNailsScrews(false);
+      setCompHardwareTight(false);
+      setCompGatesOperateSmoothly(false);
+      setCompSiteCleanWalked(false);
+      setCompDirtSpoilsSpread(false);
       // Reload job details
       await fetchJobDetails(estimateId, token);
     } catch (err: any) {
@@ -1589,7 +1619,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     jobData?.preBuildCompletedAt ||
     (Array.isArray(jobData?.preBuildPhotos || jobData?.preBuildChecklist?.photos) && (jobData?.preBuildPhotos || jobData?.preBuildChecklist?.photos || []).length >= 3 && (jobData?.preBuildSubmittedAt || jobData?.preBuildCompletedAt || jobData?.preBuildChecklist?.submittedAt))
   );
-  const isCompletionComplete = !!jobData?.completionSubmitted;
+  const isCompletionComplete = !!jobData?.completionSubmitted || !!jobData?.completionChecklist;
   const isOfficeApproved = currentStatusKey === 'completed';
 
   return (
@@ -3252,10 +3282,96 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         <CheckCircle2 size={18} />
                         <span className="text-xs font-black uppercase">Completion Checklist Submitted</span>
                       </div>
-                      <div className="space-y-2 text-xs text-slate-300">
-                        <p><strong className="text-slate-400">Leader Name:</strong> {jobData.completionChecklist.crewLeaderName}</p>
-                        <p><strong className="text-slate-400">Submitted Time:</strong> {new Date(jobData.completionChecklist.completionTime).toLocaleString()}</p>
-                        {jobData.completionChecklist.notes && <p><strong className="text-slate-400">Workmanship Notes:</strong> {jobData.completionChecklist.notes}</p>}
+                      
+                      <div className="space-y-4 text-xs text-slate-300">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#0A1120]/40 p-3.5 rounded-xl border border-blue-900/5">
+                          <p><strong className="text-slate-400">Leader Name:</strong> {jobData.completionChecklist.crewLeaderName}</p>
+                          <p><strong className="text-slate-400">Submitted Time:</strong> {new Date(jobData.completionChecklist.completionTime || jobData.completionChecklist.completedAt).toLocaleString()}</p>
+                        </div>
+
+                        {/* Checklist items in read-only review mode */}
+                        <div className="space-y-2.5 bg-[#0A1120]/40 p-4 rounded-xl border border-blue-900/10">
+                          <span className="block text-[10px] font-black uppercase text-[#888888] tracking-wider mb-1">Workmanship Verification Items</span>
+                          
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.postsSturdyLevelClean !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">All posts are sturdy, level, and cleaned of all concrete/stain</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.postsHaveCaps !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">All posts have caps</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.cutsWeldsTouchedUp !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">All cuts and welds have been touched up/painted</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.protrudingNailsScrews !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Both sides of fence has been checked for protruding nails and screws</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.hardwareTight !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">All nuts, bolts, and hardware is tight</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.gatesOperateSmoothly !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Gates operate smoothly</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.siteCleanWalked !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Site is free of all trash and debris. Fenceline has been walked</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.completionChecklist.dirtSpoilsSpread !== false ? (
+                              <CheckCircle2 size={14} className="text-[#E63946] shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Excess dirt spoils have been spread evenly along fenceline</span>
+                          </div>
+                        </div>
+
+                        {jobData.completionChecklist.notes && (
+                          <div className="bg-[#0A1120]/40 p-3.5 rounded-xl border border-blue-900/5">
+                            <strong className="text-slate-400 block mb-1">Workmanship Notes:</strong>
+                            <p className="text-slate-300 leading-relaxed italic">"{jobData.completionChecklist.notes}"</p>
+                          </div>
+                        )}
                         <p><strong className="text-slate-400">Issues Documented:</strong> {jobData.completionChecklist.issuesDocumented ? 'Yes' : 'No'}</p>
                         
                         {/* Display Completion Photos */}
@@ -3264,7 +3380,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Workmanship photos:</span>
                             <div className="grid grid-cols-3 gap-2">
                               {jobData.completionChecklist.photos.map((url: string, index: number) => (
-                                <a key={index} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-blue-900/20">
+                                <a key={index} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-blue-900/20 hover:border-red-500/50 transition-all">
                                   <img src={url} alt={`Completion ${index}`} className="w-full h-full object-cover" />
                                 </a>
                               ))}
@@ -3311,6 +3427,91 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         />
                       </div>
 
+                      {/* Completion Checklist Items */}
+                      <div className="space-y-2.5 bg-[#0A1120]/40 p-4 rounded-xl border border-blue-900/10">
+                        <span className="block text-[10px] font-black uppercase text-[#888888] tracking-wider mb-1">Required Completion Checklist *</span>
+                        
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compPostsSturdyLevelClean}
+                            onChange={(e) => setCompPostsSturdyLevelClean(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">All posts are sturdy, level, and cleaned of all concrete/stain</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compPostsHaveCaps}
+                            onChange={(e) => setCompPostsHaveCaps(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">All posts have caps</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compCutsWeldsTouchedUp}
+                            onChange={(e) => setCompCutsWeldsTouchedUp(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">All cuts and welds have been touched up/painted</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compProtrudingNailsScrews}
+                            onChange={(e) => setCompProtrudingNailsScrews(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">Both sides of fence has been checked for protruding nails and screws</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compHardwareTight}
+                            onChange={(e) => setCompHardwareTight(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">All nuts, bolts, and hardware is tight</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compGatesOperateSmoothly}
+                            onChange={(e) => setCompGatesOperateSmoothly(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">Gates operate smoothly</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compSiteCleanWalked}
+                            onChange={(e) => setCompSiteCleanWalked(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">Site is free of all trash and debris. Fenceline has been walked</span>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 text-slate-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={compDirtSpoilsSpread}
+                            onChange={(e) => setCompDirtSpoilsSpread(e.target.checked)}
+                            className="h-4 w-4 text-[#E63946] border-blue-900 rounded focus:ring-0 cursor-pointer bg-[#070D19] shrink-0 mt-0.5"
+                          />
+                          <span className="text-xs">Excess dirt spoils have been spread evenly along fenceline</span>
+                        </label>
+                      </div>
+
                       <div className="space-y-1.5">
                         <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Final completion/workmanship notes (Optional)</label>
                         <textarea
@@ -3336,7 +3537,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                       {/* Photo Upload Section */}
                       <div id="completion-photos-upload-area" className={cn("space-y-2 p-2 rounded-xl transition-all duration-300", highlightedSection === 'completion-photos-upload-area' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}>
-                        <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Finalized Workmanship Photos (At least 5 required) *</label>
+                        <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Finalized Workmanship Photos (3 photos required, {uploadedPhotos.length} uploaded) *</label>
                         
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {uploadedPhotos.map((url, index) => (
@@ -3359,7 +3560,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                               <>
                                 <Camera size={24} className="text-slate-500 mb-1" />
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Add Photo</span>
-                                <span className="text-[8px] text-slate-500">({uploadedPhotos.length}/5+)</span>
+                                <span className="text-[8px] text-slate-500">({uploadedPhotos.length}/3+)</span>
                               </>
                             )}
                             <input
@@ -3376,10 +3577,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                       <button
                         type="submit"
-                        disabled={submittingChecklist || isUploading || uploadedPhotos.length < 5}
+                        disabled={submittingChecklist || isUploading || uploadedPhotos.length < 3 || !compPostsSturdyLevelClean || !compPostsHaveCaps || !compCutsWeldsTouchedUp || !compProtrudingNailsScrews || !compHardwareTight || !compGatesOperateSmoothly || !compSiteCleanWalked || !compDirtSpoilsSpread}
                         className={cn(
                           "w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95",
-                          (submittingChecklist || isUploading || uploadedPhotos.length < 5) && "opacity-50 cursor-not-allowed active:scale-100 hover:bg-emerald-600"
+                          (submittingChecklist || isUploading || uploadedPhotos.length < 3 || !compPostsSturdyLevelClean || !compPostsHaveCaps || !compCutsWeldsTouchedUp || !compProtrudingNailsScrews || !compHardwareTight || !compGatesOperateSmoothly || !compSiteCleanWalked || !compDirtSpoilsSpread) && "opacity-50 cursor-not-allowed active:scale-100 hover:bg-emerald-600"
                         )}
                       >
                         {submittingChecklist ? (

@@ -5449,7 +5449,23 @@ export default async function handler(req: any, res: any) {
       }
 
       if (req.body && req.body.action === 'submit-completion-checklist') {
-        const { estimateId, token, crewLeaderName, completionTime, notes, issuesDocumented, photos } = req.body || {};
+        const {
+          estimateId,
+          token,
+          crewLeaderName,
+          completionTime,
+          notes,
+          issuesDocumented,
+          photos,
+          postsSturdyLevelClean,
+          postsHaveCaps,
+          cutsWeldsTouchedUp,
+          protrudingNailsScrews,
+          hardwareTight,
+          gatesOperateSmoothly,
+          siteCleanWalked,
+          dirtSpoilsSpread
+        } = req.body || {};
         if (!estimateId || !token || !crewLeaderName || !completionTime || !Array.isArray(photos)) {
           return res.status(400).json({ error: 'Missing required parameters' });
         }
@@ -5462,7 +5478,22 @@ export default async function handler(req: any, res: any) {
           return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
         }
         const nowIso = new Date().toISOString();
-        const checklist = { crewLeaderName, completionTime, notes, issuesDocumented, photos, completedAt: nowIso };
+        const checklist = {
+          crewLeaderName,
+          completionTime,
+          notes,
+          issuesDocumented,
+          photos,
+          completedAt: nowIso,
+          postsSturdyLevelClean: !!postsSturdyLevelClean,
+          postsHaveCaps: !!postsHaveCaps,
+          cutsWeldsTouchedUp: !!cutsWeldsTouchedUp,
+          protrudingNailsScrews: !!protrudingNailsScrews,
+          hardwareTight: !!hardwareTight,
+          gatesOperateSmoothly: !!gatesOperateSmoothly,
+          siteCleanWalked: !!siteCleanWalked,
+          dirtSpoilsSpread: !!dirtSpoilsSpread
+        };
         const logEntry = {
           id: crypto.randomUUID(),
           event: 'Completion Checklist Submitted',
@@ -5472,6 +5503,7 @@ export default async function handler(req: any, res: any) {
         };
         await docRef.update({
           jobPortalStatus: 'completion_submitted',
+          completionSubmitted: true,
           completionChecklist: checklist,
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
