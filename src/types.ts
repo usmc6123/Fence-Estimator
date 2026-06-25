@@ -175,6 +175,12 @@ export interface Estimate {
   drawingMimeType?: string;
   drawingUploadedAt?: string;
   drawingStoragePath?: string;
+
+  // Job Reference Photo
+  jobReferencePhotoUrl?: string;
+  jobReferencePhotoPath?: string;
+  jobReferencePhotoFileName?: string;
+  jobReferencePhotoUploadedAt?: string;
   
   jobStatus?: JobStatus;
   actualExpenses?: JobExpense[];

@@ -907,6 +907,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                 {estimate.version && estimate.version > 1 && (
                                   <span className="px-1.5 py-0.5 bg-american-blue/5 text-american-blue text-[8px] font-black rounded uppercase">v{estimate.version}</span>
                                 )}
+                                {estimate.jobReferencePhotoUrl && (
+                                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] font-black rounded uppercase border border-emerald-200/50">Reference Photo Added</span>
+                                )}
                               </div>
                               <div className="text-[11px] font-medium text-gray-400 truncate max-w-sm flex items-center gap-1 mt-0.5" title={estimate.customerAddress || 'No Address'}>
                                 <MapPin size={10} className="shrink-0" />

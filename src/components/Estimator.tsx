@@ -93,6 +93,9 @@ export default function Estimator({
   const [isUploadingDrawing, setIsUploadingDrawing] = React.useState(false);
   const drawingInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [isUploadingReference, setIsUploadingReference] = React.useState(false);
+  const referenceInputRef = React.useRef<HTMLInputElement>(null);
+
   // --- Customer Prefill Autocomplete ---
   const {
     results: prefillResults,
@@ -263,6 +266,140 @@ export default function Estimator({
       alert('Drawing removed successfully.');
     } catch (error: any) {
       console.error('Error removing drawing:', error);
+      alert(`Removal failed: ${error.message || error}`);
+    }
+  };
+
+  const handleReferencePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!user) {
+      alert('Only logged-in admin/employee users can upload reference photos.');
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file format. Please upload JPG, PNG, or WEBP.');
+      return;
+    }
+
+    setIsUploadingReference(true);
+
+    try {
+      let currentId = estimate.id;
+      if (!currentId) {
+        currentId = `est-${Math.random().toString(36).substr(2, 9)}`;
+      }
+
+      // Convert selected file to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to read file as base64 string'));
+          }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      const base64Data = await base64Promise;
+
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          action: "upload-reference-photo",
+          estimateId: currentId,
+          filename: file.name,
+          mimeType: file.type,
+          base64Data: base64Data
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Server error uploading reference photo');
+      }
+
+      const resData = await response.json();
+
+      const updatedEstimate = {
+        ...estimate,
+        id: currentId,
+        jobReferencePhotoUrl: resData.url,
+        jobReferencePhotoPath: resData.path,
+        jobReferencePhotoFileName: resData.fileName,
+        jobReferencePhotoUploadedAt: new Date().toISOString()
+      };
+
+      setEstimate(updatedEstimate);
+      alert('Job Reference Photo uploaded successfully and attached to this estimate.');
+    } catch (error: any) {
+      console.error('Error uploading reference photo:', error);
+      alert(`Upload failed: ${error.message || error}`);
+    } finally {
+      setIsUploadingReference(false);
+      if (referenceInputRef.current) referenceInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveReferencePhoto = async () => {
+    if (!user) {
+      alert('Only logged-in admin/employee users can remove reference photos.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to remove the Job Reference Photo?')) {
+      return;
+    }
+
+    const currentId = estimate.id;
+    if (!currentId) {
+      alert('No active estimate to remove reference photo from.');
+      return;
+    }
+
+    const storagePath = estimate.jobReferencePhotoPath;
+
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          action: "remove-reference-photo",
+          estimateId: currentId,
+          jobReferencePhotoPath: storagePath
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Server error removing reference photo');
+      }
+
+      const updatedEstimate = { ...estimate };
+      delete updatedEstimate.jobReferencePhotoUrl;
+      delete updatedEstimate.jobReferencePhotoPath;
+      delete updatedEstimate.jobReferencePhotoFileName;
+      delete updatedEstimate.jobReferencePhotoUploadedAt;
+
+      setEstimate(updatedEstimate);
+      alert('Job Reference Photo removed successfully.');
+    } catch (error: any) {
+      console.error('Error removing reference photo:', error);
       alert(`Removal failed: ${error.message || error}`);
     }
   };
@@ -1053,6 +1190,80 @@ export default function Estimator({
                   <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest">No Drawing or Site Plan Attached</p>
                   {!user && (
                     <p className="text-[9px] font-bold text-american-red uppercase tracking-widest mt-1">Please log in to upload drawings</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Job Reference Photo Section */}
+            <div className="bg-white rounded-3xl p-8 shadow-xl border-2 border-american-blue/10 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-black text-american-blue uppercase tracking-widest">Job Reference Photo</h3>
+                  <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mt-1">Upload an example style/reference photo to show the customer what this fence style may look like.</p>
+                </div>
+                {user && (
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      ref={referenceInputRef}
+                      className="hidden" 
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleReferencePhotoUpload}
+                    />
+                    <button
+                      type="button"
+                      disabled={isUploadingReference}
+                      onClick={() => referenceInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 bg-american-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 shadow-md shadow-american-blue/10"
+                    >
+                      <Upload size={14} />
+                      {isUploadingReference ? 'Uploading...' : (estimate.jobReferencePhotoUrl ? 'Replace' : 'Upload')}
+                    </button>
+                    {estimate.jobReferencePhotoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveReferencePhoto}
+                        className="p-2 bg-american-red text-white rounded-xl hover:scale-110 active:scale-95 transition-all shadow-md shadow-american-red/20"
+                        title="Remove Reference Photo"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {estimate.jobReferencePhotoUrl ? (
+                <div className="rounded-2xl border-2 border-[#F0F0F0] p-4 bg-[#FBFBFB]">
+                  <div className="space-y-4">
+                    <div className="max-h-[300px] overflow-hidden rounded-xl border border-[#E5E5E5] bg-white flex items-center justify-center p-2">
+                      <img 
+                        src={estimate.jobReferencePhotoUrl} 
+                        alt="Style Reference Example" 
+                        referrerPolicy="no-referrer"
+                        className="max-h-[280px] w-auto object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-[#999999]">
+                      <span className="font-bold truncate max-w-[200px] sm:max-w-xs">{estimate.jobReferencePhotoFileName || 'reference_image.png'}</span>
+                      <a 
+                        href={estimate.jobReferencePhotoUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex items-center gap-1 hover:text-american-blue font-bold uppercase tracking-widest text-[10px]"
+                      >
+                        View Fullscreen <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 flex flex-col items-center justify-center border-2 border-dashed border-[#F0F0F0] rounded-2xl">
+                  <Image size={36} className="text-[#BBBBBB] mb-2 animate-pulse" />
+                  <p className="text-[10px] font-black text-[#999999] uppercase tracking-widest">No Reference Photo Attached</p>
+                  {!user && (
+                    <p className="text-[9px] font-bold text-american-red uppercase tracking-widest mt-1">Please log in to upload reference photos</p>
                   )}
                 </div>
               )}

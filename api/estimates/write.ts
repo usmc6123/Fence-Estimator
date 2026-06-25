@@ -3568,7 +3568,8 @@ export default async function handler(req: any, res: any) {
                   </div>
 
                   <p style="color: #4a5568; font-size: 13px; line-height: 1.6; background-color: #fffbeb; border-left: 4px solid #ef4444; padding: 12px; margin: 24px 0 32px 0;">
-                    <strong>Please Note:</strong> This is a dynamic automated budget estimate for reference purposes. The final contract pricing may vary following an in-person site inspection to confirm soil status, topology, property stakes, and exact final layout measurements.
+                    <strong>Please Note:</strong> This is a dynamic automated budget estimate for reference purposes. The final contract pricing may vary following an in-person site inspection to confirm soil status, topology, property stakes, and exact final layout measurements.<br/><br/>
+                    Your estimate includes a fence style reference photo and job layout/photo when available.
                   </p>
 
                   <div style="text-align: center; margin: 32px 0;">
@@ -4408,6 +4409,135 @@ export default async function handler(req: any, res: any) {
         }
 
         return res.status(200).json({ success: true, message: 'Drawing successfully removed' });
+      }
+
+      if (req.body && req.body.action === 'upload-reference-photo') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+        
+        const { estimateId, filename, mimeType, base64Data } = req.body || {};
+        if (!estimateId || !filename || !mimeType || !base64Data) {
+          return res.status(400).json({ error: 'Missing required parameters' });
+        }
+
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedMimeTypes.includes(mimeType)) {
+          return res.status(400).json({ error: 'Invalid file format. Only JPG, PNG, WEBP are allowed.' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+        
+        if (snap.exists) {
+          const existingData = snap.data() || {};
+          if (
+            existingData.uid !== decoded.uid &&
+            existingData.userId !== decoded.uid &&
+            !isWriteAdmin
+          ) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+          }
+        }
+
+        const timestamp = Date.now();
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `estimate-reference-photos/${estimateId}/${timestamp}-${sanitizedFilename}`;
+
+        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+        const file = bucket.file(storagePath);
+
+        let cleanBase64 = base64Data;
+        if (cleanBase64.includes(';base64,')) {
+          cleanBase64 = cleanBase64.split(';base64,')[1];
+        }
+        const buffer = Buffer.from(cleanBase64, 'base64');
+
+        await file.save(buffer, {
+          metadata: {
+            contentType: mimeType,
+          }
+        });
+
+        let downloadUrl = '';
+        try {
+          await file.makePublic();
+          downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        } catch (pubErr: any) {
+          console.warn('makePublic failed during reference photo upload, using signed url fallback:', pubErr?.message || pubErr);
+        }
+
+        if (!downloadUrl) {
+          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+          const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: expires
+          });
+          downloadUrl = signedUrl;
+        }
+
+        const referencePhotoMetadata = {
+          jobReferencePhotoUrl: downloadUrl,
+          jobReferencePhotoPath: storagePath,
+          jobReferencePhotoFileName: filename,
+          jobReferencePhotoUploadedAt: new Date().toISOString()
+        };
+
+        if (snap.exists) {
+          await docRef.set(referencePhotoMetadata, { merge: true });
+        } else {
+          await docRef.set({
+            ...referencePhotoMetadata,
+            id: estimateId,
+            createdAt: new Date().toISOString()
+          }, { merge: true });
+        }
+
+        return res.status(200).json({ success: true, url: downloadUrl, path: storagePath, fileName: filename });
+      }
+
+      if (req.body && req.body.action === 'remove-reference-photo') {
+        if (!authHeader || !authHeader.startsWith('Bearer ') || !decoded || !decoded.uid) {
+          return res.status(401).json({ error: 'Unauthorized: Admin or employee login required' });
+        }
+
+        const { estimateId, jobReferencePhotoPath } = req.body || {};
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Missing estimateId parameter' });
+        }
+
+        const { docRef, snap } = await getEstimateDocRef(estimateId);
+
+        if (snap.exists) {
+          const existingData = snap.data() || {};
+          if (
+            existingData.uid !== decoded.uid &&
+            existingData.userId !== decoded.uid &&
+            !isWriteAdmin
+          ) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this estimate record' });
+          }
+        }
+
+        if (jobReferencePhotoPath) {
+          try {
+            const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+            const file = bucket.file(jobReferencePhotoPath);
+            await file.delete();
+          } catch (storageErr: any) {
+            console.warn('Could not delete reference photo file from Firebase Storage using Admin SDK:', storageErr?.message || storageErr);
+          }
+        }
+
+         if (snap.exists) {
+          await docRef.set({
+            jobReferencePhotoUrl: admin.firestore.FieldValue.delete(),
+            jobReferencePhotoPath: admin.firestore.FieldValue.delete(),
+            jobReferencePhotoFileName: admin.firestore.FieldValue.delete(),
+            jobReferencePhotoUploadedAt: admin.firestore.FieldValue.delete()
+          }, { merge: true });
+        }
+
+        return res.status(200).json({ success: true, message: 'Reference photo successfully removed' });
       }
 
       if (req.body && req.body.action === 'upload-vendor-document') {

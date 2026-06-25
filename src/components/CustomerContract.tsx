@@ -1425,6 +1425,40 @@ Please structure the contract narrative with professional Markdown bold headers 
             </div>
           )}
 
+          {/* Fence Style Reference Photo section */}
+          {estimate.jobReferencePhotoUrl && (
+            <div className="space-y-6 pt-12 border-t border-[#F0F0F0]">
+              <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center gap-3">
+                <span className="h-6 w-1 bg-american-red rounded-full" />
+                Fence Style Reference Photo
+              </h3>
+              <p className="text-xs text-slate-500">
+                This photo is provided as a style/reference example for the fence type quoted.
+              </p>
+              <div className="bg-white rounded-3xl p-4 border border-[#E5E5E5] flex flex-col gap-4 print:p-0 print:border-0">
+                <div className="max-w-2xl mx-auto overflow-hidden rounded-2xl border border-american-blue/10 print:border-0">
+                  <img 
+                    src={estimate.jobReferencePhotoUrl} 
+                    alt="Fence Style Reference"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-auto object-contain max-h-[500px]" 
+                  />
+                </div>
+                <div className="no-print text-center">
+                  <a 
+                    href={estimate.jobReferencePhotoUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center gap-2 text-xs font-bold text-american-blue hover:underline"
+                  >
+                    <ExternalLink size={14} />
+                    Open Full Resolution Reference Photo
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Terms & Conditions (From PDFs) */}
           <div className="space-y-8 pt-12 border-t border-[#F0F0F0]">
             <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center gap-3">
