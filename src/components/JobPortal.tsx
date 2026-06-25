@@ -1195,7 +1195,12 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
           crewLeaderName,
           startTime: new Date().toISOString(),
           notes,
-          photos: uploadedPhotos
+          photos: uploadedPhotos,
+          verifiedUtility: preBuildVerifiedUtility,
+          locatedValves: preBuildLocatedValves,
+          verifiedLayout: preBuildVerifiedLayout,
+          verifiedMaterials: preBuildVerifiedMaterials,
+          notifiedNeighbors: preBuildNotifiedNeighbors
         })
       });
 
@@ -1547,7 +1552,9 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     jobData?.preBuildChecklistCompleted ||
     jobData?.preBuildChecklist?.completed ||
     jobData?.preBuildChecklist?.submittedAt ||
-    jobData?.preBuildCompletedAt
+    jobData?.preBuildSubmittedAt ||
+    jobData?.preBuildCompletedAt ||
+    (Array.isArray(jobData?.preBuildPhotos || jobData?.preBuildChecklist?.photos) && (jobData?.preBuildPhotos || jobData?.preBuildChecklist?.photos || []).length >= 3 && (jobData?.preBuildSubmittedAt || jobData?.preBuildCompletedAt || jobData?.preBuildChecklist?.submittedAt))
   );
   const isCompletionComplete = !!jobData?.completionSubmitted;
   const isOfficeApproved = currentStatusKey === 'completed';
@@ -1593,7 +1600,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                     onClick={() => { setResetStep('Pre-Build'); setShowResetModal(true); }}
                     className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all"
                   >
-                    Reset Pre-Build
+                    Reopen Pre-Build Checklist
                   </button>
                 )}
                 {isCompletionComplete && (
@@ -2931,28 +2938,106 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         </p>
                       </div>
                     </div>
-                  ) : jobData.preBuildChecklist ? (
+                  ) : isPreBuildComplete ? (
                     <div className="bg-emerald-950/20 border border-emerald-500/20 p-5 rounded-2xl space-y-4">
                       <div className="flex items-center gap-2 text-emerald-400">
                         <CheckCircle2 size={18} />
                         <span className="text-xs font-black uppercase">Pre-Build Completed</span>
                       </div>
-                      <div className="space-y-2 text-xs text-slate-300">
-                        <p><strong className="text-slate-400">Leader Name:</strong> {jobData.preBuildChecklist.crewLeaderName}</p>
-                        <p><strong className="text-slate-400">Start Time:</strong> {new Date(jobData.preBuildChecklist.startTime).toLocaleString()}</p>
-                        {jobData.preBuildChecklist.notes && <p><strong className="text-slate-400">Notes:</strong> {jobData.preBuildChecklist.notes}</p>}
+                      
+                      <div className="space-y-4 text-xs text-slate-300">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#0A1120]/40 p-3.5 rounded-xl border border-blue-900/5">
+                          <p><strong className="text-slate-400">Submitted By:</strong> {jobData.preBuildChecklist?.crewLeaderName || jobData.assignedCrew || 'Crew'}</p>
+                          <p>
+                            <strong className="text-slate-400">Submitted Date/Time:</strong>{' '}
+                            {jobData.preBuildChecklist?.completedAt || jobData.preBuildCompletedAt || jobData.preBuildChecklist?.submittedAt
+                              ? new Date(jobData.preBuildChecklist?.completedAt || jobData.preBuildCompletedAt || jobData.preBuildChecklist?.submittedAt).toLocaleString()
+                              : 'Yes'}
+                          </p>
+                        </div>
+
+                        {/* Checklist items with checked/unchecked state */}
+                        <div className="space-y-2.5 bg-[#0A1120]/40 p-4 rounded-xl border border-blue-900/10">
+                          <span className="block text-[10px] font-black uppercase text-[#888888] tracking-wider mb-1">Worksite Verification Items</span>
+                          
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.preBuildChecklist?.verifiedUtility !== false ? (
+                              <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Verified located utility lines and notified crew</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.preBuildChecklist?.locatedValves !== false ? (
+                              <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Located shut off valves and possible sprinkler/septic lines/Homeowner installed utilities</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.preBuildChecklist?.verifiedLayout !== false ? (
+                              <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Verified field layout with submitted layout, homeowner, and survey</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.preBuildChecklist?.verifiedMaterials !== false ? (
+                              <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Verified all material needed to complete job is on site</span>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 text-slate-300">
+                            {jobData.preBuildChecklist?.notifiedNeighbors !== false ? (
+                              <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 rounded-full border border-slate-600 shrink-0 mt-0.5" />
+                            )}
+                            <span className="text-xs">Homeowner and neighbors have been notified. No animals present in backyards</span>
+                          </div>
+                        </div>
+
+                        {jobData.preBuildChecklist?.notes && (
+                          <div className="bg-[#0A1120]/40 p-3.5 rounded-xl border border-blue-900/5">
+                            <strong className="text-slate-400 block mb-1">Site Condition Notes / Comments:</strong>
+                            <p className="text-slate-300 leading-relaxed italic">"{jobData.preBuildChecklist.notes}"</p>
+                          </div>
+                        )}
                         
                         {/* Display Pre-Build Photos */}
-                        {Array.isArray(jobData.preBuildChecklist.photos) && jobData.preBuildChecklist.photos.length > 0 && (
-                          <div className="space-y-1.5 pt-2">
+                        {Array.isArray(jobData.preBuildChecklist?.photos || jobData.preBuildPhotos) && (jobData.preBuildChecklist?.photos || jobData.preBuildPhotos || []).length > 0 && (
+                          <div className="space-y-2 pt-1">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Documented site photos:</span>
                             <div className="grid grid-cols-3 gap-2">
-                              {jobData.preBuildChecklist.photos.map((url: string, index: number) => (
-                                <a key={index} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-blue-900/20">
+                              {(jobData.preBuildChecklist?.photos || jobData.preBuildPhotos).map((url: string, index: number) => (
+                                <a key={index} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-blue-900/20 hover:border-blue-500/50 transition-all">
                                   <img src={url} alt={`Pre-Build ${index}`} className="w-full h-full object-cover" />
                                 </a>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Admin Edit/Reopen Option */}
+                        {user && (
+                          <div className="pt-2 border-t border-blue-900/10">
+                            <button
+                              type="button"
+                              onClick={() => { setResetStep('Pre-Build'); setShowResetModal(true); }}
+                              className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2"
+                            >
+                              <RefreshCw size={12} />
+                              Reopen Pre-Build Checklist
+                            </button>
                           </div>
                         )}
                       </div>

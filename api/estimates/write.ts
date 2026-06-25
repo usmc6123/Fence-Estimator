@@ -4842,13 +4842,23 @@ export default async function handler(req: any, res: any) {
           updateData.preBuildChecklistSubmitted = false;
           updateData.preBuildChecklistCompleted = false;
           updateData.preBuildCompletedAt = null;
-          updateData.preBuildChecklist = null;
-          updateData.jobPortalStatus = 'Pre-Build Pending';
+          // Preserve the original photos/data
+          if (estimateData.preBuildChecklist) {
+            updateData.preBuildChecklist = {
+              ...estimateData.preBuildChecklist,
+              completed: false,
+              submittedAt: null,
+              completedAt: null
+            };
+          }
+          updateData.jobPortalStatus = 'materials_confirmed';
           // Lock subsequent
           updateData.completionSubmitted = false;
+          logEvent = 'Pre-Build Checklist Reopened by Admin';
+          logNotes = `Pre-Build Checklist reopened by Admin. Reason: ${reason}`;
         } else if (step === 'Completion') {
           updateData.completionSubmitted = false;
-          updateData.jobPortalStatus = 'Pre-Build Complete'; // or Completion Pending
+          updateData.jobPortalStatus = 'pre_build_complete'; // or Completion Pending
         }
 
         const logEntry = {
@@ -5324,7 +5334,7 @@ export default async function handler(req: any, res: any) {
       }
 
       if (req.body && req.body.action === 'submit-pre-build-checklist') {
-        const { estimateId, token, crewLeaderName, startTime, notes, photos } = req.body || {};
+        const { estimateId, token, crewLeaderName, startTime, notes, photos, verifiedUtility, locatedValves, verifiedLayout, verifiedMaterials, notifiedNeighbors } = req.body || {};
         if (!estimateId) {
           return res.status(400).json({ error: 'Missing required parameter: estimateId' });
         }
@@ -5358,7 +5368,12 @@ export default async function handler(req: any, res: any) {
           photos, 
           completedAt: nowIso,
           completed: true,
-          submittedAt: nowIso
+          submittedAt: nowIso,
+          verifiedUtility: verifiedUtility !== undefined ? verifiedUtility : true,
+          locatedValves: locatedValves !== undefined ? locatedValves : true,
+          verifiedLayout: verifiedLayout !== undefined ? verifiedLayout : true,
+          verifiedMaterials: verifiedMaterials !== undefined ? verifiedMaterials : true,
+          notifiedNeighbors: notifiedNeighbors !== undefined ? notifiedNeighbors : true
         };
         const logEntry = {
           id: crypto.randomUUID(),
