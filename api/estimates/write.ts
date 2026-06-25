@@ -5299,38 +5299,66 @@ export default async function handler(req: any, res: any) {
       }
 
       if (req.body && req.body.action === 'upload-job-portal-photo') {
-        const { estimateId, token, filename, mimeType, base64Data } = req.body || {};
-        if (!estimateId || !token || !filename || !mimeType || !base64Data) {
-          return res.status(400).json({ error: 'Missing parameters' });
-        }
-        const { docRef, snap } = await getEstimateDocRef(estimateId);
-        if (!snap.exists) {
-          return res.status(404).json({ error: 'Estimate not found' });
-        }
-        const estimateData = snap.data() || {};
-        if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
-          return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
-        }
-        const timestamp = Date.now();
-        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const storagePath = `job-photos/${estimateId}/${timestamp}-${sanitizedFilename}`;
-        const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
-        const file = bucket.file(storagePath);
-        let cleanBase64 = base64Data;
-        if (cleanBase64.includes(';base64,')) {
-          cleanBase64 = cleanBase64.split(';base64,')[1];
-        }
-        const buffer = Buffer.from(cleanBase64, 'base64');
-        await file.save(buffer, { metadata: { contentType: mimeType } });
-        let downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
         try {
-          await file.makePublic();
-        } catch (pubErr) {
-          const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
-          const [signedUrl] = await file.getSignedUrl({ action: 'read', expires });
-          downloadUrl = signedUrl;
+          const { estimateId, token, filename, mimeType, base64Data } = req.body || {};
+          if (!estimateId || !token || !filename || !mimeType || !base64Data) {
+            return res.status(400).json({
+              success: false,
+              error: 'Missing parameters',
+              code: 'UPLOAD_FAILED'
+            });
+          }
+          const { docRef, snap } = await getEstimateDocRef(estimateId);
+          if (!snap.exists) {
+            return res.status(404).json({
+              success: false,
+              error: 'Estimate not found',
+              code: 'UPLOAD_FAILED'
+            });
+          }
+          const estimateData = snap.data() || {};
+          if (estimateData.laborSnapshotToken !== token && estimateData.crewScheduleToken !== token) {
+            return res.status(403).json({
+              success: false,
+              error: 'Forbidden: Invalid secure token',
+              code: 'UPLOAD_FAILED'
+            });
+          }
+          const timestamp = Date.now();
+          const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `job-photos/${estimateId}/${timestamp}-${sanitizedFilename}`;
+          const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+          const file = bucket.file(storagePath);
+          let cleanBase64 = base64Data;
+          if (cleanBase64.includes(';base64,')) {
+            cleanBase64 = cleanBase64.split(';base64,')[1];
+          }
+          const buffer = Buffer.from(cleanBase64, 'base64');
+          await file.save(buffer, { metadata: { contentType: mimeType } });
+          let downloadUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+          try {
+            await file.makePublic();
+          } catch (pubErr) {
+            const expires = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
+            const [signedUrl] = await file.getSignedUrl({ action: 'read', expires });
+            downloadUrl = signedUrl;
+          }
+          return res.status(200).json({
+            success: true,
+            drawingUrl: downloadUrl, // for compatibility
+            url: downloadUrl,
+            path: storagePath,
+            fileName: sanitizedFilename,
+            contentType: mimeType
+          });
+        } catch (err: any) {
+          console.error('Job portal photo upload error:', err);
+          return res.status(500).json({
+            success: false,
+            error: err.message || 'An unexpected error occurred during photo upload.',
+            code: 'UPLOAD_FAILED'
+          });
         }
-        return res.status(200).json({ success: true, drawingUrl: downloadUrl });
       }
 
       if (req.body && req.body.action === 'submit-pre-build-checklist') {

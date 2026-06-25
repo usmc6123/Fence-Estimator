@@ -801,6 +801,118 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     }
   };
 
+  const safeUploadPhoto = async (
+    file: File,
+    filename: string,
+    action: string,
+    additionalBody = {}
+  ): Promise<any> => {
+    // 1. Client-side compression if it's an image
+    let base64Data = '';
+    
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressResult = await new Promise<{ base64Data: string; wasCompressed: boolean }>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              const maxDim = 1600;
+              let width = img.width;
+              let height = img.height;
+              
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                resolve({ base64Data: event.target?.result as string, wasCompressed: false });
+                return;
+              }
+              
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+              resolve({ base64Data: compressedBase64, wasCompressed: true });
+            };
+            img.onerror = () => {
+              resolve({ base64Data: event.target?.result as string, wasCompressed: false });
+            };
+            img.src = event.target?.result as string;
+          };
+          reader.onerror = () => {
+            resolve({ base64Data: '', wasCompressed: false });
+          };
+          reader.readAsDataURL(file);
+        });
+        base64Data = compressResult.base64Data;
+      } catch (compressErr) {
+        console.error('Compression failed, trying original file:', compressErr);
+      }
+    }
+    
+    if (!base64Data) {
+      // Fallback to normal read
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+      });
+      reader.readAsDataURL(file);
+      base64Data = await base64Promise;
+    }
+
+    const endpoint = '/api/estimates/write';
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action,
+        estimateId,
+        token,
+        filename,
+        mimeType: file.type || 'image/jpeg',
+        base64Data,
+        ...additionalBody
+      })
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const rawText = await res.text();
+      console.error('Photo upload failed. Non-JSON response received:', {
+        statusCode: res.status,
+        responseText: rawText,
+        endpoint,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
+      
+      if (res.status === 413) {
+        throw new Error('Photo is too large. Please upload a smaller image.');
+      }
+      throw new Error('Photo upload failed. Check server upload settings.');
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to upload photo');
+    }
+    return data;
+  };
+
   const handleUploadPickupPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -811,41 +923,15 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (err) => reject(err);
-        });
-        reader.readAsDataURL(file);
-        const base64Data = await base64Promise;
-
-        const res = await fetch('/api/estimates/write', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            action: 'upload-job-portal-photo',
-            estimateId,
-            token,
-            filename: `pickup_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-            mimeType: file.type || 'image/jpeg',
-            base64Data
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to upload photo');
-        }
+        const filename = `pickup_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const data = await safeUploadPhoto(file, filename, 'upload-job-portal-photo');
 
         if (data.drawingUrl) {
           setPickupGeneralPhotos(prev => [...prev, data.drawingUrl]);
         }
       }
     } catch (err: any) {
-      setConfirmError(`Photo upload failed: ${err.message || String(err)}`);
+      setConfirmError(`Photo upload failed. Check server upload settings.`);
     } finally {
       setIsUploadingPickupPhoto(false);
     }
@@ -857,33 +943,8 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
     setUploadingLineItemPhotoId(itemId);
     try {
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = (err) => reject(err);
-      });
-      reader.readAsDataURL(file);
-      const base64Data = await base64Promise;
-
-      const res = await fetch('/api/estimates/write', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'upload-job-portal-photo',
-          estimateId,
-          token,
-          filename: `item_${itemId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-          mimeType: file.type || 'image/jpeg',
-          base64Data
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to upload item photo');
-      }
+      const filename = `item_${itemId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const data = await safeUploadPhoto(file, filename, 'upload-job-portal-photo');
 
       if (data.drawingUrl) {
         setLineItemStatuses(prev => ({
@@ -1115,36 +1176,8 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        // Convert file to base64
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (err) => reject(err);
-        });
-        reader.readAsDataURL(file);
-        const base64Data = await base64Promise;
-
-        // Call our serverless upload action
-        const res = await fetch('/api/estimates/write', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            action: 'upload-job-portal-photo',
-            estimateId,
-            token,
-            filename: `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
-            mimeType: file.type || 'image/jpeg',
-            base64Data
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to upload photo to server');
-        }
+        const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const data = await safeUploadPhoto(file, filename, 'upload-job-portal-photo');
 
         if (data.drawingUrl) {
           setUploadedPhotos(prev => [...prev, data.drawingUrl]);
