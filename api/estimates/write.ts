@@ -4986,8 +4986,21 @@ export default async function handler(req: any, res: any) {
 
       if (req.body && req.body.action === 'submit-material-confirmation') {
         const { estimateId, token, crewLeaderName, pickupLocation, notes, photos, lineItemsStatus, hasIssues, problemSummary } = req.body || {};
-        if (!estimateId || !token || !crewLeaderName || !pickupLocation) {
-          return res.status(400).json({ error: 'Missing required parameters' });
+        
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Missing required parameter: estimateId' });
+        }
+        if (!token) {
+          return res.status(400).json({ error: 'Missing required parameter: token' });
+        }
+
+        const finalCrewLeaderName = crewLeaderName || (req.body && (req.body.crewName || req.body.submittedBy));
+        if (!finalCrewLeaderName) {
+          return res.status(400).json({ error: 'Missing required parameter: crewLeaderName' });
+        }
+
+        if (!lineItemsStatus) {
+          return res.status(400).json({ error: 'Missing required parameter: lineItemsStatus' });
         }
 
         const { docRef, snap } = await getEstimateDocRef(estimateId);
@@ -5002,14 +5015,16 @@ export default async function handler(req: any, res: any) {
 
         const nowIso = new Date().toISOString();
         const newStatus = hasIssues ? 'material_issue_reported' : 'materials_confirmed';
+        const resolvedPickupLocation = pickupLocation || estimateData.pickupLocation || 'N/A';
 
         const confirmationData = {
-          crewLeaderName,
-          pickupLocation,
+          crewLeaderName: finalCrewLeaderName,
+          pickupLocation: resolvedPickupLocation,
           notes: notes || '',
           photos: Array.isArray(photos) ? photos : [],
           lineItemsStatus: lineItemsStatus || {},
           completedAt: nowIso,
+          pickupDate: nowIso, // automatically populated on submit as submittedAt / nowIso
           status: newStatus,
           hasIssues: !!hasIssues,
           problemSummary: problemSummary || ''
@@ -5019,7 +5034,7 @@ export default async function handler(req: any, res: any) {
           id: crypto.randomUUID(),
           event: hasIssues ? 'Material Issues Reported' : 'Materials Confirmed',
           timestamp: nowIso,
-          user: crewLeaderName,
+          user: finalCrewLeaderName,
           notes: hasIssues 
             ? `Crew reported material pickup issues: ${problemSummary}. General Notes: ${notes || 'None'}` 
             : `Crew confirmed material pickup successfully with no issues. General Notes: ${notes || 'None'}`
@@ -5029,14 +5044,14 @@ export default async function handler(req: any, res: any) {
           materialConfirmation: confirmationData,
           materialCheckInSubmitted: true,
           materialCheckInSubmittedAt: nowIso,
-          materialCheckInBy: crewLeaderName,
+          materialCheckInBy: finalCrewLeaderName,
           jobPortalStatus: newStatus,
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
 
         // Notify office immediately
         try {
-          const crewName = estimateData.assignedCrew || crewLeaderName || 'Assigned Crew';
+          const crewName = estimateData.assignedCrew || finalCrewLeaderName || 'Assigned Crew';
           const jobPortalLink = estimateData.laborSnapshotLink || `https://fence-estimator-eight.vercel.app/?portal=job-portal&estimateId=${estimateId}&token=${estimateData.laborSnapshotToken}`;
           const officeLink = `https://fence-estimator-eight.vercel.app/dossier?id=${estimateId}`;
 
@@ -5050,7 +5065,7 @@ export default async function handler(req: any, res: any) {
             Customer Name: ${estimateData.customerName || 'N/A'}
             Job Address: ${estimateData.customerAddress || 'N/A'}
             Crew Name: ${crewName}
-            Pickup Location: ${pickupLocation}
+            Pickup Location: ${resolvedPickupLocation}
             
             Confirmation Status: ${hasIssues ? 'ISSUES REPORTED' : 'CONFIRMED OK'}
             ${hasIssues ? `Problem Items:\n${problemSummary}` : ''}
@@ -5086,7 +5101,7 @@ export default async function handler(req: any, res: any) {
                 </tr>
                 <tr style="border-bottom: 1px solid #f0f0f0;">
                   <td style="padding: 10px 0; font-weight: bold; color: #666666;">Pickup Location:</td>
-                  <td style="padding: 10px 0; color: #111111;">${pickupLocation}</td>
+                  <td style="padding: 10px 0; color: #111111;">${resolvedPickupLocation}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #f0f0f0;">
                   <td style="padding: 10px 0; font-weight: bold; color: #666666;">Confirmation Status:</td>
