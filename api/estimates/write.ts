@@ -4832,9 +4832,17 @@ export default async function handler(req: any, res: any) {
           updateData.jobPortalStatus = 'Materials Pending';
           // Lock subsequent
           updateData.preBuildSubmitted = false;
+          updateData.preBuildChecklistSubmitted = false;
+          updateData.preBuildChecklistCompleted = false;
+          updateData.preBuildCompletedAt = null;
+          updateData.preBuildChecklist = null;
           updateData.completionSubmitted = false;
         } else if (step === 'Pre-Build') {
           updateData.preBuildSubmitted = false;
+          updateData.preBuildChecklistSubmitted = false;
+          updateData.preBuildChecklistCompleted = false;
+          updateData.preBuildCompletedAt = null;
+          updateData.preBuildChecklist = null;
           updateData.jobPortalStatus = 'Pre-Build Pending';
           // Lock subsequent
           updateData.completionSubmitted = false;
@@ -5343,7 +5351,15 @@ export default async function handler(req: any, res: any) {
           return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
         }
         const nowIso = new Date().toISOString();
-        const checklist = { crewLeaderName: finalCrewLeaderName, startTime, notes, photos, completedAt: nowIso };
+        const checklist = { 
+          crewLeaderName: finalCrewLeaderName, 
+          startTime, 
+          notes, 
+          photos, 
+          completedAt: nowIso,
+          completed: true,
+          submittedAt: nowIso
+        };
         const logEntry = {
           id: crypto.randomUUID(),
           event: 'Pre-Build Checklist Completed',
@@ -5354,6 +5370,10 @@ export default async function handler(req: any, res: any) {
         await docRef.update({
           jobPortalStatus: 'pre_build_complete',
           preBuildChecklist: checklist,
+          preBuildChecklistSubmitted: true,
+          preBuildSubmitted: true,
+          preBuildChecklistCompleted: true,
+          preBuildCompletedAt: nowIso,
           jobPortalHistory: admin.firestore.FieldValue.arrayUnion(logEntry)
         });
 

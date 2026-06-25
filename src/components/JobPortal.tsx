@@ -1541,7 +1541,14 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   // Sequential Workflow Helper Variables
   const isScheduled = !!jobData?.scheduledStartDate;
   const isMaterialsConfirmed = !!jobData?.materialCheckInSubmitted;
-  const isPreBuildComplete = !!jobData?.preBuildSubmitted;
+  const isPreBuildComplete = !!(
+    jobData?.preBuildSubmitted ||
+    jobData?.preBuildChecklistSubmitted ||
+    jobData?.preBuildChecklistCompleted ||
+    jobData?.preBuildChecklist?.completed ||
+    jobData?.preBuildChecklist?.submittedAt ||
+    jobData?.preBuildCompletedAt
+  );
   const isCompletionComplete = !!jobData?.completionSubmitted;
   const isOfficeApproved = currentStatusKey === 'completed';
 
