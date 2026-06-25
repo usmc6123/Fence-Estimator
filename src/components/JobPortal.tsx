@@ -1018,6 +1018,13 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   const [checklistError, setChecklistError] = useState('');
   const [checklistSuccess, setChecklistSuccess] = useState(false);
 
+  // Pre-build checklist items states
+  const [preBuildVerifiedUtility, setPreBuildVerifiedUtility] = useState(false);
+  const [preBuildLocatedValves, setPreBuildLocatedValves] = useState(false);
+  const [preBuildVerifiedLayout, setPreBuildVerifiedLayout] = useState(false);
+  const [preBuildVerifiedMaterials, setPreBuildVerifiedMaterials] = useState(false);
+  const [preBuildNotifiedNeighbors, setPreBuildNotifiedNeighbors] = useState(false);
+
   // Incident reports states
   const [reportType, setReportType] = useState<'issue' | 'shortage' | 'delay'>('issue');
   const [reportDetails, setReportDetails] = useState('');
@@ -1162,6 +1169,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setChecklistError('Crew Leader Name is required.');
       return;
     }
+    if (!preBuildVerifiedUtility || !preBuildLocatedValves || !preBuildVerifiedLayout || !preBuildVerifiedMaterials || !preBuildNotifiedNeighbors) {
+      setChecklistError('All 5 checklist items must be checked before submitting the Pre-Build Checklist.');
+      return;
+    }
     if (uploadedPhotos.length < 3) {
       setChecklistError('At least 3 site/pre-build photos are required to document job conditions.');
       return;
@@ -1198,6 +1209,11 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
       setCrewLeaderName('');
       setNotes('');
       setUploadedPhotos([]);
+      setPreBuildVerifiedUtility(false);
+      setPreBuildLocatedValves(false);
+      setPreBuildVerifiedLayout(false);
+      setPreBuildVerifiedMaterials(false);
+      setPreBuildNotifiedNeighbors(false);
       // Reload job details
       await fetchJobDetails(estimateId, token);
     } catch (err: any) {
@@ -2973,9 +2989,66 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
                         />
                       </div>
 
+                      {/* Pre-Build Checklist Items */}
+                      <div className="space-y-3 bg-[#0A1120] border border-blue-900/15 p-4 rounded-xl">
+                        <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider mb-2">Required Worksite Verification Items *</label>
+                        
+                        <div className="space-y-3">
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={preBuildVerifiedUtility}
+                              onChange={(e) => setPreBuildVerifiedUtility(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0 rounded cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-300">Verified located utility lines and notified crew</span>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={preBuildLocatedValves}
+                              onChange={(e) => setPreBuildLocatedValves(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0 rounded cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-300">Located shut off valves and possible sprinkler/septic lines/Homeowner installed utilities</span>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={preBuildVerifiedLayout}
+                              onChange={(e) => setPreBuildVerifiedLayout(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0 rounded cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-300">Verified field layout with submitted layout, homeowner, and survey</span>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={preBuildVerifiedMaterials}
+                              onChange={(e) => setPreBuildVerifiedMaterials(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0 rounded cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-300">Verified all material needed to complete job is on site</span>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={preBuildNotifiedNeighbors}
+                              onChange={(e) => setPreBuildNotifiedNeighbors(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0 rounded cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-300">Homeowner and neighbors have been notified. No animals present in backyards</span>
+                          </label>
+                        </div>
+                      </div>
+
                       {/* Photo Upload Section */}
                       <div id="prebuild-photos-upload-area" className={cn("space-y-2 p-2 rounded-xl transition-all duration-300", highlightedSection === 'prebuild-photos-upload-area' && "ring-4 ring-amber-500 ring-offset-2 ring-offset-slate-950 scale-[1.01]")}>
-                        <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">Upload Site Photos (At least 3 required) *</label>
+                        <label className="block text-[10px] font-black uppercase text-[#888888] tracking-wider">3 photos required, {uploadedPhotos.length} uploaded *</label>
                         
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {uploadedPhotos.map((url, index) => (
@@ -3015,10 +3088,10 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
 
                       <button
                         type="submit"
-                        disabled={submittingChecklist || isUploading || uploadedPhotos.length < 3}
+                        disabled={submittingChecklist || isUploading || uploadedPhotos.length < 3 || !preBuildVerifiedUtility || !preBuildLocatedValves || !preBuildVerifiedLayout || !preBuildVerifiedMaterials || !preBuildNotifiedNeighbors}
                         className={cn(
                           "w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95",
-                          (submittingChecklist || isUploading || uploadedPhotos.length < 3) && "opacity-50 cursor-not-allowed active:scale-100 hover:bg-emerald-600"
+                          (submittingChecklist || isUploading || uploadedPhotos.length < 3 || !preBuildVerifiedUtility || !preBuildLocatedValves || !preBuildVerifiedLayout || !preBuildVerifiedMaterials || !preBuildNotifiedNeighbors) && "opacity-50 cursor-not-allowed active:scale-100 hover:bg-emerald-600"
                         )}
                       >
                         {submittingChecklist ? (

@@ -5317,9 +5317,23 @@ export default async function handler(req: any, res: any) {
 
       if (req.body && req.body.action === 'submit-pre-build-checklist') {
         const { estimateId, token, crewLeaderName, startTime, notes, photos } = req.body || {};
-        if (!estimateId || !token || !crewLeaderName || !startTime || !Array.isArray(photos)) {
-          return res.status(400).json({ error: 'Missing required parameters' });
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Missing required parameter: estimateId' });
         }
+        if (!token) {
+          return res.status(400).json({ error: 'Missing required parameter: token' });
+        }
+        const finalCrewLeaderName = crewLeaderName || (req.body && (req.body.crewName || req.body.submittedBy));
+        if (!finalCrewLeaderName) {
+          return res.status(400).json({ error: 'Missing required parameter: crewLeaderName' });
+        }
+        if (!startTime) {
+          return res.status(400).json({ error: 'Missing required parameter: startTime' });
+        }
+        if (!photos || !Array.isArray(photos)) {
+          return res.status(400).json({ error: 'Missing required parameter: photos' });
+        }
+
         const { docRef, snap } = await getEstimateDocRef(estimateId);
         if (!snap.exists) {
           return res.status(404).json({ error: 'Estimate not found' });
@@ -5329,12 +5343,12 @@ export default async function handler(req: any, res: any) {
           return res.status(403).json({ error: 'Forbidden: Invalid secure token' });
         }
         const nowIso = new Date().toISOString();
-        const checklist = { crewLeaderName, startTime, notes, photos, completedAt: nowIso };
+        const checklist = { crewLeaderName: finalCrewLeaderName, startTime, notes, photos, completedAt: nowIso };
         const logEntry = {
           id: crypto.randomUUID(),
           event: 'Pre-Build Checklist Completed',
           timestamp: nowIso,
-          user: crewLeaderName,
+          user: finalCrewLeaderName,
           notes: `Pre-build submitted with ${photos.length} photos. ${notes || ''}`
         };
         await docRef.update({
@@ -5345,12 +5359,12 @@ export default async function handler(req: any, res: any) {
 
         // Notify office
         try {
-          const text = `Crew Leader ${crewLeaderName} has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.\n\nNotes: ${notes || 'None'}\nPhoto Count: ${photos.length}`;
+          const text = `Crew Leader ${finalCrewLeaderName} has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.\n\nNotes: ${notes || 'None'}\nPhoto Count: ${photos.length}`;
           await sendAppEmail({
             to: 'bradens@lonestarfenceworks.com',
             subject: `Pre-Build Checklist Submitted - ${estimateData.customerName || 'Client'}`,
             text,
-            html: `<h3>Pre-Build Checklist Submitted</h3><p>Crew Leader <strong>${crewLeaderName}</strong> has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.</p><p><strong>Notes:</strong> ${notes || 'None'}</p><p><strong>Photo Count:</strong> ${photos.length}</p>`,
+            html: `<h3>Pre-Build Checklist Submitted</h3><p>Crew Leader <strong>${finalCrewLeaderName}</strong> has submitted the Pre-Build Checklist for ${estimateData.customerName || 'customer'}.</p><p><strong>Notes:</strong> ${notes || 'None'}</p><p><strong>Photo Count:</strong> ${photos.length}</p>`,
             estimateData
           });
         } catch (mailErr) {
