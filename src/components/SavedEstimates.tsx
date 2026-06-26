@@ -2259,6 +2259,100 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                       </div>
                     </div>
 
+                    {/* Tag Synchronization Audit Section */}
+                    {syncDiagnosticResult.trace && (
+                      <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-4">
+                        <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2">
+                          <Shield size={14} className="text-blue-600" />
+                          <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Tag Synchronization Verification Audit</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Left Column: Intended State */}
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Requested Tags</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {syncDiagnosticResult.trace.requestedTags && syncDiagnosticResult.trace.requestedTags.length > 0 ? (
+                                  syncDiagnosticResult.trace.requestedTags.map((t: string) => (
+                                    <span key={t} className="bg-blue-50 text-blue-700 border border-blue-100 font-mono text-[10px] px-2 py-0.5 rounded font-bold">
+                                      {t}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">None</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tags Added</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {syncDiagnosticResult.trace.tagsAdded && syncDiagnosticResult.trace.tagsAdded.length > 0 ? (
+                                  syncDiagnosticResult.trace.tagsAdded.map((t: string) => (
+                                    <span key={t} className="bg-emerald-50 text-emerald-700 border border-emerald-100 font-mono text-[10px] px-2 py-0.5 rounded font-bold">
+                                      +{t}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">None</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tags Removed</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {syncDiagnosticResult.trace.tagsRemoved && syncDiagnosticResult.trace.tagsRemoved.length > 0 ? (
+                                  syncDiagnosticResult.trace.tagsRemoved.map((t: string) => (
+                                    <span key={t} className="bg-rose-50 text-rose-700 border border-rose-100 font-mono text-[10px] px-2 py-0.5 rounded font-bold">
+                                      -{t}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">None</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Column: Verified State */}
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Current Contact Tags (Final Tags on Contact)</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {syncDiagnosticResult.trace.currentContactTags && syncDiagnosticResult.trace.currentContactTags.length > 0 ? (
+                                  syncDiagnosticResult.trace.currentContactTags.map((t: string) => (
+                                    <span key={t} className="bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[10px] px-2 py-0.5 rounded font-bold">
+                                      {t}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">No tags on contact</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Missing Requested Tags</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {syncDiagnosticResult.trace.missingRequestedTags && syncDiagnosticResult.trace.missingRequestedTags.length > 0 ? (
+                                  syncDiagnosticResult.trace.missingRequestedTags.map((t: string) => (
+                                    <span key={t} className="bg-red-50 text-red-700 border border-red-100 font-mono text-[10px] px-2 py-0.5 rounded font-bold animate-pulse">
+                                      ⚠️ {t}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                                    <CheckCircle2 size={12} className="text-emerald-600" /> None (Perfectly Synced)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Step-by-Step Interactive Trace Report */}
                     {syncDiagnosticResult.trace && (
                       <div className="space-y-3">
@@ -2362,10 +2456,10 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                           <div className="p-3 bg-white flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">7</span>
-                              <span className="font-bold text-slate-700 truncate">Assigned Tags & Custom Fields</span>
+                              <span className="font-bold text-slate-700 truncate">Current Contact Tags</span>
                             </div>
-                            <span className="font-semibold text-slate-600 max-w-[50%] truncate text-[10px] shrink-0">
-                              Attempted: {syncDiagnosticResult.trace.tagsAttempted?.join(', ') || 'None'}
+                            <span className="font-mono font-semibold text-slate-600 max-w-[50%] truncate text-[10px] shrink-0 bg-slate-50 border px-1.5 py-0.5 rounded">
+                              {syncDiagnosticResult.trace.currentContactTags?.join(', ') || 'No tags'}
                             </span>
                           </div>
 
@@ -2374,20 +2468,102 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                     )}
 
                     {/* HTTP Payload Response Preview */}
-                    {syncDiagnosticResult.trace && syncDiagnosticResult.trace.responseBody && (
-                      <div className="space-y-2">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">HTTP Response Payload Details</h4>
-                        <pre className="p-3 bg-slate-950 text-slate-100 font-mono text-[10px] rounded-2xl overflow-x-auto max-h-[150px] leading-relaxed select-all">
-                          {`HTTP Status: ${syncDiagnosticResult.trace.responseStatus}\nResponseBody:\n${
-                            (() => {
-                              try {
-                                return JSON.stringify(JSON.parse(syncDiagnosticResult.trace.responseBody), null, 2);
-                              } catch(e) {
-                                return syncDiagnosticResult.trace.responseBody;
-                              }
-                            })()
-                          }`}
-                        </pre>
+                    {syncDiagnosticResult.trace && (
+                      <div className="space-y-3">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">HTTP Diagnostics & Raw Payloads</h4>
+                        
+                        <div className="space-y-3">
+                          {/* Tag Update API Call */}
+                          {syncDiagnosticResult.trace.tagSyncEndpoint && (
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-950">
+                              <div className="bg-slate-900 px-4 py-2 flex justify-between items-center text-white text-[10px] font-bold">
+                                <span className="text-blue-400 uppercase font-mono">PUT Tag/Fields Update</span>
+                                <span className="font-mono bg-blue-500/10 px-1.5 py-0.5 rounded text-blue-300 border border-blue-500/20">
+                                  Status: {syncDiagnosticResult.trace.tagSyncResponseStatus || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="p-3 font-mono text-[10px] text-slate-200 space-y-2 select-all overflow-x-auto max-h-[200px]">
+                                <div>
+                                  <span className="text-amber-400">Endpoint:</span> {syncDiagnosticResult.trace.tagSyncEndpoint}
+                                </div>
+                                {syncDiagnosticResult.trace.tagSyncRequestBody && (
+                                  <div>
+                                    <span className="text-amber-400">Request Body:</span>
+                                    <pre className="mt-1 text-slate-300 whitespace-pre-wrap max-w-full">
+                                      {(() => {
+                                        try {
+                                          return JSON.stringify(JSON.parse(syncDiagnosticResult.trace.tagSyncRequestBody), null, 2);
+                                        } catch (e) {
+                                          return syncDiagnosticResult.trace.tagSyncRequestBody;
+                                        }
+                                      })()}
+                                    </pre>
+                                  </div>
+                                )}
+                                {syncDiagnosticResult.trace.tagSyncResponseBody && (
+                                  <div>
+                                    <span className="text-amber-400">Response Body:</span>
+                                    <pre className="mt-1 text-slate-300 whitespace-pre-wrap max-w-full">
+                                      {(() => {
+                                        try {
+                                          return JSON.stringify(JSON.parse(syncDiagnosticResult.trace.tagSyncResponseBody), null, 2);
+                                        } catch (e) {
+                                          return syncDiagnosticResult.trace.tagSyncResponseBody;
+                                        }
+                                      })()}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Contact GET Verification */}
+                          {syncDiagnosticResult.trace.finalGetEndpoint && (
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-950">
+                              <div className="bg-slate-900 px-4 py-2 flex justify-between items-center text-white text-[10px] font-bold">
+                                <span className="text-emerald-400 uppercase font-mono">GET Contact Verification (Re-Read)</span>
+                                <span className="font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/20">
+                                  Status: {syncDiagnosticResult.trace.finalGetStatus || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="p-3 font-mono text-[10px] text-slate-200 space-y-2 select-all overflow-x-auto max-h-[200px]">
+                                <div>
+                                  <span className="text-amber-400">Endpoint:</span> {syncDiagnosticResult.trace.finalGetEndpoint}
+                                </div>
+                                {syncDiagnosticResult.trace.finalGetResponseBody && (
+                                  <div>
+                                    <span className="text-amber-400">Response Body:</span>
+                                    <pre className="mt-1 text-slate-300 whitespace-pre-wrap max-w-full text-left">
+                                      {(() => {
+                                        try {
+                                          return JSON.stringify(JSON.parse(syncDiagnosticResult.trace.finalGetResponseBody), null, 2);
+                                        } catch (e) {
+                                          return syncDiagnosticResult.trace.finalGetResponseBody;
+                                        }
+                                      })()}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* General/Fallback Response Block */}
+                          {!syncDiagnosticResult.trace.tagSyncEndpoint && syncDiagnosticResult.trace.responseBody && (
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-950">
+                              <div className="bg-slate-900 px-4 py-2 flex justify-between items-center text-white text-[10px] font-bold">
+                                <span className="text-slate-400 uppercase font-mono">General Response</span>
+                                <span className="font-mono bg-slate-500/10 px-1.5 py-0.5 rounded text-slate-300">
+                                  Status: {syncDiagnosticResult.trace.responseStatus || 'N/A'}
+                                </span>
+                              </div>
+                              <div className="p-3 font-mono text-[10px] text-slate-200 select-all overflow-x-auto max-h-[150px]">
+                                <pre className="whitespace-pre-wrap">{syncDiagnosticResult.trace.responseBody}</pre>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

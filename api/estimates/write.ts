@@ -823,6 +823,21 @@ async function syncCustomerToGhl({
   let lastResponseStatus: number | null = null;
   let lastResponseBody: string | null = null;
   let finalResultStatus = 'failed';
+
+  // Advanced Tag Synchronization Diagnostics
+  let requestedTags: string[] = [];
+  let finalTagsOnContact: string[] = [];
+  let missingRequestedTags: string[] = [];
+  let currentContactTags: string[] = [];
+  
+  let tagSyncEndpoint = '';
+  let tagSyncRequestBody = '';
+  let tagSyncResponseStatus: number | null = null;
+  let tagSyncResponseBody = '';
+  
+  let finalGetEndpoint = '';
+  let finalGetStatus: number | null = null;
+  let finalGetResponseBody = '';
   
   const email = (customer?.email || estimate?.customerEmail || estimate?.email || '').trim().toLowerCase();
   const phone = (customer?.phone || estimate?.customerPhone || estimate?.phone || '').trim();
@@ -859,7 +874,20 @@ async function syncCustomerToGhl({
         responseStatus: lastResponseStatus,
         responseBody: lastResponseBody ? lastResponseBody.substring(0, 1000) : null,
         finalResult: finalResultStatus,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+
+        // Advanced diagnostics fields
+        requestedTags,
+        finalTagsOnContact,
+        missingRequestedTags,
+        currentContactTags,
+        tagSyncEndpoint,
+        tagSyncRequestBody,
+        tagSyncResponseStatus,
+        tagSyncResponseBody: tagSyncResponseBody ? tagSyncResponseBody.substring(0, 1500) : null,
+        finalGetEndpoint,
+        finalGetStatus,
+        finalGetResponseBody: finalGetResponseBody ? finalGetResponseBody.substring(0, 1500) : null
       });
       console.log(`[GHL API SYNC DIAGNOSTIC] Saved sync trace to ghlContactSyncTraces`);
     } catch (traceErr) {
@@ -1149,6 +1177,7 @@ async function syncCustomerToGhl({
 
     if (eventTag) {
       tagsAttempted.push(eventTag);
+      requestedTags = [eventTag];
     }
 
     // Map the human-readable job status
@@ -1252,17 +1281,31 @@ async function syncCustomerToGhl({
     // Call update tags and fields on contact
     try {
       console.log(`[GHL API SYNC] Updating GHL Contact details: ${ghlContactId}`);
-      const updateRes = await fetch(`https://services.leadconnectorhq.com/contacts/${ghlContactId}`, {
+      tagSyncEndpoint = `https://services.leadconnectorhq.com/contacts/${ghlContactId}`;
+      const payloadObj = {
+        tags: eventTag ? [eventTag] : undefined,
+        customFields: customFieldsPayload.length > 0 ? customFieldsPayload : undefined
+      };
+      tagSyncRequestBody = JSON.stringify(payloadObj);
+
+      console.log(`[GHL API SYNC DIAGNOSTIC] TAG SYNC ENDPOINT CALLED: ${tagSyncEndpoint}`);
+      console.log(`[GHL API SYNC DIAGNOSTIC] TAG SYNC REQUEST BODY: ${tagSyncRequestBody}`);
+
+      const updateRes = await fetch(tagSyncEndpoint, {
         method: 'PUT',
         headers,
-        body: JSON.stringify({
-          tags: eventTag ? [eventTag] : undefined,
-          customFields: customFieldsPayload.length > 0 ? customFieldsPayload : undefined
-        })
+        body: tagSyncRequestBody
       });
+      
+      tagSyncResponseStatus = updateRes.status;
       lastResponseStatus = updateRes.status;
       const resText = await updateRes.text();
+      tagSyncResponseBody = resText;
       lastResponseBody = resText;
+
+      console.log(`[GHL API SYNC DIAGNOSTIC] TAG SYNC HTTP STATUS: ${tagSyncResponseStatus}`);
+      console.log(`[GHL API SYNC DIAGNOSTIC] TAG SYNC RESPONSE BODY: ${tagSyncResponseBody}`);
+
       if (updateRes.ok) {
         updatedContactId = ghlContactId;
         if (eventTag) {
@@ -1273,6 +1316,62 @@ async function syncCustomerToGhl({
       }
     } catch (err) {
       console.error('[GHL API SYNC] Contact updates failed:', err);
+    }
+
+    // Immediately perform a GET on the contact after the tag update
+    if (ghlContactId) {
+      try {
+        finalGetEndpoint = `https://services.leadconnectorhq.com/contacts/${ghlContactId}`;
+        console.log(`[GHL API SYNC DIAGNOSTIC] VERIFICATION GET ENDPOINT CALLED: ${finalGetEndpoint}`);
+
+        const getRes = await fetch(finalGetEndpoint, { headers });
+        finalGetStatus = getRes.status;
+        const getBodyText = await getRes.text();
+        finalGetResponseBody = getBodyText;
+
+        console.log(`[GHL API SYNC DIAGNOSTIC] VERIFICATION GET HTTP STATUS: ${finalGetStatus}`);
+        console.log(`[GHL API SYNC DIAGNOSTIC] VERIFICATION GET RESPONSE BODY: ${finalGetResponseBody}`);
+
+        if (getRes.ok) {
+          const getData = JSON.parse(getBodyText);
+          const contactObj = getData.contact || getData;
+          const contactTags = contactObj.tags || [];
+          finalTagsOnContact = Array.isArray(contactTags) ? contactTags : [];
+          currentContactTags = finalTagsOnContact;
+
+          console.log(`[GHL API SYNC DIAGNOSTIC] CONTACT'S FINAL TAG LIST:`, finalTagsOnContact);
+        } else {
+          console.warn(`[GHL API SYNC DIAGNOSTIC] Verification GET failed with status ${getRes.status}: ${getBodyText}`);
+        }
+      } catch (err) {
+        console.error('[GHL API SYNC DIAGNOSTIC] Verification GET failed:', err);
+      }
+    }
+
+    // Verify tag exists on contact after sync. If not, mark sync as failed even if API returned 200.
+    if (eventTag) {
+      if (!finalTagsOnContact.includes(eventTag)) {
+        missingRequestedTags = [eventTag];
+        console.error(`[GHL API SYNC DIAGNOSTIC] TAG VERIFICATION FAILED: Requested tag "${eventTag}" not found on contact.`);
+        
+        const errorLog = {
+          id: logId,
+          timestamp: nowIso,
+          eventType,
+          ghlContactId,
+          ghlOpportunityId: null,
+          success: false,
+          error: `Tag verification failed: Requested tag "${eventTag}" was not found on the contact after sync.`
+        };
+        await saveGhlSyncLogLocal(estimate?.id, customer?.id, errorLog);
+        await saveTrace('failed', `Tag verification failed: Requested tag "${eventTag}" not found after sync`);
+        
+        return { 
+          success: false, 
+          error: `Tag verification failed: Requested tag "${eventTag}" was not found on the contact after sync.`,
+          ghlContactId
+        };
+      }
     }
 
     // 6. Manage CRM Pipelines / Opportunities
