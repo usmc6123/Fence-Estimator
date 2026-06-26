@@ -239,6 +239,7 @@ export interface Estimate {
   laborRates: LaborRates;
   pricingStrategy?: 'best' | 'supplier';
   selectedSupplier?: string;
+  defaultMaterialPricingSupplierId?: string;
   deliveryFee: number;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price

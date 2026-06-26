@@ -143,9 +143,36 @@ function calculateStickOptimization(requiredLengths: number[], stickLength: numb
 
 export function calculateDetailedTakeOff(
   estimate: Partial<Estimate>,
-  materials: MaterialItem[],
+  rawMaterials: MaterialItem[],
   laborRates: LaborRates
 ): DetailedTakeOff {
+  let materials = rawMaterials;
+  const defaultSupplier = estimate.defaultMaterialPricingSupplierId;
+  if (defaultSupplier) {
+    const supplierQuotes = (estimate.quotes || [])
+      .filter(q => q.supplierName === defaultSupplier)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    materials = rawMaterials.map(m => {
+      let quotedPrice: number | undefined;
+      let source = 'Library fallback';
+      
+      for (const quote of supplierQuotes) {
+        const item = quote.items.find(i => i.mappedMaterialId === m.id);
+        if (item && item.unitPrice > 0) {
+          quotedPrice = item.unitPrice;
+          source = quote.supplierName;
+          break;
+        }
+      }
+
+      if (quotedPrice !== undefined) {
+        return { ...m, cost: quotedPrice, priceSource: source };
+      }
+      return { ...m, priceSource: 'Library fallback' };
+    });
+  }
+
   const rawRuns = estimate.runs || [];
   let activeRuns = [...rawRuns];
 

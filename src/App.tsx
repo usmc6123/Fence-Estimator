@@ -720,6 +720,7 @@ export default function App() {
           footingType: estimate.footingType || 'Cuboid',
           postWidth: estimate.postWidth !== undefined ? estimate.postWidth : 6,
           postThickness: estimate.postThickness !== undefined ? estimate.postThickness : 6,
+          defaultMaterialPricingSupplierId: estimate.defaultMaterialPricingSupplierId || '',
         };
 
         await setDoc(docRef, {
@@ -746,6 +747,7 @@ export default function App() {
     estimate.footingType, 
     estimate.postWidth, 
     estimate.postThickness, 
+    estimate.defaultMaterialPricingSupplierId,
     user
   ]);
 
@@ -795,6 +797,17 @@ export default function App() {
       window.removeEventListener('focus', handleSync);
     };
   }, [user, fetchQuotes]);
+
+  React.useEffect(() => {
+    if (quotes && quotes.length > 0) {
+      setEstimate(prev => {
+        if (prev.quotes !== quotes) {
+          return { ...prev, quotes };
+        }
+        return prev;
+      });
+    }
+  }, [quotes]);
 
   const handleLogin = async () => {
     setActiveTab('pricing');
@@ -966,7 +979,7 @@ export default function App() {
   }
 
   if (isJobPortal) {
-    return <JobPortal user={user} materials={materials} laborRates={laborRates} />;
+    return <JobPortal user={user} materials={materials} laborRates={laborRates} quotes={quotes} />;
   }
 
   if (isCustomerPortal) {
@@ -1223,6 +1236,8 @@ export default function App() {
               quotes={quotes} 
               setQuotes={setQuotes} 
               user={user}
+              estimate={estimate}
+              setEstimate={setEstimate}
             />
           )}
           {activeTab === 'settings' && <Settings user={user} adminToken={adminToken} />}

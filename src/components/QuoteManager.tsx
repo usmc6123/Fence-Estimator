@@ -5,7 +5,7 @@ import {
   CheckCircle2, Loader2, ChevronRight, Scale, ExternalLink,
   Plus, History, DollarSign, Search, ChevronDown, GitMerge
 } from 'lucide-react';
-import { SupplierQuote, QuoteItem, MaterialItem, User } from '../types';
+import { SupplierQuote, QuoteItem, MaterialItem, User, Estimate } from '../types';
 import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -98,9 +98,11 @@ interface QuoteManagerProps {
   quotes: SupplierQuote[];
   setQuotes: React.Dispatch<React.SetStateAction<SupplierQuote[]>>;
   user: User | null;
+  estimate: Partial<Estimate>;
+  setEstimate: React.Dispatch<React.SetStateAction<Partial<Estimate>>>;
 }
 
-export default function QuoteManager({ materials, setMaterials, quotes, setQuotes, user }: QuoteManagerProps) {
+export default function QuoteManager({ materials, setMaterials, quotes, setQuotes, user, estimate, setEstimate }: QuoteManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeView, setActiveView] = React.useState<'list' | 'compare' | 'history'>('list');
@@ -796,6 +798,60 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
               <GitMerge size={16} />
               Merge / Combine Suppliers
             </button>
+          </div>
+
+          {/* Default Pricing Supplier Selection Card */}
+          <div className="bg-white rounded-[40px] p-8 shadow-xl border-2 border-american-blue/5 space-y-6">
+            <div className="flex items-center gap-3 text-american-blue">
+              <CheckCircle2 size={20} className="text-emerald-600" />
+              <h2 className="font-black uppercase tracking-tight">Default Pricing Supplier</h2>
+            </div>
+            
+            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest leading-relaxed">
+              Select one supplier as the default source for material takeoff, estimate pricing, and job material cost calculations.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Default Pricing Supplier:</label>
+              <select
+                value={estimate.defaultMaterialPricingSupplierId || ""}
+                onChange={(e) => {
+                  setEstimate(prev => ({
+                    ...prev,
+                    defaultMaterialPricingSupplierId: e.target.value
+                  }));
+                }}
+                className="w-full px-4 py-3 bg-[#F5F5F7] hover:bg-[#EBEBEF] rounded-2xl text-xs font-black uppercase tracking-widest text-american-blue border-2 border-transparent focus:border-american-blue outline-none transition-all cursor-pointer"
+              >
+                <option value="">-- No Default Supplier (Fallback to Library) --</option>
+                {uniqueSuppliers.map((supplier) => (
+                  <option key={supplier} value={supplier}>
+                    {supplier}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {estimate.defaultMaterialPricingSupplierId ? (
+              <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-start gap-3 text-emerald-800">
+                <CheckCircle2 className="shrink-0 text-emerald-600 mt-0.5" size={16} />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold leading-relaxed">
+                    Active: <span className="underline font-black">{estimate.defaultMaterialPricingSupplierId}</span>
+                  </p>
+                  <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest leading-relaxed">
+                    Material Takeoff will use this supplier's item prices first, falling back to library prices if unavailable.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 flex items-start gap-3 text-amber-800">
+                <AlertCircle className="shrink-0 text-amber-600 mt-0.5" size={16} />
+                <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest leading-relaxed">
+                  No default supplier active. Material Takeoff uses standard material library prices.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-[40px] p-8 shadow-xl border-2 border-american-blue/5 space-y-6">

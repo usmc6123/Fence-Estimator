@@ -262,6 +262,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   deliveryFee: 50,
   pricingStrategy: 'best',
   selectedSupplier: '',
+  defaultMaterialPricingSupplierId: '',
   manualQuantities: {},
   manualPrices: {},
   woodType: 'PT Pine',

@@ -32,9 +32,10 @@ interface JobPortalProps {
   user: User | null;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  quotes?: any[];
 }
 
-export default function JobPortal({ user, materials, laborRates }: JobPortalProps) {
+export default function JobPortal({ user, materials, laborRates, quotes = [] }: JobPortalProps) {
   const [estimateId, setEstimateId] = useState('');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
@@ -739,7 +740,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
         source = 'laborBreakdown.laborTotal';
       } else {
         // Fallback to calculation if no saved breakdown exists
-        const takeoff = calculateDetailedTakeOff(jobData, materials, laborRates);
+        const takeoff = calculateDetailedTakeOff({ ...jobData, quotes }, materials, laborRates);
         laborCost = takeoff.summary.reduce((sum, item) => item.category === 'Labor' ? sum + item.total : sum, 0);
         source = 'Dynamic Calculation';
       }
@@ -1551,7 +1552,7 @@ export default function JobPortal({ user, materials, laborRates }: JobPortalProp
   }
 
   // Calculate Materials takeoff list if jobData exists
-  const calculatedTakeoff = jobData ? calculateDetailedTakeOff(jobData, materials, laborRates) : null;
+  const calculatedTakeoff = jobData ? calculateDetailedTakeOff({ ...jobData, quotes }, materials, laborRates) : null;
   
   // Combine multiple material sources as requested:
   // 1. Calculated takeoff summary (standard fence materials)

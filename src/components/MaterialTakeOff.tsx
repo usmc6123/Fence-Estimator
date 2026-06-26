@@ -53,6 +53,32 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
   // Resolve materials based on chosen strategy
   const resolvedMaterials = React.useMemo(() => {
+    const defaultSupplier = estimate.defaultMaterialPricingSupplierId;
+    if (defaultSupplier) {
+      const supplierQuotes = quotes
+        .filter(q => q.supplierName === defaultSupplier)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      return materials.map(m => {
+        let quotedPrice: number | undefined;
+        let source = 'Library fallback';
+        
+        for (const quote of supplierQuotes) {
+          const item = quote.items.find(i => i.mappedMaterialId === m.id);
+          if (item && item.unitPrice > 0) {
+            quotedPrice = item.unitPrice;
+            source = quote.supplierName;
+            break;
+          }
+        }
+
+        if (quotedPrice !== undefined) {
+          return { ...m, cost: quotedPrice, priceSource: source };
+        }
+        return { ...m, priceSource: 'Library fallback' };
+      });
+    }
+
     if (pricingStrategy === 'best') {
       return materials.map(m => {
         let bestPrice = m.cost;
@@ -97,7 +123,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
       }
       return { ...m, priceSource: 'Library Price' };
     });
-  }, [materials, quotes, pricingStrategy, selectedSupplier]);
+  }, [materials, quotes, pricingStrategy, selectedSupplier, estimate.defaultMaterialPricingSupplierId]);
 
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
 
@@ -406,12 +432,17 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
             </div>
           )}
 
-          {pricingStrategy === 'best' && (
+          {estimate.defaultMaterialPricingSupplierId ? (
+            <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Pricing Source: {estimate.defaultMaterialPricingSupplierId}
+            </div>
+          ) : pricingStrategy === 'best' ? (
             <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-xl">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Optimal Sourcing Mode Active
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -694,9 +725,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                               const lineTotal = item.total * (1 + markupFactor + taxFactor);
 
                               // Check if price is fallback
-                              const isFallback = pricingStrategy === 'supplier' && 
+                              const isFallback = item.priceSource === 'Library fallback' || (
+                                pricingStrategy === 'supplier' && 
                                 !quotes.filter(q => q.supplierName === selectedSupplier)
-                                  .some(q => q.items.some(qi => qi.mappedMaterialId === item.id));
+                                  .some(q => q.items.some(qi => qi.mappedMaterialId === item.id))
+                              );
 
                               return (
                                   <tr key={i} className="text-sm font-bold text-american-blue/80 hover:bg-[#FBFBFB] transition-colors">
@@ -984,9 +1017,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                     </tr>
                   ) : (
                     data.summary.filter(item => item.category !== 'Labor' && item.category !== 'Demolition').map((item, i) => {
-                      const isFallback = pricingStrategy === 'supplier' && 
+                      const isFallback = item.priceSource === 'Library fallback' || (
+                        pricingStrategy === 'supplier' && 
                         !quotes.filter(q => q.supplierName === selectedSupplier)
-                          .some(q => q.items.some(qi => qi.mappedMaterialId === item.id));
+                          .some(q => q.items.some(qi => qi.mappedMaterialId === item.id))
+                      );
 
                       return (
                         <tr key={i} className="text-sm font-bold text-american-blue hover:bg-[#FBFBFB] transition-colors group">
