@@ -777,6 +777,17 @@ async function sendGhlWorkflowWebhook(
   }
 }
 
+function normalizePhone(p: string | null | undefined): string {
+  if (!p) return '';
+  const cleaned = p.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `+1${cleaned}`;
+  } else if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    return `+${cleaned}`;
+  }
+  return cleaned ? `+${cleaned}` : '';
+}
+
 async function syncCustomerToGhl({
   eventType,
   customer,
@@ -796,6 +807,66 @@ async function syncCustomerToGhl({
   let logId = 'log_' + Math.random().toString(36).substring(2, 10);
   let nowIso = new Date().toISOString();
   
+  // Tracing details
+  const initialGhlContactId = customer?.ghlContactId || estimate?.ghlContactId || '';
+  let ghlContactId = initialGhlContactId;
+  let didSearchByEmail = false;
+  let didSearchByPhone = false;
+  let matchedExistingContactId = '';
+  let createdNewContactId = '';
+  let updatedContactId = '';
+  let savedGhlContactIdBackToEstimate = false;
+  let tagsAttempted: string[] = [];
+  let tagsAdded: string[] = [];
+  let tagsRemoved: string[] = [];
+  let pipelineOpportunityActionAttempted = 'none';
+  let lastResponseStatus: number | null = null;
+  let lastResponseBody: string | null = null;
+  let finalResultStatus = 'failed';
+  
+  const email = (customer?.email || estimate?.customerEmail || estimate?.email || '').trim().toLowerCase();
+  const phone = (customer?.phone || estimate?.customerPhone || estimate?.phone || '').trim();
+  const firstName = (customer?.firstName || estimate?.firstName || '').trim();
+  const lastName = (customer?.lastName || estimate?.lastName || '').trim();
+  const customerName = (customer?.customerName || estimate?.customerName || `${firstName} ${lastName}`).trim();
+  const address = (customer?.address || estimate?.address || estimate?.streetAddress || '').trim();
+  const city = (customer?.city || estimate?.city || '').trim();
+  const state = (customer?.state || estimate?.state || '').trim();
+  const zip = (customer?.zip || estimate?.zip || estimate?.postalCode || '').trim();
+
+  // Helper function to save the trace doc at the end
+  const saveTrace = async (outcome: string, errMessage?: string) => {
+    finalResultStatus = errMessage ? `failed: ${errMessage}` : outcome;
+    try {
+      await db.collection('ghlContactSyncTraces').add({
+        estimateId: estimate?.id || null,
+        estimateNumber: estimate?.estimateNumber || null,
+        customerName,
+        email,
+        phone,
+        actionSource: source || eventType || 'unknown',
+        existingGhlContactId: initialGhlContactId || null,
+        didSearchByEmail,
+        didSearchByPhone,
+        matchedExistingContactId: matchedExistingContactId || null,
+        createdNewContactId: createdNewContactId || null,
+        updatedContactId: updatedContactId || null,
+        savedGhlContactIdBackToEstimate,
+        tagsAttempted,
+        tagsAdded,
+        tagsRemoved,
+        pipelineOpportunityActionAttempted,
+        responseStatus: lastResponseStatus,
+        responseBody: lastResponseBody ? lastResponseBody.substring(0, 1000) : null,
+        finalResult: finalResultStatus,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`[GHL API SYNC DIAGNOSTIC] Saved sync trace to ghlContactSyncTraces`);
+    } catch (traceErr) {
+      console.error('[GHL API SYNC DIAGNOSTIC] Failed to save trace doc to Firestore:', traceErr);
+    }
+  };
+
   try {
     // 1. Resolve Company Settings
     const settingsSnap = await db.collection('companySettings').doc('braden-lonestar-uid').get();
@@ -817,6 +888,7 @@ async function syncCustomerToGhl({
         message: 'Sync skipped: API Sync disabled'
       };
       await saveGhlSyncLogLocal(estimate?.id, customer?.id, skippedLog);
+      await saveTrace('skipped', 'API Sync disabled in settings');
       return { success: true, message: 'Sync skipped: API Sync disabled' };
     }
 
@@ -835,28 +907,16 @@ async function syncCustomerToGhl({
         error: 'Missing API Key or Location ID configuration'
       };
       await saveGhlSyncLogLocal(estimate?.id, customer?.id, errorLog);
+      await saveTrace('failed', 'Missing CRM credentials (API key or Location ID)');
       return { success: false, error: 'Missing CRM credentials' };
     }
 
-    // 2. Extract and format contact fields
-    // Use customer data or estimate data to form name, email, phone
-    const email = (customer?.email || estimate?.customerEmail || estimate?.email || '').trim().toLowerCase();
-    const phone = (customer?.phone || estimate?.customerPhone || estimate?.phone || '').trim();
-    const firstName = (customer?.firstName || estimate?.firstName || '').trim();
-    const lastName = (customer?.lastName || estimate?.lastName || '').trim();
-    const customerName = (customer?.customerName || estimate?.customerName || `${firstName} ${lastName}`).trim();
-    const address = (customer?.address || estimate?.address || estimate?.streetAddress || '').trim();
-    const city = (customer?.city || estimate?.city || '').trim();
-    const state = (customer?.state || estimate?.state || '').trim();
-    const zip = (customer?.zip || estimate?.zip || estimate?.postalCode || '').trim();
-
     if (!email && !phone && !customerName) {
       console.warn(`[GHL API SYNC] Insufficient data to locate or create contact.`);
+      await saveTrace('failed', 'Insufficient contact details');
       return { success: false, error: 'Insufficient contact details' };
     }
 
-    let ghlContactId = customer?.ghlContactId || estimate?.ghlContactId || '';
-    
     // GHL API request helper headers
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
@@ -869,14 +929,20 @@ async function syncCustomerToGhl({
       console.log(`[GHL API SYNC] No cached contact ID. Searching GHL...`);
       let foundContactId = '';
 
+      // Rule 2: Email exact match
       if (email) {
+        didSearchByEmail = true;
         try {
           const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&email=${encodeURIComponent(email)}`, { headers });
+          lastResponseStatus = res.status;
+          const resText = await res.text();
+          lastResponseBody = resText;
           if (res.ok) {
-            const data: any = await res.json();
+            const data: any = JSON.parse(resText);
             if (data.contacts && data.contacts.length > 0) {
               foundContactId = data.contacts[0].id;
-              console.log(`[GHL API SYNC] Found contact by email: ${foundContactId}`);
+              matchedExistingContactId = foundContactId;
+              console.log(`[GHL API SYNC] Found contact by email exact match: ${foundContactId}`);
             }
           }
         } catch (err) {
@@ -884,18 +950,25 @@ async function syncCustomerToGhl({
         }
       }
 
+      // Rule 3: Phone normalized match
       if (!foundContactId && phone) {
-        // format phone safely
+        didSearchByPhone = true;
         const cleanedPhone = phone.replace(/\D/g, '');
-        const phoneVariants = [phone, cleanedPhone, `+1${cleanedPhone}`].filter(Boolean);
+        const normPhone = normalizePhone(phone);
+        const phoneVariants = [normPhone, `+1${cleanedPhone}`, cleanedPhone, phone].filter((v, i, a) => v && a.indexOf(v) === i);
+        
         for (const pv of phoneVariants) {
           try {
             const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&phone=${encodeURIComponent(pv)}`, { headers });
+            lastResponseStatus = res.status;
+            const resText = await res.text();
+            lastResponseBody = resText;
             if (res.ok) {
-              const data: any = await res.json();
+              const data: any = JSON.parse(resText);
               if (data.contacts && data.contacts.length > 0) {
                 foundContactId = data.contacts[0].id;
-                console.log(`[GHL API SYNC] Found contact by phone ${pv}: ${foundContactId}`);
+                matchedExistingContactId = foundContactId;
+                console.log(`[GHL API SYNC] Found contact by normalized phone match ${pv}: ${foundContactId}`);
                 break;
               }
             }
@@ -908,10 +981,14 @@ async function syncCustomerToGhl({
       if (!foundContactId && customerName) {
         try {
           const res = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(customerName)}`, { headers });
+          lastResponseStatus = res.status;
+          const resText = await res.text();
+          lastResponseBody = resText;
           if (res.ok) {
-            const data: any = await res.json();
+            const data: any = JSON.parse(resText);
             if (data.contacts && data.contacts.length > 0) {
               foundContactId = data.contacts[0].id;
+              matchedExistingContactId = foundContactId;
               console.log(`[GHL API SYNC] Found contact by query/name: ${foundContactId}`);
             }
           }
@@ -922,9 +999,15 @@ async function syncCustomerToGhl({
 
       if (foundContactId) {
         ghlContactId = foundContactId;
-        // Save back to Firestore
-        await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+        try {
+          await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+          savedGhlContactIdBackToEstimate = true;
+        } catch (e) {
+          console.warn('Failed caching contact ID:', e);
+        }
       }
+    } else {
+      matchedExistingContactId = ghlContactId;
     }
 
     // 4. Create contact if still missing
@@ -936,7 +1019,7 @@ async function syncCustomerToGhl({
         lastName: lastName || customerName.split(' ').slice(1).join(' ') || 'Customer',
         name: customerName || 'New CRM Contact',
         email: email || undefined,
-        phone: phone || undefined,
+        phone: normalizePhone(phone) || undefined,
         address1: address || undefined,
         city: city || undefined,
         state: state || undefined,
@@ -950,13 +1033,21 @@ async function syncCustomerToGhl({
           headers,
           body: JSON.stringify(createBody)
         });
+        lastResponseStatus = res.status;
+        const errText = await res.text();
+        lastResponseBody = errText;
         if (res.ok) {
-          const data: any = await res.json();
+          const data: any = JSON.parse(errText);
           ghlContactId = data.contact?.id || data.id;
+          createdNewContactId = ghlContactId;
           console.log(`[GHL API SYNC] Successfully created new GHL Contact: ${ghlContactId}`);
-          await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+          try {
+            await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+            savedGhlContactIdBackToEstimate = true;
+          } catch (e) {
+            console.warn('Failed caching contact ID:', e);
+          }
         } else {
-          const errText = await res.text();
           let errJson: any = null;
           try {
             errJson = JSON.parse(errText);
@@ -965,8 +1056,12 @@ async function syncCustomerToGhl({
           const duplicateContactId = errJson?.contact?.id || errJson?.id || errJson?.meta?.contactId || errJson?.meta?.id;
           if (duplicateContactId) {
             ghlContactId = duplicateContactId;
+            matchedExistingContactId = duplicateContactId;
             console.log(`[GHL API SYNC] Derived duplicate contact ID ${ghlContactId} from error payload.`);
-            await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+            try {
+              await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+              savedGhlContactIdBackToEstimate = true;
+            } catch (e) {}
           } else {
             // Aggressive fallback search by query
             let foundByFallback = '';
@@ -982,21 +1077,28 @@ async function syncCustomerToGhl({
               } catch (e) {}
             }
             if (!foundByFallback && phone) {
-              try {
-                const fRes = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(phone)}`, { headers });
-                if (fRes.ok) {
-                  const fData: any = await fRes.json();
-                  if (fData.contacts && fData.contacts.length > 0) {
-                    foundByFallback = fData.contacts[0].id;
+              const normPhone = normalizePhone(phone);
+              if (normPhone) {
+                try {
+                  const fRes = await fetch(`https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=${encodeURIComponent(normPhone)}`, { headers });
+                  if (fRes.ok) {
+                    const fData: any = await fRes.json();
+                    if (fData.contacts && fData.contacts.length > 0) {
+                      foundByFallback = fData.contacts[0].id;
+                    }
                   }
-                }
-              } catch (e) {}
+                } catch (e) {}
+              }
             }
 
             if (foundByFallback) {
               ghlContactId = foundByFallback;
+              matchedExistingContactId = foundByFallback;
               console.log(`[GHL API SYNC] Fallback search matched duplicate contact ID: ${ghlContactId}`);
-              await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+              try {
+                await saveCachedGhlContactId(estimate?.id, customer?.id, ghlContactId);
+                savedGhlContactIdBackToEstimate = true;
+              } catch (e) {}
             } else {
               throw new Error(`Create contact returned HTTP ${res.status}: ${errText}`);
             }
@@ -1014,6 +1116,7 @@ async function syncCustomerToGhl({
           error: `Contact creation failed: ${err.message || err}`
         };
         await saveGhlSyncLogLocal(estimate?.id, customer?.id, errorLog);
+        await saveTrace('failed', `CRM contact creation failed: ${err.message}`);
         return { success: false, error: `CRM contact creation failed: ${err.message}` };
       }
     }
@@ -1043,6 +1146,10 @@ async function syncCustomerToGhl({
     else if (eventType === 'start_approved_with_material_issue') eventTag = 'LSFW - Start Approved With Material Issue';
     else if (eventType === 'job_start_scheduled') eventTag = 'LSFW - Job Start Scheduled';
     else if (eventType === 'job_schedule_updated') eventTag = 'LSFW - Install Schedule Updated';
+
+    if (eventTag) {
+      tagsAttempted.push(eventTag);
+    }
 
     // Map the human-readable job status
     let currentJobStatus = status || 'Interested';
@@ -1153,9 +1260,16 @@ async function syncCustomerToGhl({
           customFields: customFieldsPayload.length > 0 ? customFieldsPayload : undefined
         })
       });
-      if (!updateRes.ok) {
-        const errText = await updateRes.text();
-        console.warn(`[GHL API SYNC] Contact update response: HTTP ${updateRes.status}: ${errText}`);
+      lastResponseStatus = updateRes.status;
+      const resText = await updateRes.text();
+      lastResponseBody = resText;
+      if (updateRes.ok) {
+        updatedContactId = ghlContactId;
+        if (eventTag) {
+          tagsAdded.push(eventTag);
+        }
+      } else {
+        console.warn(`[GHL API SYNC] Contact update response: HTTP ${updateRes.status}: ${resText}`);
       }
     } catch (err) {
       console.error('[GHL API SYNC] Contact updates failed:', err);
@@ -1186,6 +1300,7 @@ async function syncCustomerToGhl({
     }
 
     if (pipelineId && stageId) {
+      pipelineOpportunityActionAttempted = `move_to_stage_${stageName}`;
       console.log(`[GHL API SYNC] Pipeline opportunity mapped. Stage: ${stageName} (${stageId})`);
       
       // Map opportunity open/won/lost status based on state
@@ -1230,17 +1345,13 @@ async function syncCustomerToGhl({
               monetaryValue: monetaryValue || undefined
             })
           });
-          console.log(`[GHL API SYNC] PUT Payload keys: ${Object.keys({
-            pipelineId,
-            pipelineStageId: stageId,
-            status: oppStatus,
-            monetaryValue: monetaryValue || undefined
-          }).join(', ')}`);
+          lastResponseStatus = oppRes.status;
+          const resText = await oppRes.text();
+          lastResponseBody = resText;
           if (oppRes.ok) {
             ghlOpportunityId = existingOppId;
           } else {
-            const errText = await oppRes.text();
-            console.warn(`[GHL API SYNC] Update opportunity failed: HTTP ${oppRes.status}: ${errText}`);
+            console.warn(`[GHL API SYNC] Update opportunity failed: HTTP ${oppRes.status}: ${resText}`);
           }
         } catch (err) {
           console.error('[GHL API SYNC] Opportunity update endpoint failed:', err);
@@ -1262,22 +1373,15 @@ async function syncCustomerToGhl({
               monetaryValue: monetaryValue || undefined
             })
           });
-          console.log(`[GHL API SYNC] POST Payload keys: ${Object.keys({
-            pipelineId,
-            locationId,
-            contactId: ghlContactId,
-            pipelineStageId: stageId,
-            name: opportunityName,
-            status: oppStatus,
-            monetaryValue: monetaryValue || undefined
-          }).join(', ')}`);
+          lastResponseStatus = oppRes.status;
+          const resText = await oppRes.text();
+          lastResponseBody = resText;
           if (oppRes.ok) {
-            const oppData: any = await oppRes.json();
+            const oppData: any = JSON.parse(resText);
             ghlOpportunityId = oppData.opportunity?.id || oppData.id;
             console.log(`[GHL API SYNC] Successfully created new GHL Opportunity: ${ghlOpportunityId}`);
           } else {
-            const errText = await oppRes.text();
-            console.warn(`[GHL API SYNC] Create opportunity failed: HTTP ${oppRes.status}: ${errText}`);
+            console.warn(`[GHL API SYNC] Create opportunity failed: HTTP ${oppRes.status}: ${resText}`);
           }
         } catch (err) {
           console.error('[GHL API SYNC] Opportunity creation endpoint failed:', err);
@@ -1298,6 +1402,7 @@ async function syncCustomerToGhl({
       error: null
     };
     await saveGhlSyncLogLocal(estimate?.id, customer?.id, successLog);
+    await saveTrace('success');
 
     return {
       success: true,
@@ -1318,6 +1423,7 @@ async function syncCustomerToGhl({
       error: err.message || String(err)
     };
     await saveGhlSyncLogLocal(estimate?.id, customer?.id, failureLog);
+    await saveTrace('failed', err.message || String(err));
     return { success: false, error: err.message || String(err) };
   }
 }
@@ -1626,6 +1732,54 @@ export default async function handler(req: any, res: any) {
           ...logData
         });
         return res.status(200).json({ success: true });
+      } catch (err: any) {
+        return res.status(500).json({ success: false, error: err.message || String(err) });
+      }
+    }
+
+    // --- GHL DIAGNOSTIC TEST CONTACT SYNC ACTION ---
+    if (action === 'test-contact-sync') {
+      try {
+        const { estimateId } = req.body || {};
+        if (!estimateId) {
+          return res.status(400).json({ error: 'Missing estimateId' });
+        }
+        
+        // Fetch the estimate
+        const estRef = db.collection('estimates').doc(estimateId);
+        const estSnap = await estRef.get();
+        if (!estSnap.exists) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const estimate = estSnap.data() || {};
+        
+        // Let's run syncCustomerToGhl
+        const result = await syncCustomerToGhl({
+          eventType: 'manual_estimate_sent',
+          estimate: { id: estimateId, ...estimate },
+          source: 'Manual Diagnostic Test'
+        });
+        
+        // Load the trace logs for this estimate to show the full output
+        const traceSnap = await db.collection('ghlContactSyncTraces')
+          .where('estimateId', '==', estimateId)
+          .orderBy('timestamp', 'desc')
+          .limit(1)
+          .get();
+        
+        let lastTrace = null;
+        if (!traceSnap.empty) {
+          lastTrace = traceSnap.docs[0].data();
+        }
+        
+        return res.status(200).json({
+          success: result.success,
+          message: result.message || 'Diagnostic sync executed.',
+          error: result.error || null,
+          ghlContactId: result.ghlContactId || null,
+          ghlOpportunityId: result.ghlOpportunityId || null,
+          trace: lastTrace
+        });
       } catch (err: any) {
         return res.status(500).json({ success: false, error: err.message || String(err) });
       }

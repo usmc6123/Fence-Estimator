@@ -74,6 +74,36 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
   const [compareFromId, setCompareFromId] = React.useState<string>("");
   const [compareToId, setCompareToId] = React.useState<string>("");
 
+  // GHL Contact Sync Diagnostic States
+  const [syncDiagnosticEstimate, setSyncDiagnosticEstimate] = React.useState<SavedEstimate | null>(null);
+  const [syncDiagnosticLoading, setSyncDiagnosticLoading] = React.useState(false);
+  const [syncDiagnosticResult, setSyncDiagnosticResult] = React.useState<any>(null);
+
+  const handleRunContactSyncDiagnostic = async (estimate: SavedEstimate) => {
+    setSyncDiagnosticEstimate(estimate);
+    setSyncDiagnosticLoading(true);
+    setSyncDiagnosticResult(null);
+    try {
+      const response = await fetch('/api/estimates/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test-contact-sync',
+          estimateId: estimate.id
+        })
+      });
+      const data = await response.json();
+      setSyncDiagnosticResult(data);
+    } catch (err: any) {
+      setSyncDiagnosticResult({
+        success: false,
+        error: err.message || String(err)
+      });
+    } finally {
+      setSyncDiagnosticLoading(false);
+    }
+  };
+
   const [companySettings, setCompanySettings] = React.useState<any>(null);
 
   // Send Estimate Modal States
@@ -1183,6 +1213,17 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            handleRunContactSyncDiagnostic(estimate);
+                                            setOpenDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 text-xs font-bold text-[#1e40af] hover:bg-[#eff6ff] hover:text-[#1d4ed8] flex items-center gap-2 border-t border-blue-50 mt-1 pt-1"
+                                        >
+                                          <Shield size={14} className="text-[#1e40af]" /> Test Contact Sync
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             setSelectedHistoryEstimate(estimate);
                                             setCompareFromId("");
                                             setCompareToId("");
@@ -2106,6 +2147,283 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* CRM Contact Sync Diagnostic Modal Popup */}
+      <AnimatePresence>
+        {syncDiagnosticEstimate && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col font-sans text-left"
+            >
+              {/* Header */}
+              <div className="p-6 bg-[#0c1a30] text-white flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 p-2.5 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0">
+                    <Shield size={20} className="text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider">CRM Sync Diagnostic Console</h3>
+                    <p className="text-[10px] opacity-70 font-semibold uppercase tracking-widest mt-0.5">
+                      Contact Match & Trace Audit for Estimate #{syncDiagnosticEstimate.estimateNumber || '1201'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSyncDiagnosticEstimate(null);
+                    setSyncDiagnosticResult(null);
+                  }}
+                  className="text-white/70 hover:text-white transition-colors p-1"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
+                
+                {/* Contact Baseline Profile */}
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Target Customer Contact Profile</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Customer Name</p>
+                      <p className="text-xs font-black text-slate-800 mt-0.5">{syncDiagnosticEstimate.customerName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Email Address</p>
+                      <p className="text-xs font-black text-slate-800 mt-0.5">{syncDiagnosticEstimate.customerEmail || (syncDiagnosticEstimate as any).email || 'None Provided'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Phone Number</p>
+                      <p className="text-xs font-black text-[#0c1a30] font-mono mt-0.5">{syncDiagnosticEstimate.customerPhone || (syncDiagnosticEstimate as any).phone || 'None Provided'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Indicator */}
+                {syncDiagnosticLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider animate-pulse text-center">Running full GoHighLevel matching API diagnostics...</p>
+                  </div>
+                ) : syncDiagnosticResult ? (
+                  <div className="space-y-6">
+                    {/* Diagnostic Outcomes Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Overall Status Box */}
+                      <div className={cn(
+                        "p-4 rounded-2xl border flex items-start gap-3",
+                        syncDiagnosticResult.success 
+                          ? "bg-emerald-50 border-emerald-200/50 text-emerald-800" 
+                          : "bg-red-50 border-red-200/50 text-red-800"
+                      )}>
+                        {syncDiagnosticResult.success ? (
+                          <CheckCircle2 size={18} className="text-emerald-600 mt-0.5 shrink-0" />
+                        ) : (
+                          <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
+                        )}
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Test Run Outcome</p>
+                          <p className="text-xs font-black mt-1">
+                            {syncDiagnosticResult.success ? 'CRM Sync Succeeded' : 'CRM Sync Failed'}
+                          </p>
+                          <p className="text-[11px] font-semibold mt-0.5 opacity-90">
+                            {syncDiagnosticResult.message || syncDiagnosticResult.error}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* CRM ID Mappings */}
+                      <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active CRM IDs</p>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-bold block uppercase">GHL Contact ID</span>
+                            <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] inline-block mt-0.5">
+                              {syncDiagnosticResult.ghlContactId || 'None'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-bold block uppercase">Opportunity ID</span>
+                            <span className="font-mono font-black text-slate-800 bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] inline-block mt-0.5">
+                              {syncDiagnosticResult.ghlOpportunityId || 'None'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step-by-Step Interactive Trace Report */}
+                    {syncDiagnosticResult.trace && (
+                      <div className="space-y-3">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Execution Steps & Trace Details</h4>
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 text-xs">
+                          
+                          {/* Step 1: Baseline Check */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                              <span className="font-bold text-slate-700 truncate">Pre-existing CRM Cache Scan</span>
+                            </div>
+                            <span className="font-mono font-semibold text-slate-600 bg-slate-50 border px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                              {syncDiagnosticResult.trace.existingGhlContactId ? `Cached ID found: ${syncDiagnosticResult.trace.existingGhlContactId}` : 'No cached ID'}
+                            </span>
+                          </div>
+
+                          {/* Step 2: Email Match */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
+                              <span className="font-bold text-slate-700 truncate">GoHighLevel Email Exact Search</span>
+                            </div>
+                            <span className={cn(
+                              "font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] border shrink-0",
+                              syncDiagnosticResult.trace.didSearchByEmail 
+                                ? syncDiagnosticResult.trace.matchedExistingContactId && syncDiagnosticResult.trace.matchedExistingContactId === syncDiagnosticResult.trace.existingGhlContactId
+                                  ? "bg-slate-50 text-slate-600" 
+                                  : syncDiagnosticResult.trace.matchedExistingContactId
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                    : "bg-amber-50 text-amber-700 border-amber-100"
+                                : "bg-slate-50 text-slate-400"
+                            )}>
+                              {!syncDiagnosticResult.trace.didSearchByEmail ? 'Skipped (No Email or Cached ID used)' : syncDiagnosticResult.trace.matchedExistingContactId ? `Matched Contact: ${syncDiagnosticResult.trace.matchedExistingContactId}` : 'No Match Found'}
+                            </span>
+                          </div>
+
+                          {/* Step 3: Phone Match */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">3</span>
+                              <span className="font-bold text-slate-700 truncate">GoHighLevel Phone Normalized Search</span>
+                            </div>
+                            <span className={cn(
+                              "font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] border shrink-0",
+                              syncDiagnosticResult.trace.didSearchByPhone 
+                                ? syncDiagnosticResult.trace.matchedExistingContactId 
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                  : "bg-amber-50 text-amber-700 border-amber-100"
+                                : "bg-slate-50 text-slate-400"
+                            )}>
+                              {!syncDiagnosticResult.trace.didSearchByPhone ? 'Skipped (Not Needed or No Phone)' : syncDiagnosticResult.trace.matchedExistingContactId ? `Matched Contact: ${syncDiagnosticResult.trace.matchedExistingContactId}` : 'No Match Found'}
+                            </span>
+                          </div>
+
+                          {/* Step 4: Contact Resolution */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">4</span>
+                              <span className="font-bold text-slate-700 truncate">Contact Integration Resolution</span>
+                            </div>
+                            <span className="font-bold text-slate-700 shrink-0">
+                              {syncDiagnosticResult.trace.createdNewContactId ? (
+                                <span className="text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded text-[10px]">Created New Contact</span>
+                              ) : syncDiagnosticResult.trace.matchedExistingContactId ? (
+                                <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded text-[10px]">Resolved Existing Contact</span>
+                              ) : (
+                                <span className="text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded text-[10px]">Resolution Failed</span>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Step 5: Database Cache Persistence */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">5</span>
+                              <span className="font-bold text-slate-700 truncate">Estimate ID Back-Caching to Local DB</span>
+                            </div>
+                            <span className={cn(
+                              "font-bold px-1.5 py-0.5 rounded text-[10px] border shrink-0",
+                              syncDiagnosticResult.trace.savedGhlContactIdBackToEstimate 
+                                ? "bg-emerald-50 border-emerald-100 text-emerald-700" 
+                                : "bg-slate-50 text-slate-500"
+                            )}>
+                              {syncDiagnosticResult.trace.savedGhlContactIdBackToEstimate ? 'Successfully Persisted' : 'Not Saved/Not Required'}
+                            </span>
+                          </div>
+
+                          {/* Step 6: Pipeline Opportunity */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">6</span>
+                              <span className="font-bold text-slate-700 truncate">Opportunity Stage Progression</span>
+                            </div>
+                            <span className="font-mono font-semibold text-slate-600 bg-slate-50 border px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                              {syncDiagnosticResult.trace.pipelineOpportunityActionAttempted || 'None'}
+                            </span>
+                          </div>
+
+                          {/* Step 7: Tags application */}
+                          <div className="p-3 bg-white flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="bg-slate-100 text-slate-600 h-5 w-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0">7</span>
+                              <span className="font-bold text-slate-700 truncate">Assigned Tags & Custom Fields</span>
+                            </div>
+                            <span className="font-semibold text-slate-600 max-w-[50%] truncate text-[10px] shrink-0">
+                              Attempted: {syncDiagnosticResult.trace.tagsAttempted?.join(', ') || 'None'}
+                            </span>
+                          </div>
+
+                        </div>
+                      </div>
+                    )}
+
+                    {/* HTTP Payload Response Preview */}
+                    {syncDiagnosticResult.trace && syncDiagnosticResult.trace.responseBody && (
+                      <div className="space-y-2">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">HTTP Response Payload Details</h4>
+                        <pre className="p-3 bg-slate-950 text-slate-100 font-mono text-[10px] rounded-2xl overflow-x-auto max-h-[150px] leading-relaxed select-all">
+                          {`HTTP Status: ${syncDiagnosticResult.trace.responseStatus}\nResponseBody:\n${
+                            (() => {
+                              try {
+                                return JSON.stringify(JSON.parse(syncDiagnosticResult.trace.responseBody), null, 2);
+                              } catch(e) {
+                                return syncDiagnosticResult.trace.responseBody;
+                              }
+                            })()
+                          }`}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-3">
+                    <AlertCircle size={24} className="text-slate-400" />
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">No diagnostic data retrieved.</p>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleRunContactSyncDiagnostic(syncDiagnosticEstimate)}
+                  disabled={syncDiagnosticLoading}
+                  className="py-2.5 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow disabled:opacity-50"
+                >
+                  Re-Run Diagnostic Sync
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSyncDiagnosticEstimate(null);
+                    setSyncDiagnosticResult(null);
+                  }}
+                  className="py-2.5 px-6 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-colors"
+                >
+                  Close Console
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );
