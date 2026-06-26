@@ -100,9 +100,21 @@ interface QuoteManagerProps {
   user: User | null;
   estimate: Partial<Estimate>;
   setEstimate: React.Dispatch<React.SetStateAction<Partial<Estimate>>>;
+  globalDefaultSupplierId?: string;
+  setGlobalDefaultSupplierId?: (val: string) => void;
 }
 
-export default function QuoteManager({ materials, setMaterials, quotes, setQuotes, user, estimate, setEstimate }: QuoteManagerProps) {
+export default function QuoteManager({ 
+  materials, 
+  setMaterials, 
+  quotes, 
+  setQuotes, 
+  user, 
+  estimate, 
+  setEstimate,
+  globalDefaultSupplierId = '',
+  setGlobalDefaultSupplierId
+}: QuoteManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeView, setActiveView] = React.useState<'list' | 'compare' | 'history'>('list');
@@ -814,11 +826,17 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-[#888888]">Default Pricing Supplier:</label>
               <select
-                value={estimate.defaultMaterialPricingSupplierId || ""}
+                value={globalDefaultSupplierId || ""}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  if (setGlobalDefaultSupplierId) {
+                    setGlobalDefaultSupplierId(val);
+                  }
                   setEstimate(prev => ({
                     ...prev,
-                    defaultMaterialPricingSupplierId: e.target.value
+                    defaultMaterialPricingSupplierId: val,
+                    pricingStrategy: val ? 'supplier' : 'best',
+                    selectedSupplier: val || prev.selectedSupplier
                   }));
                 }}
                 className="w-full px-4 py-3 bg-[#F5F5F7] hover:bg-[#EBEBEF] rounded-2xl text-xs font-black uppercase tracking-widest text-american-blue border-2 border-transparent focus:border-american-blue outline-none transition-all cursor-pointer"
@@ -832,12 +850,12 @@ export default function QuoteManager({ materials, setMaterials, quotes, setQuote
               </select>
             </div>
 
-            {estimate.defaultMaterialPricingSupplierId ? (
+            {globalDefaultSupplierId ? (
               <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-start gap-3 text-emerald-800">
                 <CheckCircle2 className="shrink-0 text-emerald-600 mt-0.5" size={16} />
                 <div className="space-y-1">
                   <p className="text-xs font-bold leading-relaxed">
-                    Active: <span className="underline font-black">{estimate.defaultMaterialPricingSupplierId}</span>
+                    Active: <span className="underline font-black">{globalDefaultSupplierId}</span>
                   </p>
                   <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest leading-relaxed">
                     Material Takeoff will use this supplier's item prices first, falling back to library prices if unavailable.

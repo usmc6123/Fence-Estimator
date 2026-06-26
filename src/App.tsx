@@ -385,6 +385,10 @@ export default function App() {
   });
   const [laborRateDiagnostic, setLaborRateDiagnostic] = React.useState<any>(null);
 
+  const [globalDefaultSupplierId, setGlobalDefaultSupplierId] = React.useState<string>(() => {
+    return localStorage.getItem('fence_pro_global_default_supplier') || '';
+  });
+
   const [estimate, setEstimate] = React.useState<Partial<Estimate>>(() => {
     const initial = getInitialValue('estimate', 'fence_pro_estimate', DEFAULT_ESTIMATE);
     const hasNoCustomer = !initial.customerName && !initial.customerAddress;
@@ -631,6 +635,11 @@ export default function App() {
           } else {
             console.log('[DIAGNOSTIC] No laborRates key in main document');
           }
+          if (sData.defaultMaterialPricingSupplierId) {
+            setGlobalDefaultSupplierId(sData.defaultMaterialPricingSupplierId);
+          } else if (sData.estimatorSettings?.defaultMaterialPricingSupplierId) {
+            setGlobalDefaultSupplierId(sData.estimatorSettings.defaultMaterialPricingSupplierId);
+          }
           if (sData.estimatorSettings) {
             setEstimate(prev => ({
               ...prev,
@@ -647,6 +656,44 @@ export default function App() {
 
     fetchGlobalSettings();
   }, [user]);
+
+  // Synchronize globalDefaultSupplierId back to Firestore and LocalStorage
+  React.useEffect(() => {
+    localStorage.setItem('fence_pro_global_default_supplier', globalDefaultSupplierId);
+    if (!user) return;
+
+    const syncGlobalSupplierToCloud = async () => {
+      try {
+        const docRef = doc(db, 'companySettings', 'main');
+        await setDoc(docRef, {
+          defaultMaterialPricingSupplierId: globalDefaultSupplierId,
+          estimatorSettings: {
+            defaultMaterialPricingSupplierId: globalDefaultSupplierId,
+          }
+        }, { merge: true });
+      } catch (syncErr) {
+        console.error('Failed to sync updated global pricing default to cloud:', syncErr);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      syncGlobalSupplierToCloud();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [globalDefaultSupplierId, user]);
+
+  // Automatically inject global default supplier into new/draft estimates
+  React.useEffect(() => {
+    if (!estimate.id && globalDefaultSupplierId && estimate.defaultMaterialPricingSupplierId !== globalDefaultSupplierId) {
+      setEstimate(prev => ({
+        ...prev,
+        defaultMaterialPricingSupplierId: globalDefaultSupplierId,
+        pricingStrategy: prev.pricingStrategy || (globalDefaultSupplierId ? 'supplier' : 'best'),
+        selectedSupplier: prev.selectedSupplier || globalDefaultSupplierId
+      }));
+    }
+  }, [globalDefaultSupplierId, estimate.id, estimate.defaultMaterialPricingSupplierId]);
 
   const handleSaveLaborRates = async (newRates: LaborRates) => {
     setLaborRates(newRates);
@@ -1160,6 +1207,7 @@ export default function App() {
                 setCurrentPath(path);
               }}
               isAdminVerifying={isAdminVerifying}
+              globalDefaultSupplierId={globalDefaultSupplierId}
             />
           )}
           {activeTab === 'scheduler' && (
@@ -1238,6 +1286,8 @@ export default function App() {
               user={user}
               estimate={estimate}
               setEstimate={setEstimate}
+              globalDefaultSupplierId={globalDefaultSupplierId}
+              setGlobalDefaultSupplierId={setGlobalDefaultSupplierId}
             />
           )}
           {activeTab === 'settings' && <Settings user={user} adminToken={adminToken} />}

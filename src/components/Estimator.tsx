@@ -34,6 +34,7 @@ interface EstimatorProps {
   setAdminToken: (token: string | null) => void;
   onNavigate: (path: string) => void;
   isAdminVerifying?: boolean;
+  globalDefaultSupplierId?: string;
 }
 
 export default function Estimator({ 
@@ -49,7 +50,8 @@ export default function Estimator({
   adminToken,
   setAdminToken,
   onNavigate,
-  isAdminVerifying = false
+  isAdminVerifying = false,
+  globalDefaultSupplierId = ''
 }: EstimatorProps) {
   // Gracefully clean up case where last name is misplaced in the email field
   const resolvedClientName = React.useMemo(() => {
@@ -644,7 +646,12 @@ export default function Estimator({
 
   const handleReset = () => {
     if (confirm('Are you sure you want to start a new estimate? This will clear all current data.')) {
-      setEstimate(DEFAULT_ESTIMATE);
+      setEstimate({
+        ...DEFAULT_ESTIMATE,
+        defaultMaterialPricingSupplierId: globalDefaultSupplierId || '',
+        pricingStrategy: globalDefaultSupplierId ? 'supplier' : 'best',
+        selectedSupplier: globalDefaultSupplierId || ''
+      });
       setStep(1);
       setIsFullView(false);
       localStorage.removeItem('fence_pro_estimator_step');
@@ -892,7 +899,12 @@ export default function Estimator({
 
       setTimeout(() => {
         setShowSuccess(false);
-        setEstimate(JSON.parse(JSON.stringify(DEFAULT_ESTIMATE)));
+        setEstimate({
+          ...DEFAULT_ESTIMATE,
+          defaultMaterialPricingSupplierId: globalDefaultSupplierId || '',
+          pricingStrategy: globalDefaultSupplierId ? 'supplier' : 'best',
+          selectedSupplier: globalDefaultSupplierId || ''
+        });
         setStep(1);
         localStorage.removeItem('fence_pro_estimator_step');
         // Switch to dossiers tab if available
