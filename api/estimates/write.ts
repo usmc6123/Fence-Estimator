@@ -564,8 +564,84 @@ async function saveLocalWebhookLog(firestoreDb: any, estimateId: string, logEntr
   }
 }
 
+function parseLocalDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1; // 0-indexed
+  const day = parseInt(parts[2], 10);
+  return new Date(year, month, day, 12, 0, 0); // Use noon to avoid DST or timezone shifts
+}
+
+function formatInstallDates(dates: Date[]): string {
+  if (dates.length === 0) return '';
+  
+  // Sort dates chronologically
+  dates.sort((a, b) => a.getTime() - b.getTime());
+
+  // Month names
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  const formattedDates = dates.map(d => ({
+    day: d.getDate(),
+    month: months[d.getMonth()],
+    year: d.getFullYear(),
+    monthIndex: d.getMonth(),
+    dateObj: d
+  }));
+
+  const first = formattedDates[0];
+  const allSameMonth = formattedDates.every(d => d.monthIndex === first.monthIndex);
+  const allSameYear = formattedDates.every(d => d.year === first.year);
+
+  // Check if dates are consecutive
+  let consecutive = true;
+  for (let i = 1; i < dates.length; i++) {
+    const diffTime = dates[i].getTime() - dates[i-1].getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays !== 1) {
+      consecutive = false;
+      break;
+    }
+  }
+
+  if (dates.length === 1) {
+    return `${first.month} ${first.day}, ${first.year}`;
+  }
+
+  if (allSameYear && allSameMonth && consecutive) {
+    const last = formattedDates[formattedDates.length - 1];
+    return `${first.month} ${first.day}-${last.day}, ${first.year}`;
+  }
+
+  if (consecutive) {
+    const last = formattedDates[formattedDates.length - 1];
+    if (allSameYear) {
+      return `${first.month} ${first.day} - ${last.month} ${last.day}, ${first.year}`;
+    } else {
+      return `${first.month} ${first.day}, ${first.year} - ${last.month} ${last.day}, ${last.year}`;
+    }
+  }
+
+  // Non-consecutive: e.g. July 15, July 17 & July 18, 2026
+  const dateStrings = formattedDates.map((fd) => {
+    if (allSameYear) {
+      return `${fd.month} ${fd.day}`;
+    } else {
+      return `${fd.month} ${fd.day}, ${fd.year}`;
+    }
+  });
+
+  if (dateStrings.length === 2) {
+    return `${dateStrings[0]} & ${dateStrings[1]}${allSameYear ? `, ${first.year}` : ''}`;
+  }
+
+  const lastStr = dateStrings.pop();
+  return `${dateStrings.join(', ')} & ${lastStr}${allSameYear ? `, ${first.year}` : ''}`;
+}
+
 async function sendGhlWorkflowWebhook(
-  eventType: 'instant_estimate_submitted' | 'customer_estimator_submitted' | 'manual_estimate_sent' | 'estimate_accepted' | 'estimate_completed' | 'estimate_declined',
+  eventType: 'instant_estimate_submitted' | 'customer_estimator_submitted' | 'manual_estimate_sent' | 'estimate_accepted' | 'estimate_completed' | 'estimate_declined' | 'install_scheduled',
   payloadData: any,
   companySettings: any,
   firestoreDb?: any,
@@ -617,6 +693,8 @@ async function sendGhlWorkflowWebhook(
       webhookUrl = settings.ghlWebhookEstimateCompleted || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     } else if (eventType === 'estimate_declined') {
       webhookUrl = settings.ghlWebhookEstimateDeclined || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
+    } else if (eventType === 'install_scheduled') {
+      webhookUrl = settings.ghlWebhookInstallScheduled || settings.ghlWebhookUrl || settings.gohighlevelWebhookUrl;
     }
 
     if (!webhookUrl) {
@@ -728,6 +806,66 @@ async function sendGhlWorkflowWebhook(
         declineReason: String(payloadData.declineReason || 'Not specified'),
         declinedAt: String(payloadData.declinedAt || new Date().toISOString()),
         estimateLink: String(payloadData.estimateLink || '')
+      };
+    } else if (eventType === 'install_scheduled') {
+      const getDatesList = (): Date[] => {
+        const list: Date[] = [];
+        if (payloadData.estimate && Array.isArray(payloadData.estimate.scheduledDates)) {
+          payloadData.estimate.scheduledDates.forEach((d: string) => {
+            try { list.push(parseLocalDate(d)); } catch (e) {}
+          });
+        } else {
+          const sDate = payloadData.startDate || payloadData.scheduledStartDate || (payloadData.estimate ? (payloadData.estimate.scheduledStartDate || payloadData.estimate.jobStartDate) : '') || payloadData.scheduleDate;
+          const sDur = payloadData.duration || payloadData.scheduledDuration || (payloadData.estimate ? (payloadData.estimate.scheduledDuration || payloadData.estimate.jobDuration) : '') || 1;
+          if (sDate) {
+            const durNum = parseInt(String(sDur)) || 1;
+            const baseDate = parseLocalDate(sDate);
+            for (let d = 0; d < durNum; d++) {
+              const nextD = new Date(baseDate);
+              nextD.setDate(baseDate.getDate() + d);
+              list.push(nextD);
+            }
+          }
+        }
+        return list;
+      };
+
+      const calcDates = getDatesList();
+      const installDatesStr = formatInstallDates(calcDates);
+      const arrivalWindowStr = '7:00 AM - 10:00 AM';
+      const crewNameStr = payloadData.crewName || payloadData.assignedCrew || (payloadData.estimate ? (payloadData.estimate.scheduledByCrewName || payloadData.estimate.assignedCrew || payloadData.estimate.crewName) : '') || 'TBD';
+      
+      let projectDurationStr = '';
+      const durVal = payloadData.duration || payloadData.scheduledDuration || (payloadData.estimate ? (payloadData.estimate.scheduledDuration || payloadData.estimate.jobDuration) : '');
+      const durParsed = parseInt(String(durVal));
+      if (!isNaN(durParsed) && durParsed > 0) {
+        projectDurationStr = durParsed === 1 ? '1 day' : `${durParsed} days`;
+      } else if (calcDates.length > 0) {
+        projectDurationStr = calcDates.length === 1 ? '1 day' : `${calcDates.length} days`;
+      } else {
+        projectDurationStr = 'TBD';
+      }
+
+      const installStartDateStr = (payloadData.startDate || payloadData.scheduledStartDate || (payloadData.estimate ? (payloadData.estimate.scheduledStartDate || payloadData.estimate.jobStartDate) : '') || payloadData.scheduleDate || (calcDates.length > 0 ? calcDates[0].toISOString().split('T')[0] : ''));
+      const installEndDateStr = (calcDates.length > 0 ? calcDates[calcDates.length - 1].toISOString().split('T')[0] : '') || installStartDateStr;
+
+      finalPayload = {
+        ...finalPayload,
+        estimateId: estimateId || payloadData.estimateId || (payloadData.estimate ? payloadData.estimate.id : '') || '',
+        estimateNumber: payloadData.estimateNumber || (payloadData.estimate ? payloadData.estimate.estimateNumber : '') || '',
+        customerName: payloadData.customerName || (payloadData.estimate ? payloadData.estimate.customerName : '') || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
+        email: payloadData.email || (payloadData.estimate ? (payloadData.estimate.customerEmail || payloadData.estimate.email) : '') || '',
+        phone: formatPhoneForGHL(payloadData.phone || (payloadData.estimate ? (payloadData.estimate.customerPhone || payloadData.estimate.phone) : '') || ''),
+        address: payloadData.address || (payloadData.estimate ? (payloadData.estimate.customerAddress || payloadData.estimate.address) : '') || '',
+        fenceType: payloadData.fenceType || (payloadData.estimate ? (payloadData.estimate.fenceMaterial || payloadData.estimate.woodType || payloadData.estimate.fenceType) : '') || '',
+        jobStatus: 'Install Scheduled',
+        installDates: installDatesStr,
+        arrivalWindow: arrivalWindowStr,
+        crewName: crewNameStr,
+        projectDuration: projectDurationStr,
+        installStartDate: installStartDateStr,
+        installEndDate: installEndDateStr,
+        scheduledAt: payloadData.scheduledAt || new Date().toISOString()
       };
     }
 
@@ -1173,7 +1311,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'material_issue_reported') eventTag = 'LSFW - Material Issue Reported';
     else if (eventType === 'start_approved_with_material_issue') eventTag = 'LSFW - Start Approved With Material Issue';
     else if (eventType === 'job_start_scheduled') eventTag = 'LSFW - Job Start Scheduled';
-    else if (eventType === 'job_schedule_updated') eventTag = 'LSFW - Install Schedule Updated';
+    else if (eventType === 'job_schedule_updated' || eventType === 'install_scheduled') eventTag = 'LSFW - Install Schedule Updated';
 
     if (eventTag) {
       tagsAttempted.push(eventTag);
@@ -1199,6 +1337,7 @@ async function syncCustomerToGhl({
     else if (eventType === 'material_issue_reported') currentJobStatus = 'Material Issue Reported';
     else if (eventType === 'start_approved_with_material_issue') currentJobStatus = 'Start Approved with Issue';
     else if (eventType === 'job_start_scheduled') currentJobStatus = 'Start Date Scheduled';
+    else if (eventType === 'job_schedule_updated' || eventType === 'install_scheduled') currentJobStatus = 'Install Scheduled';
 
     // Form Custom Fields array
     const customFieldsPayload: { id: string; value: any }[] = [];
@@ -1249,6 +1388,55 @@ async function syncCustomerToGhl({
         addCf('scheduleLastChangedBy', estimate.scheduleLastChangedBy || '');
         addCf('scheduleChangeReason', estimate.scheduleChangeReason || '');
         addCf('scheduleChangeNotes', estimate.scheduleChangeNotes || '');
+
+        // Calculate and format GHL install schedule details
+        const getDatesList = (): Date[] => {
+          const list: Date[] = [];
+          if (estimate && Array.isArray(estimate.scheduledDates)) {
+            estimate.scheduledDates.forEach((d: string) => {
+              try { list.push(parseLocalDate(d)); } catch (e) {}
+            });
+          } else {
+            const sDate = estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate;
+            const sDur = estimate.scheduledDuration || estimate.jobDuration || 1;
+            if (sDate) {
+              const durNum = parseInt(String(sDur)) || 1;
+              const baseDate = parseLocalDate(sDate);
+              for (let d = 0; d < durNum; d++) {
+                const nextD = new Date(baseDate);
+                nextD.setDate(baseDate.getDate() + d);
+                list.push(nextD);
+              }
+            }
+          }
+          return list;
+        };
+
+        const calcDates = getDatesList();
+        const installDatesStr = formatInstallDates(calcDates);
+        const arrivalWindowStr = '7:00 AM - 10:00 AM';
+        const crewNameStr = estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || 'TBD';
+        
+        let projectDurationStr = '';
+        const durVal = estimate.scheduledDuration || estimate.jobDuration;
+        const durParsed = parseInt(String(durVal));
+        if (!isNaN(durParsed) && durParsed > 0) {
+          projectDurationStr = durParsed === 1 ? '1 day' : `${durParsed} days`;
+        } else if (calcDates.length > 0) {
+          projectDurationStr = calcDates.length === 1 ? '1 day' : `${calcDates.length} days`;
+        } else {
+          projectDurationStr = 'TBD';
+        }
+
+        const installStartDateStr = (estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || (calcDates.length > 0 ? calcDates[0].toISOString().split('T')[0] : ''));
+        const installEndDateStr = (calcDates.length > 0 ? calcDates[calcDates.length - 1].toISOString().split('T')[0] : '') || installStartDateStr;
+
+        addCf('installDates', installDatesStr);
+        addCf('arrivalWindow', arrivalWindowStr);
+        addCf('crewName', crewNameStr);
+        addCf('projectDuration', projectDurationStr);
+        addCf('installStartDate', installStartDateStr);
+        addCf('installEndDate', installEndDateStr);
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -1310,6 +1498,29 @@ async function syncCustomerToGhl({
         updatedContactId = ghlContactId;
         if (eventTag) {
           tagsAdded.push(eventTag);
+        }
+
+        // Trigger outbound webhook for install_scheduled or job_schedule_updated
+        if (eventType === 'install_scheduled' || eventType === 'job_schedule_updated') {
+          try {
+            console.log(`[GHL API SYNC] Successful contact update. Sending outbound webhook for eventType: install_scheduled.`);
+            await sendGhlWorkflowWebhook(
+              'install_scheduled',
+              {
+                estimate,
+                customer,
+                startDate: estimate?.scheduledStartDate || estimate?.jobStartDate || scheduleDate,
+                duration: estimate?.scheduledDuration || estimate?.jobDuration || 1,
+                crewName: estimate?.scheduledByCrewName || estimate?.assignedCrew || estimate?.crewName,
+                scheduledAt: new Date().toISOString()
+              },
+              settings,
+              db,
+              String(estimate?.id || '')
+            );
+          } catch (err) {
+            console.error('[GHL API SYNC] Failed triggering outbound webhook for install_scheduled:', err);
+          }
         }
       } else {
         console.warn(`[GHL API SYNC] Contact update response: HTTP ${updateRes.status}: ${resText}`);

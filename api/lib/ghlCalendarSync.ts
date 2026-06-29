@@ -779,6 +779,25 @@ Admin Estimate: ${adminEstimateLink}`;
     });
 
     if (overallSuccessFinal) {
+      if (typeof syncCustomerToGhlFn === 'function') {
+        try {
+          console.log(`[GHL SYNC TRACE - ${traceId}] Successful calendar sync. Triggering contact sync and webhook with eventType: install_scheduled.`);
+          await syncCustomerToGhlFn({
+            eventType: 'install_scheduled',
+            estimate: { 
+              ...estimateData, 
+              id: estimateId,
+              scheduledStartDate: startDate,
+              scheduledDuration: duration,
+              scheduledDates: syncDaysResults.map(d => d.date)
+            },
+            status: 'Install Scheduled',
+            scheduleDate: startDate
+          });
+        } catch (syncErr) {
+          console.error(`[GHL SYNC TRACE - ${traceId}] Failed calling syncCustomerToGhlFn for install_scheduled:`, syncErr);
+        }
+      }
       return { success: true, ghlCalendarEventId: finalIdsStr, ghlCalendarEventIds: newIds, ghlContactId, ghlSyncDebug };
     } else {
       ghlSyncDebug.status = 'failed';

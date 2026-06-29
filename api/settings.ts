@@ -665,12 +665,24 @@ export default async function handler(req: any, res: any) {
           completedAt: '',
           minimumInstallDate: '',
           customerName: '',
-          address: ''
+          address: '',
+          installDates: '',
+          arrivalWindow: '',
+          crewName: '',
+          projectDuration: '',
+          installStartDate: '',
+          installEndDate: ''
         };
       } else {
         if (data.ghlCustomFields.minimumInstallDate === undefined) data.ghlCustomFields.minimumInstallDate = '';
         if (data.ghlCustomFields.customerName === undefined) data.ghlCustomFields.customerName = '';
         if (data.ghlCustomFields.address === undefined) data.ghlCustomFields.address = '';
+        if (data.ghlCustomFields.installDates === undefined) data.ghlCustomFields.installDates = '';
+        if (data.ghlCustomFields.arrivalWindow === undefined) data.ghlCustomFields.arrivalWindow = '';
+        if (data.ghlCustomFields.crewName === undefined) data.ghlCustomFields.crewName = '';
+        if (data.ghlCustomFields.projectDuration === undefined) data.ghlCustomFields.projectDuration = '';
+        if (data.ghlCustomFields.installStartDate === undefined) data.ghlCustomFields.installStartDate = '';
+        if (data.ghlCustomFields.installEndDate === undefined) data.ghlCustomFields.installEndDate = '';
       }
       
       // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval

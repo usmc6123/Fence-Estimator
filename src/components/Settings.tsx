@@ -854,7 +854,16 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       { key: 'acceptedAt', label: 'Contract Accepted Date', dataType: 'DATE' },
       { key: 'declinedAt', label: 'Contract Declined Date', dataType: 'DATE' },
       { key: 'scheduledStartDate', label: 'Project Scheduled Start Date', dataType: 'DATE' },
-      { key: 'completedAt', label: 'Project Completed Date', dataType: 'DATE' }
+      { key: 'completedAt', label: 'Project Completed Date', dataType: 'DATE' },
+      { key: 'minimumInstallDate', label: 'Minimum Install Lead Date', dataType: 'DATE' },
+      { key: 'customerName', label: 'Customer Name (Custom Field)', dataType: 'TEXT' },
+      { key: 'address', label: 'Customer Address (Custom Field)', dataType: 'TEXT' },
+      { key: 'installDates', label: 'Install Dates', dataType: 'TEXT' },
+      { key: 'arrivalWindow', label: 'Arrival Window', dataType: 'TEXT' },
+      { key: 'crewName', label: 'Crew Name', dataType: 'TEXT' },
+      { key: 'projectDuration', label: 'Project Duration', dataType: 'TEXT' },
+      { key: 'installStartDate', label: 'Install Start Date', dataType: 'DATE' },
+      { key: 'installEndDate', label: 'Install End Date', dataType: 'DATE' }
     ];
 
     const missing: any[] = [];
@@ -2291,7 +2300,13 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         { key: 'completedAt', label: 'Project Completed Date' },
                         { key: 'minimumInstallDate', label: 'Minimum Install Lead Date' },
                         { key: 'customerName', label: 'Customer Name (Custom Field)' },
-                        { key: 'address', label: 'Customer Address (Custom Field)' }
+                        { key: 'address', label: 'Customer Address (Custom Field)' },
+                        { key: 'installDates', label: 'Install Dates' },
+                        { key: 'arrivalWindow', label: 'Arrival Window' },
+                        { key: 'crewName', label: 'Crew Name' },
+                        { key: 'projectDuration', label: 'Project Duration' },
+                        { key: 'installStartDate', label: 'Install Start Date' },
+                        { key: 'installEndDate', label: 'Install End Date' }
                       ].map((mapping) => {
                         const isMissing = missingCustomFieldsList.some((item) => item.key === mapping.key);
                         
