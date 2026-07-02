@@ -1290,6 +1290,9 @@ async function syncCustomerToGhl({
     // 5. Update custom fields and tag contact
     // Determine the Tag of the event
     let eventTag = '';
+    const isSchedulingEvent = (eventType === 'job_schedule_updated' || eventType === 'install_scheduled');
+    const isCancellationEvent = (eventType === 'install_unscheduled' || eventType === 'install_cancelled');
+
     if (eventType === 'customer_created') eventTag = 'customer-created';
     else if (eventType === 'customer_estimator_submitted') eventTag = 'customer-estimator-submitted';
     else if (eventType === 'estimate_scheduled') eventTag = 'estimate-scheduled';
@@ -1311,7 +1314,8 @@ async function syncCustomerToGhl({
     else if (eventType === 'material_issue_reported') eventTag = 'LSFW - Material Issue Reported';
     else if (eventType === 'start_approved_with_material_issue') eventTag = 'LSFW - Start Approved With Material Issue';
     else if (eventType === 'job_start_scheduled') eventTag = 'LSFW - Job Start Scheduled';
-    else if (eventType === 'job_schedule_updated' || eventType === 'install_scheduled') eventTag = 'LSFW - Install Schedule Updated';
+    else if (isSchedulingEvent) eventTag = 'lsfw - install schedule updated';
+    else if (isCancellationEvent) eventTag = 'lsfw- install date cancelled';
 
     if (eventTag) {
       tagsAttempted.push(eventTag);
@@ -1337,17 +1341,18 @@ async function syncCustomerToGhl({
     else if (eventType === 'material_issue_reported') currentJobStatus = 'Material Issue Reported';
     else if (eventType === 'start_approved_with_material_issue') currentJobStatus = 'Start Approved with Issue';
     else if (eventType === 'job_start_scheduled') currentJobStatus = 'Start Date Scheduled';
-    else if (eventType === 'job_schedule_updated' || eventType === 'install_scheduled') currentJobStatus = 'Install Scheduled';
+    else if (isSchedulingEvent) currentJobStatus = 'Install Scheduled';
+    else if (isCancellationEvent) currentJobStatus = 'Accepted';
 
     // Form Custom Fields array
     const customFieldsPayload: { id: string; value: any }[] = [];
     const gcf = settings.ghlCustomFields;
     
     if (gcf) {
-      const addCf = (key: string, val: any) => {
+      const addCf = (key: string, val: any, allowClear = false) => {
         const fieldId = gcf[key];
-        if (fieldId && val !== undefined && val !== null && val !== '') {
-          customFieldsPayload.push({ id: fieldId, value: val });
+        if (fieldId && (val !== undefined && val !== null && (val !== '' || allowClear))) {
+          customFieldsPayload.push({ id: fieldId, value: val === null ? '' : val });
         }
       };
 
@@ -1377,66 +1382,80 @@ async function syncCustomerToGhl({
         addCf('materialIssueReported', estimate.materialIssueReported || '');
         addCf('materialIssueSummary', estimate.materialIssueSummary || '');
 
-        // Add new scheduling details
-        addCf('jobStartDate', estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || '');
-        addCf('jobScheduledDuration', estimate.scheduledDuration || estimate.jobDuration || '');
-        addCf('installDays', estimate.scheduledDuration || estimate.jobDuration || '');
-        addCf('jobDuration', estimate.scheduledDuration || estimate.jobDuration || '');
-        addCf('crewName', estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || '');
-        addCf('jobPortalScheduled', estimate.jobPortalScheduled === true || estimate.jobPortalScheduled === 'true' || false);
-        addCf('scheduleLastChangedAt', estimate.scheduleLastChangedAt || '');
-        addCf('scheduleLastChangedBy', estimate.scheduleLastChangedBy || '');
-        addCf('scheduleChangeReason', estimate.scheduleChangeReason || '');
-        addCf('scheduleChangeNotes', estimate.scheduleChangeNotes || '');
+        if (isCancellationEvent) {
+          addCf('installDates', '', true);
+          addCf('arrivalWindow', '', true);
+          addCf('crewName', '', true);
+          addCf('projectDuration', '', true);
+          addCf('installStartDate', '', true);
+          addCf('installEndDate', '', true);
+          addCf('jobStartDate', '', true);
+          addCf('jobScheduledDuration', '', true);
+          addCf('installDays', '', true);
+          addCf('jobDuration', '', true);
+          addCf('jobPortalScheduled', false, true);
+        } else {
+          // Add new scheduling details
+          addCf('jobStartDate', estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || '');
+          addCf('jobScheduledDuration', estimate.scheduledDuration || estimate.jobDuration || '');
+          addCf('installDays', estimate.scheduledDuration || estimate.jobDuration || '');
+          addCf('jobDuration', estimate.scheduledDuration || estimate.jobDuration || '');
+          addCf('crewName', estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || '');
+          addCf('jobPortalScheduled', estimate.jobPortalScheduled === true || estimate.jobPortalScheduled === 'true' || false);
+          addCf('scheduleLastChangedAt', estimate.scheduleLastChangedAt || '');
+          addCf('scheduleLastChangedBy', estimate.scheduleLastChangedBy || '');
+          addCf('scheduleChangeReason', estimate.scheduleChangeReason || '');
+          addCf('scheduleChangeNotes', estimate.scheduleChangeNotes || '');
 
-        // Calculate and format GHL install schedule details
-        const getDatesList = (): Date[] => {
-          const list: Date[] = [];
-          if (estimate && Array.isArray(estimate.scheduledDates)) {
-            estimate.scheduledDates.forEach((d: string) => {
-              try { list.push(parseLocalDate(d)); } catch (e) {}
-            });
-          } else {
-            const sDate = estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate;
-            const sDur = estimate.scheduledDuration || estimate.jobDuration || 1;
-            if (sDate) {
-              const durNum = parseInt(String(sDur)) || 1;
-              const baseDate = parseLocalDate(sDate);
-              for (let d = 0; d < durNum; d++) {
-                const nextD = new Date(baseDate);
-                nextD.setDate(baseDate.getDate() + d);
-                list.push(nextD);
+          // Calculate and format GHL install schedule details
+          const getDatesList = (): Date[] => {
+            const list: Date[] = [];
+            if (estimate && Array.isArray(estimate.scheduledDates)) {
+              estimate.scheduledDates.forEach((d: string) => {
+                try { list.push(parseLocalDate(d)); } catch (e) {}
+              });
+            } else {
+              const sDate = estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate;
+              const sDur = estimate.scheduledDuration || estimate.jobDuration || 1;
+              if (sDate) {
+                const durNum = parseInt(String(sDur)) || 1;
+                const baseDate = parseLocalDate(sDate);
+                for (let d = 0; d < durNum; d++) {
+                  const nextD = new Date(baseDate);
+                  nextD.setDate(baseDate.getDate() + d);
+                  list.push(nextD);
+                }
               }
             }
+            return list;
+          };
+
+          const calcDates = getDatesList();
+          const installDatesStr = formatInstallDates(calcDates);
+          const arrivalWindowStr = '7:00 AM - 10:00 AM';
+          const crewNameStr = estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || 'TBD';
+          
+          let projectDurationStr = '';
+          const durVal = estimate.scheduledDuration || estimate.jobDuration;
+          const durParsed = parseInt(String(durVal));
+          if (!isNaN(durParsed) && durParsed > 0) {
+            projectDurationStr = durParsed === 1 ? '1 day' : `${durParsed} days`;
+          } else if (calcDates.length > 0) {
+            projectDurationStr = calcDates.length === 1 ? '1 day' : `${calcDates.length} days`;
+          } else {
+            projectDurationStr = 'TBD';
           }
-          return list;
-        };
 
-        const calcDates = getDatesList();
-        const installDatesStr = formatInstallDates(calcDates);
-        const arrivalWindowStr = '7:00 AM - 10:00 AM';
-        const crewNameStr = estimate.scheduledByCrewName || estimate.assignedCrew || estimate.crewName || 'TBD';
-        
-        let projectDurationStr = '';
-        const durVal = estimate.scheduledDuration || estimate.jobDuration;
-        const durParsed = parseInt(String(durVal));
-        if (!isNaN(durParsed) && durParsed > 0) {
-          projectDurationStr = durParsed === 1 ? '1 day' : `${durParsed} days`;
-        } else if (calcDates.length > 0) {
-          projectDurationStr = calcDates.length === 1 ? '1 day' : `${calcDates.length} days`;
-        } else {
-          projectDurationStr = 'TBD';
+          const installStartDateStr = (estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || (calcDates.length > 0 ? calcDates[0].toISOString().split('T')[0] : ''));
+          const installEndDateStr = (calcDates.length > 0 ? calcDates[calcDates.length - 1].toISOString().split('T')[0] : '') || installStartDateStr;
+
+          addCf('installDates', installDatesStr);
+          addCf('arrivalWindow', arrivalWindowStr);
+          addCf('crewName', crewNameStr);
+          addCf('projectDuration', projectDurationStr);
+          addCf('installStartDate', installStartDateStr);
+          addCf('installEndDate', installEndDateStr);
         }
-
-        const installStartDateStr = (estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || (calcDates.length > 0 ? calcDates[0].toISOString().split('T')[0] : ''));
-        const installEndDateStr = (calcDates.length > 0 ? calcDates[calcDates.length - 1].toISOString().split('T')[0] : '') || installStartDateStr;
-
-        addCf('installDates', installDatesStr);
-        addCf('arrivalWindow', arrivalWindowStr);
-        addCf('crewName', crewNameStr);
-        addCf('projectDuration', projectDurationStr);
-        addCf('installStartDate', installStartDateStr);
-        addCf('installEndDate', installEndDateStr);
       }
 
       addCf('jobStatus', currentJobStatus);
@@ -1471,7 +1490,7 @@ async function syncCustomerToGhl({
       console.log(`[GHL API SYNC] Updating GHL Contact details: ${ghlContactId}`);
       tagSyncEndpoint = `https://services.leadconnectorhq.com/contacts/${ghlContactId}`;
       const payloadObj = {
-        tags: eventTag ? [eventTag] : undefined,
+        tags: (eventTag && !isSchedulingEvent && !isCancellationEvent) ? [eventTag] : undefined,
         customFields: customFieldsPayload.length > 0 ? customFieldsPayload : undefined
       };
       tagSyncRequestBody = JSON.stringify(payloadObj);
@@ -1496,8 +1515,80 @@ async function syncCustomerToGhl({
 
       if (updateRes.ok) {
         updatedContactId = ghlContactId;
-        if (eventTag) {
+        if (eventTag && !isSchedulingEvent && !isCancellationEvent) {
           tagsAdded.push(eventTag);
+        }
+        console.log(`[GHL API SYNC] Contact ID solved/updated: ${ghlContactId}`);
+        console.log(`[GHL API SYNC] Contact custom fields updated successfully. Custom fields:`, customFieldsPayload);
+
+        // Helper to remove a tag on the contact
+        const removeContactTag = async (contactId: string, tag: string) => {
+          try {
+            console.log(`[GHL API SYNC] Attempting to remove tag "${tag}" from contact: ${contactId}`);
+            const res = await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}/tags`, {
+              method: 'DELETE',
+              headers,
+              body: JSON.stringify({ tags: [tag] })
+            });
+            const status = res.status;
+            const text = await res.text();
+            console.log(`[GHL API SYNC] Remove tag "${tag}" HTTP Status: ${status}, Response: ${text}`);
+            if (res.ok) {
+              tagsRemoved.push(tag);
+              console.log(`[GHL API SYNC] Tag removed successfully: "${tag}"`);
+              return true;
+            } else {
+              console.warn(`[GHL API SYNC] Failed to remove tag "${tag}" (status ${status}): ${text}`);
+              return false;
+            }
+          } catch (err) {
+            console.error(`[GHL API SYNC] Error removing tag "${tag}":`, err);
+            return false;
+          }
+        };
+
+        // Helper to add a tag on the contact
+        const addContactTag = async (contactId: string, tag: string) => {
+          try {
+            console.log(`[GHL API SYNC] Attempting to add tag "${tag}" to contact: ${contactId}`);
+            const res = await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}/tags`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ tags: [tag] })
+            });
+            const status = res.status;
+            const text = await res.text();
+            console.log(`[GHL API SYNC] Add tag "${tag}" HTTP Status: ${status}, Response: ${text}`);
+            if (res.ok) {
+              tagsAdded.push(tag);
+              console.log(`[GHL API SYNC] Tag added successfully: "${tag}"`);
+              return true;
+            } else {
+              console.warn(`[GHL API SYNC] Failed to add tag "${tag}" (status ${status}): ${text}`);
+              return false;
+            }
+          } catch (err) {
+            console.error(`[GHL API SYNC] Error adding tag "${tag}":`, err);
+            return false;
+          }
+        };
+
+        // Order of operations for scheduled/rescheduled:
+        // First updated custom fields (already done via PUT call).
+        // Then remove "lsfw- install date cancelled".
+        // Then add "lsfw - install schedule updated".
+        if (isSchedulingEvent) {
+          await removeContactTag(ghlContactId, 'lsfw- install date cancelled');
+          await addContactTag(ghlContactId, 'lsfw - install schedule updated');
+        }
+
+        // Order of operations for unscheduled/cancelled:
+        // First updated custom fields (already done via PUT call).
+        // Then remove "lsfw - install schedule updated".
+        // Then add "lsfw- install date cancelled".
+        if (isCancellationEvent) {
+          await removeContactTag(ghlContactId, 'lsfw - install schedule updated');
+          await addContactTag(ghlContactId, 'lsfw- install date cancelled');
         }
 
         // Trigger outbound webhook for install_scheduled or job_schedule_updated
@@ -8060,12 +8151,26 @@ Lone Star Fence Works`;
           try {
             const { docRef, snap } = await getEstimateDocRef(estId);
             if (snap.exists) {
+              const estimateData = snap.data() || {};
               await docRef.update({
                 scheduledStartDate: null,
                 scheduledEndDate: null,
                 scheduledDuration: null,
                 jobStatus: 'Accepted'
               });
+
+              // Trigger unscheduled/cancelled GHL sync
+              try {
+                console.log(`[GHL SYNC] Triggering syncCustomerToGhl for unscheduled install of estimate: ${estId}`);
+                await syncCustomerToGhl({
+                  eventType: 'install_unscheduled',
+                  estimate: { id: estId, ...estimateData, scheduledStartDate: null, scheduledEndDate: null, scheduledDuration: null, jobStatus: 'Accepted' },
+                  status: 'Accepted',
+                  source: 'delete_schedule_event'
+                });
+              } catch (syncErr) {
+                console.error("[GHL API SYNC] GHL API sync failed for unscheduled install:", syncErr);
+              }
             }
           } catch(e) {}
         }
