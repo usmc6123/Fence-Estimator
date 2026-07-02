@@ -789,7 +789,9 @@ export default function Estimator({
       gateSummary: gateSummary,
       demoRemovalPrice: pricing.demoRemovalPrice || 0,
       addOnSitePrepPrice: pricing.addOnSitePrepPrice || 0,
-      discountAmount: pricing.discountAmount || 0
+      discountAmount: pricing.discountAmount || 0,
+      baseFenceTotal: pricing.baseFenceTotal || 0,
+      additionalContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0
     };
 
     if (wasDecisionMade || isNewDraft) {

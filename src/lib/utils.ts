@@ -107,13 +107,24 @@ export function assignEstimateNumbers<T extends { id: string; createdAt?: string
 export function getEstimateFinalPrice(estimate: any): number {
   if (!estimate) return 0;
   
-  let basePrice = 0;
   if (estimate.contractSnapshot) {
-    basePrice = Number(estimate.contractSnapshot.finalCustomerPrice || 0);
-    const customTotal = Number(estimate.contractSnapshot.customContractLineItemsTotal || 0);
-    return basePrice + customTotal;
+    const snap = estimate.contractSnapshot;
+    const finalPrice = Number(snap.finalCustomerPrice || 0);
+    if (snap.baseFenceTotal !== undefined && snap.baseFenceTotal !== null) {
+      // New system: finalCustomerPrice already includes custom contract line items
+      return finalPrice;
+    }
+    // Old system fallback
+    const customTotal = Number(snap.customContractLineItemsTotal || 0);
+    return finalPrice + customTotal;
   }
   
+  if (estimate.baseFenceTotal !== undefined && estimate.baseFenceTotal !== null) {
+    // New system: finalCustomerPrice already includes custom contract line items
+    return Number(estimate.finalCustomerPrice || 0);
+  }
+  
+  let basePrice = 0;
   if (estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null) {
     basePrice = Number(estimate.finalCustomerPrice);
   } else if (estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null) {

@@ -226,12 +226,14 @@ export default function CustomerContract({
       manualGateTotals: gateTotals,
       manualDemoTotals: demoTotals,
       manualGrandTotal: manualGrandTotal,
-      manualGatePrices: manualGatePrices
+      manualGatePrices: manualGatePrices,
+      customContractLineItems: customLineItems,
+      customContractLineItemsTotal: customContractLineItemsTotal
     };
     const calculated = calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
     
     return calculated;
-  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView]);
+  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal]);
 
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
@@ -534,7 +536,9 @@ export default function CustomerContract({
         addOnSitePrepPrice: data.pricing.addOnSitePrepPrice,
         demoRemovalPrice: data.pricing.demoRemovalPrice,
         discountAmount: data.pricing.discountAmount,
-        pricePerFoot: data.pricing.pricePerFoot
+        pricePerFoot: data.pricing.pricePerFoot,
+        baseFenceTotal: baseFenceTotal,
+        additionalContractLineItemsTotal: customContractLineItemsTotal
       };
 
       const updates: any = {
@@ -1497,11 +1501,12 @@ Please structure the contract narrative with professional Markdown bold headers 
                         <input 
                           type="number"
                           step="0.01"
-                          value={baseFenceTotal.toFixed(2)}
+                          value={finalProjectTotal.toFixed(2)}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                            setManualGrandTotal(val);
-                            if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: val });
+                            const baseVal = val === null ? null : val - customContractLineItemsTotal;
+                            setManualGrandTotal(baseVal);
+                            if (onUpdateEstimate) onUpdateEstimate({ manualGrandTotal: baseVal });
                           }}
                           className={cn(
                             "text-7xl font-black tabular-nums tracking-tighter leading-none bg-transparent outline-none text-right w-full max-w-[400px] hover:bg-white/10 rounded px-2 transition-colors",
@@ -1511,11 +1516,6 @@ Please structure the contract narrative with professional Markdown bold headers 
                       </>
                     )}
                   </div>
-                  {customContractLineItemsTotal !== 0 && !isCustomerView && (
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-1">
-                      Final Customer Price (incl. Custom Items): {formatCurrency(finalProjectTotal)}
-                    </p>
-                  )}
                   {isGrandTotalOverridden && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(editedGrandTotal)}</p>
                   )}
@@ -1537,7 +1537,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                     </div>
                     <div className="flex justify-between text-white font-semibold">
                       <span>Admin Displayed Total:</span>
-                      <span>{formatCurrency(manualGrandTotal ?? editedGrandTotal)}</span>
+                      <span>{formatCurrency(finalProjectTotal)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Firestore finalCustomerPrice:</span>
@@ -1586,12 +1586,16 @@ Please structure the contract narrative with professional Markdown bold headers 
                       <span className="text-slate-400">Discount Amount:</span>
                       <span className="text-white">-{formatCurrency(data.pricing.discountAmount)}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Additional Contract Line Items:</span>
+                      <span className="text-white">+{formatCurrency(customContractLineItemsTotal)}</span>
+                    </div>
                     <div className="flex justify-between font-bold border-t border-slate-700/60 pt-2 text-amber-300">
                       <span>Calculated Grand Total:</span>
                       <span>{formatCurrency(data.pricing.calculatedTotal)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Manual Grand Total:</span>
+                      <span className="text-slate-400">Manual Grand Total Override (Base Fence):</span>
                       <span className="text-white">{data.pricing.manualGrandTotal !== null ? formatCurrency(data.pricing.manualGrandTotal) : "None (Using Calculated)"}</span>
                     </div>
                     <div className="flex justify-between font-extrabold border-t-2 border-slate-700/80 pt-2 text-green-400">

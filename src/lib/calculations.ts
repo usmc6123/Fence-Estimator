@@ -100,6 +100,8 @@ export interface DetailedTakeOff {
     demoRemovalPrice: number;
     discountAmount: number;
     manualGrandTotal: number | null;
+    baseFenceTotal?: number;
+    additionalContractLineItemsTotal?: number;
     calculatedTotal: number;
     finalCustomerPrice: number;
     estimatedPrice: number;
@@ -2317,23 +2319,35 @@ export function calculateDetailedTakeOff(
   // Discount
   const discountAmount = estimate.discountAmount || 0;
 
-  // Calculated overall grand total
-  let calculatedTotal = totalSectionsSum;
+  // Calculated overall base fence total (excluding custom contract line items)
+  let baseFenceCalculatedTotal = totalSectionsSum;
   if (addOnSitePrepPrice > 0) {
-    calculatedTotal += addOnSitePrepPrice;
+    baseFenceCalculatedTotal += addOnSitePrepPrice;
   }
   if (discountAmount > 0) {
-    calculatedTotal -= discountAmount;
+    baseFenceCalculatedTotal -= discountAmount;
   }
 
-  // Override or Calculated
+  // Override or Calculated for base fence
   const manualGrandTotal = estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? estimate.manualGrandTotal : null;
-  const finalCustomerPrice = manualGrandTotal !== null ? manualGrandTotal : calculatedTotal;
+  const baseFenceTotal = manualGrandTotal !== null ? manualGrandTotal : baseFenceCalculatedTotal;
+
+  // Custom contract line items total (additional contract line items)
+  const customContractLineItems = estimate.customContractLineItems || [];
+  const additionalContractLineItemsTotal = customContractLineItems.length > 0
+    ? customContractLineItems.filter(item => item.showOnContract).reduce((sum, item) => sum + item.amount, 0)
+    : (estimate.customContractLineItemsTotal || 0);
+
+  // finalCustomerPrice should equal: baseFenceTotal + additionalContractLineItemsTotal
+  const finalCustomerPrice = baseFenceTotal + additionalContractLineItemsTotal;
+
+  // calculatedTotal includes base calculated total and additional contract line items
+  const calculatedTotal = baseFenceCalculatedTotal + additionalContractLineItemsTotal;
 
   // Subtotal before discount is totalSectionsSum + addOnSitePrepPrice
   const subtotalBeforeDiscount = totalSectionsSum + addOnSitePrepPrice;
 
-  // Global price per foot
+  // Global price per foot (remains unchanged, purely on base fence calculation)
   const totalNetLF = runsPricing.reduce((sum, r) => sum + r.netLF, 0);
   let totalFenceChargeSumForPricePerFoot = 0;
   runsPricing.forEach((r, idx) => {
@@ -2358,6 +2372,8 @@ export function calculateDetailedTakeOff(
     demoRemovalPrice,
     discountAmount,
     manualGrandTotal,
+    baseFenceTotal,
+    additionalContractLineItemsTotal,
     calculatedTotal,
     finalCustomerPrice,
     estimatedPrice: finalCustomerPrice,

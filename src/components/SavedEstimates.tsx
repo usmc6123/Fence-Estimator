@@ -326,7 +326,11 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         totalInvestment: finalPrice,
         contractScope: mergedEstimate.contractScope || mergedEstimate.localAiScope || 'Detailed Scope of Work is being finalized.',
         sentAt: new Date().toISOString(),
-        sentBy: user?.email || 'Admin'
+        sentBy: user?.email || 'Admin',
+        baseFenceTotal: pricing.baseFenceTotal || 0,
+        additionalContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0,
+        customContractLineItems: mergedEstimate.customContractLineItems || [],
+        customContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0
       };
 
       const pricingUpdates = {
@@ -343,7 +347,9 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         discountAmount: pricing.discountAmount || 0,
         calculatedGrandTotal: pricing.calculatedTotal || 0,
         pricingUpdatedAt: new Date().toISOString(),
-        contractSnapshot: contractSnapshot
+        contractSnapshot: contractSnapshot,
+        baseFenceTotal: pricing.baseFenceTotal || 0,
+        additionalContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0
       };
 
       const token = localStorage.getItem('company_admin_token');
