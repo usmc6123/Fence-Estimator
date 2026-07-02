@@ -189,7 +189,7 @@ export function useCustomerEstimator(
     const markupPercentage = activeEstimateConfig.markupPercentage !== undefined ? activeEstimateConfig.markupPercentage : 20;
     const taxPercentage = activeEstimateConfig.taxPercentage !== undefined ? activeEstimateConfig.taxPercentage : 8.25;
     const concreteType = activeEstimateConfig.concreteType || 'Maximizer';
-    const footingType = activeEstimateConfig.footingType || 'Cuboid';
+    const footingType = activeEstimateConfig.footingType || 'Round';
     const postWidth = activeEstimateConfig.postWidth !== undefined ? activeEstimateConfig.postWidth : 6;
     const postThickness = activeEstimateConfig.postThickness !== undefined ? activeEstimateConfig.postThickness : 6;
 

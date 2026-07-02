@@ -677,8 +677,16 @@ CRITICAL INSTRUCTIONS (FORBIDDEN VOCABULARY & RULES):
 
 LONE STAR FENCE WORKS COMPANY SPECIFICATIONS & DEFAULTS:
 Use these specific standard specifications when writing:
-- STEEL POSTS: "Schedule 20 galvanized steel posts" installed approximately 36" deep, wet-set in concrete. Post hole diameter minimum 8-10 inches, utilizing wet-mixed concrete. Post spacing set approximately 8 feet on center.
-- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" installed approximately 36" deep, wet-set in concrete.
+- POST FOOTINGS (ROUND CONCRETE FOOTINGS):
+  - Rule 1: For any Wood fence at 8' (foot) tall, use: 36" round concrete footings.
+  - Rule 2: For any Wood fence at 6' (foot) tall or lower, use: 24" round concrete footings.
+  - Rule 3: For ALL Wrought Iron fences, use: 24" round concrete footings.
+  - Rule 4: For ALL Chain Link fences, use: 24" round concrete footings.
+  - Rule 5: For ALL Pipe/No-Climb fences, use: 24" round concrete footings.
+  - Rule 6: For ALL other fence types (Vinyl, etc.), use: 24" round concrete footings.
+  - Methodology: All posts are wet-set in concrete. Post hole diameter minimum 8-10 inches, utilizing wet-mixed concrete.
+- STEEL POSTS: "Schedule 20 galvanized steel posts" installed approximately 24" deep (or 36" for 8' tall wood sections), wet-set in concrete. Post spacing set approximately 8 feet on center.
+- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" installed approximately 24" deep (or 36" for 8' tall wood sections), wet-set in concrete.
 - RAILS:
   - For 6' (foot) tall fences: 3 nominal 2x4 rails.
   - For 8' (foot) tall fences: 4 nominal 2x4 rails.
@@ -689,7 +697,6 @@ Use these specific standard specifications when writing:
   - Rail Configuration: 2 rail for 4'-5' height, or 3 rail for 6' height.
   - Finish: Durable satin-black powder-coated finish.
   - Gate hardware: Heavy-duty gravity latches, self-closing premium spring hinges.
-  - Post footing: Dug minimum 36 inches deep, wet-set in concrete.
   - Puppy panels: Specify if configured (18" tall pickets with maximum 1.5" bottom gap).
 - CHAIN LINK FENCES:
   - Fabric Gauge: heavy duty 9-gauge fabric or residential 11.5-gauge fabric based on selection.
@@ -704,7 +711,6 @@ Use these specific standard specifications when writing:
   - Rails: 2, 3, or 4 rails.
   - Mesh/Wire: 2"x4" no-climb woven wire fabric or welded utility wire.
   - Gate type: Premium welded pipe matching frames.
-  - Footer depth: 36 inches deep.
 - STAINING & RESTORATION:
   - Product: Wood Defender Commercial Grade Stain and Sealer (Semi-Transparent or Transparent).
   - Coating application: 1 heavy flood coat saturating wood to refusal.
@@ -722,7 +728,7 @@ You must verify:
 ✓ Stain selection
 ✓ Post type
 ✓ Demolition scope
-Compare what was calculated / specified in the sections against the company standards. If any required value is missing, write a professional warning/assumption alert block at the top of the Scope of Work titled "I. Project Variables & Assumptions" explaining that you used the company default values (e.g. 36" depth, Schedule 20, 3-rail configuration, etc.) rather than generic placeholder words. If everything is fully specified, note "✓ All estimated parameters verified & locked".
+Compare what was calculated / specified in the sections against the company standards. If any required value is missing, write a professional warning/assumption alert block at the top of the Scope of Work titled "I. Project Variables & Assumptions" explaining that you used the company default values (e.g. 24" depth for 6' fences, 36" depth for 8' wood fences, Schedule 20, 3-rail configuration, etc.) rather than generic placeholder words. If everything is fully specified, note "✓ All estimated parameters verified & locked".
 
 ESTIMATE DATA AND FACTS SHEET:
 --- ESTIMATOR SOURCE OF TRUTH ---

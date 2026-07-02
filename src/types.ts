@@ -242,7 +242,7 @@ export interface Estimate {
   wastePercentage: number;
   includeStain: boolean;
   hasRotBoard?: boolean;
-  footingType: 'Cuboid' | 'Cylindrical';
+  footingType: 'Round' | 'Cylindrical';
   concreteType: 'Maximizer' | 'Quickset';
   postWidth: number;
   postThickness: number;

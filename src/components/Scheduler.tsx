@@ -442,7 +442,7 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
         gateStyleId: 'standard',
         wastePercentage: 10,
         includeStain: false,
-        footingType: 'Cylindrical',
+        footingType: 'Round',
         concreteType: 'Quickset',
         postWidth: 4,
         postThickness: 4,

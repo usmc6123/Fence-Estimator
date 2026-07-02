@@ -214,7 +214,7 @@ export function calculateCustomerEstimate(
     markupPercentage: activeEstimateConfig.markupPercentage !== undefined ? activeEstimateConfig.markupPercentage : 20,
     taxPercentage: activeEstimateConfig.taxPercentage !== undefined ? activeEstimateConfig.taxPercentage : 8.25,
     concreteType: activeEstimateConfig.concreteType || 'Maximizer',
-    footingType: activeEstimateConfig.footingType || 'Cuboid',
+    footingType: activeEstimateConfig.footingType || 'Round',
     wastePercentage: activeEstimateConfig.wastePercentage !== undefined ? activeEstimateConfig.wastePercentage : 0,
     postWidth: activeEstimateConfig.postWidth !== undefined ? activeEstimateConfig.postWidth : 6,
     postThickness: activeEstimateConfig.postThickness !== undefined ? activeEstimateConfig.postThickness : 6,

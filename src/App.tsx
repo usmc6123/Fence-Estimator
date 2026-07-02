@@ -764,7 +764,7 @@ export default function App() {
           wastePercentage: estimate.wastePercentage !== undefined ? estimate.wastePercentage : 0,
           taxPercentage: estimate.taxPercentage !== undefined ? estimate.taxPercentage : 8.25,
           concreteType: estimate.concreteType || 'Maximizer',
-          footingType: estimate.footingType || 'Cuboid',
+          footingType: estimate.footingType || 'Round',
           postWidth: estimate.postWidth !== undefined ? estimate.postWidth : 6,
           postThickness: estimate.postThickness !== undefined ? estimate.postThickness : 6,
           defaultMaterialPricingSupplierId: estimate.defaultMaterialPricingSupplierId || '',

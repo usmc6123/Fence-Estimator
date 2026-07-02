@@ -247,7 +247,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   hasCapAndTrim: false,
   gateCount: 1,
   gateStyleId: 'g-frame-4ft-wood',
-  footingType: 'Cuboid',
+  footingType: 'Round',
   concreteType: 'Maximizer',
   postWidth: 6,
   postThickness: 6,

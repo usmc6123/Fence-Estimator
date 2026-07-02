@@ -1162,7 +1162,7 @@ export default function EmbedCodeBuilder({
       topStyle: state.topStyle,
       wastePercentage: 0,
       includeStain: !!state.isPreStained,
-      footingType: 'Cuboid',
+      footingType: 'Round',
       concreteType: 'Maximizer',
       postWidth: 6,
       postThickness: 6,
