@@ -590,7 +590,7 @@ export default async function handler(req: any, res: any) {
             declinedAt: '',
             scheduledStartDate: '',
             completedAt: '',
-            installationReminderTime: ''
+            installationReminderDate: ''
           },
           ghlPrefillSources: ['customers', 'estimates', 'ghl'],
           ghlMinChars: 2,
@@ -673,7 +673,7 @@ export default async function handler(req: any, res: any) {
           projectDuration: '',
           installStartDate: '',
           installEndDate: '',
-          installationReminderTime: ''
+          installationReminderDate: ''
         };
       } else {
         if (data.ghlCustomFields.minimumInstallDate === undefined) data.ghlCustomFields.minimumInstallDate = '';
@@ -685,7 +685,7 @@ export default async function handler(req: any, res: any) {
         if (data.ghlCustomFields.projectDuration === undefined) data.ghlCustomFields.projectDuration = '';
         if (data.ghlCustomFields.installStartDate === undefined) data.ghlCustomFields.installStartDate = '';
         if (data.ghlCustomFields.installEndDate === undefined) data.ghlCustomFields.installEndDate = '';
-        if (data.ghlCustomFields.installationReminderTime === undefined) data.ghlCustomFields.installationReminderTime = '';
+        if (data.ghlCustomFields.installationReminderDate === undefined) data.ghlCustomFields.installationReminderDate = '';
       }
       
       // Mask sensitive fields like smtpPassword and ghlApiKey for secure retrieval
@@ -909,7 +909,7 @@ export default async function handler(req: any, res: any) {
             minimumInstallDate: '',
             customerName: '',
             address: '',
-            installationReminderTime: ''
+            installationReminderDate: ''
           },
           updatedAt: new Date().toISOString()
         };
@@ -1730,7 +1730,7 @@ export default async function handler(req: any, res: any) {
             declinedAt: '',
             scheduledStartDate: new Date().toISOString(),
             completedAt: '',
-            installationReminderTime: new Date().toISOString()
+            installationReminderDate: new Date().toISOString().split('T')[0]
           };
 
           Object.keys(finalCustomFields).forEach((key) => {

@@ -412,7 +412,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       'declinedAt': '',
       'scheduledStartDate': '',
       'completedAt': '',
-      'installationReminderTime': ''
+      'installationReminderDate': ''
     },
     enableGhlCalendarPrimaryScheduler: false,
     sendCrewEmailAfterGhlInstallBooking: true,
@@ -649,7 +649,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
             'minimumInstallDate': '',
             'customerName': '',
             'address': '',
-            'installationReminderTime': ''
+            'installationReminderDate': ''
           },
           enableGhlCalendarPrimaryScheduler: apiData.enableGhlCalendarPrimaryScheduler !== undefined ? apiData.enableGhlCalendarPrimaryScheduler : (firebaseData.enableGhlCalendarPrimaryScheduler !== undefined ? firebaseData.enableGhlCalendarPrimaryScheduler : false),
           sendCrewEmailAfterGhlInstallBooking: apiData.sendCrewEmailAfterGhlInstallBooking !== undefined ? apiData.sendCrewEmailAfterGhlInstallBooking : (firebaseData.sendCrewEmailAfterGhlInstallBooking !== undefined ? firebaseData.sendCrewEmailAfterGhlInstallBooking : true),
@@ -866,7 +866,7 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       { key: 'projectDuration', label: 'Project Duration', dataType: 'TEXT' },
       { key: 'installStartDate', label: 'Install Start Date', dataType: 'DATE' },
       { key: 'installEndDate', label: 'Install End Date', dataType: 'DATE' },
-      { key: 'installationReminderTime', label: 'Installation Reminder Time', dataType: 'DATE_TIME' }
+      { key: 'installationReminderDate', label: 'Installation Reminder Date', dataType: 'DATE' }
     ];
 
     const missing: any[] = [];

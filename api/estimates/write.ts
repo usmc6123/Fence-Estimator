@@ -717,17 +717,14 @@ function calculateInstallationReminderTime(startDateStr: string | null | undefin
     }
 
     const installStartLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    const reminderMs = installStartLocal.getTime() - (16 * 60 * 60 * 1000);
-    const reminderDate = new Date(reminderMs);
+    const reminderDate = new Date(installStartLocal);
+    reminderDate.setDate(reminderDate.getDate() - 1);
 
     const rYear = reminderDate.getFullYear();
     const rMonth = String(reminderDate.getMonth() + 1).padStart(2, '0');
     const rDay = String(reminderDate.getDate()).padStart(2, '0');
-    const rHours = String(reminderDate.getHours()).padStart(2, '0');
-    const rMinutes = String(reminderDate.getMinutes()).padStart(2, '0');
-    const rSeconds = String(reminderDate.getSeconds()).padStart(2, '0');
 
-    const calculatedReminderTime = `${rYear}-${rMonth}-${rDay}T${rHours}:${rMinutes}:${rSeconds}`;
+    const calculatedReminderTime = `${rYear}-${rMonth}-${rDay}`;
     
     // Install start datetime formatted
     const sYear = String(year);
@@ -974,7 +971,8 @@ async function sendGhlWorkflowWebhook(
 
       console.log(`[GHL WORKFLOW WEBHOOK] Calculated scheduling date-times:`);
       console.log(`- installStartDateTime: ${installStartDateTime}`);
-      console.log(`- calculated installationReminderTime: ${reminderIsoStr}`);
+      console.log(`- installStartDate: ${installStartDateStr}`);
+      console.log(`- calculated installationReminderDate: ${reminderIsoStr}`);
 
       finalPayload = {
         ...finalPayload,
@@ -992,7 +990,7 @@ async function sendGhlWorkflowWebhook(
         projectDuration: projectDurationStr,
         installStartDate: installStartDateStr,
         installEndDate: installEndDateStr,
-        installationReminderTime: reminderIsoStr,
+        installationReminderDate: reminderIsoStr,
         scheduledAt: payloadData.scheduledAt || new Date().toISOString()
       };
     }
@@ -1524,7 +1522,7 @@ async function syncCustomerToGhl({
           addCf('installDays', '', true);
           addCf('jobDuration', '', true);
           addCf('jobPortalScheduled', false, true);
-          addCf('installationReminderTime', '', true);
+          addCf('installationReminderDate', '', true);
         } else {
           // Add new scheduling details
           addCf('jobStartDate', estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || '');
@@ -1608,10 +1606,12 @@ async function syncCustomerToGhl({
 
           console.log(`[GHL API SYNC] Calculated scheduling date-times:`);
           console.log(`- installStartDateTime: ${installStartDateTime}`);
-          console.log(`- calculated installationReminderTime: ${reminderIsoStr}`);
-          console.log(`- GHL custom field ID being used for installationReminderTime: ${settings?.ghlCustomFields?.installationReminderTime}`);
+          console.log(`- installStartDate: ${installStartDateStr}`);
+          console.log(`- calculated installationReminderDate: ${reminderIsoStr}`);
+          console.log(`- GHL custom field ID being used for installationReminderDate: ${settings?.ghlCustomFields?.installationReminderDate}`);
+          console.log(`- final contact customFields payload:`, JSON.stringify(customFieldsPayload, null, 2));
 
-          addCf('installationReminderTime', reminderIsoStr, true);
+          addCf('installationReminderDate', reminderIsoStr, true);
         }
       }
 
