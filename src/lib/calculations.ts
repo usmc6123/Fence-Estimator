@@ -60,6 +60,8 @@ export interface RunTakeOff {
     construction?: string;
     items: TakeOffItem[];
   }[];
+  deeperPostMaterialDiff?: number;
+  deeperPostLaborCost?: number;
 }
 
 export interface DetailedTakeOff {
@@ -139,6 +141,83 @@ function calculateStickOptimization(requiredLengths: number[], stickLength: numb
   const efficiency = totalLengthUsed > 0 ? ((totalLengthUsed - totalWaste) / totalLengthUsed) * 100 : 100;
 
   return { stickLength, sticks, totalWaste, efficiency };
+}
+
+function getPostLength(item: MaterialItem): number | null {
+  // Try ID suffix first, e.g., m-post-2x2-10 or w-post-metal-12
+  const idMatch = item.id.match(/-(\d+)(?:-|$)/);
+  if (idMatch) {
+    return parseInt(idMatch[1], 10);
+  }
+  // Try name pattern, e.g., "6' Steel T-Post" or "8' Sch 20 Metal Post"
+  const nameMatch = item.name.match(/(\d+)'/);
+  if (nameMatch) {
+    return parseInt(nameMatch[1], 10);
+  }
+  return null;
+}
+
+function resolvePostMat(
+  materials: MaterialItem[],
+  normalPostMat: MaterialItem,
+  targetLength: number
+): { postMat: MaterialItem | null; warning: string | null } {
+  const numIndex = normalPostMat.id.search(/-\d+/);
+  const prefix = numIndex !== -1 ? normalPostMat.id.slice(0, numIndex + 1) : normalPostMat.id;
+  
+  const candidates = materials.filter(m => m.id.startsWith(prefix));
+  
+  // Try exact targetLength match
+  const exactMatch = candidates.find(m => getPostLength(m) === targetLength);
+  if (exactMatch) {
+    return { postMat: exactMatch, warning: null };
+  }
+  
+  // Try closest matching longer post item
+  const normalLength = getPostLength(normalPostMat) || 0;
+  const longerCandidates = candidates.filter(m => {
+    const l = getPostLength(m);
+    return l !== null && l > normalLength;
+  });
+  
+  if (longerCandidates.length > 0) {
+    longerCandidates.sort((a, b) => (getPostLength(a) || 0) - (getPostLength(b) || 0));
+    return { postMat: longerCandidates[0], warning: null };
+  }
+  
+  // Otherwise warn
+  return {
+    postMat: null,
+    warning: `Longer post material not found. Please add a ${targetLength} ft post to the material library.`
+  };
+}
+
+function processPost(
+  materials: MaterialItem[],
+  normalPostMat: MaterialItem,
+  increasePostDepth: boolean,
+  targetLengthOffset: number = 1
+): { id: string; name: string; unit: string; cost: number; priceSource?: string } {
+  if (!increasePostDepth) {
+    return normalPostMat;
+  }
+  const normalLength = getPostLength(normalPostMat);
+  if (normalLength === null) {
+    return normalPostMat;
+  }
+  const targetLength = normalLength + targetLengthOffset;
+  const { postMat, warning } = resolvePostMat(materials, normalPostMat, targetLength);
+  if (postMat) {
+    return postMat;
+  }
+  // Return a warning mock item
+  return {
+    id: `${normalPostMat.id}-deeper-warning`,
+    name: `Longer post material not found. Please add a ${targetLength} ft post to the material library.`,
+    unit: 'each',
+    cost: normalPostMat.cost, // fallback cost
+    priceSource: 'Warning'
+  };
 }
 
 export function calculateDetailedTakeOff(
@@ -403,6 +482,7 @@ export function calculateDetailedTakeOff(
     let runGateMaterialCost = 0;
     let runGateLaborCost = 0;
     let runDemoCharge = 0;
+    let runDeeperPostMaterialDiff = 0;
     
     // Existing Fence Check - We still need style info for staining square footage
     const isExisting = !!run.isExistingFence;
@@ -813,14 +893,18 @@ export function calculateDetailedTakeOff(
           const linePostId = `cl-post-line-${grade === 'Commercial' ? 'comm' : 'res'}-${postHeight}`;
           const linePostMat = materials.find(m => m.id === linePostId);
           if (linePostMat && runLinePosts > 0) {
-            const lpCost = runLinePosts * linePostMat.cost;
+            const finalLinePost = processPost(materials, linePostMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += runLinePosts * (finalLinePost.cost - linePostMat.cost);
+            }
+            const lpCost = runLinePosts * finalLinePost.cost;
             runFenceMaterialCost += lpCost;
             runItems.push({
-              id: linePostMat.id,
-              name: linePostMat.name,
+              id: finalLinePost.id,
+              name: finalLinePost.name,
               qty: runLinePosts,
-              unit: linePostMat.unit,
-              unitCost: linePostMat.cost,
+              unit: finalLinePost.unit,
+              unitCost: finalLinePost.cost,
               total: lpCost,
               category: 'Structure'
             });
@@ -832,14 +916,18 @@ export function calculateDetailedTakeOff(
           const tpCount = (runCornerPosts + startEndPosts) + (run.gateDetails?.length * 2 || 0);
           
           if (termPostMat && tpCount > 0) {
-            const tpCost = tpCount * termPostMat.cost;
+            const finalTermPost = processPost(materials, termPostMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += tpCount * (finalTermPost.cost - termPostMat.cost);
+            }
+            const tpCost = tpCount * finalTermPost.cost;
             runFenceMaterialCost += tpCost;
             runItems.push({
-              id: termPostMat.id,
-              name: termPostMat.name,
+              id: finalTermPost.id,
+              name: finalTermPost.name,
               qty: tpCount,
-              unit: termPostMat.unit,
-              unitCost: termPostMat.cost,
+              unit: finalTermPost.unit,
+              unitCost: finalTermPost.cost,
               total: tpCost,
               category: 'Structure'
             });
@@ -850,15 +938,19 @@ export function calculateDetailedTakeOff(
         if (runStyle.type !== 'Chain Link') {
           if (runStyle.type === 'Wood') {
             postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
-            const cost = stdPostCount * postMat.cost;
+            const finalPost = processPost(materials, postMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += stdPostCount * (finalPost.cost - postMat.cost);
+            }
+            const cost = stdPostCount * finalPost.cost;
             runFenceMaterialCost += cost;
             runItems.push({
-              id: postMat.id,
-              name: postMat.name,
+              id: finalPost.id,
+              name: finalPost.name,
               qty: stdPostCount,
-              unit: postMat.unit,
-              unitCost: postMat.cost,
-              priceSource: postMat.priceSource,
+              unit: finalPost.unit,
+              unitCost: finalPost.cost,
+              priceSource: finalPost.priceSource,
               total: cost,
               category: 'Structure'
             });
@@ -870,44 +962,55 @@ export function calculateDetailedTakeOff(
               const concretePostMat = materials.find(m => m.id === `p-post-238-${concretePostHeight}`) || materials.find(m => m.id === `p-post-238-8`) || postMat;
               const drivenPostMat = materials.find(m => m.id === `p-post-238-${drivenPostHeight}`) || materials.find(m => m.id === `p-post-238-8`) || postMat;
               
+              const finalConcretePost = processPost(materials, concretePostMat, !!estimate.increasePostDepth);
+              const finalDrivenPost = processPost(materials, drivenPostMat, !!estimate.increasePostDepth);
+              
               const cornerAndEndPosts = runCornerPosts + startEndPosts;
               const concreteIntervalCount = Math.floor(runLF / 96);
               const concretePostCount = Math.min(stdPostCount, cornerAndEndPosts + concreteIntervalCount);
               const drivenPostCount = Math.max(0, stdPostCount - concretePostCount);
+
+              if (estimate.increasePostDepth) {
+                runDeeperPostMaterialDiff += concretePostCount * (finalConcretePost.cost - concretePostMat.cost);
+                runDeeperPostMaterialDiff += drivenPostCount * (finalDrivenPost.cost - drivenPostMat.cost);
+              }
+              
+              const finalConcreteLength = getPostLength(finalConcretePost as MaterialItem) || (concretePostHeight + (estimate.increasePostDepth ? 1 : 0));
+              const finalDrivenLength = getPostLength(finalDrivenPost as MaterialItem) || (drivenPostHeight + (estimate.increasePostDepth ? 1 : 0));
               
               // Push to allPipeSegments for stick optimization
               for (let i = 0; i < concretePostCount; i++) {
-                allPipeSegments.push(concretePostHeight);
+                allPipeSegments.push(finalConcreteLength);
               }
               for (let i = 0; i < drivenPostCount; i++) {
-                allPipeSegments.push(drivenPostHeight);
+                allPipeSegments.push(finalDrivenLength);
               }
               
               if (concretePostCount > 0) {
-                const concreteCost = concretePostCount * concretePostMat.cost;
+                const concreteCost = concretePostCount * finalConcretePost.cost;
                 runFenceMaterialCost += concreteCost;
                 runItems.push({
-                  id: concretePostMat.id,
-                  name: `${concretePostMat.name} (Concrete Set Post - 3' Deep)`,
+                  id: finalConcretePost.id,
+                  name: `${finalConcretePost.name} (Concrete Set Post - 3' Deep)`,
                   qty: concretePostCount,
-                  unit: concretePostMat.unit,
-                  unitCost: concretePostMat.cost,
-                  priceSource: concretePostMat.priceSource,
+                  unit: finalConcretePost.unit,
+                  unitCost: finalConcretePost.cost,
+                  priceSource: finalConcretePost.priceSource,
                   total: concreteCost,
                   category: 'Structure'
                 });
               }
               
               if (drivenPostCount > 0) {
-                const drivenCost = drivenPostCount * drivenPostMat.cost;
+                const drivenCost = drivenPostCount * finalDrivenPost.cost;
                 runFenceMaterialCost += drivenCost;
                 runItems.push({
-                  id: drivenPostMat.id,
-                  name: `${drivenPostMat.name} (Driven Post - 4' Deep)`,
+                  id: finalDrivenPost.id,
+                  name: `${finalDrivenPost.name} (Driven Post - 4' Deep)`,
                   qty: drivenPostCount,
-                  unit: drivenPostMat.unit,
-                  unitCost: drivenPostMat.cost,
-                  priceSource: drivenPostMat.priceSource,
+                  unit: finalDrivenPost.unit,
+                  unitCost: finalDrivenPost.cost,
+                  priceSource: finalDrivenPost.priceSource,
                   total: drivenCost,
                   category: 'Structure'
                 });
@@ -916,19 +1019,24 @@ export function calculateDetailedTakeOff(
               // Standard Posts (Set in Concrete, standard height + 2)
               const postHeight = (run.height || 4) + 2;
               postMat = materials.find(m => m.id === `p-post-238-${postHeight}`) || postMat;
+              const finalPost = processPost(materials, postMat, !!estimate.increasePostDepth);
+              if (estimate.increasePostDepth) {
+                runDeeperPostMaterialDiff += stdPostCount * (finalPost.cost - postMat.cost);
+              }
+              const finalLength = getPostLength(finalPost as MaterialItem) || (postHeight + (estimate.increasePostDepth ? 1 : 0));
               for (let i = 0; i < stdPostCount; i++) {
-                allPipeSegments.push(postHeight);
+                allPipeSegments.push(finalLength);
               }
               
-              const cost = stdPostCount * postMat.cost;
+              const cost = stdPostCount * finalPost.cost;
               runFenceMaterialCost += cost;
               runItems.push({
-                id: postMat.id,
-                name: postMat.name,
+                id: finalPost.id,
+                name: finalPost.name,
                 qty: stdPostCount,
-                unit: postMat.unit,
-                unitCost: postMat.cost,
-                priceSource: postMat.priceSource,
+                unit: finalPost.unit,
+                unitCost: finalPost.cost,
+                priceSource: finalPost.priceSource,
                 total: cost,
                 category: 'Structure'
               });
@@ -936,15 +1044,19 @@ export function calculateDetailedTakeOff(
           } else if (runStyle.type === 'Metal') {
             const postHeight = (run.height || 4) + 2;
             postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
-            const cost = stdPostCount * postMat.cost;
+            const finalPost = processPost(materials, postMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += stdPostCount * (finalPost.cost - postMat.cost);
+            }
+            const cost = stdPostCount * finalPost.cost;
             runFenceMaterialCost += cost;
             runItems.push({
-              id: postMat.id,
-              name: postMat.name,
+              id: finalPost.id,
+              name: finalPost.name,
               qty: stdPostCount,
-              unit: postMat.unit,
-              unitCost: postMat.cost,
-              priceSource: postMat.priceSource,
+              unit: finalPost.unit,
+              unitCost: finalPost.cost,
+              priceSource: finalPost.priceSource,
               total: cost,
               category: 'Structure'
             });
@@ -960,15 +1072,19 @@ export function calculateDetailedTakeOff(
           // Wrought Iron: Use 2x2 posts for all gates (Single or Double)
           const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`);
           if (gatePostMat) {
-            const cost = gatePostCountForRun * gatePostMat.cost;
+            const finalGatePost = processPost(materials, gatePostMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += gatePostCountForRun * (finalGatePost.cost - gatePostMat.cost);
+            }
+            const cost = gatePostCountForRun * finalGatePost.cost;
             runFenceMaterialCost += cost;
             runItems.push({
-              id: gatePostMat.id,
-              name: `${gatePostMat.name} (Gate Post)`,
+              id: finalGatePost.id,
+              name: `${finalGatePost.name} (Gate Post)`,
               qty: gatePostCountForRun,
-              unit: gatePostMat.unit,
-              unitCost: gatePostMat.cost,
-              priceSource: gatePostMat.priceSource,
+              unit: finalGatePost.unit,
+              unitCost: finalGatePost.cost,
+              priceSource: finalGatePost.priceSource,
               total: cost,
               category: 'Structure'
             });
@@ -979,19 +1095,24 @@ export function calculateDetailedTakeOff(
           const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`);
           
           if (gatePostMat) {
+            const finalGatePost = processPost(materials, gatePostMat, !!estimate.increasePostDepth);
+            if (estimate.increasePostDepth) {
+              runDeeperPostMaterialDiff += gatePostCountForRun * (finalGatePost.cost - gatePostMat.cost);
+            }
+            const finalLength = getPostLength(finalGatePost as MaterialItem) || (postHeight + (estimate.increasePostDepth ? 1 : 0));
             // Collect for optimization
             for (let i = 0; i < gatePostCountForRun; i++) {
-              allPipeSegments.push(postHeight);
+              allPipeSegments.push(finalLength);
             }
-            const cost = gatePostCountForRun * gatePostMat.cost;
+            const cost = gatePostCountForRun * finalGatePost.cost;
             runFenceMaterialCost += cost;
             runItems.push({
-              id: gatePostMat.id,
-              name: `${gatePostMat.name} (Gate Post)`,
+              id: finalGatePost.id,
+              name: `${finalGatePost.name} (Gate Post)`,
               qty: gatePostCountForRun,
-              unit: gatePostMat.unit,
-              unitCost: gatePostMat.cost,
-              priceSource: gatePostMat.priceSource,
+              unit: finalGatePost.unit,
+              unitCost: finalGatePost.cost,
+              priceSource: finalGatePost.priceSource,
               total: cost,
               category: 'Structure'
             });
@@ -1004,15 +1125,19 @@ export function calculateDetailedTakeOff(
         const hingeId = run.height === 8 ? 'w-post-metal-12' : 'w-post-metal-9';
         const hingeMat = materials.find(m => m.id === hingeId);
         if (hingeMat) {
-          const cost = hingePostCount * hingeMat.cost;
+          const finalHinge = processPost(materials, hingeMat, !!estimate.increasePostDepth);
+          if (estimate.increasePostDepth) {
+            runDeeperPostMaterialDiff += hingePostCount * (finalHinge.cost - hingeMat.cost);
+          }
+          const cost = hingePostCount * finalHinge.cost;
           runFenceMaterialCost += cost;
           runItems.push({
-            id: hingeMat.id,
-            name: `${hingeMat.name} (Gate Hinge)`,
+            id: finalHinge.id,
+            name: `${finalHinge.name} (Gate Hinge)`,
             qty: hingePostCount,
-            unit: hingeMat.unit,
-            unitCost: hingeMat.cost,
-            priceSource: hingeMat.priceSource,
+            unit: finalHinge.unit,
+            unitCost: finalHinge.cost,
+            priceSource: finalHinge.priceSource,
             total: cost,
             category: 'Structure'
           });
@@ -1732,6 +1857,25 @@ export function calculateDetailedTakeOff(
       runItems.push(laborItem);
     }
 
+    let runDeeperPostLaborCost = 0;
+    if (estimate.increasePostDepth && !isExisting) {
+      const deeperPostLaborRate = laborRates.deeperPostLabor ?? 1;
+      runDeeperPostLaborCost = netLF * deeperPostLaborRate;
+      if (runDeeperPostLaborCost > 0) {
+        const deeperPostLaborItem = {
+          id: `labor-deeper-post-${run.id}`,
+          name: `Deeper Post Labor (${run.name})`,
+          qty: netLF,
+          unit: 'lf',
+          unitCost: deeperPostLaborRate,
+          total: runDeeperPostLaborCost,
+          category: 'Labor'
+        };
+        runItems.push(deeperPostLaborItem);
+        runFenceLaborCost += runDeeperPostLaborCost;
+      }
+    }
+
     // Demolition per run
     if (run.hasDemolition) {
       const runDemoLF = run.demoLinearFeet || runLF;
@@ -1821,7 +1965,9 @@ export function calculateDetailedTakeOff(
       gateMaterialCost: runGateMaterialCost,
       gateLaborCost: runGateLaborCost,
       demoCharge: runDemoCharge,
-      gates: runGates
+      gates: runGates,
+      deeperPostMaterialDiff: runDeeperPostMaterialDiff,
+      deeperPostLaborCost: runDeeperPostLaborCost
     });
   });
 
@@ -2063,8 +2209,21 @@ export function calculateDetailedTakeOff(
 
   // Global price per foot
   const totalNetLF = runsPricing.reduce((sum, r) => sum + r.netLF, 0);
-  const totalFenceChargeSum = runsPricing.reduce((sum, r) => sum + r.finalFence, 0);
-  const pricePerFoot = totalNetLF > 0 ? totalFenceChargeSum / totalNetLF : 0;
+  let totalFenceChargeSumForPricePerFoot = 0;
+  runsPricing.forEach((r, idx) => {
+    let sectionFenceCharge = r.finalFence;
+    if (estimate.increasePostDepth) {
+      const run = detailedRuns[idx];
+      const matDiff = run.deeperPostMaterialDiff || 0;
+      const laborDiff = run.deeperPostLaborCost || 0;
+      const baseDiff = (matDiff + laborDiff) * markupFactor;
+      const taxDiff = matDiff * taxFactor;
+      const totalAddOnForRun = baseDiff + taxDiff;
+      sectionFenceCharge = Math.max(0, sectionFenceCharge - totalAddOnForRun);
+    }
+    totalFenceChargeSumForPricePerFoot += sectionFenceCharge;
+  });
+  const pricePerFoot = totalNetLF > 0 ? totalFenceChargeSumForPricePerFoot / totalNetLF : 0;
 
   const pricing = {
     runsPricing,

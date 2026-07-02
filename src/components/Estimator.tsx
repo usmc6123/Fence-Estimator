@@ -2340,10 +2340,15 @@ export default function Estimator({
                 )}
               </div>
               <div className="p-6 rounded-2xl border border-[#E5E5E5] space-y-4">
-                <div className="flex items-center justify-between font-bold">
-                  <span>Waste Allowance (%): {estimate.wastePercentage}%</span>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold">Increase Post Depth</h3>
+                  <button onClick={() => setEstimate({...estimate, increasePostDepth: !estimate.increasePostDepth})} className={cn("h-6 w-12 rounded-full relative transition-all", estimate.increasePostDepth ? "bg-american-red" : "bg-[#E5E5E5]")}>
+                    <div className={cn("absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all", estimate.increasePostDepth ? "right-1" : "left-1")} />
+                  </button>
                 </div>
-                <input type="range" min="0" max="25" step="1" value={estimate.wastePercentage} onChange={(e) => setEstimate({...estimate, wastePercentage: Number(e.target.value)})} className="w-full h-2 bg-[#F5F5F5] rounded-lg appearance-none cursor-pointer accent-american-blue" />
+                <p className="text-xs text-[#666666] leading-relaxed">
+                  Adds 12" to post depth. Uses posts 1 foot longer than standard, with extra deep set labor.
+                </p>
               </div>
             </div>
 

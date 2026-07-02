@@ -11,6 +11,25 @@ import { COMPANY_INFO } from '../constants';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
+const getPostUpgradeInfo = (name: string, runHeight: number, category: string) => {
+  const nameLower = name.toLowerCase();
+  if (!nameLower.includes('post') && category !== 'Structure') return null;
+  
+  let currentLength = 0;
+  const match = name.match(/(\d+)'/) || name.match(/(\d+)\s*ft/) || name.match(/(\d+)-foot/);
+  if (match) {
+    currentLength = parseInt(match[1]);
+  } else {
+    currentLength = runHeight + 2;
+  }
+  
+  const normalLength = currentLength - 1;
+  return {
+    normal: normalLength,
+    deeper: currentLength
+  };
+};
+
 interface MaterialTakeOffProps {
   estimate: Partial<Estimate>;
   materials: MaterialItem[];
@@ -754,6 +773,19 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                           <span className="text-[9px] font-bold text-american-red/60 uppercase tracking-tighter mt-0.5">
                                             {item.formula}
                                           </span>
+                                        )}
+                                        {estimate.increasePostDepth && (item.name.toLowerCase().includes('post') || item.category === 'Structure') && (
+                                          (() => {
+                                            const upgrade = getPostUpgradeInfo(item.name, run.height || 6, item.category);
+                                            if (upgrade) {
+                                              return (
+                                                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-tight mt-1 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 w-fit">
+                                                  Post depth increased by 12" / Post material upgraded from: {upgrade.normal} ft → {upgrade.deeper} ft
+                                                </span>
+                                              );
+                                            }
+                                            return null;
+                                          })()
                                         )}
                                       </div>
                                     </td>

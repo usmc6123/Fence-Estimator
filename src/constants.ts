@@ -274,6 +274,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   defaultChainLinkGrade: 'Residential',
   defaultHasBottomRail: false,
   pipeInstallType: 'Set in Concrete',
+  increasePostDepth: false,
 };
 
 export const DEFAULT_LABOR_RATES = {
@@ -293,6 +294,7 @@ export const DEFAULT_LABOR_RATES = {
   gateWoodWalk: 100,
   gateHangPreMade: 50,
   deliveryFee: 50,
+  deeperPostLabor: 1,
 };
 
 export const FENCE_STYLES: FenceStyle[] = [

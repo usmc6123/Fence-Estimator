@@ -606,6 +606,7 @@ export default function CustomerContract({
         Include Stain: ${estimate.includeStain ? 'Yes' : 'No'}
         Pre-Stained Style: ${estimate.isPreStained ? 'Yes' : 'No'}
         Stain Color: ${estimate.defaultColor || 'N/A'}
+        Increase Post Depth: ${estimate.increasePostDepth ? 'Yes' : 'No'}
         Total Contract Price: $${(data.pricing.finalCustomerPrice || 0).toFixed(2)}
         Demolition Removal Price: $${(data.pricing.demoRemovalPrice || 0).toFixed(2)}
       `.trim();
@@ -667,6 +668,7 @@ CRITICAL INSTRUCTIONS (FORBIDDEN VOCABULARY & RULES):
    "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts."
 7. DAMP LUMBER BRANDING: Do not use premium self-promoting terminology such as "#1 Grade" or similar quality marketing slogans for lumber. Use the exact wood species/types as configured in the estimate (e.g. Japanese Cedar, Western Red Cedar, or Pressure-Treated Pine).
 8. SECTION DISTINCTIVENESS: Clearly differentiate between "New Installation" and "Staining/Restoration" sections in the output document. Staining/Restoration work on existing fences MUST NOT be described as a new installation. Focus staining on: surface prep, application method, and limitations (natural tone variations, age/moisture absorption, weather-dependency).
+9. INCREASED POST DEPTH: If global specs indicate "Increase Post Depth: Yes", you MUST include this specification in the post installation description: "Increased post depth: +12 inches (Total post depth: 48 inches). Posts are upgraded to 1-foot-longer structural posts and set with deeper set labor."
 
 LONE STAR FENCE WORKS COMPANY SPECIFICATIONS & DEFAULTS:
 Use these specific standard specifications when writing:
@@ -1091,6 +1093,14 @@ Please structure the contract narrative with professional Markdown bold headers 
                     })()}
                   </span>
                 </div>
+                {estimate.increasePostDepth && (
+                  <div className="flex justify-between items-end border-t border-dashed border-[#E5E5E5] pt-3 mt-3">
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Special Option</span>
+                    <span className="text-sm font-bold text-emerald-600 uppercase tracking-widest">
+                      Increased post depth: +12"
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

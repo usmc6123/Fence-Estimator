@@ -112,6 +112,7 @@ export interface LaborRates {
   gateWoodWalk: number;
   gateHangPreMade: number;
   deliveryFee: number;
+  deeperPostLabor?: number;
 }
 
 export interface QuoteItem {
@@ -244,6 +245,7 @@ export interface Estimate {
   concreteType: 'Maximizer' | 'Quickset';
   postWidth: number;
   postThickness: number;
+  increasePostDepth?: boolean;
   
   // Financials
   markupPercentage: number;

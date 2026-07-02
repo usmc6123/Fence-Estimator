@@ -262,7 +262,8 @@ export default function LaborPricing({ laborRates, setLaborRates, onSave, diagno
                 { label: "Top Cap (/FT)", key: "topCap" },
                 { label: "Demo / Haul (/FT)", key: "demo" },
                 { label: "Stain (/SQ FT)", key: "washAndStain" },
-                { label: "Delivery Fee ($)", key: "deliveryFee" }
+                { label: "Delivery Fee ($)", key: "deliveryFee" },
+                { label: "Deeper Post Labor (/FT)", key: "deeperPostLabor" }
               ].map((item) => (
                 <div key={item.key} className="group space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-[#666666] ml-2 group-hover:text-american-blue transition-colors">
@@ -271,7 +272,7 @@ export default function LaborPricing({ laborRates, setLaborRates, onSave, diagno
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={localRates[item.key as keyof LaborRates]} 
+                      value={localRates[item.key as keyof LaborRates] !== undefined ? localRates[item.key as keyof LaborRates] : 1} 
                       onChange={(e) => handleChange(item.key as keyof LaborRates, Number(e.target.value))} 
                       className="w-full rounded-2xl border-3 border-[#F0F0F0] bg-[#F9F9F9] px-5 py-4 text-base font-bold text-american-blue focus:border-american-blue focus:bg-white outline-none transition-all" 
                     />
