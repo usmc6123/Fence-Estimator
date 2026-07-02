@@ -136,6 +136,7 @@ export default function CustomerContract({
       amount: 0,
       taxable: false,
       showOnContract: true,
+      includeInPricePerFoot: false,
       sortOrder: customLineItems.length + 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -976,6 +977,19 @@ Please structure the contract narrative with professional Markdown bold headers 
                         />
                         <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
                           Show on Contract
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          id={`ppf-${item.id}`}
+                          checked={!!item.includeInPricePerFoot}
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { includeInPricePerFoot: e.target.checked })}
+                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                        />
+                        <label htmlFor={`ppf-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                          Include in PPF
                         </label>
                       </div>
 

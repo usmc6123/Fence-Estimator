@@ -2347,23 +2347,15 @@ export function calculateDetailedTakeOff(
   // Subtotal before discount is totalSectionsSum + addOnSitePrepPrice
   const subtotalBeforeDiscount = totalSectionsSum + addOnSitePrepPrice;
 
-  // Global price per foot (remains unchanged, purely on base fence calculation)
+  // Global price per foot: (Final Contract Total - Gates - Excluded Custom Line Items) / Linear Feet
   const totalNetLF = runsPricing.reduce((sum, r) => sum + r.netLF, 0);
-  let totalFenceChargeSumForPricePerFoot = 0;
-  runsPricing.forEach((r, idx) => {
-    let sectionFenceCharge = r.finalFence;
-    if (estimate.increasePostDepth) {
-      const run = detailedRuns[idx];
-      const matDiff = run.deeperPostMaterialDiff || 0;
-      const laborDiff = run.deeperPostLaborCost || 0;
-      const baseDiff = (matDiff + laborDiff) * markupFactor;
-      const taxDiff = matDiff * taxFactor;
-      const totalAddOnForRun = baseDiff + taxDiff;
-      sectionFenceCharge = Math.max(0, sectionFenceCharge - totalAddOnForRun);
-    }
-    totalFenceChargeSumForPricePerFoot += sectionFenceCharge;
-  });
-  const pricePerFoot = totalNetLF > 0 ? totalFenceChargeSumForPricePerFoot / totalNetLF : 0;
+  const totalGates = runsPricing.reduce((sum, r) => sum + r.finalGate, 0);
+  
+  const excludedCustomItemsTotal = customContractLineItems.length > 0
+    ? customContractLineItems.filter(item => item.showOnContract && !item.includeInPricePerFoot).reduce((sum, item) => sum + item.amount, 0)
+    : additionalContractLineItemsTotal;
+
+  const pricePerFoot = totalNetLF > 0 ? (finalCustomerPrice - totalGates - excludedCustomItemsTotal) / totalNetLF : 0;
 
   const pricing = {
     runsPricing,

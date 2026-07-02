@@ -162,6 +162,7 @@ export interface CustomContractLineItem {
   amount: number;
   taxable?: boolean;
   showOnContract: boolean;
+  includeInPricePerFoot?: boolean;
   sortOrder?: number;
   createdAt?: string;
   updatedAt?: string;
