@@ -1394,6 +1394,7 @@ async function syncCustomerToGhl({
           addCf('installDays', '', true);
           addCf('jobDuration', '', true);
           addCf('jobPortalScheduled', false, true);
+          addCf('installationReminderTime', '', true);
         } else {
           // Add new scheduling details
           addCf('jobStartDate', estimate.scheduledStartDate || estimate.jobStartDate || scheduleDate || '');
@@ -1455,6 +1456,48 @@ async function syncCustomerToGhl({
           addCf('projectDuration', projectDurationStr);
           addCf('installStartDate', installStartDateStr);
           addCf('installEndDate', installEndDateStr);
+
+          // Calculate GHL Custom Field "Installation Reminder Time" = Install Start Date/Time - 16 hours
+          // First resolve the startTime from schedule_events
+          let startTimeStr = '07:00';
+          if (estimate && estimate.id) {
+            try {
+              const eventDoc = await db.collection('schedule_events').doc("install-" + estimate.id).get();
+              if (eventDoc.exists) {
+                const eventData = eventDoc.data();
+                if (eventData && eventData.startTime) {
+                  startTimeStr = eventData.startTime;
+                }
+              }
+            } catch (err) {
+              console.error("[GHL API SYNC] Failed to fetch schedule event for start time:", err);
+            }
+          }
+
+          let reminderIsoStr = '';
+          if (installStartDateStr) {
+            try {
+              const [year, month, day] = installStartDateStr.split('-').map(Number);
+              const [hours, minutes] = startTimeStr.split(':').map(Number);
+              const installStartLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
+              const reminderMs = installStartLocal.getTime() - (16 * 60 * 60 * 1000);
+              const reminderDate = new Date(reminderMs);
+              
+              const rYear = reminderDate.getFullYear();
+              const rMonth = String(reminderDate.getMonth() + 1).padStart(2, '0');
+              const rDay = String(reminderDate.getDate()).padStart(2, '0');
+              const rHours = String(reminderDate.getHours()).padStart(2, '0');
+              const rMinutes = String(reminderDate.getMinutes()).padStart(2, '0');
+              const rSeconds = String(reminderDate.getSeconds()).padStart(2, '0');
+              
+              reminderIsoStr = `${rYear}-${rMonth}-${rDay}T${rHours}:${rMinutes}:${rSeconds}`;
+              console.log(`[GHL API SYNC] Calculated installationReminderTime. Start: ${installStartDateStr} ${startTimeStr}, Reminder: ${reminderIsoStr}`);
+            } catch (calcErr) {
+              console.error("[GHL API SYNC] Error calculating installation reminder time:", calcErr);
+            }
+          }
+
+          addCf('installationReminderTime', reminderIsoStr, true);
         }
       }
 

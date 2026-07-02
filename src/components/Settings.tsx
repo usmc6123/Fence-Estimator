@@ -411,7 +411,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       'acceptedAt': '',
       'declinedAt': '',
       'scheduledStartDate': '',
-      'completedAt': ''
+      'completedAt': '',
+      'installationReminderTime': ''
     },
     enableGhlCalendarPrimaryScheduler: false,
     sendCrewEmailAfterGhlInstallBooking: true,
@@ -647,7 +648,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
             'completedAt': '',
             'minimumInstallDate': '',
             'customerName': '',
-            'address': ''
+            'address': '',
+            'installationReminderTime': ''
           },
           enableGhlCalendarPrimaryScheduler: apiData.enableGhlCalendarPrimaryScheduler !== undefined ? apiData.enableGhlCalendarPrimaryScheduler : (firebaseData.enableGhlCalendarPrimaryScheduler !== undefined ? firebaseData.enableGhlCalendarPrimaryScheduler : false),
           sendCrewEmailAfterGhlInstallBooking: apiData.sendCrewEmailAfterGhlInstallBooking !== undefined ? apiData.sendCrewEmailAfterGhlInstallBooking : (firebaseData.sendCrewEmailAfterGhlInstallBooking !== undefined ? firebaseData.sendCrewEmailAfterGhlInstallBooking : true),
@@ -863,7 +865,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
       { key: 'crewName', label: 'Crew Name', dataType: 'TEXT' },
       { key: 'projectDuration', label: 'Project Duration', dataType: 'TEXT' },
       { key: 'installStartDate', label: 'Install Start Date', dataType: 'DATE' },
-      { key: 'installEndDate', label: 'Install End Date', dataType: 'DATE' }
+      { key: 'installEndDate', label: 'Install End Date', dataType: 'DATE' },
+      { key: 'installationReminderTime', label: 'Installation Reminder Time', dataType: 'DATE_TIME' }
     ];
 
     const missing: any[] = [];
@@ -2306,7 +2309,8 @@ export default function Settings({ user, adminToken }: SettingsProps) {
                         { key: 'crewName', label: 'Crew Name' },
                         { key: 'projectDuration', label: 'Project Duration' },
                         { key: 'installStartDate', label: 'Install Start Date' },
-                        { key: 'installEndDate', label: 'Install End Date' }
+                        { key: 'installEndDate', label: 'Install End Date' },
+                        { key: 'installationReminderTime', label: 'Installation Reminder Time' }
                       ].map((mapping) => {
                         const isMissing = missingCustomFieldsList.some((item) => item.key === mapping.key);
                         
