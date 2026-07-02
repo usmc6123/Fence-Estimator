@@ -154,6 +154,18 @@ export interface JobExpense {
   materialId?: string; // Link to MaterialLibrary id
 }
 
+export interface CustomContractLineItem {
+  id: string;
+  title: string;
+  description?: string;
+  amount: number;
+  taxable?: boolean;
+  showOnContract: boolean;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Estimate {
   id: string;
   estimateNumber?: number;
@@ -249,6 +261,8 @@ export interface Estimate {
   manualDemoTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
   contractSnapshot?: any;
+  customContractLineItems?: CustomContractLineItem[];
+  customContractLineItemsTotal?: number;
   finalCustomerPrice?: number;
   estimatedPrice?: number;
   grandTotal?: number;

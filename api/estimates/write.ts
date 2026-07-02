@@ -8156,6 +8156,8 @@ Lone Star Fence Works`;
           ...(requestEstimateDetails.manualDemoTotals ? { manualDemoTotals: requestEstimateDetails.manualDemoTotals } : {}),
           ...(requestEstimateDetails.manualGrandTotal !== undefined ? { manualGrandTotal: requestEstimateDetails.manualGrandTotal } : {}),
           ...(requestEstimateDetails.manualGatePrices ? { manualGatePrices: requestEstimateDetails.manualGatePrices } : {}),
+          ...(requestEstimateDetails.customContractLineItems ? { customContractLineItems: requestEstimateDetails.customContractLineItems } : {}),
+          ...(requestEstimateDetails.customContractLineItemsTotal !== undefined ? { customContractLineItemsTotal: requestEstimateDetails.customContractLineItemsTotal } : {}),
           updatedAt: new Date().toISOString()
         };
 

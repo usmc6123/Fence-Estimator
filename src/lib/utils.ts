@@ -107,29 +107,29 @@ export function assignEstimateNumbers<T extends { id: string; createdAt?: string
 export function getEstimateFinalPrice(estimate: any): number {
   if (!estimate) return 0;
   
+  let basePrice = 0;
   if (estimate.contractSnapshot) {
-    return Number(estimate.contractSnapshot.finalCustomerPrice || 0);
+    basePrice = Number(estimate.contractSnapshot.finalCustomerPrice || 0);
+    const customTotal = Number(estimate.contractSnapshot.customContractLineItemsTotal || 0);
+    return basePrice + customTotal;
   }
   
   if (estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null) {
-    return Number(estimate.finalCustomerPrice);
+    basePrice = Number(estimate.finalCustomerPrice);
+  } else if (estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null) {
+    basePrice = Number(estimate.manualGrandTotal);
+  } else if (estimate.estimatedPrice !== undefined && estimate.estimatedPrice !== null) {
+    basePrice = Number(estimate.estimatedPrice);
+  } else if (estimate.grandTotal !== undefined && estimate.grandTotal !== null) {
+    basePrice = Number(estimate.grandTotal);
+  } else if (estimate.totalCost !== undefined && estimate.totalCost !== null) {
+    basePrice = Number(estimate.totalCost);
+  } else if (estimate.total !== undefined && estimate.total !== null) {
+    basePrice = Number(estimate.total);
   }
-  if (estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null) {
-    return Number(estimate.manualGrandTotal);
-  }
-  if (estimate.estimatedPrice !== undefined && estimate.estimatedPrice !== null) {
-    return Number(estimate.estimatedPrice);
-  }
-  if (estimate.grandTotal !== undefined && estimate.grandTotal !== null) {
-    return Number(estimate.grandTotal);
-  }
-  if (estimate.totalCost !== undefined && estimate.totalCost !== null) {
-    return Number(estimate.totalCost);
-  }
-  if (estimate.total !== undefined && estimate.total !== null) {
-    return Number(estimate.total);
-  }
-  return 0;
+  
+  const customTotal = Number(estimate.customContractLineItemsTotal || 0);
+  return basePrice + customTotal;
 }
 
 

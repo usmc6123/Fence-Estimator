@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2 } from 'lucide-react';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote, CustomContractLineItem } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency, getEstimateFinalPrice } from '../lib/utils';
 import { COMPANY_INFO, FENCE_STYLES } from '../constants';
@@ -117,9 +117,54 @@ export default function CustomerContract({
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
   const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
   const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(estimate.manualGatePrices || {});
+  const [customLineItems, setCustomLineItems] = useState<CustomContractLineItem[]>(estimate.customContractLineItems || []);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const isInitialMount = React.useRef(true);
+
+  const customContractLineItemsTotal = React.useMemo(() => {
+    return customLineItems
+      .filter(item => item.showOnContract)
+      .reduce((sum, item) => sum + item.amount, 0);
+  }, [customLineItems]);
+
+  const handleAddCustomLineItem = () => {
+    const newItem: CustomContractLineItem = {
+      id: crypto.randomUUID(),
+      title: '',
+      description: '',
+      amount: 0,
+      taxable: false,
+      showOnContract: true,
+      sortOrder: customLineItems.length + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const updated = [...customLineItems, newItem];
+    setCustomLineItems(updated);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleUpdateCustomLineItem = (id: string, updates: Partial<CustomContractLineItem>) => {
+    const updated = customLineItems.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          ...updates,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return item;
+    });
+    setCustomLineItems(updated);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDeleteCustomLineItem = (id: string) => {
+    const updated = customLineItems.filter(item => item.id !== id);
+    setCustomLineItems(updated);
+    setHasUnsavedChanges(true);
+  };
 
   const data: DetailedTakeOff = React.useMemo(() => {
     if (isCustomerView && estimate.contractSnapshot) {
@@ -265,7 +310,8 @@ export default function CustomerContract({
     if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
     if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
     if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
-  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal]);
+    if (estimate.customContractLineItems) setCustomLineItems(estimate.customContractLineItems);
+  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal, estimate.customContractLineItems]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
@@ -433,6 +479,17 @@ export default function CustomerContract({
   });
 
   const editedGrandTotal = data.pricing.calculatedTotal;
+  const baseFenceTotal = React.useMemo(() => {
+    if (isCustomerView && estimate.contractSnapshot) {
+      return Number(estimate.contractSnapshot.finalCustomerPrice || 0);
+    }
+    return manualGrandTotal ?? editedGrandTotal;
+  }, [estimate.contractSnapshot, isCustomerView, manualGrandTotal, editedGrandTotal]);
+
+  const finalProjectTotal = React.useMemo(() => {
+    return baseFenceTotal + customContractLineItemsTotal;
+  }, [baseFenceTotal, customContractLineItemsTotal]);
+
   const grandTotal = data.pricing.finalCustomerPrice;
   const isGrandTotalOverridden = manualGrandTotal !== null;
   const hasSectionOverrides = sectionTotals.some(t => t !== null) || gateTotals.some(t => t !== null) || demoTotals.some(t => t !== null);
@@ -488,6 +545,8 @@ export default function CustomerContract({
         contractProjectDate: projectDate,
         contractScope: localAiScope,
         manualGatePrices: manualGatePrices,
+        customContractLineItems: customLineItems,
+        customContractLineItemsTotal: customContractLineItemsTotal,
         ...pricingUpdates
       };
 
@@ -826,6 +885,120 @@ Please structure the contract narrative with professional Markdown bold headers 
                   <p className="mt-4 text-[9px] font-bold text-white/40 uppercase tracking-widest text-center">Powered by Project Intelligence</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Contract Line Items (Admin Only) */}
+      {!isCustomerView && (
+        <div className="bg-white rounded-3xl p-8 shadow-md border border-[#E5E5E5] space-y-6 print:hidden">
+          <div>
+            <h3 className="text-xl font-black text-american-blue uppercase tracking-tight flex items-center gap-2">
+              <Sparkles className="text-american-red" size={20} />
+              Custom Contract Line Items
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Add custom standalone line items (fees, discounts, permit charges) to this customer's contract. These do not affect your material takeoffs or labor breakdowns.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {customLineItems.length === 0 ? (
+              <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">No custom line items added yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {customLineItems.map((item) => (
+                  <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col md:flex-row gap-4 items-start md:items-center">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full">
+                      <div className="sm:col-span-1 md:col-span-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Title</label>
+                        <input
+                          type="text"
+                          value={item.title}
+                          placeholder="e.g. HOA Permit Processing"
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { title: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-american-blue outline-none focus:border-american-blue"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 md:col-span-2">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Description (Optional)</label>
+                        <input
+                          type="text"
+                          value={item.description || ''}
+                          placeholder="Brief details about this custom charge"
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { description: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-600 outline-none focus:border-american-blue"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Amount ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.amount || ''}
+                          placeholder="0.00"
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { amount: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 w-full md:w-auto md:self-end md:mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          id={`taxable-${item.id}`}
+                          checked={!!item.taxable}
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { taxable: e.target.checked })}
+                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                        />
+                        <label htmlFor={`taxable-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                          Taxable
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          id={`show-${item.id}`}
+                          checked={item.showOnContract}
+                          onChange={(e) => handleUpdateCustomLineItem(item.id, { showOnContract: e.target.checked })}
+                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                        />
+                        <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                          Show on Contract
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteCustomLineItem(item.id)}
+                        className="p-2 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto md:ml-0"
+                        title="Delete line item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-2">
+              <button
+                onClick={handleAddCustomLineItem}
+                className="px-5 py-3 bg-american-blue text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-american-blue/95 active:scale-95 transition-all shadow-md flex items-center gap-2"
+              >
+                Add Custom Line Item
+              </button>
+              {customLineItems.length > 0 && (
+                <div className="text-right">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Custom Subtotal</span>
+                  <span className="text-base font-black text-american-blue">{formatCurrency(customContractLineItemsTotal)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1241,20 +1414,72 @@ Please structure the contract narrative with professional Markdown bold headers 
                 </div>
               )}
 
+              {/* Additional Contract Line Items Section */}
+              {customLineItems.filter(item => item.showOnContract).length > 0 && (
+                <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5] mt-8 space-y-6">
+                  <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center gap-3">
+                    <span className="h-6 w-1 bg-american-red rounded-full" />
+                    Additional Contract Line Items
+                  </h3>
+                  <div className="divide-y divide-slate-200">
+                    {customLineItems
+                      .filter(item => item.showOnContract)
+                      .map((item) => (
+                        <div key={item.id} className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-bold text-american-blue uppercase tracking-tight">
+                              {item.title || 'Untitled Line Item'}
+                            </h4>
+                            {item.description && (
+                              <p className="text-xs text-slate-500 max-w-xl">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right sm:self-center">
+                            <span className="font-bold text-sm text-american-blue font-mono">
+                              {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                  <div className="pt-4 border-t-2 border-slate-200 flex justify-between items-center">
+                    <span className="text-xs font-black text-american-blue uppercase tracking-widest">Additional Items Subtotal</span>
+                    <span className="font-black text-american-blue text-base font-mono">
+                      {formatCurrency(customContractLineItemsTotal)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Grand Total */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-8 p-6 sm:p-10 bg-american-blue rounded-3xl text-white relative overflow-hidden mt-8 shadow-xl">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                    <CheckCircle2 size={100} />
                 </div>
-                <div className="relative z-10 text-center md:text-left">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50 mb-1">Guaranteed Project Quoted Total</p>
+                <div className="relative z-10 text-center md:text-left space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50">Guaranteed Project Quoted Total</p>
                   <h3 className="text-3xl font-black tracking-tighter">TOTAL INVESTMENT</h3>
+                  
+                  {customContractLineItemsTotal !== 0 && (
+                    <div className="text-[11px] font-semibold text-white/70 space-y-1 pt-1 border-t border-white/10 mt-1">
+                      <div className="flex justify-between md:justify-start gap-4">
+                        <span>Fence Installation Total:</span>
+                        <span className="font-bold">{formatCurrency(baseFenceTotal)}</span>
+                      </div>
+                      <div className="flex justify-between md:justify-start gap-4">
+                        <span>Additional Contract Line Items:</span>
+                        <span className="font-bold">{formatCurrency(customContractLineItemsTotal)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="relative z-10 text-center md:text-right w-full md:w-auto">
                   <div className="flex items-center justify-center md:justify-end gap-1 mb-1 relative group">
                     {isCustomerView ? (
                       <span className="text-5xl md:text-7xl font-black tabular-nums tracking-tighter leading-none text-white">
-                        {formatCurrency(getEstimateFinalPrice(estimate))}
+                        {formatCurrency(finalProjectTotal)}
                       </span>
                     ) : (
                       <>
@@ -1262,7 +1487,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                         <input 
                           type="number"
                           step="0.01"
-                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          value={baseFenceTotal.toFixed(2)}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseFloat(e.target.value);
                             setManualGrandTotal(val);
@@ -1276,6 +1501,11 @@ Please structure the contract narrative with professional Markdown bold headers 
                       </>
                     )}
                   </div>
+                  {customContractLineItemsTotal !== 0 && !isCustomerView && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-1">
+                      Final Customer Price (incl. Custom Items): {formatCurrency(finalProjectTotal)}
+                    </p>
+                  )}
                   {isGrandTotalOverridden && (
                     <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(editedGrandTotal)}</p>
                   )}
