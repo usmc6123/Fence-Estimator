@@ -774,7 +774,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                             {item.formula}
                                           </span>
                                         )}
-                                        {estimate.increasePostDepth && (item.name.toLowerCase().includes('post') || item.category === 'Structure') && (
+                                        {item.deeperWarning && (
+                                          <span className="text-[9px] font-bold text-amber-600 uppercase tracking-tight mt-1 bg-amber-50 px-2 py-1 rounded-md border border-amber-200 w-fit">
+                                            ⚠️ {item.deeperWarning}
+                                          </span>
+                                        )}
+                                        {!item.deeperWarning && item.longerMatchingPostName && (
+                                          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-tight mt-1 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 w-fit">
+                                            Post depth increased: {item.originalPostName} → {item.longerMatchingPostName}
+                                          </span>
+                                        )}
+                                        {/* Fallback for manually added or legacy items */}
+                                        {estimate.increasePostDepth && !item.deeperWarning && !item.longerMatchingPostName && (item.name.toLowerCase().includes('post') || item.category === 'Structure') && (
                                           (() => {
                                             const upgrade = getPostUpgradeInfo(item.name, run.height || 6, item.category);
                                             if (upgrade) {
@@ -844,6 +855,16 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                               </span>
                                             )}
                                           </div>
+                                          {item.deeperWarning && (
+                                            <span className="text-[9px] font-bold text-amber-600 uppercase tracking-tight mt-1 bg-amber-50 px-2 py-1 rounded-md border border-amber-200 w-fit">
+                                              ⚠️ {item.deeperWarning}
+                                            </span>
+                                          )}
+                                          {!item.deeperWarning && item.longerMatchingPostName && (
+                                            <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-tight mt-1 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 w-fit">
+                                              Post depth increased: {item.originalPostName} → {item.longerMatchingPostName}
+                                            </span>
+                                          )}
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>

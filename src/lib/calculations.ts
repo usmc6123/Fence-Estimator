@@ -11,6 +11,10 @@ export interface TakeOffItem {
   total: number;
   category: string;
   formula?: string;
+  originalPostName?: string;
+  longerMatchingPostName?: string;
+  deeperWarning?: string;
+  increasedDepth?: boolean;
 }
 
 export interface StickCut {
@@ -157,38 +161,112 @@ function getPostLength(item: MaterialItem): number | null {
   return null;
 }
 
+function getPostDimensions(name: string, id: string): string {
+  const nameLower = name.toLowerCase();
+  const idLower = id.toLowerCase();
+  
+  // match "2x2", "4x4", etc.
+  const xMatch = name.match(/\b\d+x\d+\b/) || id.match(/\b\d+x\d+\b/);
+  if (xMatch) return xMatch[0];
+  
+  // match "2-3/8\"", "1-5/8\"", "1-7/8\"", etc.
+  const inchMatch = name.match(/\d+-\d+\/\d+"?/) || id.match(/\d+-\d+\/\d+/);
+  if (inchMatch) return inchMatch[0].replace(/"$/, ''); // strip trailing quote
+  
+  // special case for T-post
+  if (nameLower.includes('t-post') || idLower.includes('-t')) return 't-post';
+  
+  return '';
+}
+
 function resolvePostMat(
   materials: MaterialItem[],
   normalPostMat: MaterialItem,
   targetLength: number
 ): { postMat: MaterialItem | null; warning: string | null } {
-  const numIndex = normalPostMat.id.search(/-\d+/);
-  const prefix = numIndex !== -1 ? normalPostMat.id.slice(0, numIndex + 1) : normalPostMat.id;
-  
-  const candidates = materials.filter(m => m.id.startsWith(prefix));
-  
-  // Try exact targetLength match
-  const exactMatch = candidates.find(m => getPostLength(m) === targetLength);
-  if (exactMatch) {
-    return { postMat: exactMatch, warning: null };
+  const normalLength = getPostLength(normalPostMat);
+  if (normalLength === null) {
+    return { postMat: null, warning: null };
   }
-  
-  // Try closest matching longer post item
-  const normalLength = getPostLength(normalPostMat) || 0;
-  const longerCandidates = candidates.filter(m => {
-    const l = getPostLength(m);
-    return l !== null && l > normalLength;
+
+  const normalSize = getPostDimensions(normalPostMat.name, normalPostMat.id);
+  const isHeavy = normalPostMat.name.toLowerCase().includes('heavy') || normalPostMat.id.toLowerCase().includes('hd');
+  const isSch40 = normalPostMat.name.toLowerCase().includes('sch 40');
+  const isSch20 = normalPostMat.name.toLowerCase().includes('sch 20');
+  const isTerm = normalPostMat.name.toLowerCase().includes('terminal') || normalPostMat.id.toLowerCase().includes('term');
+  const isLine = normalPostMat.name.toLowerCase().includes('line') || normalPostMat.id.toLowerCase().includes('line');
+  const isComm = normalPostMat.name.toLowerCase().includes('commercial') || normalPostMat.id.toLowerCase().includes('comm');
+  const isRes = normalPostMat.name.toLowerCase().includes('residential') || normalPostMat.id.toLowerCase().includes('res');
+
+  const normalPrefix = normalPostMat.id.replace(/-\d+(?:-hd)?$/, '').replace(/-\d+$/, '');
+
+  const candidates = materials.filter(m => {
+    if (m.category !== 'Post' && m.category !== normalPostMat.category) {
+      return false;
+    }
+    
+    if (getPostLength(m) !== targetLength) {
+      return false;
+    }
+
+    const candSize = getPostDimensions(m.name, m.id);
+    if (candSize !== normalSize) {
+      return false;
+    }
+
+    const candHeavy = m.name.toLowerCase().includes('heavy') || m.id.toLowerCase().includes('hd');
+    if (candHeavy !== isHeavy) {
+      return false;
+    }
+
+    const candSch40 = m.name.toLowerCase().includes('sch 40');
+    if (candSch40 !== isSch40) {
+      return false;
+    }
+
+    const candSch20 = m.name.toLowerCase().includes('sch 20');
+    if (candSch20 !== isSch20) {
+      return false;
+    }
+
+    const candTerm = m.name.toLowerCase().includes('terminal') || m.id.toLowerCase().includes('term');
+    if (candTerm !== isTerm) {
+      return false;
+    }
+
+    const candLine = m.name.toLowerCase().includes('line') || m.id.toLowerCase().includes('line');
+    if (candLine !== isLine) {
+      return false;
+    }
+
+    const candComm = m.name.toLowerCase().includes('commercial') || m.id.toLowerCase().includes('comm');
+    if (candComm !== isComm) {
+      return false;
+    }
+
+    const candRes = m.name.toLowerCase().includes('residential') || m.id.toLowerCase().includes('res');
+    if (candRes !== isRes) {
+      return false;
+    }
+
+    return true;
   });
-  
-  if (longerCandidates.length > 0) {
-    longerCandidates.sort((a, b) => (getPostLength(a) || 0) - (getPostLength(b) || 0));
-    return { postMat: longerCandidates[0], warning: null };
+
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => {
+      const aPrefix = a.id.replace(/-\d+(?:-hd)?$/, '').replace(/-\d+$/, '');
+      const bPrefix = b.id.replace(/-\d+(?:-hd)?$/, '').replace(/-\d+$/, '');
+      if (aPrefix === normalPrefix && bPrefix !== normalPrefix) return -1;
+      if (bPrefix === normalPrefix && aPrefix !== normalPrefix) return 1;
+      return a.id.localeCompare(b.id);
+    });
+    return { postMat: candidates[0], warning: null };
   }
-  
-  // Otherwise warn
+
+  const sizeLabel = normalSize ? normalSize : 'same size';
   return {
     postMat: null,
-    warning: `Longer post material not found. Please add a ${targetLength} ft post to the material library.`
+    warning: `Longer matching post not found for ${normalPostMat.name}. Please add a ${sizeLabel} post that is 1 ft longer.`
   };
 }
 
@@ -197,7 +275,12 @@ function processPost(
   normalPostMat: MaterialItem,
   increasePostDepth: boolean,
   targetLengthOffset: number = 1
-): { id: string; name: string; unit: string; cost: number; priceSource?: string } {
+): MaterialItem & {
+  originalPostName?: string;
+  longerMatchingPostName?: string;
+  deeperWarning?: string;
+  increasedDepth?: boolean;
+} {
   if (!increasePostDepth) {
     return normalPostMat;
   }
@@ -208,15 +291,18 @@ function processPost(
   const targetLength = normalLength + targetLengthOffset;
   const { postMat, warning } = resolvePostMat(materials, normalPostMat, targetLength);
   if (postMat) {
-    return postMat;
+    return {
+      ...postMat,
+      originalPostName: normalPostMat.name,
+      longerMatchingPostName: postMat.name,
+      increasedDepth: true
+    };
   }
-  // Return a warning mock item
   return {
-    id: `${normalPostMat.id}-deeper-warning`,
-    name: `Longer post material not found. Please add a ${targetLength} ft post to the material library.`,
-    unit: 'each',
-    cost: normalPostMat.cost, // fallback cost
-    priceSource: 'Warning'
+    ...normalPostMat,
+    originalPostName: normalPostMat.name,
+    deeperWarning: warning || `Longer matching post not found for ${normalPostMat.name}. Please add a post that is 1 ft longer.`,
+    increasedDepth: true
   };
 }
 
@@ -906,7 +992,11 @@ export function calculateDetailedTakeOff(
               unit: finalLinePost.unit,
               unitCost: finalLinePost.cost,
               total: lpCost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalLinePost.originalPostName,
+              longerMatchingPostName: finalLinePost.longerMatchingPostName,
+              deeperWarning: finalLinePost.deeperWarning,
+              increasedDepth: finalLinePost.increasedDepth
             });
           }
           
@@ -929,7 +1019,11 @@ export function calculateDetailedTakeOff(
               unit: finalTermPost.unit,
               unitCost: finalTermPost.cost,
               total: tpCost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalTermPost.originalPostName,
+              longerMatchingPostName: finalTermPost.longerMatchingPostName,
+              deeperWarning: finalTermPost.deeperWarning,
+              increasedDepth: finalTermPost.increasedDepth
             });
           }
         }
@@ -952,7 +1046,11 @@ export function calculateDetailedTakeOff(
               unitCost: finalPost.cost,
               priceSource: finalPost.priceSource,
               total: cost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalPost.originalPostName,
+              longerMatchingPostName: finalPost.longerMatchingPostName,
+              deeperWarning: finalPost.deeperWarning,
+              increasedDepth: finalPost.increasedDepth
             });
           } else if (runStyle.type === 'Pipe') {
             if (run.pipeInstallType === 'Driven Posts') {
@@ -997,7 +1095,11 @@ export function calculateDetailedTakeOff(
                   unitCost: finalConcretePost.cost,
                   priceSource: finalConcretePost.priceSource,
                   total: concreteCost,
-                  category: 'Structure'
+                  category: 'Structure',
+                  originalPostName: finalConcretePost.originalPostName,
+                  longerMatchingPostName: finalConcretePost.longerMatchingPostName,
+                  deeperWarning: finalConcretePost.deeperWarning,
+                  increasedDepth: finalConcretePost.increasedDepth
                 });
               }
               
@@ -1012,7 +1114,11 @@ export function calculateDetailedTakeOff(
                   unitCost: finalDrivenPost.cost,
                   priceSource: finalDrivenPost.priceSource,
                   total: drivenCost,
-                  category: 'Structure'
+                  category: 'Structure',
+                  originalPostName: finalDrivenPost.originalPostName,
+                  longerMatchingPostName: finalDrivenPost.longerMatchingPostName,
+                  deeperWarning: finalDrivenPost.deeperWarning,
+                  increasedDepth: finalDrivenPost.increasedDepth
                 });
               }
             } else {
@@ -1038,7 +1144,11 @@ export function calculateDetailedTakeOff(
                 unitCost: finalPost.cost,
                 priceSource: finalPost.priceSource,
                 total: cost,
-                category: 'Structure'
+                category: 'Structure',
+                originalPostName: finalPost.originalPostName,
+                longerMatchingPostName: finalPost.longerMatchingPostName,
+                deeperWarning: finalPost.deeperWarning,
+                increasedDepth: finalPost.increasedDepth
               });
             }
           } else if (runStyle.type === 'Metal') {
@@ -1058,7 +1168,11 @@ export function calculateDetailedTakeOff(
               unitCost: finalPost.cost,
               priceSource: finalPost.priceSource,
               total: cost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalPost.originalPostName,
+              longerMatchingPostName: finalPost.longerMatchingPostName,
+              deeperWarning: finalPost.deeperWarning,
+              increasedDepth: finalPost.increasedDepth
             });
           }
         }
@@ -1086,7 +1200,11 @@ export function calculateDetailedTakeOff(
               unitCost: finalGatePost.cost,
               priceSource: finalGatePost.priceSource,
               total: cost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalGatePost.originalPostName,
+              longerMatchingPostName: finalGatePost.longerMatchingPostName,
+              deeperWarning: finalGatePost.deeperWarning,
+              increasedDepth: finalGatePost.increasedDepth
             });
           }
         } else {
@@ -1114,7 +1232,11 @@ export function calculateDetailedTakeOff(
               unitCost: finalGatePost.cost,
               priceSource: finalGatePost.priceSource,
               total: cost,
-              category: 'Structure'
+              category: 'Structure',
+              originalPostName: finalGatePost.originalPostName,
+              longerMatchingPostName: finalGatePost.longerMatchingPostName,
+              deeperWarning: finalGatePost.deeperWarning,
+              increasedDepth: finalGatePost.increasedDepth
             });
           }
         }
@@ -1139,7 +1261,11 @@ export function calculateDetailedTakeOff(
             unitCost: finalHinge.cost,
             priceSource: finalHinge.priceSource,
             total: cost,
-            category: 'Structure'
+            category: 'Structure',
+            originalPostName: finalHinge.originalPostName,
+            longerMatchingPostName: finalHinge.longerMatchingPostName,
+            deeperWarning: finalHinge.deeperWarning,
+            increasedDepth: finalHinge.increasedDepth
           });
         }
       }
