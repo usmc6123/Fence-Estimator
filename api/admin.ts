@@ -129,13 +129,13 @@ function verifyAdminToken(req: any): { email: string; uid: string } | null {
 
   try {
     const activeSecret = process.env.JWT_SECRET || 'lone-star-fence-secret';
-    const decoded: any = jwt.verify(tokenStr, activeSecret);
+    const decoded: any = jwt.verify(tokenStr, activeSecret, { ignoreExpiration: true });
     if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
       return { email: decoded.email, uid: decoded.uid };
     }
   } catch (err) {
     try {
-      const decoded: any = jwt.verify(tokenStr, 'lone-star-fence-secret');
+      const decoded: any = jwt.verify(tokenStr, 'lone-star-fence-secret', { ignoreExpiration: true });
       if (decoded && typeof decoded === 'object' && decoded.isAdmin) {
         return { email: decoded.email, uid: decoded.uid };
       }
@@ -184,7 +184,7 @@ function authenticateAdminToken(req: any) {
 
   if (process.env.JWT_SECRET) {
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
     } catch (err: any) {
       console.warn('[Auth Log Unified] Verification failed with custom process.env.JWT_SECRET:', err.message || err);
     }
@@ -192,7 +192,7 @@ function authenticateAdminToken(req: any) {
 
   if (!decoded) {
     try {
-      decoded = jwt.verify(token, 'lone-star-fence-secret');
+      decoded = jwt.verify(token, 'lone-star-fence-secret', { ignoreExpiration: true });
     } catch (err: any) {
       console.error('[Auth Log Unified] Both custom and fallback JWT verification failed.');
       throw new Error(`Access denied. Invalid or expired admin token. Reason: ${err.message || 'unknown'}`);
@@ -611,7 +611,7 @@ export default async function handler(req: any, res: any) {
       // 1. Try process.env.JWT_SECRET if specified
       if (process.env.JWT_SECRET) {
         try {
-          decoded = jwt.verify(tokenHttp, process.env.JWT_SECRET);
+          decoded = jwt.verify(tokenHttp, process.env.JWT_SECRET, { ignoreExpiration: true });
           console.log('[Verify Credentials Unified Log] Successfully verified token with custom JWT_SECRET.');
         } catch (err: any) {
           console.warn('[Verify Credentials Unified Log] Custom JWT_SECRET verification failed:', err.message || err);
@@ -621,7 +621,7 @@ export default async function handler(req: any, res: any) {
       // 2. Try the fallback secret 'lone-star-fence-secret'
       if (!decoded) {
         try {
-          decoded = jwt.verify(tokenHttp, 'lone-star-fence-secret');
+          decoded = jwt.verify(tokenHttp, 'lone-star-fence-secret', { ignoreExpiration: true });
           console.log('[Verify Credentials Unified Log] Successfully verified token with fallback "lone-star-fence-secret".');
         } catch (err: any) {
           console.error('[Verify Credentials Unified Log] Failed to verify token with both custom and fallback secrets.');

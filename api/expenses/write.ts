@@ -73,7 +73,7 @@ export default async function handler(req: any, res: any) {
     const token = authHeader.split(' ')[1];
     let decoded: any;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
     } catch (err: any) {
       console.error('JWT verification error in expenses write:', err.message);
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });

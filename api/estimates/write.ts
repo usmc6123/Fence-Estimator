@@ -2504,7 +2504,7 @@ export default async function handler(req: any, res: any) {
         const token = authHeader.split(' ')[1];
         let decoded: any;
         try {
-          decoded = jwt.verify(token, JWT_SECRET);
+          decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
         } catch (err: any) {
           console.error('JWT verification error in estimates list:', err.message);
           return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -4561,7 +4561,7 @@ export default async function handler(req: any, res: any) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       try {
-        decoded = jwt.verify(token, JWT_SECRET);
+        decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
       } catch (err: any) {
         console.warn('JWT verification failed in estimates write:', err.message);
       }
