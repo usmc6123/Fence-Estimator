@@ -677,16 +677,17 @@ CRITICAL INSTRUCTIONS (FORBIDDEN VOCABULARY & RULES):
 
 LONE STAR FENCE WORKS COMPANY SPECIFICATIONS & DEFAULTS:
 Use these specific standard specifications when writing:
-- POST FOOTINGS (ROUND CONCRETE FOOTINGS):
-  - Rule 1: For any Wood fence at 8' (foot) tall, use: 36" round concrete footings.
-  - Rule 2: For any Wood fence at 6' (foot) tall or lower, use: 24" round concrete footings.
-  - Rule 3: For ALL Wrought Iron fences, use: 24" round concrete footings.
-  - Rule 4: For ALL Chain Link fences, use: 24" round concrete footings.
-  - Rule 5: For ALL Pipe/No-Climb fences, use: 24" round concrete footings.
-  - Rule 6: For ALL other fence types (Vinyl, etc.), use: 24" round concrete footings.
-  - Methodology: All posts are wet-set in concrete. Post hole diameter minimum 8-10 inches, utilizing wet-mixed concrete.
-- STEEL POSTS: "Schedule 20 galvanized steel posts" installed approximately 24" deep (or 36" for 8' tall wood sections), wet-set in concrete. Post spacing set approximately 8 feet on center.
-- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" installed approximately 24" deep (or 36" for 8' tall wood sections), wet-set in concrete.
+- POST FOOTINGS:
+  - Required Wording: "Posts will be installed in round concrete footings measuring {diameter}\" in diameter by {depth}\" deep."
+  - Rule 1 (8' Wood Fence): 10" in diameter by 36" deep.
+  - Rule 2 (6' Wood Fence or lower): 8" in diameter by 24" deep.
+  - Rule 3 (Wrought Iron): 8" in diameter by 24" deep.
+  - Rule 4 (Chain Link): 8" in diameter by 24" deep.
+  - Rule 5 (Pipe / No-Climb): 8" in diameter by 24" deep.
+  - Rule 6 (Vinyl & others): 8" in diameter by 24" deep.
+  - Methodology: All posts are wet-set in concrete.
+- STEEL POSTS: "Schedule 20 galvanized steel posts" wet-set in concrete. Post spacing set approximately 8 feet on center.
+- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" wet-set in concrete.
 - RAILS:
   - For 6' (foot) tall fences: 3 nominal 2x4 rails.
   - For 8' (foot) tall fences: 4 nominal 2x4 rails.
@@ -728,7 +729,7 @@ You must verify:
 ✓ Stain selection
 ✓ Post type
 ✓ Demolition scope
-Compare what was calculated / specified in the sections against the company standards. If any required value is missing, write a professional warning/assumption alert block at the top of the Scope of Work titled "I. Project Variables & Assumptions" explaining that you used the company default values (e.g. 24" depth for 6' fences, 36" depth for 8' wood fences, Schedule 20, 3-rail configuration, etc.) rather than generic placeholder words. If everything is fully specified, note "✓ All estimated parameters verified & locked".
+Compare what was calculated / specified in the sections against the company standards. If any required value is missing, write a professional warning/assumption alert block at the top of the Scope of Work titled "I. Project Variables & Assumptions" explaining that you used the company default values (e.g. 8"x24" footings for 6' fences, 10"x36" footings for 8' wood fences, Schedule 20, 3-rail configuration, etc.) rather than generic placeholder words. If everything is fully specified, note "✓ All estimated parameters verified & locked".
 
 ESTIMATE DATA AND FACTS SHEET:
 --- ESTIMATOR SOURCE OF TRUTH ---
