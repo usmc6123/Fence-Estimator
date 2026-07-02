@@ -178,14 +178,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     if (stepNum === 1) {
       navigateToSection('schedule', 'crew-schedule-section');
     } else if (stepNum === 2) {
-      const hasSalesOrder = jobData.vendorDocuments && jobData.vendorDocuments.length > 0;
-      if (isAdmin && !hasSalesOrder) {
-        navigateToSection('financials', 'sales-orders-section', () => {
-          setShowUploadDocPanel(true);
-        });
-      } else {
-        navigateToSection('materials', 'materials-checklist-section');
-      }
+      navigateToSection('materials', 'materials-checklist-section');
     } else if (stepNum === 3) {
       let elementId = 'prebuild-section';
       if (!isLocked) {
@@ -2664,276 +2657,344 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                   </form>
                 )}
 
-                {/* Documents List */}
+                {/* Vendor Sales Order Status Banner */}
                 {Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0 ? (
-                  <div className="space-y-4">
-                    {jobData.vendorDocuments
-                      .filter((d: any) => user || d.visibleToCrew)
-                      .map((doc: any) => {
-                        const isConfirmed = !!jobData.materialConfirmation || !!doc.confirmation;
-                        const confirmationDetails = jobData.materialConfirmation || doc.confirmation;
-                        
-                        return (
-                          <div key={doc.id} className="bg-[#0A1120] border border-blue-900/15 p-5 rounded-2xl space-y-4">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-blue-900/10 pb-3">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-black text-white uppercase">{doc.vendorName}</span>
-                                  <span className="text-[10px] font-mono text-slate-400 font-bold uppercase bg-slate-800/60 px-2 py-0.5 rounded">
-                                    SO #{doc.salesOrderNumber}
-                                  </span>
-                                  {user && (
-                                    <span className={cn(
-                                      "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border",
-                                      doc.visibleToCrew 
-                                        ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5" 
-                                        : "text-slate-500 border-slate-700 bg-slate-800/10"
-                                    )}>
-                                      {doc.visibleToCrew ? 'Visible to Crew' : 'Hidden from Crew'}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                                  <span><strong>Location:</strong> {doc.pickupLocation}</span>
-                                  {doc.pickupDateTime && (
-                                    <span><strong>Target Date/Time:</strong> {new Date(doc.pickupDateTime).toLocaleString()}</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <a
-                                  href={doc.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1 border border-blue-900/30"
-                                >
-                                  <Eye size={13} /> View Order Document
-                                </a>
-
-                                {user && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteVendorDoc(doc.id)}
-                                    className="p-1.5 bg-rose-950/20 border border-rose-900/20 hover:bg-rose-950/40 text-rose-400 rounded-lg transition-all"
-                                    title="Delete document"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            {doc.notes && (
-                              <p className="text-xs text-slate-300 italic bg-[#070D19]/60 p-3 rounded-xl border border-blue-900/5">
-                                <strong>Office Notes:</strong> {doc.notes}
-                              </p>
-                            )}
-
-                            {/* Line items checklist */}
-                            {Array.isArray(doc.lineItems) && doc.lineItems.length > 0 && (
-                              <div className="space-y-2">
-                                <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                  Pickup Item Manifest:
-                                </span>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {doc.lineItems.map((item: any) => {
-                                    const itemStatus = confirmationDetails?.lineItemsStatus?.[item.id]?.status || 'Pending';
-                                    const itemNotes = confirmationDetails?.lineItemsStatus?.[item.id]?.notes;
-                                    const itemPhoto = confirmationDetails?.lineItemsStatus?.[item.id]?.photoUrl;
-                                    
-                                    return (
-                                      <div key={item.id} className="p-3 bg-[#070D19]/40 border border-blue-900/5 rounded-xl flex items-center justify-between gap-4">
-                                        <div className="space-y-0.5">
-                                          <span className="text-xs font-bold text-slate-300">{item.description}</span>
-                                          <span className="text-[10px] font-black text-amber-500 font-mono">Qty: {item.qty}</span>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                          <span className={cn(
-                                            "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
-                                            itemStatus === 'Confirmed' 
-                                              ? "bg-emerald-500/10 text-emerald-400" 
-                                              : itemStatus === 'Pending' 
-                                                ? "bg-amber-500/10 text-amber-500 animate-pulse" 
-                                                : "bg-rose-500/10 text-rose-400"
-                                          )}>
-                                            {itemStatus}
-                                          </span>
-                                          {itemNotes && (
-                                            <p className="text-[9px] text-slate-400 italic mt-0.5 line-clamp-1 max-w-[120px]" title={itemNotes}>
-                                              "{itemNotes}"
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* CONFIRMATION SECTION */}
-                            {isConfirmed ? (
-                              <div className="bg-emerald-950/20 border border-emerald-500/20 p-4 rounded-xl space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 text-emerald-400">
-                                    <CheckCircle2 size={16} />
-                                    <span className="text-xs font-black uppercase tracking-wider">Materials Pickup Confirmed</span>
-                                  </div>
-                                  <span className="text-[10px] font-mono text-slate-400">
-                                    {confirmationDetails?.confirmedAt ? new Date(confirmationDetails.confirmedAt).toLocaleString() : ''}
-                                  </span>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
-                                  <div className="space-y-1">
-                                    <p><strong className="text-slate-400">Confirmed By:</strong> {confirmationDetails?.crewLeaderName}</p>
-                                    <p><strong className="text-slate-400">Pickup Location:</strong> {confirmationDetails?.pickupLocation || doc.pickupLocation}</p>
-                                    {confirmationDetails?.notes && (
-                                      <p><strong className="text-slate-400">Crew Notes:</strong> {confirmationDetails.notes}</p>
-                                    )}
-                                  </div>
-
-                                  {/* Photos */}
-                                  {Array.isArray(confirmationDetails?.photos) && confirmationDetails.photos.length > 0 && (
-                                    <div className="space-y-1.5">
-                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pickup Documentation Photos:</span>
-                                      <div className="flex flex-wrap gap-2">
-                                        {confirmationDetails.photos.map((url: string, idx: number) => (
-                                          <a key={idx} href={url} target="_blank" rel="noreferrer" className="block h-12 w-12 overflow-hidden rounded-lg border border-blue-900/10 hover:border-[#E63946] transition-all">
-                                            <img src={url} alt={`Pickup confirmation ${idx}`} className="h-full w-full object-cover" />
-                                          </a>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Reported problems summary */}
-                                {confirmationDetails?.hasIssues && (
-                                  <div className="p-3 bg-rose-950/30 border border-rose-500/20 rounded-lg space-y-1.5 mt-2">
-                                    <div className="flex items-center gap-1.5 text-rose-400 text-xs font-bold">
-                                      <AlertTriangle size={14} />
-                                      <span>Issues Documented during Pickup:</span>
-                                    </div>
-                                    <p className="text-xs text-slate-300 whitespace-pre-wrap">{confirmationDetails.problemSummary}</p>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              /* Crew Action Button */
-                              !user && (
-                                <div className="bg-[#1D3557]/40 border border-blue-900/20 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                                  <div className="space-y-1">
-                                    <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
-                                      <AlertTriangle size={15} /> Action Required: Check In Order
-                                    </span>
-                                    <p className="text-[10px] text-slate-400">
-                                      Auditing and confirming material statuses is required before starting the project.
-                                    </p>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDocForConfirmation(doc);
-                                      setPickupLeaderName(crewLeaderName || '');
-                                      setPickupGeneralNotes('');
-                                      setPickupGeneralPhotos([]);
-                                      
-                                      // Initialize statuses to 'Not Received' for ALL materials in the job
-                                      const initialStatuses: any = {};
-                                      materialsList.forEach((item: any, idx: number) => {
-                                        const itemId = item.id || `mat-${idx}-${item.name}`;
-                                        initialStatuses[itemId] = { status: 'Not Received', notes: '' };
-                                      });
-                                      setLineItemStatuses(initialStatuses);
-                                      
-                                      setConfirmError('');
-                                      setConfirmSuccessMessage('');
-                                      setShowConfirmModal(true);
-                                    }}
-                                    className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5"
-                                  >
-                                    <ClipboardList size={14} />
-                                    Check In & Confirm Materials
-                                  </button>
-                                </div>
-                              )
-                            )}
-
-                            {/* OFFICE OVERRIDE AREA FOR ADMIN */}
-                            {user && isConfirmed && confirmationDetails?.hasIssues && currentStatusKey === 'material_issue_reported' && (
-                              <div className="bg-amber-950/30 border border-amber-500/30 p-4 rounded-xl space-y-3 mt-4">
-                                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
-                                  <ShieldCheck size={16} />
-                                  <span>Office Action Required: Material Issue Override Panel</span>
-                                </div>
-                                <p className="text-[10px] text-slate-300">
-                                  The crew reported a material issue. You can override and authorize them to start anyway, or issue instructions to return the order or resolve vendor errors.
-                                </p>
-                                
-                                <div className="space-y-3 pt-2">
-                                  <div className="space-y-1">
-                                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Override Action Decision *</label>
-                                    <div className="flex gap-4">
-                                      <label className="flex items-center gap-2 select-none cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name="overrideDecision"
-                                          checked={overrideDecision === 'approve_anyway'}
-                                          onChange={() => setOverrideDecision('approve_anyway')}
-                                          className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
-                                        />
-                                        <span className="text-xs font-bold text-slate-200">Approve Start Anyway (Unlocks Pre-Build)</span>
-                                      </label>
-                                      <label className="flex items-center gap-2 select-none cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name="overrideDecision"
-                                          checked={overrideDecision === 'return_to_crew'}
-                                          onChange={() => setOverrideDecision('return_to_crew')}
-                                          className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
-                                        />
-                                        <span className="text-xs font-bold text-slate-200">Return to Crew / Vendor (Resolve Issues First)</span>
-                                      </label>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-1">
-                                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Resolution Instructions / Admin Notes *</label>
-                                    <textarea
-                                      required
-                                      value={overrideNotes}
-                                      onChange={(e) => setOverrideNotes(e.target.value)}
-                                      placeholder="e.g. Approved start. Local supplier delivering substitutions by 2 PM..."
-                                      className="w-full text-xs bg-[#070D19] text-white border border-blue-900/30 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
-                                      rows={2}
-                                    />
-                                  </div>
-
-                                  {overrideError && (
-                                    <p className="text-xs text-rose-400 font-bold">⚠️ {overrideError}</p>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    disabled={overrideSubmitting || !overrideNotes.trim()}
-                                    onClick={() => handleOverrideMaterialIssue(overrideDecision)}
-                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] font-black text-[10px] uppercase tracking-wider rounded-lg transition-all"
-                                  >
-                                    {overrideSubmitting ? 'Submitting Override...' : 'Submit Resolution Action'}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                          </div>
-                        );
-                      })}
+                  <div className="p-4 bg-blue-950/20 border border-blue-900/20 rounded-xl">
+                    <span className="text-xs font-black text-blue-400 uppercase tracking-wider block">Vendor Sales Order Available</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-bold uppercase">Crews can audit loaded items and complete the check-in process.</span>
                   </div>
                 ) : (
-                  <div className="p-8 bg-[#0A1120] border-2 border-dashed border-blue-900/10 rounded-2xl text-center text-slate-500">
-                    <Package className="mx-auto mb-2 text-slate-600" size={32} />
-                    <p className="text-xs font-bold uppercase tracking-wider">No vendor sales orders or material pickup documents attached to this job.</p>
+                  <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl">
+                    <span className="text-xs font-black text-slate-300 uppercase tracking-wider block">No Vendor Sales Order Uploaded</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 font-bold uppercase">No vendor sales order uploaded. Check in materials using the app-generated bill of materials.</span>
+                  </div>
+                )}
+
+                {/* Main Material Check-In Workflow Control Panel */}
+                <div className="bg-[#0A1120] border border-blue-900/15 p-5 rounded-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <ClipboardList size={16} className="text-[#E63946]" />
+                        Material Audit & Check-In Status
+                      </span>
+                      <p className="text-[10px] text-slate-400">
+                        {isMaterialsConfirmed 
+                          ? "The crew has completed the material check-in audit for this job." 
+                          : "Audit and verify all materials from the bill of materials before commencing work."}
+                      </p>
+                    </div>
+
+                    {!isMaterialsConfirmed ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Initialize statuses to 'Not Received' for ALL materials in the job
+                          const initialStatuses: any = {};
+                          materialsList.forEach((item: any, idx: number) => {
+                            const itemId = item.id || `mat-${idx}-${item.name}`;
+                            initialStatuses[itemId] = { status: 'Not Received', notes: '' };
+                          });
+                          setLineItemStatuses(initialStatuses);
+                          
+                          // If there's a vendor doc, set it for the context of the modal header, else null
+                          const firstVendorDoc = Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0 
+                            ? jobData.vendorDocuments[0] 
+                            : null;
+                          
+                          setActiveDocForConfirmation(firstVendorDoc);
+                          setPickupLeaderName(crewLeaderName || '');
+                          setPickupGeneralNotes('');
+                          setPickupGeneralPhotos([]);
+                          setConfirmError('');
+                          setConfirmSuccessMessage('');
+                          setShowConfirmModal(true);
+                        }}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5"
+                      >
+                        <ClipboardList size={14} />
+                        Check In & Confirm Materials
+                      </button>
+                    ) : (
+                      <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-wider rounded-lg">
+                        ✓ Materials Checked In
+                      </span>
+                    )}
+                  </div>
+
+                  {/* If confirmed, show details */}
+                  {isMaterialsConfirmed && jobData.materialConfirmation && (
+                    <div className="bg-emerald-950/10 border border-emerald-500/10 p-4 rounded-xl space-y-3 text-xs text-slate-300 mt-2">
+                      <div className="flex items-center justify-between border-b border-emerald-500/10 pb-2">
+                        <span className="font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <CheckCircle2 size={14} /> Check-In Confirmed Details
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {jobData.materialConfirmation.completedAt ? new Date(jobData.materialConfirmation.completedAt).toLocaleString() : ''}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p><strong className="text-slate-400">Crew Leader:</strong> {jobData.materialConfirmation.crewLeaderName}</p>
+                          {jobData.materialConfirmation.pickupLocation && jobData.materialConfirmation.pickupLocation !== 'N/A' && (
+                            <p><strong className="text-slate-400">Pickup Location:</strong> {jobData.materialConfirmation.pickupLocation}</p>
+                          )}
+                          {jobData.materialConfirmation.notes && (
+                            <p><strong className="text-slate-400">General Notes:</strong> {jobData.materialConfirmation.notes}</p>
+                          )}
+                        </div>
+
+                        {/* General Photos */}
+                        {Array.isArray(jobData.materialConfirmation.photos) && jobData.materialConfirmation.photos.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Loaded Material Photos:</span>
+                            <div className="flex flex-wrap gap-2">
+                              {jobData.materialConfirmation.photos.map((url: string, idx: number) => (
+                                <a key={idx} href={url} target="_blank" rel="noreferrer" className="block h-12 w-12 overflow-hidden rounded-lg border border-blue-900/10 hover:border-[#E63946] transition-all">
+                                  <img src={url} alt={`Pickup confirmation ${idx}`} className="h-full w-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* If crew leader checked items with problems */}
+                      {jobData.materialConfirmation.hasIssues && (
+                        <div className="p-3 bg-rose-950/30 border border-rose-500/20 rounded-lg space-y-1 mt-2">
+                          <div className="flex items-center gap-1.5 text-rose-400 text-xs font-bold">
+                            <AlertTriangle size={14} />
+                            <span>Reported Check-In Issues:</span>
+                          </div>
+                          <p className="text-xs text-slate-300 whitespace-pre-wrap">{jobData.materialConfirmation.problemSummary}</p>
+                        </div>
+                      )}
+
+                      {/* Line Item Detailed Audit Status */}
+                      {jobData.materialConfirmation.lineItemsStatus && (
+                        <div className="space-y-2 pt-2 border-t border-emerald-500/10">
+                          <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            Item Status Audit:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {materialsList.map((item: any, idx: number) => {
+                              const itemId = item.id || `mat-${idx}-${item.name}`;
+                              const itemStatus = jobData.materialConfirmation.lineItemsStatus[itemId]?.status || 'Confirmed';
+                              const itemNotes = jobData.materialConfirmation.lineItemsStatus[itemId]?.notes;
+                              return (
+                                <div key={itemId} className="p-2.5 bg-[#070D19]/40 border border-emerald-500/5 rounded-xl flex items-center justify-between gap-3">
+                                  <div>
+                                    <span className="text-xs font-bold text-slate-300 block">{item.name}</span>
+                                    <span className="text-[9px] font-mono text-slate-400">Qty: {item.qty}</span>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className={cn(
+                                      "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                                      itemStatus === 'Confirmed' 
+                                        ? "bg-emerald-500/10 text-emerald-400" 
+                                        : itemStatus === 'Short' || itemStatus === 'Substituted' 
+                                          ? "bg-amber-500/10 text-amber-500" 
+                                          : "bg-rose-500/10 text-rose-400"
+                                    )}>
+                                      {itemStatus}
+                                    </span>
+                                    {itemNotes && (
+                                      <p className="text-[8px] text-slate-400 italic mt-0.5 max-w-[120px] truncate" title={itemNotes}>
+                                        "{itemNotes}"
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* OFFICE OVERRIDE AREA FOR ADMIN (Rendered at top level of check-in block) */}
+                  {user && isMaterialsConfirmed && jobData.materialConfirmation?.hasIssues && currentStatusKey === 'material_issue_reported' && (
+                    <div className="bg-amber-950/30 border border-amber-500/30 p-4 rounded-xl space-y-3 mt-4">
+                      <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                        <ShieldCheck size={16} />
+                        <span>Office Action Required: Material Issue Override Panel</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300">
+                        The crew reported a material issue. You can override and authorize them to start anyway, or issue instructions to return the order or resolve vendor errors.
+                      </p>
+                      
+                      <div className="space-y-3 pt-2">
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Override Action Decision *</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-2 select-none cursor-pointer">
+                              <input
+                                type="radio"
+                                name="overrideDecision"
+                                checked={overrideDecision === 'approve_anyway'}
+                                onChange={() => setOverrideDecision('approve_anyway')}
+                                className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
+                              />
+                              <span className="text-xs font-bold text-slate-200">Approve Start Anyway (Unlocks Pre-Build)</span>
+                            </label>
+                            <label className="flex items-center gap-2 select-none cursor-pointer">
+                              <input
+                                type="radio"
+                                name="overrideDecision"
+                                checked={overrideDecision === 'return_to_crew'}
+                                onChange={() => setOverrideDecision('return_to_crew')}
+                                className="h-4 w-4 bg-[#070D19] border-blue-900 text-[#E63946] focus:ring-0"
+                              />
+                              <span className="text-xs font-bold text-slate-200">Return to Crew / Vendor (Resolve Issues First)</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Resolution Instructions / Admin Notes *</label>
+                          <textarea
+                            required
+                            value={overrideNotes}
+                            onChange={(e) => setOverrideNotes(e.target.value)}
+                            placeholder="e.g. Approved start. Local supplier delivering substitutions by 2 PM..."
+                            className="w-full text-xs bg-[#070D19] text-white border border-blue-900/30 focus:border-blue-900 rounded-xl px-3 py-2 focus:outline-none"
+                            rows={2}
+                          />
+                        </div>
+
+                        {overrideError && (
+                          <p className="text-xs text-rose-400 font-bold">⚠️ {overrideError}</p>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={overrideSubmitting || !overrideNotes.trim()}
+                          onClick={() => handleOverrideMaterialIssue(overrideDecision)}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-[#0c1a30] font-black text-[10px] uppercase tracking-wider rounded-lg transition-all"
+                        >
+                          {overrideSubmitting ? 'Submitting Override...' : 'Submit Resolution Action'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attached Vendor Documents List */}
+                {Array.isArray(jobData.vendorDocuments) && jobData.vendorDocuments.length > 0 && (
+                  <div className="space-y-4">
+                    <span className="block text-xs font-black uppercase text-slate-300 tracking-wider">
+                      Attached Vendor Documents ({jobData.vendorDocuments.length})
+                    </span>
+                    <div className="space-y-4">
+                      {jobData.vendorDocuments
+                        .filter((d: any) => user || d.visibleToCrew)
+                        .map((doc: any) => {
+                          const isConfirmed = !!jobData.materialConfirmation || !!doc.confirmation;
+                          const confirmationDetails = jobData.materialConfirmation || doc.confirmation;
+                          
+                          return (
+                            <div key={doc.id} className="bg-[#0A1120] border border-blue-900/15 p-5 rounded-2xl space-y-4">
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-blue-900/10 pb-3">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-white uppercase">{doc.vendorName}</span>
+                                    <span className="text-[10px] font-mono text-slate-400 font-bold uppercase bg-slate-800/60 px-2 py-0.5 rounded">
+                                      SO #{doc.salesOrderNumber}
+                                    </span>
+                                    {user && (
+                                      <span className={cn(
+                                        "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border",
+                                        doc.visibleToCrew 
+                                          ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5" 
+                                          : "text-slate-500 border-slate-700 bg-slate-800/10"
+                                      )}>
+                                        {doc.visibleToCrew ? 'Visible to Crew' : 'Hidden from Crew'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                    <span><strong>Location:</strong> {doc.pickupLocation}</span>
+                                    {doc.pickupDateTime && (
+                                      <span><strong>Target Date/Time:</strong> {new Date(doc.pickupDateTime).toLocaleString()}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <a
+                                    href={doc.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1 border border-blue-900/30"
+                                  >
+                                    <Eye size={13} /> View Order Document
+                                  </a>
+
+                                  {user && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteVendorDoc(doc.id)}
+                                      className="p-1.5 bg-rose-950/20 border border-rose-900/20 hover:bg-rose-950/40 text-rose-400 rounded-lg transition-all"
+                                      title="Delete document"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {doc.notes && (
+                                <p className="text-xs text-slate-300 italic bg-[#070D19]/60 p-3 rounded-xl border border-blue-900/5">
+                                  <strong>Office Notes:</strong> {doc.notes}
+                                </p>
+                              )}
+
+                              {/* Line items checklist */}
+                              {Array.isArray(doc.lineItems) && doc.lineItems.length > 0 && (
+                                <div className="space-y-2">
+                                  <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                    Pickup Item Manifest:
+                                  </span>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {doc.lineItems.map((item: any) => {
+                                      const itemStatus = confirmationDetails?.lineItemsStatus?.[item.id]?.status || 'Pending';
+                                      const itemNotes = confirmationDetails?.lineItemsStatus?.[item.id]?.notes;
+                                      
+                                      return (
+                                        <div key={item.id} className="p-3 bg-[#070D19]/40 border border-blue-900/5 rounded-xl flex items-center justify-between gap-4">
+                                          <div className="space-y-0.5">
+                                            <span className="text-xs font-bold text-slate-300">{item.description}</span>
+                                            <span className="text-[10px] font-black text-amber-500 font-mono">Qty: {item.qty}</span>
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <span className={cn(
+                                              "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
+                                              itemStatus === 'Confirmed' 
+                                                ? "bg-emerald-500/10 text-emerald-400" 
+                                                : itemStatus === 'Pending' 
+                                                  ? "bg-amber-500/10 text-amber-500 animate-pulse" 
+                                                  : "bg-rose-500/10 text-rose-400"
+                                            )}>
+                                              {itemStatus}
+                                            </span>
+                                            {itemNotes && (
+                                              <p className="text-[9px] text-slate-400 italic mt-0.5 line-clamp-1 max-w-[120px]" title={itemNotes}>
+                                                "{itemNotes}"
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -4761,7 +4822,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
 
       {/* CREW WORKFLOW: MATERIAL PICKUP CONFIRMATION MODAL */}
       <AnimatePresence>
-        {showConfirmModal && activeDocForConfirmation && (
+        {showConfirmModal && (
           <div className="fixed inset-0 bg-black/95 z-[120] flex items-center justify-center overflow-y-auto p-4 md:p-8">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
@@ -4776,9 +4837,15 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                     <ClipboardList className="text-[#E63946]" size={20} />
                     Material Audit & Check-In Confirmation
                   </h3>
-                  <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">
-                    Vendor: {activeDocForConfirmation.vendorName} | Order: #{activeDocForConfirmation.salesOrderNumber}
-                  </p>
+                  {activeDocForConfirmation ? (
+                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">
+                      Vendor: {activeDocForConfirmation.vendorName} | Order: #{activeDocForConfirmation.salesOrderNumber}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider text-rose-400">
+                      No vendor sales order uploaded. Check in materials using the app-generated bill of materials.
+                    </p>
+                  )}
                 </div>
                 <button 
                   onClick={() => setShowConfirmModal(false)} 
