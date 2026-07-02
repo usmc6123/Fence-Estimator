@@ -640,6 +640,110 @@ function formatInstallDates(dates: Date[]): string {
   return `${dateStrings.join(', ')} & ${lastStr}${allSameYear ? `, ${first.year}` : ''}`;
 }
 
+function calculateInstallationReminderTime(startDateStr: string | null | undefined, startTimeStr?: string | null | undefined): { installStartDateTime: string; calculatedReminderTime: string } {
+  if (!startDateStr) {
+    return { installStartDateTime: '', calculatedReminderTime: '' };
+  }
+
+  // 1. Extract date part (YYYY-MM-DD) and optional time part
+  let datePart = '';
+  let timePart = startTimeStr || '';
+
+  if (startDateStr.includes('T')) {
+    const parts = startDateStr.split('T');
+    datePart = parts[0];
+    if (!timePart && parts[1]) {
+      timePart = parts[1].substring(0, 5); // get HH:MM
+    }
+  } else if (startDateStr.includes(' ')) {
+    const parts = startDateStr.split(' ');
+    datePart = parts[0];
+    if (!timePart && parts[1]) {
+      timePart = parts[1].substring(0, 5); // get HH:MM
+    }
+  } else {
+    datePart = startDateStr;
+  }
+
+  // If timePart is still empty or invalid, default to '07:00'
+  if (!timePart || !timePart.includes(':')) {
+    timePart = '07:00';
+  }
+
+  try {
+    let year = 0;
+    let month = 0;
+    let day = 0;
+
+    if (datePart.includes('-')) {
+      const parts = datePart.split('-');
+      if (parts[0].length === 4) {
+        year = Number(parts[0]);
+        month = Number(parts[1]);
+        day = Number(parts[2]);
+      } else {
+        // MM-DD-YYYY
+        month = Number(parts[0]);
+        day = Number(parts[1]);
+        year = Number(parts[2]);
+      }
+    } else if (datePart.includes('/')) {
+      const parts = datePart.split('/');
+      if (parts[2].length === 4) {
+        // MM/DD/YYYY
+        month = Number(parts[0]);
+        day = Number(parts[1]);
+        year = Number(parts[2]);
+      } else {
+        // YYYY/MM/DD
+        year = Number(parts[0]);
+        month = Number(parts[1]);
+        day = Number(parts[2]);
+      }
+    } else {
+      // Try parsing with native Date
+      const parsedDate = new Date(datePart);
+      if (!isNaN(parsedDate.getTime())) {
+        year = parsedDate.getFullYear();
+        month = parsedDate.getMonth() + 1;
+        day = parsedDate.getDate();
+      }
+    }
+
+    const [hours, minutes] = timePart.split(':').map(Number);
+    
+    if (!year || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+      throw new Error(`Invalid components: datePart=${datePart}, timePart=${timePart}`);
+    }
+
+    const installStartLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const reminderMs = installStartLocal.getTime() - (16 * 60 * 60 * 1000);
+    const reminderDate = new Date(reminderMs);
+
+    const rYear = reminderDate.getFullYear();
+    const rMonth = String(reminderDate.getMonth() + 1).padStart(2, '0');
+    const rDay = String(reminderDate.getDate()).padStart(2, '0');
+    const rHours = String(reminderDate.getHours()).padStart(2, '0');
+    const rMinutes = String(reminderDate.getMinutes()).padStart(2, '0');
+    const rSeconds = String(reminderDate.getSeconds()).padStart(2, '0');
+
+    const calculatedReminderTime = `${rYear}-${rMonth}-${rDay}T${rHours}:${rMinutes}:${rSeconds}`;
+    
+    // Install start datetime formatted
+    const sYear = String(year);
+    const sMonth = String(month).padStart(2, '0');
+    const sDay = String(day).padStart(2, '0');
+    const sHours = String(hours).padStart(2, '0');
+    const sMinutes = String(minutes).padStart(2, '0');
+    const installStartDateTime = `${sYear}-${sMonth}-${sDay}T${sHours}:${sMinutes}:00`;
+
+    return { installStartDateTime, calculatedReminderTime };
+  } catch (calcErr) {
+    console.error("[GHL API SYNC] Error parsing/calculating reminder time:", calcErr);
+    return { installStartDateTime: '', calculatedReminderTime: '' };
+  }
+}
+
 async function sendGhlWorkflowWebhook(
   eventType: 'instant_estimate_submitted' | 'customer_estimator_submitted' | 'manual_estimate_sent' | 'estimate_accepted' | 'estimate_completed' | 'estimate_declined' | 'install_scheduled',
   payloadData: any,
@@ -849,9 +953,32 @@ async function sendGhlWorkflowWebhook(
       const installStartDateStr = (payloadData.startDate || payloadData.scheduledStartDate || (payloadData.estimate ? (payloadData.estimate.scheduledStartDate || payloadData.estimate.jobStartDate) : '') || payloadData.scheduleDate || (calcDates.length > 0 ? calcDates[0].toISOString().split('T')[0] : ''));
       const installEndDateStr = (calcDates.length > 0 ? calcDates[calcDates.length - 1].toISOString().split('T')[0] : '') || installStartDateStr;
 
+      // Get the startTimeStr from Firestore schedule_events if possible
+      let startTimeStr = '07:00';
+      const resolvedEstId = estimateId || payloadData.estimateId || (payloadData.estimate ? payloadData.estimate.id : '') || '';
+      if (firestoreDb && resolvedEstId) {
+        try {
+          const eventDoc = await firestoreDb.collection('schedule_events').doc("install-" + resolvedEstId).get();
+          if (eventDoc.exists) {
+            const eventData = eventDoc.data();
+            if (eventData && eventData.startTime) {
+              startTimeStr = eventData.startTime;
+            }
+          }
+        } catch (err) {
+          console.error("[GHL WORKFLOW WEBHOOK] Failed to fetch schedule event for start time:", err);
+        }
+      }
+
+      const { installStartDateTime, calculatedReminderTime: reminderIsoStr } = calculateInstallationReminderTime(installStartDateStr, startTimeStr);
+
+      console.log(`[GHL WORKFLOW WEBHOOK] Calculated scheduling date-times:`);
+      console.log(`- installStartDateTime: ${installStartDateTime}`);
+      console.log(`- calculated installationReminderTime: ${reminderIsoStr}`);
+
       finalPayload = {
         ...finalPayload,
-        estimateId: estimateId || payloadData.estimateId || (payloadData.estimate ? payloadData.estimate.id : '') || '',
+        estimateId: resolvedEstId,
         estimateNumber: payloadData.estimateNumber || (payloadData.estimate ? payloadData.estimate.estimateNumber : '') || '',
         customerName: payloadData.customerName || (payloadData.estimate ? payloadData.estimate.customerName : '') || `${payloadData.firstName || ''} ${payloadData.lastName || ''}`.trim(),
         email: payloadData.email || (payloadData.estimate ? (payloadData.estimate.customerEmail || payloadData.estimate.email) : '') || '',
@@ -865,11 +992,13 @@ async function sendGhlWorkflowWebhook(
         projectDuration: projectDurationStr,
         installStartDate: installStartDateStr,
         installEndDate: installEndDateStr,
+        installationReminderTime: reminderIsoStr,
         scheduledAt: payloadData.scheduledAt || new Date().toISOString()
       };
     }
 
     console.log(`Triggering GHL Webhook for ${eventType} to ${webhookUrl}`);
+    console.log(`[GHL WORKFLOW WEBHOOK DIAGNOSTIC] FINAL PAYLOAD:`, JSON.stringify(finalPayload, null, 2));
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -877,6 +1006,7 @@ async function sendGhlWorkflowWebhook(
     });
 
     const responseText = await response.text();
+    console.log(`[GHL WORKFLOW WEBHOOK DIAGNOSTIC] GHL API RESPONSE: HTTP ${response.status}`, responseText);
     const maskedUrl = webhookUrl.replace(/^(https?:\/\/[^\/]+).*$/, '$1/...');
 
     const logEntry = {
@@ -1474,28 +1604,12 @@ async function syncCustomerToGhl({
             }
           }
 
-          let reminderIsoStr = '';
-          if (installStartDateStr) {
-            try {
-              const [year, month, day] = installStartDateStr.split('-').map(Number);
-              const [hours, minutes] = startTimeStr.split(':').map(Number);
-              const installStartLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
-              const reminderMs = installStartLocal.getTime() - (16 * 60 * 60 * 1000);
-              const reminderDate = new Date(reminderMs);
-              
-              const rYear = reminderDate.getFullYear();
-              const rMonth = String(reminderDate.getMonth() + 1).padStart(2, '0');
-              const rDay = String(reminderDate.getDate()).padStart(2, '0');
-              const rHours = String(reminderDate.getHours()).padStart(2, '0');
-              const rMinutes = String(reminderDate.getMinutes()).padStart(2, '0');
-              const rSeconds = String(reminderDate.getSeconds()).padStart(2, '0');
-              
-              reminderIsoStr = `${rYear}-${rMonth}-${rDay}T${rHours}:${rMinutes}:${rSeconds}`;
-              console.log(`[GHL API SYNC] Calculated installationReminderTime. Start: ${installStartDateStr} ${startTimeStr}, Reminder: ${reminderIsoStr}`);
-            } catch (calcErr) {
-              console.error("[GHL API SYNC] Error calculating installation reminder time:", calcErr);
-            }
-          }
+          const { installStartDateTime, calculatedReminderTime: reminderIsoStr } = calculateInstallationReminderTime(installStartDateStr, startTimeStr);
+
+          console.log(`[GHL API SYNC] Calculated scheduling date-times:`);
+          console.log(`- installStartDateTime: ${installStartDateTime}`);
+          console.log(`- calculated installationReminderTime: ${reminderIsoStr}`);
+          console.log(`- GHL custom field ID being used for installationReminderTime: ${settings?.ghlCustomFields?.installationReminderTime}`);
 
           addCf('installationReminderTime', reminderIsoStr, true);
         }
