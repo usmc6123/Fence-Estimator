@@ -277,6 +277,11 @@ export interface Estimate {
   totalInvestment?: number;
   baseFencePrice?: number;
   calculatedGrandTotal?: number;
+  materialTakeoffFinalTotal?: number;
+  fenceRunMaterialTotal?: number;
+  customMaterialTotal?: number;
+  customerContractMaterialSource?: string;
+  customerContractDisplayedMaterialTotal?: number;
   pricingUpdatedAt?: string;
   contractProjectDate?: string;
   customerEmailSentAt?: string | null;

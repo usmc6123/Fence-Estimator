@@ -108,6 +108,12 @@ export interface DetailedTakeOff {
     grandTotal: number;
     subtotalBeforeDiscount: number;
     pricePerFoot: number;
+    // Debug fields
+    fenceRunMaterialTotal?: number;
+    customMaterialTotal?: number;
+    materialTakeoffFinalTotal?: number;
+    customerContractMaterialSource?: string;
+    customerContractDisplayedMaterialTotal?: number;
   };
 }
 
@@ -2243,7 +2249,13 @@ export function calculateDetailedTakeOff(
   // To meet the requirement that the delivery fee and custom labor additions are included in the fence installation cost
   // and count towards the run/section cost summaries on the contract, we assign it to the first run (idx === 0).
   if (detailedRuns.length > 0) {
-    detailedRuns[0].fenceLaborCost += extraLaborTotal;
+    const manualMaterialOnlyTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+    const manualLaborOnlyTotal = manualSummary.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
+    const manualDemoOnlyTotal = manualSummary.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
+
+    detailedRuns[0].fenceLaborCost += extraLaborTotal + manualLaborOnlyTotal;
+    detailedRuns[0].fenceMaterialCost += manualMaterialOnlyTotal;
+    detailedRuns[0].demoCharge += manualDemoOnlyTotal;
   }
 
   // Re-calculate totals based on ALL items
@@ -2319,14 +2331,12 @@ export function calculateDetailedTakeOff(
   // Discount
   const discountAmount = estimate.discountAmount || 0;
 
+  // Authoritative Grand Total from Takeoff (Materials + Labor + Demo + Prep + Markup + Tax)
+  const authoritativeGrandTotal = (totalMaterial + totalLabor + totalDemo + totalPrep) * markupFactor + (totalMaterial * taxFactor);
+
   // Calculated overall base fence total (excluding custom contract line items)
-  let baseFenceCalculatedTotal = totalSectionsSum;
-  if (addOnSitePrepPrice > 0) {
-    baseFenceCalculatedTotal += addOnSitePrepPrice;
-  }
-  if (discountAmount > 0) {
-    baseFenceCalculatedTotal -= discountAmount;
-  }
+  // This should match authoritativeGrandTotal minus discount
+  let baseFenceCalculatedTotal = authoritativeGrandTotal - discountAmount;
 
   // Override or Calculated for base fence
   const manualGrandTotal = estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? estimate.manualGrandTotal : null;
@@ -2344,10 +2354,10 @@ export function calculateDetailedTakeOff(
   // calculatedTotal includes base calculated total and additional contract line items
   const calculatedTotal = baseFenceCalculatedTotal + additionalContractLineItemsTotal;
 
-  // Subtotal before discount is totalSectionsSum + addOnSitePrepPrice
-  const subtotalBeforeDiscount = totalSectionsSum + addOnSitePrepPrice;
+  // Subtotal before discount
+  const subtotalBeforeDiscount = authoritativeGrandTotal;
 
-  // Global price per foot: (Final Contract Total - Gates - Excluded Custom Line Items) / Linear Feet
+  // Global price per foot
   const totalNetLF = runsPricing.reduce((sum, r) => sum + r.netLF, 0);
   const totalGates = runsPricing.reduce((sum, r) => sum + r.finalGate, 0);
   
@@ -2356,6 +2366,9 @@ export function calculateDetailedTakeOff(
     : additionalContractLineItemsTotal;
 
   const pricePerFoot = totalNetLF > 0 ? (finalCustomerPrice - totalGates - excludedCustomItemsTotal) / totalNetLF : 0;
+
+  const fenceRunMaterialTotal = calculatedSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  const customMaterialTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
 
   const pricing = {
     runsPricing,
@@ -2371,7 +2384,13 @@ export function calculateDetailedTakeOff(
     estimatedPrice: finalCustomerPrice,
     grandTotal: finalCustomerPrice,
     subtotalBeforeDiscount,
-    pricePerFoot
+    pricePerFoot,
+    // Debug fields
+    fenceRunMaterialTotal,
+    customMaterialTotal,
+    materialTakeoffFinalTotal: authoritativeGrandTotal,
+    customerContractMaterialSource: customMaterialTotal > 0 ? 'Mixed (Runs + Manual)' : 'Runs Only',
+    customerContractDisplayedMaterialTotal: totalMaterial
   };
 
   return {

@@ -549,7 +549,12 @@ export default function CustomerContract({
         discountAmount: data.pricing.discountAmount,
         pricePerFoot: data.pricing.pricePerFoot,
         baseFenceTotal: baseFenceTotal,
-        additionalContractLineItemsTotal: customContractLineItemsTotal
+        additionalContractLineItemsTotal: customContractLineItemsTotal,
+        materialTakeoffFinalTotal: data.pricing.materialTakeoffFinalTotal,
+        fenceRunMaterialTotal: data.pricing.fenceRunMaterialTotal,
+        customMaterialTotal: data.pricing.customMaterialTotal,
+        customerContractMaterialSource: data.pricing.customerContractMaterialSource,
+        customerContractDisplayedMaterialTotal: data.pricing.customerContractDisplayedMaterialTotal
       };
 
       const updates: any = {
@@ -1633,7 +1638,32 @@ Please structure the contract narrative with professional Markdown bold headers 
                       <span>Final Customer Price:</span>
                       <span>{formatCurrency(data.pricing.finalCustomerPrice)}</span>
                     </div>
-                    <div className="flex justify-between text-[11px] text-slate-500">
+
+                    <div className="mt-4 pt-4 border-t border-slate-700 space-y-1">
+                      <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Takeoff Material Breakdown</div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Fence Run Material Total:</span>
+                        <span className="text-white">{formatCurrency(data.pricing.fenceRunMaterialTotal || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Custom Material Total:</span>
+                        <span className="text-white">{formatCurrency(data.pricing.customMaterialTotal || 0)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-blue-300">
+                        <span className="text-slate-300">Material Takeoff Final Total (Incl. Markup/Tax):</span>
+                        <span>{formatCurrency(data.pricing.materialTakeoffFinalTotal || 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-500">Material Source:</span>
+                        <span className="text-slate-400">{data.pricing.customerContractMaterialSource}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-500">Contract Displayed Material (Total):</span>
+                        <span className="text-slate-400">{formatCurrency(data.pricing.customerContractDisplayedMaterialTotal || 0)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-[11px] text-slate-500 pt-2">
                       <span>Overall Price Per Foot:</span>
                       <span>{formatCurrency(data.pricing.pricePerFoot)} / FT</span>
                     </div>
