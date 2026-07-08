@@ -210,6 +210,8 @@ export default function CustomerContract({
           demoRemovalPrice: Number(snap.demoRemovalPrice || snap.demoTotal || 0),
           discountAmount: Number(snap.discountAmount || 0),
           manualGrandTotal: snap.manualGrandTotal !== undefined ? snap.manualGrandTotal : null,
+          baseFenceTotal: Number(snap.baseFenceTotal || snap.baseFencePrice || snap.fenceTotal || 0),
+          additionalContractLineItemsTotal: Number(snap.additionalContractLineItemsTotal || snap.customContractLineItemsTotal || 0),
           calculatedTotal: Number(snap.calculatedGrandTotal || snap.subtotalBeforeDiscount || 0),
           finalCustomerPrice: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
           estimatedPrice: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
@@ -481,17 +483,25 @@ export default function CustomerContract({
       ));
   });
 
-  const editedGrandTotal = data.pricing.calculatedTotal;
-  const baseFenceTotal = React.useMemo(() => {
-    if (isCustomerView && estimate.contractSnapshot) {
-      return Number(estimate.contractSnapshot.finalCustomerPrice || 0);
-    }
-    return manualGrandTotal ?? editedGrandTotal;
-  }, [estimate.contractSnapshot, isCustomerView, manualGrandTotal, editedGrandTotal]);
+  const baseFenceTotal = data.pricing.baseFenceTotal || 0;
+  const finalProjectTotal = data.pricing.finalCustomerPrice || 0;
 
-  const finalProjectTotal = React.useMemo(() => {
-    return baseFenceTotal + customContractLineItemsTotal;
-  }, [baseFenceTotal, customContractLineItemsTotal]);
+  // Debug Pricing Breakdown (Console logs as requested)
+  useEffect(() => {
+    const calculatedFenceInstallationTotal = data.pricing.totalSectionsSum + data.pricing.addOnSitePrepPrice - data.pricing.discountAmount;
+    const displayFenceInstallationTotal = baseFenceTotal;
+    const displayAdditionalItemsTotal = customContractLineItemsTotal;
+    const displayTotalInvestment = finalProjectTotal;
+
+    console.log('Contract Display Debug:', {
+      calculatedFenceInstallationTotal,
+      customContractLineItemsTotal,
+      existingFinalContractTotal: data.pricing.finalCustomerPrice,
+      displayFenceInstallationTotal,
+      displayAdditionalItemsTotal,
+      displayTotalInvestment
+    });
+  }, [data.pricing, baseFenceTotal, customContractLineItemsTotal, finalProjectTotal]);
 
   const grandTotal = data.pricing.finalCustomerPrice;
   const isGrandTotalOverridden = manualGrandTotal !== null;
@@ -1377,7 +1387,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                   <div className="mt-2 flex items-center justify-center gap-1">
                     {isCustomerView ? (
                       <span className="text-xl font-black text-american-blue">
-                        {formatCurrency(manualGrandTotal ?? editedGrandTotal)}
+                        {formatCurrency(data.pricing.baseFenceTotal)}
                       </span>
                     ) : (
                       <>
@@ -1385,7 +1395,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                         <input 
                           type="number"
                           step="0.01"
-                          value={(manualGrandTotal ?? editedGrandTotal).toFixed(2)}
+                          value={(data.pricing.baseFenceTotal).toFixed(2)}
                           onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
                           className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
                         />
@@ -1538,7 +1548,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                     )}
                   </div>
                   {isGrandTotalOverridden && (
-                    <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(editedGrandTotal)}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-american-red/80 mb-2">Manual Override Active • Original: {formatCurrency(data.pricing.calculatedTotal)}</p>
                   )}
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Valid for 30 days from date of issue</p>
                 </div>
