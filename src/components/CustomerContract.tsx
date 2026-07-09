@@ -251,7 +251,22 @@ export default function CustomerContract({
 
       return (runsToUse as any[]).map((run, i) => {
         const finalFenceValue = run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge !== undefined ? run.totalFenceCharge : (run.finalFence || 0));
-        const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0));
+        
+        // Calculate gate total from items as a fallback if summary values are missing labor
+        // This ensures the Run Breakdown matches the Custom Gate Access Systems section
+        const snapshotGates = run.gateDetails || run.gates || [];
+        const summedGatesTotal = snapshotGates.reduce((acc: number, gate: any) => {
+          const items = gate.items || [];
+          if (items.length === 0) return acc;
+          const subtotal = items.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+          const nonLaborSubtotal = items.filter((i: any) => i.category !== 'Labor').reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+          return acc + (subtotal * markupFactor) + (nonLaborSubtotal * taxFactor);
+        }, 0);
+
+        const rawGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0));
+        // Use the summed total if it appears to include labor that is missing from the summary snapshot
+        const finalGateValue = (summedGatesTotal > rawGateValue && rawGateValue > 0) ? summedGatesTotal : (rawGateValue || summedGatesTotal);
+
         const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0));
         return {
           name: run.runName || run.name || `Section ${i + 1}`,
@@ -280,10 +295,23 @@ export default function CustomerContract({
       const fenceTax = run.fenceMaterialCost * taxFactor;
       const totalFenceCharge = baseFenceCharge + fenceTax;
       
-      // Gate Charge
+      // Gate Charge calculation with fallback for missing labor in summary fields
+      // We calculate from items to ensure parity with the Custom Gate Access Systems section
+      const summedGatesTotal = (run.gates || []).reduce((acc: number, gate: any) => {
+        const items = gate.items || [];
+        const subtotal = items.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+        const nonLaborSubtotal = items.filter((i: any) => i.category !== 'Labor').reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+        return acc + (subtotal * markupFactor) + (nonLaborSubtotal * taxFactor);
+      }, 0);
+
       const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
       const gateTax = run.gateMaterialCost * taxFactor;
-      const totalGateCharge = baseGateCharge + gateTax;
+      const summaryGateTotal = baseGateCharge + gateTax;
+
+      // Fallback: Use summed total if it's greater than summary total and labor in summary is missing/zero
+      const totalGateCharge = (summedGatesTotal > summaryGateTotal && (run.gateLaborCost === 0 || !run.gateLaborCost)) 
+        ? summedGatesTotal 
+        : summaryGateTotal;
 
       // Demo Charge
       const demoCharge = run.demoCharge * markupFactor;
