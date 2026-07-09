@@ -2284,9 +2284,19 @@ export function calculateDetailedTakeOff(
     const totalFenceCharge = baseFenceCharge + fenceTax;
 
     // Gate Charge
+    const summedGatesTotal = (run.gates || []).reduce((acc: number, gate: any) => {
+      const items = gate.items || [];
+      const subtotal = items.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+      const nonLaborSubtotal = items.filter((i: any) => i.category !== 'Labor').reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+      return acc + (subtotal * markupFactor) + (nonLaborSubtotal * taxFactor);
+    }, 0);
+
     const baseGateCharge = (run.gateMaterialCost + run.gateLaborCost) * markupFactor;
     const gateTax = run.gateMaterialCost * taxFactor;
-    const totalGateCharge = baseGateCharge + gateTax;
+    const summaryGateTotal = baseGateCharge + gateTax;
+
+    // Use the more accurate summedGatesTotal if it's available and higher (indicating missing labor in summary)
+    const totalGateCharge = (summedGatesTotal > summaryGateTotal) ? summedGatesTotal : summaryGateTotal;
 
     // Demo Charge
     const demoCharge = run.demoCharge * markupFactor;
