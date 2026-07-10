@@ -315,6 +315,43 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
+  const checkJobConflict = (startDate: string, duration: number, excludeEstimateId?: string) => {
+    const start = parseISO(startDate);
+    const requestedDates = [];
+    for (let i = 0; i < duration; i++) {
+      requestedDates.push(format(addDays(start, i), 'yyyy-MM-dd'));
+    }
+
+    for (const dateKey of requestedDates) {
+      // Check schedule_events for jobs
+      const conflictEvent = events.find(e => {
+        if (e.type !== 'Job') return false;
+        if (excludeEstimateId && e.estimateId === excludeEstimateId) return false;
+        
+        const eStart = e.startDate;
+        const eEnd = e.endDate || eStart;
+        return dateKey >= eStart && dateKey <= eEnd;
+      });
+      if (conflictEvent) return { hasConflict: true, date: dateKey, title: conflictEvent.title };
+
+      // Check scheduledEstimates
+      const conflictJob = scheduledEstimates.find(j => {
+        if (excludeEstimateId && j.id === excludeEstimateId) return false;
+        const jStart = j.scheduledStartDate!.substring(0, 10);
+        let jEnd = j.scheduledEndDate ? j.scheduledEndDate.substring(0, 10) : jStart;
+        const jDuration = Number(j.scheduledDuration || 1);
+        if (!j.scheduledEndDate && jDuration > 1) {
+          const d = parseLocalDate(jStart);
+          d.setDate(d.getDate() + (jDuration - 1));
+          jEnd = format(d, 'yyyy-MM-dd');
+        }
+        return dateKey >= jStart && dateKey <= jEnd;
+      });
+      if (conflictJob) return { hasConflict: true, date: dateKey, title: conflictJob.customerName };
+    }
+    return { hasConflict: false };
+  };
+
   const isDateUnavailable = (date: Date | string, duration: number = 1) => {
     const start = typeof date === 'string' ? parseLocalDate(date) : date;
     for (let i = 0; i < duration; i++) {
@@ -511,6 +548,14 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       }
 
       const startDateStr = format(date, 'yyyy-MM-dd');
+      const duration = selectedDuration; 
+
+      const conflict = checkJobConflict(startDateStr, duration, estimateId);
+      if (conflict.hasConflict) {
+        alert(`Schedule Conflict: ${conflict.date} is already occupied by ${conflict.title}. Only one installation is allowed per day.`);
+        return;
+      }
+
       const traceId = 'trace-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
       
       // Check for Job Blackouts
@@ -519,8 +564,6 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
           alert("This day is a designated blackout for installs.");
           return;
       }
-
-      const duration = selectedDuration; 
       const endDate = addDays(date, duration - 1);
       const endDateStr = format(endDate, 'yyyy-MM-dd');
 
@@ -644,6 +687,12 @@ export default function Scheduler({ savedEstimates, user, readOnly = false }: Sc
       const parsed = parseLocalDate(newDateStr);
       const end = addDays(parsed, newDuration - 1);
       const endStr = format(end, 'yyyy-MM-dd');
+
+      const conflict = checkJobConflict(newDateStr, newDuration, estimateId);
+      if (conflict.hasConflict) {
+        alert(`Schedule Conflict: ${conflict.date} is already occupied by ${conflict.title}. Only one installation is allowed per day.`);
+        return;
+      }
       
       const isBlackedOut = events.some(e => e.type === 'Blackout' && e.startDate.startsWith(newDateStr));
       if (isBlackedOut) {

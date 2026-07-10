@@ -97,6 +97,12 @@ export default function CrewSchedulePortal() {
       return;
     }
 
+    const conflict = getOverlapWarning();
+    if (conflict) {
+      setSubmitError(`Schedule Conflict: ${conflict.date} is already occupied by ${conflict.title}. Please choose alternative dates.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError('');
     setSubmitSuccess(false);
@@ -169,10 +175,12 @@ export default function CrewSchedulePortal() {
   };
 
   const handleRequestAlternateDate = async () => {
-    if (!alternateStartDate) {
-      setSubmitError('Please specify an alternate slot start date.');
+    const conflict = getOverlapWarning(alternateStartDate, Number(alternateDuration));
+    if (conflict) {
+      setSubmitError(`Schedule Conflict: ${conflict.date} is already occupied by ${conflict.title}. Please choose alternative dates.`);
       return;
     }
+
     setIsSubmitting(true);
     setSubmitError('');
     setSubmitSuccess(false);
@@ -311,44 +319,48 @@ export default function CrewSchedulePortal() {
     setChosenStartDate(dateStr);
   };
 
-  // Check if selection overlaps with any blackout date
-  const getOverlapWarning = () => {
-    if (!chosenStartDate || !scheduleData || !scheduleData.events) return null;
-    
-    const startD = new Date(chosenStartDate);
-    const endD = new Date(chosenStartDate);
-    endD.setDate(endD.getDate() + Number(chosenDuration));
-    
-    const pStartStr = startD.toISOString().split('T')[0];
-    const pEndStr = endD.toISOString().split('T')[0];
-    const pStart = new Date(pStartStr).getTime();
-    const pEnd = new Date(pEndStr).getTime();
+  // Check if selection overlaps with any blackout date or other installation
+  const getOverlapWarning = (startDate?: string, duration?: number) => {
+    const sDate = startDate || chosenStartDate;
+    const dDays = duration || Number(chosenDuration);
 
-    let hasOverlap = false;
+    if (!sDate || !scheduleData || !scheduleData.events) return null;
+    
+    const startD = new Date(sDate + 'T00:00:00');
+    const requestedDates = [];
+    for (let i = 0; i < dDays; i++) {
+      const d = new Date(startD);
+      d.setDate(startD.getDate() + i);
+      requestedDates.push(d.toISOString().split('T')[0]);
+    }
 
-    scheduleData.events.forEach((ev: any) => {
-      const isBlackout = ev.eventType === 'blackout' || ev.type === 'blackout';
-      if (isBlackout) {
+    for (const dStr of requestedDates) {
+      const conflict = scheduleData.events.find((ev: any) => {
+        // Skip current job if we are rescheduling
+        if (ev.id === `install-${estimateId}`) return false;
+
         const bStartStr = ev.start.split('T')[0];
         let bEndStr = (ev.end || ev.start).split('T')[0];
+        
+        // Handle single day events
         if (bStartStr === bEndStr) {
-          const d = new Date(bStartStr);
-          d.setDate(d.getDate() + 1);
-          bEndStr = d.toISOString().split('T')[0];
+          return dStr === bStartStr;
         }
 
-        const bs = new Date(bStartStr).getTime();
-        const be = new Date(bEndStr).getTime();
+        // Standard range check
+        return dStr >= bStartStr && dStr <= bEndStr;
+      });
 
-        if ((pStart < be) && (bs < pEnd)) {
-          hasOverlap = true;
-        }
+      if (conflict) {
+        const isBlackout = conflict.eventType === 'blackout' || conflict.type === 'blackout';
+        return {
+          date: dStr,
+          title: conflict.title,
+          isBlackout
+        };
       }
-    });
-
-    if (hasOverlap) {
-      return "Warning: The selected dates overlap with a blocked blackout date. Please choose alternative dates.";
     }
+
     return null;
   };
 
@@ -706,7 +718,7 @@ export default function CrewSchedulePortal() {
 
             {errorWarning && (
               <div className="p-4 bg-yellow-950/50 text-yellow-500 text-xs font-bold leading-relaxed rounded-xl border border-yellow-900/30">
-                ⚠️ {errorWarning}
+                ⚠️ Warning: The selected dates overlap with <strong>{errorWarning.title}</strong> on <strong>{errorWarning.date}</strong>. Only one installation is allowed per day.
               </div>
             )}
 

@@ -41,6 +41,92 @@ function isInstallOnUnavailableDay(startDate: string, duration: number, unavaila
   return { isUnavailable: false };
 }
 
+/**
+ * Checks for scheduling conflicts with existing installation jobs.
+ * Rule: Only one installation job occupying any calendar day.
+ */
+async function checkInstallationConflicts(
+  startDate: string,
+  duration: number,
+  excludeEstimateId: string | null,
+  firestoreDb: any
+): Promise<{ hasConflict: boolean; date?: string; estimateId?: string }> {
+  // 1. Generate all requested install dates.
+  const requestedDates: string[] = [];
+  try {
+    const start = new Date(startDate + 'T00:00:00');
+    if (isNaN(start.getTime())) return { hasConflict: false };
+    
+    for (let i = 0; i < duration; i++) {
+      const current = new Date(start);
+      current.setDate(start.getDate() + i);
+      requestedDates.push(format(current, 'yyyy-MM-dd'));
+    }
+  } catch (e) {
+    return { hasConflict: false };
+  }
+
+  if (requestedDates.length === 0) return { hasConflict: false };
+
+  // 2. Query active installation schedule events.
+  // We treat 'Job' types in schedule_events as blocking installations.
+  const eventsSnap = await firestoreDb.collection('schedule_events')
+    .where('type', '==', 'Job')
+    .get();
+
+  for (const doc of eventsSnap.docs) {
+    const event = doc.data();
+    const eventEstimateId = event.estimateId;
+
+    // 5. Exclude the current schedule event/estimate when rescheduling itself.
+    if (excludeEstimateId && eventEstimateId === excludeEstimateId) continue;
+    if (excludeEstimateId && doc.id === excludeEstimateId) continue;
+    if (excludeEstimateId && doc.id === `install-${excludeEstimateId}`) continue;
+
+    const eventStart = event.startDate || event.start;
+    const eventEnd = event.endDate || event.end;
+    const eventDuration = Number(event.duration || 1);
+
+    if (!eventStart) continue;
+
+    // 3. Expand existing multi-day jobs into every occupied date.
+    const occupiedDates: string[] = [];
+    try {
+      const eStart = new Date(eventStart + 'T00:00:00');
+      if (isNaN(eStart.getTime())) continue;
+
+      let days = eventDuration;
+      if (eventEnd) {
+        const eEnd = new Date(eventEnd + 'T00:00:00');
+        if (!isNaN(eEnd.getTime())) {
+          days = Math.round((eEnd.getTime() - eStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        }
+      }
+
+      for (let j = 0; j < days; j++) {
+        const d = new Date(eStart);
+        d.setDate(eStart.getDate() + j);
+        occupiedDates.push(format(d, 'yyyy-MM-dd'));
+      }
+    } catch (e) {
+      continue;
+    }
+
+    // 4. Compare requested dates against occupied dates.
+    for (const rDate of requestedDates) {
+      if (occupiedDates.includes(rDate)) {
+        return { 
+          hasConflict: true, 
+          date: rDate, 
+          estimateId: eventEstimateId 
+        };
+      }
+    }
+  }
+
+  return { hasConflict: false };
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
 
@@ -2272,6 +2358,20 @@ export default async function handler(req: any, res: any) {
               error: `Installs cannot be scheduled on ${validation.day}s. This timeframe includes ${validation.date}.`
             });
           }
+
+          // ONE-INSTALL-PER-DAY CONFLICT CHECK
+          // Reject the schedule if any requested install date is already occupied by another active installation job.
+          const conflict = await checkInstallationConflicts(vStartDate, vDuration, vEstId || null, db);
+          if (conflict.hasConflict) {
+            console.warn(`[AVAILABILITY BLOCKED] Action ${action} rejected. Reason: Date ${conflict.date} is occupied by estimate ${conflict.estimateId}.`);
+            return res.status(400).json({
+              success: false,
+              reason: "installation_date_conflict",
+              conflictDate: conflict.date,
+              conflictingEstimateId: conflict.estimateId,
+              message: "This date is already occupied by another installation."
+            });
+          }
         } catch (err) {
           console.error("Failed to validate install availability:", err);
         }
@@ -2827,6 +2927,59 @@ export default async function handler(req: any, res: any) {
       });
 
       return res.json({ jobs });
+    }
+
+    if (action === 'get-unavailable-install-dates') {
+      const estimateId = (req.query?.estimateId || req.body?.estimateId) as string;
+      const token = (req.query?.token || req.body?.token) as string;
+
+      if (!estimateId || !token) {
+        return res.status(400).json({ error: 'Estimate ID and token are required.' });
+      }
+
+      const { snap } = await getEstimateDocRef(estimateId);
+      if (!snap.exists) return res.status(404).json({ error: 'Estimate not found' });
+      const estimateData = snap.data() || {};
+
+      const isValidToken = (estimateData.laborSnapshotToken === token || estimateData.crewScheduleToken === token);
+      if (!isValidToken) return res.status(403).json({ error: 'Invalid security token.' });
+
+      // Fetch all blocking install events
+      const eventsSnap = await db.collection('schedule_events')
+        .where('type', '==', 'Job')
+        .get();
+
+      const occupiedDates = new Set<string>();
+      eventsSnap.forEach(doc => {
+        const event = doc.data();
+        if (estimateId && event.estimateId === estimateId) return;
+
+        const start = event.startDate || event.start;
+        const end = event.endDate || event.end;
+        const duration = Number(event.duration || 1);
+
+        if (start) {
+          try {
+            const s = new Date(start + 'T00:00:00');
+            if (isNaN(s.getTime())) return;
+
+            let days = duration;
+            if (end) {
+              const e = new Date(end + 'T00:00:00');
+              if (!isNaN(e.getTime())) {
+                days = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+              }
+            }
+            for (let i = 0; i < days; i++) {
+              const d = new Date(s);
+              d.setDate(s.getDate() + i);
+              occupiedDates.add(format(d, 'yyyy-MM-dd'));
+            }
+          } catch (err) {}
+        }
+      });
+
+      return res.json({ occupiedDates: Array.from(occupiedDates) });
     }
 
     if (action === 'update-job-schedule') {

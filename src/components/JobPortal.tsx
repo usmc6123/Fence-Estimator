@@ -221,6 +221,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
 
   // Crew Monthly Calendar View states
   const [crewJobs, setCrewJobs] = useState<any[]>([]);
+  const [occupiedDates, setOccupiedDates] = useState<string[]>([]);
   const [loadingCrewJobs, setLoadingCrewJobs] = useState(false);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
@@ -234,6 +235,24 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     const minDate = new Date();
     minDate.setDate(minDate.getDate() + 4);
     return minDate.toISOString().split('T')[0];
+  };
+
+  const isDateOccupied = (dateStr: string, durationStr: string) => {
+    try {
+      const start = parseISO(dateStr);
+      const duration = parseInt(durationStr) || 1;
+      
+      for (let i = 0; i < duration; i++) {
+        const d = addDays(start, i);
+        const dStr = format(d, 'yyyy-MM-dd');
+        if (occupiedDates.includes(dStr)) {
+          return { isOccupied: true, date: format(d, 'MM/dd/yyyy') };
+        }
+      }
+    } catch (e) {
+      console.error('Error checking occupancy:', e);
+    }
+    return { isOccupied: false };
   };
 
   const handleScheduleJobStart = async (e: React.FormEvent) => {
@@ -251,6 +270,13 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
 
     if (selectedDate.getTime() < minDateLimit.getTime()) {
       setScheduleError(`The soonest start date allowed is 4 calendar days from today (${minDateLimit.toISOString().split('T')[0]}).`);
+      return;
+    }
+
+    // ONE-INSTALL-PER-DAY FRONTEND CHECK
+    const occupancy = isDateOccupied(scheduleStartDate, scheduleDuration);
+    if (occupancy.isOccupied) {
+      setScheduleError(`This date is already occupied by another installation: ${occupancy.date}.`);
       return;
     }
 
@@ -295,6 +321,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
       }
 
       await fetchJobDetails(estimateId, token);
+      fetchOccupiedDates();
     } catch (err: any) {
       setScheduleError(err.message || String(err));
     } finally {
@@ -312,6 +339,14 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     const availability = isDateUnavailable(newScheduleStartDate, newScheduleDuration);
     if (availability.isUnavailable) {
       setScheduleError(`Installs cannot be scheduled on ${availability.day}s. This timeframe includes ${availability.date}.`);
+      setRescheduleSubmitting(false);
+      return;
+    }
+
+    // ONE-INSTALL-PER-DAY FRONTEND CHECK
+    const occupancy = isDateOccupied(newScheduleStartDate, newScheduleDuration);
+    if (occupancy.isOccupied) {
+      setScheduleError(`This date is already occupied by another installation: ${occupancy.date}.`);
       setRescheduleSubmitting(false);
       return;
     }
@@ -361,6 +396,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
 
       setShowRescheduleModal(false);
       await fetchJobDetails(estimateId, token);
+      fetchOccupiedDates();
     } catch (err: any) {
       setScheduleError(err.message || String(err));
     } finally {
@@ -378,6 +414,12 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     const isUnavailable = (settings?.unavailableInstallDays || ['Sunday']).includes(dayName);
     if (isUnavailable) {
       setScheduleError(`Installs are not available on ${dayName}s.`);
+      return;
+    }
+
+    const dateStr = format(day, 'yyyy-MM-dd');
+    if (occupiedDates.includes(dateStr)) {
+      setScheduleError(`This date is already occupied by another installation.`);
       return;
     }
 
@@ -409,9 +451,22 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     }
   };
 
+  const fetchOccupiedDates = async () => {
+    try {
+      const response = await fetch(`/api/estimates/write?action=get-unavailable-install-dates&estimateId=${estimateId}&token=${token}`);
+      const data = await response.json();
+      if (response.ok) {
+        setOccupiedDates(data.occupiedDates || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch occupied dates:', err);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'schedule') {
       fetchCrewJobs();
+      fetchOccupiedDates();
     }
   }, [activeTab, jobData?.assignedCrew]);
 
@@ -4542,6 +4597,8 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                       return isWithinInterval(day, { start: startDate, end: endDate });
                     });
 
+                    const isOccupiedGlobal = occupiedDates.includes(dateKey);
+
                     const isToday = isSameDay(day, new Date());
                     const isCurrentMonth = isSameMonth(day, currentCalendarDate);
                     
@@ -4555,22 +4612,25 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                       <button 
                         key={dateKey} 
                         type="button"
-                        onClick={() => !isPast && handleCalendarDayClick(day)}
-                        disabled={isPast}
+                        onClick={() => !isPast && !isOccupiedGlobal && handleCalendarDayClick(day)}
+                        disabled={isPast || isOccupiedGlobal}
                         className={cn(
                           "min-h-[70px] p-1 border-r border-b border-blue-900/5 last:border-r-0 transition-all text-left relative",
                           !isCurrentMonth && "opacity-20",
                           isToday && "bg-blue-900/5",
-                          isPast ? "cursor-not-allowed bg-slate-900/20" : "hover:bg-blue-600/5"
+                          (isPast || isOccupiedGlobal) ? "cursor-not-allowed bg-slate-900/20" : "hover:bg-blue-600/5"
                         )}
                       >
                         <span className={cn(
                           "text-[9px] font-mono font-bold mb-1 block",
-                          isToday ? "text-[#E63946]" : isPast ? "text-slate-700" : "text-slate-500"
+                          isToday ? "text-[#E63946]" : (isPast || isOccupiedGlobal) ? "text-slate-700" : "text-slate-500"
                         )}>
                           {format(day, 'd')}
                         </span>
                         <div className="space-y-0.5">
+                          {isOccupiedGlobal && !dayJobs.some(j => j.id === estimateId) && (
+                            <div className="h-1.5 w-full rounded-sm bg-orange-500/40" title="Occupied by another crew" />
+                          )}
                           {dayJobs.map(job => (
                             <div 
                               key={job.id}
