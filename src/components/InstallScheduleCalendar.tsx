@@ -155,14 +155,14 @@ export default function InstallScheduleCalendar({
         ...dayEvents.map(e => ({
           id: e.id,
           type: e.type,
-          title: mode === 'admin' ? e.title : (e.type === 'Job' ? 'Installation Scheduled' : e.title),
+          title: e.type === 'Job' ? ((e as any)?.customerName || e.title) : e.title,
           isJob: false,
           raw: e
         })),
         ...dayJobs.map(j => ({
           id: j.id,
           type: 'Job' as const,
-          title: mode === 'admin' ? j.customerName : 'Installation Scheduled',
+          title: j.customerName || (j as any).contactName || (j as any).jobTitle || 'Installation Scheduled',
           isJob: true,
           raw: j,
           city: j.customerCity,
@@ -262,7 +262,7 @@ export default function InstallScheduleCalendar({
                       <div
                         key={`${item.id}-${idx}`}
                         className={cn(
-                          "text-[9px] px-1.5 py-0.5 rounded-sm font-bold truncate leading-tight shadow-xs",
+                          "text-[9px] px-1.5 py-1 rounded-sm font-bold leading-tight shadow-xs w-full whitespace-normal break-words",
                           isJob ? "bg-american-blue text-white" :
                           isBusy ? "bg-purple-500 text-white" :
                           isEstimate ? "bg-amber-100 text-amber-800 border border-amber-200" :
@@ -356,7 +356,7 @@ export default function InstallScheduleCalendar({
                               item.type === 'Job' ? "bg-american-blue" : 
                               item.type === 'Busy' ? "bg-purple-500" : "bg-amber-500"
                             )} />
-                            <span className={cn("text-sm font-bold truncate", isSelected ? "text-white/90" : "text-gray-600")}>
+                            <span className={cn("text-sm font-bold whitespace-normal break-words", isSelected ? "text-white/90" : "text-gray-600")}>
                               {item.title}
                               {mode === 'crew' && item.isJob && (item.raw as any).customerCity && ` (${(item.raw as any).customerCity})`}
                             </span>
