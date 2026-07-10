@@ -4861,11 +4861,37 @@ export default async function handler(req: any, res: any) {
           eventsList.push({ id: doc.id, ...doc.data() });
         });
         
-        const filtered = eventsList.filter(e => 
+        const filteredEvents = eventsList.filter(e => 
           e.userId === decoded.uid || 
           decoded.uid === 'braden-lonestar-uid'
         );
-        return res.status(200).json(filtered);
+
+        // Also fetch scheduled estimates for portals
+        const estimatesList: any[] = [];
+        const estSnap = await db.collection('estimates').where('scheduledStartDate', '!=', null).get();
+        estSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.status !== 'archived') {
+            estimatesList.push({ id: doc.id, ...data });
+          }
+        });
+
+        // Search in users subcollections as well
+        const usersSnap = await db.collection('users').get();
+        for (const userDoc of usersSnap.docs) {
+          const nestedSnap = await db.collection('users').doc(userDoc.id).collection('estimates').where('scheduledStartDate', '!=', null).get();
+          nestedSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.status !== 'archived') {
+              estimatesList.push({ id: doc.id, ...data });
+            }
+          });
+        }
+
+        return res.status(200).json({
+          events: filteredEvents,
+          scheduledEstimates: estimatesList
+        });
       }
       if (action === 'debug-smtp-logs') {
         const settingsList: any[] = [];

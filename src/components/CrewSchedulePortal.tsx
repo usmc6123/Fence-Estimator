@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar as CalendarIcon, Clock, MapPin, Hammer, AlertTriangle, Check, Loader2, RefreshCw, Eye, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, MapPin, Hammer, AlertTriangle, Check, Loader2, RefreshCw, Eye, ShieldCheck, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
+import { ScheduleEvent, SavedEstimate } from '../types';
+import InstallScheduleCalendar from './InstallScheduleCalendar';
+import { parseISO, format, addDays } from 'date-fns';
 
 export default function CrewSchedulePortal() {
   const [estimateId, setEstimateId] = useState('');
@@ -13,6 +16,8 @@ export default function CrewSchedulePortal() {
   // Schedule Data
   const [scheduleData, setScheduleData] = useState<any>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [scheduledEstimates, setScheduledEstimates] = useState<SavedEstimate[]>([]);
   
   // Selection state
   const [chosenStartDate, setChosenStartDate] = useState('');
@@ -79,6 +84,14 @@ export default function CrewSchedulePortal() {
         setChosenStartDate(tomorrow.toISOString().split('T')[0]);
       }
       setChosenDuration(String(data.crewRequestedDuration || data.installDuration || 1));
+
+      // Fetch all schedule events for the unified calendar
+      const eventsRes = await fetch(`/api/estimates/write?action=list-schedule-events&estimateId=${estId}&token=${tok}`);
+      const eventsData = await eventsRes.json();
+      if (eventsRes.ok) {
+        setEvents(eventsData.events || []);
+        setScheduledEstimates(eventsData.scheduledEstimates || []);
+      }
     } catch (err: any) {
       setError(err?.message || String(err));
     } finally {
@@ -216,147 +229,36 @@ export default function CrewSchedulePortal() {
     }
   };
 
-  // Helper functions for Calendar Logic
-  const getDaysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (year: number, month: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const generateCalendarDays = () => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const daysInMonth = getDaysInMonth(year, month);
-    const firstDay = getFirstDayOfMonth(year, month);
-    
-    const days = [];
-    
-    // Add empty slots for days before the 1st
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null);
-    }
-    
-    // Add real days
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-    
-    return days;
-  };
-
-  const checkDayStatus = (date: Date | null) => {
-    if (!date || !scheduleData || !scheduleData.events) return { isBlackout: false, isInstallation: false, matchesSelection: false };
-    
-    const dateStr = date.toISOString().split('T')[0];
-    const cleanTime = (dStr: string) => new Date(dStr).getTime();
-    const t = date.getTime();
-
-    // Check selection preview overlap
-    let matchesSelection = false;
-    if (chosenStartDate) {
-      const startD = new Date(chosenStartDate);
-      const endD = new Date(chosenStartDate);
-      endD.setDate(endD.getDate() + Number(chosenDuration));
-      
-      const selectStart = new Date(startD.toISOString().split('T')[0]).getTime();
-      const selectEnd = new Date(endD.toISOString().split('T')[0]).getTime();
-
-      if (t >= selectStart && t < selectEnd) {
-        matchesSelection = true;
-      }
-    }
-
-    let isBlackout = false;
-    let isInstallation = false;
-
-    scheduleData.events.forEach((ev: any) => {
-      const bStart = new Date(ev.start.split('T')[0]).getTime();
-      let bEnd = new Date((ev.end || ev.start).split('T')[0]).getTime();
-      
-      // If start equals end, ensure single day is visible
-      if (bStart === bEnd) {
-        const d = new Date(ev.start);
-        d.setDate(d.getDate() + 1);
-        bEnd = new Date(d.toISOString().split('T')[0]).getTime();
-      }
-
-      if (t >= bStart && t < bEnd) {
-        if (ev.eventType === 'blackout' || ev.type === 'blackout') {
-          isBlackout = true;
-        } else {
-          isInstallation = true;
-        }
-      }
-    });
-
-    return { isBlackout, isInstallation, matchesSelection };
-  };
-
-  const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-  };
-
-  const handleDayClick = (day: Date) => {
-    const { isBlackout } = checkDayStatus(day);
-    if (isBlackout) {
-      setSubmitError("This date is blocked out for installation. Please choose another date.");
-      return;
-    }
-    setSubmitError("");
-    
-    // Set scheduledStartDate formatted as YYYY-MM-DD (local time-zone safe)
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const dateNum = String(day.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${dateNum}`;
-    
-    setChosenStartDate(dateStr);
-  };
-
-  // Check if selection overlaps with any blackout date or other installation
   const getOverlapWarning = (startDate?: string, duration?: number) => {
     const sDate = startDate || chosenStartDate;
     const dDays = duration || Number(chosenDuration);
 
-    if (!sDate || !scheduleData || !scheduleData.events) return null;
+    if (!sDate || !events) return null;
     
     const startD = new Date(sDate + 'T00:00:00');
     const requestedDates = [];
     for (let i = 0; i < dDays; i++) {
       const d = new Date(startD);
       d.setDate(startD.getDate() + i);
-      requestedDates.push(d.toISOString().split('T')[0]);
+      requestedDates.push(format(d, 'yyyy-MM-dd'));
     }
 
     for (const dStr of requestedDates) {
-      const conflict = scheduleData.events.find((ev: any) => {
+      const conflict = events.find((ev: any) => {
         // Skip current job if we are rescheduling
-        if (ev.id === `install-${estimateId}`) return false;
+        if (ev.estimateId === estimateId) return false;
 
-        const bStartStr = ev.start.split('T')[0];
-        let bEndStr = (ev.end || ev.start).split('T')[0];
+        const bStartStr = ev.startDate;
+        let bEndStr = ev.endDate || ev.startDate;
         
-        // Handle single day events
-        if (bStartStr === bEndStr) {
-          return dStr === bStartStr;
-        }
-
-        // Standard range check
         return dStr >= bStartStr && dStr <= bEndStr;
       });
 
       if (conflict) {
-        const isBlackout = conflict.eventType === 'blackout' || conflict.type === 'blackout';
         return {
           date: dStr,
           title: conflict.title,
-          isBlackout
+          isBlackout: conflict.type === 'Blackout'
         };
       }
     }
@@ -394,8 +296,6 @@ export default function CrewSchedulePortal() {
     );
   }
 
-  const calendarDays = generateCalendarDays();
-  const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const errorWarning = getOverlapWarning();
 
   return (
@@ -605,78 +505,24 @@ export default function CrewSchedulePortal() {
                   Active schedules & blackout periods
                 </p>
               </div>
-
-              {/* Prev/Next Navigation */}
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handlePrevMonth}
-                  className="p-2 hover:bg-[#13233B] text-slate-300 hover:text-white rounded-xl border border-american-blue/10 transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-xs font-black uppercase tracking-wider px-3 text-white">
-                  {monthName}
-                </span>
-                <button 
-                  onClick={handleNextMonth}
-                  className="p-2 hover:bg-[#13233B] text-slate-300 hover:text-white rounded-xl border border-american-blue/10 transition-colors"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
             </div>
 
-            {/* Grid Header days */}
-            <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black uppercase tracking-widest text-[#555555]">
-              <div>Sun</div>
-              <div>Mon</div>
-              <div>Tue</div>
-              <div>Wed</div>
-              <div>Thu</div>
-              <div>Fri</div>
-              <div>Sat</div>
-            </div>
-
-             {/* Calendar Days */}
-            <div className="grid grid-cols-7 gap-1.5 md:gap-2">
-              {calendarDays.map((day, idx) => {
-                if (!day) {
-                  return <div key={`empty-${idx}`} className="aspect-square bg-american-blue/[0.01]" />;
-                }
-
-                const { isBlackout, isInstallation, matchesSelection } = checkDayStatus(day);
-                const isToday = day.toDateString() === new Date().toDateString();
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => day && handleDayClick(day)}
-                    className={cn(
-                      "aspect-square p-1 sm:p-2 rounded-xl flex flex-col justify-between items-center relative transition-all duration-200 font-mono font-medium border border-[#13233B]/20 text-[10px] sm:text-xs select-none",
-                      day ? "cursor-pointer hover:border-american-blue/50" : "pointer-events-none",
-                      isBlackout && "bg-amber-950/40 text-amber-500 border border-amber-900/40 cursor-not-allowed hover:bg-amber-950/60",
-                      isInstallation && "bg-american-red/10 text-american-red border-american-red/10 hover:bg-american-red/20",
-                      matchesSelection && "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 ring-2 ring-emerald-500/50",
-                      !isBlackout && !isInstallation && !matchesSelection && "bg-[#030A14]/40 hover:bg-[#13233B] hover:text-white text-slate-300",
-                      isToday && "ring-2 ring-american-red/50 ring-offset-2 ring-offset-[#060E1A]"
-                    )}
-                  >
-                    <span>{day.getDate()}</span>
-                    
-                    <div className="flex flex-col gap-0.5 w-full mt-1">
-                      {isBlackout && (
-                        <span className="text-[7px] font-black uppercase text-center block leading-none truncate tracking-tighter text-amber-500/80">Blocked</span>
-                      )}
-                      {isInstallation && (
-                        <span className="text-[7px] font-black uppercase text-center block leading-none truncate tracking-tighter text-american-red">Busy</span>
-                      )}
-                      {matchesSelection && (
-                        <span className="text-[7px] font-black uppercase text-center block leading-none truncate tracking-tighter text-emerald-400">Proposed</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="p-3 sm:p-6 bg-[#030A14]/40 rounded-3xl border border-american-blue/5">
+              <InstallScheduleCalendar
+                mode="crew"
+                events={events}
+                scheduledEstimates={scheduledEstimates}
+                selectedDate={chosenStartDate ? parseISO(chosenStartDate) : null}
+                onDateClick={(day) => {
+                  setChosenStartDate(format(day, 'yyyy-MM-dd'));
+                  setSubmitError("");
+                }}
+                unavailableInstallDays={scheduleData?.settings?.unavailableInstallDays || ['Sunday']}
+                config={{
+                  viewFilter: 'jobs',
+                  appointmentDuration: 60
+                } as any}
+              />
             </div>
 
             {/* Legend indicators */}
@@ -692,10 +538,6 @@ export default function CrewSchedulePortal() {
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded bg-american-red/10 border border-american-red/30 inline-block" />
                 <span>Other Crews Busy</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-block" />
-                <span>Chosen Schedule Window</span>
               </div>
             </div>
 

@@ -26,7 +26,8 @@ import {
 import { cn } from '../lib/utils';
 import { storage } from '../lib/firebase';
 import { calculateDetailedTakeOff } from '../lib/calculations';
-import { MaterialItem, LaborRates, User } from '../types';
+import { MaterialItem, LaborRates, User, ScheduleEvent, SavedEstimate } from '../types';
+import InstallScheduleCalendar from './InstallScheduleCalendar';
 
 interface JobPortalProps {
   user: User | null;
@@ -222,14 +223,9 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
   // Crew Monthly Calendar View states
   const [crewJobs, setCrewJobs] = useState<any[]>([]);
   const [occupiedDates, setOccupiedDates] = useState<string[]>([]);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [scheduledEstimates, setScheduledEstimates] = useState<SavedEstimate[]>([]);
   const [loadingCrewJobs, setLoadingCrewJobs] = useState(false);
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
-
-  const calendarDays = useMemo(() => {
-    const start = startOfWeek(startOfMonth(currentCalendarDate));
-    const end = endOfWeek(endOfMonth(currentCalendarDate));
-    return eachDayOfInterval({ start, end });
-  }, [currentCalendarDate]);
 
   const getMinDateString = () => {
     const minDate = new Date();
@@ -458,8 +454,16 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
       if (response.ok) {
         setOccupiedDates(data.occupiedDates || []);
       }
+
+      // Also fetch all schedule events for the unified calendar view
+      const eventsRes = await fetch(`/api/estimates/write?action=list-schedule-events&estimateId=${estimateId}&token=${token}`);
+      const eventsData = await eventsRes.json();
+      if (eventsRes.ok) {
+        setEvents(eventsData.events || []);
+        setScheduledEstimates(eventsData.scheduledEstimates || []);
+      }
     } catch (err) {
-      console.error('Failed to fetch occupied dates:', err);
+      console.error('Failed to fetch schedule data:', err);
     }
   };
 
@@ -4332,26 +4336,6 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Viewing all jobs for {jobData?.assignedCrew || 'Assigned Crew'}</p>
                   </div>
                 </div>
-                <div className="flex items-center bg-[#070D19] p-1 rounded-xl border border-blue-900/10">
-                  <button 
-                    onClick={() => setCurrentCalendarDate(subMonths(currentCalendarDate, 1))}
-                    className="p-2 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button 
-                    onClick={() => setCurrentCalendarDate(new Date())}
-                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-all"
-                  >
-                    {format(currentCalendarDate, 'MMMM yyyy')}
-                  </button>
-                  <button 
-                    onClick={() => setCurrentCalendarDate(addMonths(currentCalendarDate, 1))}
-                    className="p-2 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
               </div>
 
               {loadingCrewJobs ? (
@@ -4360,95 +4344,19 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                   <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Loading crew schedule...</p>
                 </div>
               ) : (
-                <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl">
-                  {/* Day headers */}
-                  <div className="grid grid-cols-7 border-b border-blue-900/10 bg-[#070D19]/50">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="py-3 text-center text-[9px] font-black uppercase text-slate-500 tracking-widest border-r border-blue-900/5 last:border-r-0">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7">
-                    {calendarDays.map((day, i) => {
-                      const dateKey = format(day, 'yyyy-MM-dd');
-                      const dayName = format(day, 'EEEE');
-                      const isUnavailable = (settings?.unavailableInstallDays || ['Sunday']).includes(dayName);
-                      const dayJobs = crewJobs.filter(job => {
-                        if (!job.scheduledStartDate) return false;
-                        const start = job.scheduledStartDate;
-                        const durationStr = String(job.scheduledDuration || 1);
-                        const duration = parseInt(durationStr) || 1;
-                        const startDate = parseISO(start);
-                        const endDate = addDays(startDate, duration - 1);
-                        return isWithinInterval(day, { start: startDate, end: endDate });
-                      });
-
-                      const isToday = isSameDay(day, new Date());
-                      const isCurrentMonth = isSameMonth(day, currentCalendarDate);
-                      
-                      const today = new Date();
-                      today.setHours(0,0,0,0);
-                      const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
-                      minDateLimit.setHours(0,0,0,0);
-                      const isPast = day.getTime() < minDateLimit.getTime();
-
-                      return (
-                        <div 
-                          key={dateKey} 
-                          onClick={() => !isPast && handleCalendarDayClick(day)}
-                          className={cn(
-                            "min-h-[120px] p-2 border-r border-b border-blue-900/5 last:border-r-0 transition-colors relative",
-                            !isCurrentMonth && "opacity-20",
-                            isUnavailable && "bg-slate-950/40 opacity-50 cursor-not-allowed",
-                            isToday && "bg-blue-900/5",
-                            isPast ? "bg-slate-900/10 cursor-not-allowed" : "cursor-pointer hover:bg-blue-600/5"
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={cn(
-                              "text-[10px] font-mono font-bold",
-                              isToday ? "text-[#E63946]" : isPast ? "text-slate-700" : "text-slate-500"
-                            )}>
-                              {format(day, 'd')}
-                            </span>
-                            {isPast && !isToday && <Clock size={10} className="text-slate-700" />}
-                          </div>
-
-                          <div className="space-y-1">
-                            {dayJobs.map(job => (
-                              <button
-                                key={job.id}
-                                onClick={() => {
-                                  if (job.id === estimateId) {
-                                    setActiveTab('overview');
-                                  } else {
-                                    window.open(`/?portal=job-portal&estimateId=${job.id}&token=${job.laborSnapshotToken || job.crewScheduleToken}`, '_blank');
-                                  }
-                                }}
-                                className={cn(
-                                  "w-full text-left p-1.5 rounded-lg text-[9px] font-bold transition-all truncate group relative",
-                                  job.id === estimateId ? "bg-[#E63946] text-white" : "bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 shadow-sm"
-                                )}
-                              >
-                                {job.customerName}
-                                <div className="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-[#070D19] border border-blue-900/20 p-3 rounded-2xl shadow-2xl mb-2 pointer-events-none">
-                                  <p className="text-[10px] text-white font-black uppercase mb-1">{job.customerName}</p>
-                                  <p className="text-[8px] text-slate-400 uppercase font-bold">{job.customerAddress || job.address || 'Location N/A'}</p>
-                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-blue-900/10">
-                                    <span className="text-[8px] text-amber-500 font-bold uppercase">{job.scheduledDuration || 1} Days</span>
-                                    <span className="text-[8px] text-slate-500 uppercase font-black">{job.jobStatus || 'Scheduled'}</span>
-                                  </div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl p-3 sm:p-8">
+                  <InstallScheduleCalendar
+                    mode="crew"
+                    events={events}
+                    scheduledEstimates={scheduledEstimates}
+                    selectedDate={newScheduleStartDate ? parseISO(newScheduleStartDate) : null}
+                    onDateClick={handleCalendarDayClick}
+                    unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
+                    config={{
+                      viewFilter: 'jobs',
+                      appointmentDuration: 60
+                    } as any}
+                  />
                 </div>
               )}
             </div>
@@ -4553,23 +4461,6 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Click an available date below (min 4 days out)</p>
                   </div>
                 </div>
-                <div className="flex items-center bg-[#070D19] p-1 rounded-xl border border-blue-900/10 scale-90">
-                  <button 
-                    onClick={() => setCurrentCalendarDate(subMonths(currentCalendarDate, 1))}
-                    className="p-1.5 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="px-3 text-[9px] font-black uppercase tracking-widest text-blue-400">
-                    {format(currentCalendarDate, 'MMM yyyy')}
-                  </span>
-                  <button 
-                    onClick={() => setCurrentCalendarDate(addMonths(currentCalendarDate, 1))}
-                    className="p-1.5 hover:bg-blue-900/20 rounded-lg text-slate-400 hover:text-white transition-all"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
               </div>
 
               {scheduleError && (
@@ -4578,74 +4469,23 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                 </div>
               )}
 
-              <div className="bg-[#0A1120] rounded-2xl border border-blue-900/15 overflow-hidden">
-                <div className="grid grid-cols-7 border-b border-blue-900/10 bg-[#070D19]/50">
-                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-                    <div key={day} className="py-2 text-center text-[8px] font-black uppercase text-slate-500 tracking-widest">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7">
-                  {calendarDays.map((day, i) => {
-                    const dateKey = format(day, 'yyyy-MM-dd');
-                    const dayJobs = crewJobs.filter(job => {
-                      if (!job.scheduledStartDate) return false;
-                      const duration = parseInt(String(job.scheduledDuration || 1)) || 1;
-                      const startDate = parseISO(job.scheduledStartDate);
-                      const endDate = addDays(startDate, duration - 1);
-                      return isWithinInterval(day, { start: startDate, end: endDate });
-                    });
-
-                    const isOccupiedGlobal = occupiedDates.includes(dateKey);
-
-                    const isToday = isSameDay(day, new Date());
-                    const isCurrentMonth = isSameMonth(day, currentCalendarDate);
-                    
-                    const today = new Date();
-                    today.setHours(0,0,0,0);
-                    const minDateLimit = new Date(today.getTime() + 4 * 24 * 60 * 60 * 1000);
-                    minDateLimit.setHours(0,0,0,0);
-                    const isPast = day.getTime() < minDateLimit.getTime();
-
-                    return (
-                      <button 
-                        key={dateKey} 
-                        type="button"
-                        onClick={() => !isPast && !isOccupiedGlobal && handleCalendarDayClick(day)}
-                        disabled={isPast || isOccupiedGlobal}
-                        className={cn(
-                          "min-h-[70px] p-1 border-r border-b border-blue-900/5 last:border-r-0 transition-all text-left relative",
-                          !isCurrentMonth && "opacity-20",
-                          isToday && "bg-blue-900/5",
-                          (isPast || isOccupiedGlobal) ? "cursor-not-allowed bg-slate-900/20" : "hover:bg-blue-600/5"
-                        )}
-                      >
-                        <span className={cn(
-                          "text-[9px] font-mono font-bold mb-1 block",
-                          isToday ? "text-[#E63946]" : (isPast || isOccupiedGlobal) ? "text-slate-700" : "text-slate-500"
-                        )}>
-                          {format(day, 'd')}
-                        </span>
-                        <div className="space-y-0.5">
-                          {isOccupiedGlobal && !dayJobs.some(j => j.id === estimateId) && (
-                            <div className="h-1.5 w-full rounded-sm bg-orange-500/40" title="Occupied by another crew" />
-                          )}
-                          {dayJobs.map(job => (
-                            <div 
-                              key={job.id}
-                              className={cn(
-                                "h-1.5 w-full rounded-sm",
-                                job.id === estimateId ? "bg-[#E63946]" : "bg-blue-600/30"
-                              )}
-                              title={job.customerName}
-                            />
-                          ))}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="bg-[#0A1120] rounded-2xl border border-blue-900/15 overflow-hidden p-3 sm:p-6">
+                <InstallScheduleCalendar
+                  mode="crew"
+                  events={events}
+                  scheduledEstimates={scheduledEstimates}
+                  selectedDate={scheduleStartDate ? parseISO(scheduleStartDate) : null}
+                  onDateClick={(day) => {
+                    const dateStr = format(day, 'yyyy-MM-dd');
+                    setScheduleStartDate(dateStr);
+                    handleCalendarDayClick(day);
+                  }}
+                  unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
+                  config={{
+                    viewFilter: 'jobs',
+                    appointmentDuration: 60
+                  } as any}
+                />
               </div>
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest text-center">
                 Earliest start date: <span className="text-slate-300">{format(new Date(new Date().getTime() + 4 * 24 * 60 * 60 * 1000), 'MMMM do, yyyy')}</span>
