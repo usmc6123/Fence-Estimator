@@ -21,13 +21,36 @@ import {
   Camera, Plus, Trash2, ClipboardList, Package, Image as ImageIcon,
   Map, MessageSquare, History, CheckCircle2, X, AlertCircle, Play,
   Send, User as UserIcon, AlertOctagon, HelpCircle, ArrowLeft, Lock,
-  ExternalLink, FileText, DollarSign
+  ExternalLink, FileText, DollarSign, Save
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { storage } from '../lib/firebase';
 import { calculateDetailedTakeOff } from '../lib/calculations';
 import { MaterialItem, LaborRates, User, ScheduleEvent, SavedEstimate } from '../types';
 import InstallScheduleCalendar from './InstallScheduleCalendar';
+
+// Error Boundary for Scheduler Protection
+class ErrorBoundary extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 interface JobPortalProps {
   user: User | null;
@@ -213,11 +236,11 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
   const [scheduleError, setScheduleError] = useState('');
 
   // Rescheduling states
-  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [newScheduleStartDate, setNewScheduleStartDate] = useState('');
   const [newScheduleDuration, setNewScheduleDuration] = useState('1 day');
   const [newScheduleReason, setNewScheduleReason] = useState('');
   const [newScheduleNotes, setNewScheduleNotes] = useState('');
+  const [isRescheduling, setIsRescheduling] = useState(false);
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
 
   // Crew Monthly Calendar View states
@@ -390,7 +413,10 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
         throw new Error(resData.error || 'Failed to update schedule.');
       }
 
-      setShowRescheduleModal(false);
+      setIsRescheduling(false);
+      setNewScheduleStartDate('');
+      setNewScheduleReason('');
+      setNewScheduleNotes('');
       await fetchJobDetails(estimateId, token);
       fetchOccupiedDates();
     } catch (err: any) {
@@ -428,7 +454,12 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
     const currentDuration = jobData?.scheduledDuration || jobData?.installDuration || 1;
     setNewScheduleDuration(String(currentDuration) + ' day' + (Number(currentDuration) > 1 ? 's' : ''));
     setScheduleError('');
-    setShowRescheduleModal(true);
+    setIsRescheduling(true);
+    setActiveTab('schedule');
+    setTimeout(() => {
+      const el = document.getElementById('crew-schedule-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const fetchCrewJobs = async () => {
@@ -2227,7 +2258,12 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                       onClick={() => {
                         setNewScheduleStartDate(jobData.scheduledStartDate || '');
                         setNewScheduleDuration(String(jobData.scheduledDuration || jobData.installDuration || 1) + ' day' + (Number(jobData.scheduledDuration || jobData.installDuration || 1) > 1 ? 's' : ''));
-                        setShowRescheduleModal(true);
+                        setIsRescheduling(true);
+                        setActiveTab('schedule');
+                        setTimeout(() => {
+                          const el = document.getElementById('crew-schedule-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
                       }}
                       className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-900/20"
                     >
@@ -4326,39 +4362,160 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
           {/* TAB 6: JOB HISTORY TIMELINE */}
           {activeTab === 'schedule' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div id="crew-schedule-section" className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-6 rounded-3xl border border-blue-900/15 shadow-2xl transition-all duration-300", highlightedSection === 'crew-schedule-section' && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
+              <div id="crew-schedule-section" className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0A1120] p-6 rounded-3xl border border-blue-900/15 shadow-2xl transition-all duration-300", (highlightedSection === 'crew-schedule-section' || isRescheduling) && "ring-4 ring-blue-500 ring-offset-4 ring-offset-slate-900 shadow-2xl scale-[1.01]")}>
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-500">
                     <CalendarIcon size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Crew Schedule</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Viewing all jobs for {jobData?.assignedCrew || 'Assigned Crew'}</p>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                      {isRescheduling ? 'Adjust Installation Schedule' : 'Crew Schedule'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      {isRescheduling ? 'Select a new start date and provide details' : `Viewing all jobs for ${jobData?.assignedCrew || 'Assigned Crew'}`}
+                    </p>
                   </div>
                 </div>
+                {isRescheduling && (
+                  <button
+                    onClick={() => {
+                      setIsRescheduling(false);
+                      setNewScheduleStartDate('');
+                      setScheduleError('');
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    Cancel Adjustment
+                  </button>
+                )}
               </div>
 
-              {loadingCrewJobs ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-[#0A1120] rounded-3xl border border-blue-900/15">
-                  <Loader2 className="animate-spin text-[#E63946] mb-4" size={32} />
-                  <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Loading crew schedule...</p>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className={cn("space-y-6 transition-all duration-500", isRescheduling ? "lg:col-span-2" : "lg:col-span-3")}>
+                  {loadingCrewJobs ? (
+                    <div className="flex flex-col items-center justify-center py-20 bg-[#0A1120] rounded-3xl border border-blue-900/15">
+                      <Loader2 className="animate-spin text-[#E63946] mb-4" size={32} />
+                      <p className="text-xs font-black uppercase text-slate-400 tracking-widest">Loading crew schedule...</p>
+                    </div>
+                  ) : (
+                    <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl p-3 sm:p-8">
+                      <ErrorBoundary fallback={
+                        <div className="p-12 text-center bg-rose-950/20 rounded-3xl border border-rose-500/20">
+                          <AlertTriangle className="mx-auto text-rose-500 mb-4" size={32} />
+                          <p className="text-sm font-black uppercase text-rose-400">Unable to load installation calendar</p>
+                          <p className="text-xs text-rose-300 mt-2">Please refresh or contact the office.</p>
+                        </div>
+                      }>
+                        <InstallScheduleCalendar
+                          mode="crew"
+                          events={events}
+                          scheduledEstimates={scheduledEstimates}
+                          selectedDate={newScheduleStartDate && newScheduleStartDate.length >= 10 ? parseISO(newScheduleStartDate) : null}
+                          onDateClick={handleCalendarDayClick}
+                          unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
+                          excludeEstimateId={estimateId}
+                          highlightedEstimateId={estimateId}
+                          selectedDuration={parseInt(newScheduleDuration) || 1}
+                          config={{
+                            viewFilter: 'jobs',
+                            appointmentDuration: 60
+                          } as any}
+                        />
+                      </ErrorBoundary>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl p-3 sm:p-8">
-                  <InstallScheduleCalendar
-                    mode="crew"
-                    events={events}
-                    scheduledEstimates={scheduledEstimates}
-                    selectedDate={newScheduleStartDate ? parseISO(newScheduleStartDate) : null}
-                    onDateClick={handleCalendarDayClick}
-                    unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
-                    config={{
-                      viewFilter: 'jobs',
-                      appointmentDuration: 60
-                    } as any}
-                  />
-                </div>
-              )}
+
+                {isRescheduling && (
+                  <div className="space-y-6 animate-in slide-in-from-right-8 duration-500">
+                    <div className="bg-[#1D3557] rounded-3xl p-6 border border-blue-900/20 shadow-2xl space-y-5 sticky top-24">
+                      <div className="pb-4 border-b border-blue-900/10">
+                        <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                          <Clock size={16} className="text-amber-500" /> Reschedule Details
+                        </h4>
+                      </div>
+
+                      {scheduleError && (
+                        <div className="p-3 bg-red-900/20 border border-red-900/30 rounded-xl flex items-center gap-2 text-red-400 text-[10px] font-bold uppercase">
+                          <AlertTriangle size={14} /> {scheduleError}
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">New Start Date</label>
+                          <div className="w-full bg-[#070D19] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white font-mono min-h-[46px] flex items-center">
+                            {newScheduleStartDate ? format(parseISO(newScheduleStartDate), 'MMMM do, yyyy') : 'Select from calendar'}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Expected Duration</label>
+                          <select
+                            value={newScheduleDuration}
+                            onChange={(e) => setNewScheduleDuration(e.target.value)}
+                            className="w-full bg-[#070D19] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
+                            required
+                          >
+                            <option value="1 day">1 Day</option>
+                            <option value="2 days">2 Days</option>
+                            <option value="3 days">3 Days</option>
+                            <option value="4 days">4 Days</option>
+                            <option value="5+ days">5+ Days</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reason for Adjustment</label>
+                          <select
+                            value={newScheduleReason}
+                            onChange={(e) => setNewScheduleReason(e.target.value)}
+                            className="w-full bg-[#070D19] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                            required
+                          >
+                            <option value="">Select a reason...</option>
+                            <option value="Weather Delay">Weather Delay</option>
+                            <option value="Material Delay">Material Delay</option>
+                            <option value="Labor/Crew Shortage">Labor/Crew Shortage</option>
+                            <option value="Previous Job Run Over">Previous Job Run Over</option>
+                            <option value="Customer Request">Customer Request</option>
+                            <option value="Utility Issue">Utility Issue</option>
+                            <option value="Permit Issue">Permit Issue</option>
+                            <option value="Equipment Failure">Equipment Failure</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Additional Notes</label>
+                          <textarea
+                            value={newScheduleNotes}
+                            onChange={(e) => setNewScheduleNotes(e.target.value)}
+                            placeholder="Provide specific details about the schedule change..."
+                            className="w-full bg-[#070D19] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all min-h-[100px] resize-none"
+                          />
+                        </div>
+
+                        <button
+                          onClick={(e) => handleRescheduleSubmit(e as any)}
+                          disabled={rescheduleSubmitting || !newScheduleStartDate}
+                          className="w-full px-6 py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800/50 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-amber-900/20 flex items-center justify-center gap-2"
+                        >
+                          {rescheduleSubmitting ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" /> Updating...
+                            </>
+                          ) : (
+                            <>
+                              <Save size={16} /> Update Schedule
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -4408,7 +4565,7 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
 
           </>
         ) : (
-          <div className="bg-[#111A2E] rounded-3xl p-6 sm:p-8 border border-blue-900/15 shadow-xl space-y-6">
+          <div id="crew-schedule-section" className="bg-[#111A2E] rounded-3xl p-6 sm:p-8 border border-blue-900/15 shadow-xl space-y-6">
             <div className="border-b border-blue-900/10 pb-4">
               <h2 className="text-xl font-black uppercase text-white tracking-tight flex items-center gap-2">
                 <CalendarIcon className="text-[#E63946]" size={24} />
@@ -4470,23 +4627,73 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
               )}
 
               <div className="bg-[#0A1120] rounded-2xl border border-blue-900/15 overflow-hidden p-3 sm:p-6">
-                <InstallScheduleCalendar
-                  mode="crew"
-                  events={events}
-                  scheduledEstimates={scheduledEstimates}
-                  selectedDate={scheduleStartDate ? parseISO(scheduleStartDate) : null}
-                  onDateClick={(day) => {
-                    const dateStr = format(day, 'yyyy-MM-dd');
-                    setScheduleStartDate(dateStr);
-                    handleCalendarDayClick(day);
-                  }}
-                  unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
-                  config={{
-                    viewFilter: 'jobs',
-                    appointmentDuration: 60
-                  } as any}
-                />
+                <ErrorBoundary fallback={
+                  <div className="p-12 text-center bg-rose-950/20 rounded-3xl border border-rose-500/20">
+                    <AlertTriangle className="mx-auto text-rose-500 mb-4" size={32} />
+                    <p className="text-sm font-black uppercase text-rose-400">Unable to load installation calendar</p>
+                    <p className="text-xs text-rose-300 mt-2">Please refresh or contact the office.</p>
+                  </div>
+                }>
+                  <InstallScheduleCalendar
+                    mode="crew"
+                    events={events}
+                    scheduledEstimates={scheduledEstimates}
+                    selectedDate={scheduleStartDate && scheduleStartDate.length >= 10 ? parseISO(scheduleStartDate) : null}
+                    onDateClick={(day) => {
+                      const dateStr = format(day, 'yyyy-MM-dd');
+                      setScheduleStartDate(dateStr);
+                      handleCalendarDayClick(day);
+                    }}
+                    unavailableInstallDays={settings?.unavailableInstallDays || ['Sunday']}
+                    config={{
+                      viewFilter: 'jobs',
+                      appointmentDuration: 60
+                    } as any}
+                  />
+                </ErrorBoundary>
               </div>
+
+              {scheduleStartDate && (
+                <div className="bg-[#1D3557] p-6 rounded-3xl border border-blue-900/20 shadow-xl space-y-4 animate-in fade-in zoom-in duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Selected Start Date</span>
+                      <p className="text-lg font-black text-white">{format(parseISO(scheduleStartDate), 'EEEE, MMMM do, yyyy')}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Est. Duration</span>
+                      <p className="text-lg font-black text-white">{jobData.scheduledDuration || jobData.installDuration || 1} Day(s)</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Additional Scheduling Notes</label>
+                    <textarea
+                      value={scheduleNotes}
+                      onChange={(e) => setScheduleNotes(e.target.value)}
+                      placeholder="Any specific crew instructions or scheduling requests..."
+                      className="w-full bg-[#070D19] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all min-h-[80px] resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={(e) => handleScheduleJobStart(e as any)}
+                    disabled={scheduleSubmitting}
+                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800/50 disabled:opacity-50 text-[#0c1a30] text-sm font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2"
+                  >
+                    {scheduleSubmitting ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" /> Scheduling...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={18} /> Confirm & Schedule Job Start
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest text-center">
                 Earliest start date: <span className="text-slate-300">{format(new Date(new Date().getTime() + 4 * 24 * 60 * 60 * 1000), 'MMMM do, yyyy')}</span>
               </p>
@@ -5046,132 +5253,6 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                         <Check size={14} />
                         {editingChargeId ? 'Update Job Charge' : 'Apply Job Charge'}
                       </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* RESCHEDULE MODAL */}
-      <AnimatePresence>
-        {showRescheduleModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-[#0A1120] w-full max-w-lg rounded-3xl border border-blue-900/20 shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-blue-900/10 flex items-center justify-between bg-[#070D19]/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-900/20 rounded-lg text-amber-500">
-                    <Clock size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-tight">
-                      {jobData?.scheduledStartDate ? 'Adjust Install Schedule' : 'Schedule Install Job'}
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estimate #{jobData?.estimateNumber}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowRescheduleModal(false)}
-                  className="p-2 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-5">
-                {scheduleError && (
-                  <div className="p-3 bg-red-900/20 border border-red-900/30 rounded-xl flex items-center gap-2 text-red-400 text-[10px] font-bold uppercase">
-                    <AlertTriangle size={14} /> {scheduleError}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Proposed Start Date</label>
-                    <input
-                      type="date"
-                      value={newScheduleStartDate}
-                      onChange={(e) => setNewScheduleStartDate(e.target.value)}
-                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Expected Duration</label>
-                    <select
-                      value={newScheduleDuration}
-                      onChange={(e) => setNewScheduleDuration(e.target.value)}
-                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all font-mono"
-                      required
-                    >
-                      <option value="1 day">1 Day</option>
-                      <option value="2 days">2 Days</option>
-                      <option value="3 days">3 Days</option>
-                      <option value="4 days">4 Days</option>
-                      <option value="5+ days">5+ Days</option>
-                    </select>
-                  </div>
-                </div>
-
-                {jobData?.scheduledStartDate && (
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Reason for Adjustment</label>
-                    <select
-                      value={newScheduleReason}
-                      onChange={(e) => setNewScheduleReason(e.target.value)}
-                      className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all"
-                      required={!!jobData?.scheduledStartDate}
-                    >
-                      <option value="">Select a reason...</option>
-                      <option value="Weather Delay">Weather Delay</option>
-                      <option value="Material Delay">Material Delay</option>
-                      <option value="Labor/Crew Shortage">Labor/Crew Shortage</option>
-                      <option value="Previous Job Run Over">Previous Job Run Over</option>
-                      <option value="Customer Request">Customer Request</option>
-                      <option value="Utility Issue">Utility Issue</option>
-                      <option value="Permit Issue">Permit Issue</option>
-                      <option value="Equipment Failure">Equipment Failure</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Additional Notes</label>
-                  <textarea
-                    value={newScheduleNotes}
-                    onChange={(e) => setNewScheduleNotes(e.target.value)}
-                    placeholder="Provide specific details about the schedule change..."
-                    className="w-full bg-[#070D19] border border-blue-900/20 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 transition-all min-h-[100px] resize-none"
-                  />
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowRescheduleModal(false)}
-                    className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={rescheduleSubmitting}
-                    className="flex-[2] px-4 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
-                  >
-                    {rescheduleSubmitting ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" /> Updating...
-                      </>
-                    ) : (
-                      'Update Schedule'
                     )}
                   </button>
                 </div>
