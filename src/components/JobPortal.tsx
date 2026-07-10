@@ -30,22 +30,59 @@ import { MaterialItem, LaborRates, User, ScheduleEvent, SavedEstimate } from '..
 import InstallScheduleCalendar from './InstallScheduleCalendar';
 
 // Error Boundary for Scheduler Protection
-class ErrorBoundary extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean; error: Error | null; errorInfo: any }> {
   constructor(props: any) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error: any) {
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
+    console.error("[CRITICAL] Scheduler ErrorBoundary caught an error:", error);
+    console.error("Error Info:", errorInfo);
+    this.setState({ error, errorInfo });
   }
 
   render() {
     if (this.state.hasError) {
+      if (process.env.NODE_ENV === 'development' || true) { // Force display for debugging
+        return (
+          <div className="p-8 bg-rose-950/20 border border-rose-500/20 rounded-3xl text-left overflow-auto max-h-[500px]">
+            <h2 className="text-rose-500 font-black uppercase tracking-widest flex items-center gap-2 mb-4">
+              <AlertTriangle size={20} /> InstallScheduleCalendar Error
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest mb-1">Message</p>
+                <p className="text-sm text-white font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10">
+                  {this.state.error?.message || "Unknown Error"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest mb-1">Stack Trace</p>
+                <pre className="text-[10px] text-rose-300/70 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10 whitespace-pre-wrap">
+                  {this.state.error?.stack}
+                </pre>
+              </div>
+              <div>
+                <p className="text-[10px] text-rose-400 font-black uppercase tracking-widest mb-1">Component Stack</p>
+                <pre className="text-[10px] text-rose-300/70 font-mono bg-black/40 p-3 rounded-lg border border-rose-500/10 whitespace-pre-wrap">
+                  {this.state.errorInfo?.componentStack}
+                </pre>
+              </div>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-6 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+            >
+              Reload Page
+            </button>
+          </div>
+        );
+      }
       return this.props.fallback;
     }
     return this.props.children;
@@ -4399,6 +4436,18 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
                     </div>
                   ) : (
                     <div className="bg-[#0A1120] rounded-3xl border border-blue-900/15 overflow-hidden shadow-2xl p-3 sm:p-8">
+                      {(() => {
+                        console.log("[DEBUG] Render Checkpoint: JobPortal -> Calendar (Crew Tab)");
+                        console.log("Props being passed to InstallScheduleCalendar:");
+                        console.log("- mode: crew");
+                        console.log("- events:", events || "MISSING PROP: events");
+                        console.log("- scheduledEstimates:", scheduledEstimates || "MISSING PROP: scheduledEstimates");
+                        const selDate = newScheduleStartDate && newScheduleStartDate.length >= 10 ? parseISO(newScheduleStartDate) : null;
+                        console.log("- selectedDate:", selDate);
+                        console.log("- unavailableInstallDays:", settings?.unavailableInstallDays || "DEFAULT: ['Sunday']");
+                        console.log("- estimateId (current):", estimateId);
+                        return null;
+                      })()}
                       <ErrorBoundary fallback={
                         <div className="p-12 text-center bg-rose-950/20 rounded-3xl border border-rose-500/20">
                           <AlertTriangle className="mx-auto text-rose-500 mb-4" size={32} />
@@ -4627,6 +4676,17 @@ export default function JobPortal({ user, materials, laborRates, quotes = [] }: 
               )}
 
               <div className="bg-[#0A1120] rounded-2xl border border-blue-900/15 overflow-hidden p-3 sm:p-6">
+                {(() => {
+                  console.log("[DEBUG] Render Checkpoint: JobPortal -> Calendar (Progression Step)");
+                  console.log("Props being passed to InstallScheduleCalendar:");
+                  console.log("- mode: crew");
+                  console.log("- events:", events || "MISSING PROP: events");
+                  console.log("- scheduledEstimates:", scheduledEstimates || "MISSING PROP: scheduledEstimates");
+                  const selDate = scheduleStartDate && scheduleStartDate.length >= 10 ? parseISO(scheduleStartDate) : null;
+                  console.log("- selectedDate:", selDate);
+                  console.log("- unavailableInstallDays:", settings?.unavailableInstallDays || "DEFAULT: ['Sunday']");
+                  return null;
+                })()}
                 <ErrorBoundary fallback={
                   <div className="p-12 text-center bg-rose-950/20 rounded-3xl border border-rose-500/20">
                     <AlertTriangle className="mx-auto text-rose-500 mb-4" size={32} />
