@@ -713,6 +713,48 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                     </div>
                   )}
 
+                  {/* Admin Debug Breakdown */}
+                  {run.debugData && (
+                    <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl print:hidden">
+                      <div className="flex items-center gap-2 mb-3">
+                        <SettingsIcon size={16} className="text-amber-600" />
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-900">Chain-Link Run Identification (Admin Debug)</h4>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Total Linear Feet</p>
+                          <p className="text-sm font-black text-amber-900">{run.debugData.totalLF} LF</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Calculated Runs</p>
+                          <p className="text-sm font-black text-amber-900">{run.debugData.runCount} Runs</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Corners / Gates</p>
+                          <p className="text-sm font-black text-amber-900">{run.debugData.cornerSplits} C / {run.debugData.gateSplits} G</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Tension Bars</p>
+                          <p className="text-sm font-black text-amber-900">{run.debugData.tensionBars} Units</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Rail End Cups</p>
+                          <p className="text-xs font-bold text-amber-900">{run.debugData.railEndCups} Units</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Brace Bands</p>
+                          <p className="text-xs font-bold text-amber-900">{run.debugData.braceBands} Units</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold text-amber-700 uppercase">Tension Bands</p>
+                          <p className="text-xs font-bold text-amber-900">{run.debugData.tensionBands} Units</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Run Materials */}
                       <div className="overflow-x-auto rounded-2xl border-2 border-american-blue/5">
                         <table className="min-w-[800px] w-full text-left">

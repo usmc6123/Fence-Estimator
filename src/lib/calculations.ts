@@ -66,6 +66,8 @@ export interface RunTakeOff {
   }[];
   deeperPostMaterialDiff?: number;
   deeperPostLaborCost?: number;
+  chainLinkFenceRunCount?: number;
+  debugData?: any;
 }
 
 export interface DetailedTakeOff {
@@ -1014,7 +1016,7 @@ export function calculateDetailedTakeOff(
           // Terminal Posts (Ends, Corners, and Gates)
           const terminalPostId = `cl-post-term-${postHeight}`;
           const termPostMat = materials.find(m => m.id === terminalPostId);
-          const tpCount = (runCornerPosts + startEndPosts) + (run.gateDetails?.length * 2 || 0);
+          const tpCount = (runCornerPosts + startEndPosts + (run.corners || 0)) + (run.gateDetails?.length * 2 || 0);
           
           if (termPostMat && tpCount > 0) {
             const finalTermPost = processPost(materials, termPostMat, !!estimate.increasePostDepth);
@@ -1479,13 +1481,24 @@ export function calculateDetailedTakeOff(
       });
 
       // Chain Link Hardware Implementation (Both Residential and Commercial)
+      const chainLinkFenceRunCount = 1 + (run.corners || 0) + (run.gateDetails?.length || 0);
+
       // Dome Caps (1 per 2-3/8" Post)
-      const terminalCount = (runCornerPosts + startEndPosts) + (run.gateDetails?.length * 2 || 0);
+      const terminalCount = (runCornerPosts + startEndPosts + (run.corners || 0)) + (run.gateDetails?.length * 2 || 0);
       const domeCapMat = materials.find(m => m.id === 'cl-hw-dome-238');
       if (domeCapMat && terminalCount > 0) {
         const dcCost = terminalCount * domeCapMat.cost;
         runFenceMaterialCost += dcCost;
-        runItems.push({ id: domeCapMat.id, name: domeCapMat.name, qty: terminalCount, unit: 'each', unitCost: domeCapMat.cost, total: dcCost, category: 'Hardware' });
+        runItems.push({ 
+          id: domeCapMat.id, 
+          name: domeCapMat.name, 
+          qty: terminalCount, 
+          unit: 'each', 
+          unitCost: domeCapMat.cost, 
+          total: dcCost, 
+          category: 'Hardware',
+          formula: `${terminalCount} terminal points`
+        });
       }
 
       // Loop Caps (1 per Line Post - 1-7/8" Comm, 1-5/8" Res)
@@ -1494,45 +1507,90 @@ export function calculateDetailedTakeOff(
       if (loopCapMat && runLinePosts > 0) {
         const lcCost = runLinePosts * loopCapMat.cost;
         runFenceMaterialCost += lcCost;
-        runItems.push({ id: loopCapMat.id, name: loopCapMat.name, qty: runLinePosts, unit: 'each', unitCost: loopCapMat.cost, total: lcCost, category: 'Hardware' });
+        runItems.push({ 
+          id: loopCapMat.id, 
+          name: loopCapMat.name, 
+          qty: runLinePosts, 
+          unit: 'each', 
+          unitCost: loopCapMat.cost, 
+          total: lcCost, 
+          category: 'Hardware',
+          formula: `${runLinePosts} line posts`
+        });
       }
 
       // Tension Bars (2 per fence run)
       const tensionBarId = `cl-hw-tension-bar-${height}`;
       const barMat = materials.find(m => m.id === tensionBarId) || materials.find(m => m.id === 'cl-hw-tension-bar-6');
       if (barMat) {
-        const barQty = 2;
+        const barQty = chainLinkFenceRunCount * 2;
         const barCost = barQty * barMat.cost;
         runFenceMaterialCost += barCost;
-        runItems.push({ id: barMat.id, name: barMat.name, qty: barQty, unit: 'each', unitCost: barMat.cost, total: barCost, category: 'Hardware' });
+        runItems.push({ 
+          id: barMat.id, 
+          name: barMat.name, 
+          qty: barQty, 
+          unit: 'each', 
+          unitCost: barMat.cost, 
+          total: barCost, 
+          category: 'Hardware',
+          formula: `${chainLinkFenceRunCount} runs × 2 bars/run`
+        });
       }
 
       // Tension Bands (1 per 1' of height per bar - 2 3/8")
       const tensionBandMat = materials.find(m => m.id === 'cl-hw-tension-band-238');
       if (tensionBandMat) {
-        const bandQty = height * 2;
+        const bandQty = chainLinkFenceRunCount * 2 * height;
         const bandCost = bandQty * tensionBandMat.cost;
         runFenceMaterialCost += bandCost;
-        runItems.push({ id: tensionBandMat.id, name: tensionBandMat.name, qty: bandQty, unit: 'each', unitCost: tensionBandMat.cost, total: bandCost, category: 'Hardware' });
+        runItems.push({ 
+          id: tensionBandMat.id, 
+          name: tensionBandMat.name, 
+          qty: bandQty, 
+          unit: 'each', 
+          unitCost: tensionBandMat.cost, 
+          total: bandCost, 
+          category: 'Hardware',
+          formula: `${chainLinkFenceRunCount} runs × 2 bars × ${height}' height`
+        });
       }
 
       // Brace Bands (4 per fence run - 2 3/8")
       const braceBandMat = materials.find(m => m.id === 'cl-hw-brace-band-238');
       if (braceBandMat) {
-        const bbQty = 4;
+        const bbQty = chainLinkFenceRunCount * 4;
         const bbCost = bbQty * braceBandMat.cost;
         runFenceMaterialCost += bbCost;
-        runItems.push({ id: braceBandMat.id, name: braceBandMat.name, qty: bbQty, unit: 'each', unitCost: braceBandMat.cost, total: bbCost, category: 'Hardware' });
+        runItems.push({ 
+          id: braceBandMat.id, 
+          name: braceBandMat.name, 
+          qty: bbQty, 
+          unit: 'each', 
+          unitCost: braceBandMat.cost, 
+          total: bbCost, 
+          category: 'Hardware',
+          formula: `${chainLinkFenceRunCount} runs × 4 bands/run`
+        });
       }
 
       // Rail End Cups (2 per fence run)
       const cupId = isCommercial ? 'cl-hw-cup-comm' : 'cl-hw-cup-res';
       const cupMat = materials.find(m => m.id === cupId);
       if (cupMat) {
-        const cupQty = 2;
+        const cupQty = chainLinkFenceRunCount * 2;
         const cupCost = cupQty * cupMat.cost;
         runFenceMaterialCost += cupCost;
-        runItems.push({ id: cupMat.id, name: cupMat.name, qty: cupQty, unit: 'each', unitCost: cupMat.cost, total: cupCost, category: 'Hardware' });
+        runItems.push({ 
+          id: cupMat.id, 
+          name: cupMat.name, 
+          qty: cupQty, 
+          unit: 'each', 
+          unitCost: cupMat.cost, 
+          total: cupCost, 
+          category: 'Hardware',
+          formula: `${chainLinkFenceRunCount} runs × 2 cups/run`
+        });
       }
 
       // Rail EZ Ties (1 per 2 LF) - 1-5/8" Comm, 1-3/8" Res
@@ -2104,7 +2162,19 @@ export function calculateDetailedTakeOff(
       demoCharge: runDemoCharge,
       gates: runGates,
       deeperPostMaterialDiff: runDeeperPostMaterialDiff,
-      deeperPostLaborCost: runDeeperPostLaborCost
+      deeperPostLaborCost: runDeeperPostLaborCost,
+      chainLinkFenceRunCount: runStyle.type === 'Chain Link' ? (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) : undefined,
+      debugData: runStyle.type === 'Chain Link' ? {
+        totalLF: runLF,
+        runCount: 1 + (run.corners || 0) + (run.gateDetails?.length || 0),
+        segmentNames: run.name,
+        gateSplits: run.gateDetails?.length || 0,
+        cornerSplits: run.corners || 0,
+        tensionBars: (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) * 2,
+        railEndCups: (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) * 2,
+        braceBands: (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) * 4,
+        tensionBands: (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) * 2 * (run.height || 6)
+      } : undefined
     });
   });
 
