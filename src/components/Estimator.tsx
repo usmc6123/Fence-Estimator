@@ -1913,7 +1913,7 @@ export default function Estimator({
                             </div>
 
                             {runStyle.type === 'Chain Link' && (
-                              <div className="col-span-full grid grid-cols-2 gap-6 pt-4">
+                              <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
                                 <div className="space-y-2">
                                   <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Fence Grade</label>
                                   <div className="flex bg-[#F0F0F0] p-0.5 rounded-xl">
@@ -1923,6 +1923,10 @@ export default function Estimator({
                                         onClick={() => {
                                           const newRuns = [...estimate.runs!];
                                           newRuns[idx].chainLinkGrade = grade;
+                                          // Auto-set gauge based on grade if user hasn't touched it yet
+                                          if (!newRuns[idx].chainLinkFabricGauge) {
+                                            newRuns[idx].chainLinkFabricGauge = grade === 'Commercial' ? '9ga' : '11ga';
+                                          }
                                           setEstimate({ ...estimate, runs: newRuns });
                                         }}
                                         className={cn(
@@ -1937,6 +1941,31 @@ export default function Estimator({
                                     ))}
                                   </div>
                                 </div>
+
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Fabric Gauge</label>
+                                  <div className="flex bg-[#F0F0F0] p-0.5 rounded-xl">
+                                    {(['11ga', '9ga'] as const).map(gauge => (
+                                      <button 
+                                        key={gauge}
+                                        onClick={() => {
+                                          const newRuns = [...estimate.runs!];
+                                          newRuns[idx].chainLinkFabricGauge = gauge;
+                                          setEstimate({ ...estimate, runs: newRuns });
+                                        }}
+                                        className={cn(
+                                          "flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                          (run.chainLinkFabricGauge || (run.chainLinkGrade === 'Commercial' ? '9ga' : '11ga')) === gauge 
+                                            ? "bg-white text-american-blue shadow-sm" 
+                                            : "text-american-blue/40 hover:text-american-blue"
+                                        )}
+                                      >
+                                        {gauge === '11ga' ? '11 Gauge' : '9 Gauge'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
                                 {(run.chainLinkGrade === 'Commercial') && (
                                   <div className="pt-6">
                                     <button

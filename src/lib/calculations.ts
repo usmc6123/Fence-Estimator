@@ -1488,13 +1488,19 @@ export function calculateDetailedTakeOff(
       const height = run.height || 6;
 
       // Mesh
-      const meshGrade = isCommercial ? 'comm' : 'res';
+      const explicitGauge = run.chainLinkFabricGauge;
+      let meshGrade;
+      if (explicitGauge) {
+        meshGrade = explicitGauge === '9ga' ? 'comm' : 'res';
+      } else {
+        meshGrade = isCommercial ? 'comm' : 'res';
+      }
       const meshMat = materials.find(m => m.id === `cl-mesh-${meshGrade}-${height}`) || materials.find(m => m.id === `cl-mesh-${meshGrade}-6`) || materials[0];
       const meshCost = runLF * meshMat.cost;
       runFenceMaterialCost += meshCost;
       runItems.push({
         id: meshMat.id,
-        name: meshMat.name,
+        name: `Chain-Link Fabric: ${meshGrade === 'comm' ? '9 Gauge' : '11 Gauge'} (${height}')`,
         qty: runLF,
         unit: meshMat.unit,
         unitCost: meshMat.cost,

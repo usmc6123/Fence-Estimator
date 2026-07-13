@@ -82,6 +82,7 @@ export interface FenceRun {
   ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   chainLinkGrade?: 'Residential' | 'Commercial';
+  chainLinkFabricGauge?: '9ga' | '11ga';
   pipeInstallType?: 'Set in Concrete' | 'Driven Posts';
   hasBottomRail?: boolean;
   hasRotBoard?: boolean;
@@ -221,6 +222,7 @@ export interface Estimate {
   ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   defaultChainLinkGrade?: 'Residential' | 'Commercial';
+  defaultChainLinkFabricGauge?: '9ga' | '11ga';
   pipeInstallType?: 'Set in Concrete' | 'Driven Posts';
   defaultHasBottomRail?: boolean;
   isPreStained?: boolean;

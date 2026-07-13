@@ -270,6 +270,7 @@ export default function CustomerContract({
           picketStyle: run.picketStyle || '',
           ironInstallType: run.ironInstallType || '',
           ironPanelType: run.ironPanelType || '',
+          chainLinkFabricGauge: run.chainLinkFabricGauge || '',
         };
       });
     }
@@ -1239,6 +1240,12 @@ Please structure the contract narrative with professional Markdown bold headers 
                               {projectBreakdown[0]?.ironPanelType} Panels
                             </>
                           )}
+                          {projectBreakdown[0]?.style?.includes('Chain Link') && projectBreakdown[0]?.chainLinkFabricGauge && (
+                            <>
+                              <span className="mx-2">•</span>
+                              {projectBreakdown[0]?.chainLinkFabricGauge === '9ga' ? '9 Gauge Fabric' : '11 Gauge Fabric'}
+                            </>
+                          )}
                         </p>
                       </div>
 
@@ -1277,6 +1284,12 @@ Please structure the contract narrative with professional Markdown bold headers 
                                     {run.ironInstallType}
                                     <span className="mx-1">•</span>
                                     {run.ironPanelType}
+                                  </>
+                                )}
+                                {(run.style || '').includes('Chain Link') && run.chainLinkFabricGauge && (
+                                  <>
+                                    <span className="mx-1">•</span>
+                                    {run.chainLinkFabricGauge === '9ga' ? '9 Gauge' : '11 Gauge'}
                                   </>
                                 )}
                               </p>
