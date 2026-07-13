@@ -7,7 +7,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, Clock, AlertTriangle, ClipboardList, Printer
 } from 'lucide-react';
 import { MATERIALS, COMPANY_INFO } from '../constants';
-import { MaterialCategory, MaterialItem, User } from '../types';
+import { MaterialCategory, MaterialItem, User, MaterialHistoryEntry } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import { X } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -57,10 +57,170 @@ function PriceIndicator({ status }: { status: 'fresh' | 'stale' | 'preloaded' })
   </div>;
 }
 
+function PriceSourceBadge({ item, onOpenHistory }: { item: MaterialItem, onOpenHistory: (item: MaterialItem) => void }) {
+  const sourceType = item.libraryPriceSourceType || 'legacy_import';
+  
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2">
+      <div className={cn(
+        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm",
+        sourceType === 'supplier_quote' ? "bg-emerald-50 text-emerald-600 border border-emerald-200" :
+        sourceType === 'manual' ? "bg-amber-50 text-amber-600 border border-amber-200" :
+        "bg-gray-50 text-gray-400 border border-gray-200"
+      )}>
+        {sourceType === 'supplier_quote' ? (
+          <>
+            <ClipboardList size={10} />
+            Quote: {item.libraryPriceSourceSupplierName || 'Supplier'}
+          </>
+        ) : sourceType === 'manual' ? (
+          <>
+            <Edit2 size={10} />
+            Manual Entry
+          </>
+        ) : (
+          <>
+            <Clock size={10} />
+            Legacy Data
+          </>
+        )}
+      </div>
+
+      <button 
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenHistory(item);
+        }}
+        className="px-2 py-0.5 bg-american-blue/5 hover:bg-american-blue text-[8px] text-american-blue hover:text-white rounded font-black uppercase tracking-widest transition-all"
+      >
+        History
+      </button>
+
+      {item.libraryPriceSourceDocumentUrl && (
+        <a 
+          href={item.libraryPriceSourceDocumentUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-600 text-[8px] text-emerald-600 hover:text-white rounded font-black uppercase tracking-widest transition-all flex items-center gap-1"
+        >
+          Source Quote
+        </a>
+      )}
+    </div>
+  );
+}
+
 interface MaterialLibraryProps {
   materials: MaterialItem[];
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   user: User | null;
+}
+
+function MaterialHistoryModal({ material, history, isLoading, onClose }: { material: MaterialItem, history: MaterialHistoryEntry[], isLoading: boolean, onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-american-blue/40 backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-2xl bg-white rounded-[32px] shadow-2xl overflow-hidden border border-[#E5E5E5]"
+      >
+        <div className="p-8 border-b border-[#F5F5F5] flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-american-blue/5 text-american-blue flex items-center justify-center">
+              <RotateCcw size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-american-blue tracking-tight uppercase">Price History</h2>
+              <p className="text-xs text-[#666666] font-bold uppercase tracking-widest">{material.name}</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="h-10 w-10 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#999999] hover:text-american-blue transition-all"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
+              <div className="h-12 w-12 rounded-full border-4 border-american-blue/10 border-t-american-blue animate-spin" />
+              <p className="text-xs font-black text-american-blue uppercase tracking-widest animate-pulse">Retrieving historical records...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-20 bg-[#FBFBFB] rounded-3xl border-2 border-dashed border-[#EEEEEE]">
+              <div className="h-16 w-16 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto mb-4 text-[#CCCCCC]">
+                <RotateCcw size={32} />
+              </div>
+              <p className="text-sm font-bold text-[#999999] uppercase tracking-widest">No history recorded yet</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {history.map((entry, idx) => {
+                const diff = entry.previousPrice ? entry.price - entry.previousPrice : 0;
+                const isIncrease = diff > 0;
+                const isDecrease = diff < 0;
+                
+                return (
+                  <div key={entry.id || idx} className="flex items-center justify-between p-5 rounded-2xl bg-[#FBFBFB] border border-[#EEEEEE] group hover:border-american-blue transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "h-10 w-10 rounded-xl flex items-center justify-center",
+                        entry.sourceType === 'supplier_quote' ? "bg-emerald-50 text-emerald-600" :
+                        entry.sourceType === 'manual' ? "bg-amber-50 text-amber-600" :
+                        "bg-gray-100 text-gray-400"
+                      )}>
+                        {entry.sourceType === 'supplier_quote' ? <ClipboardList size={20} /> : <Edit2 size={20} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-american-blue">{formatCurrency(entry.price)}</span>
+                          {diff !== 0 && (
+                            <span className={cn(
+                              "text-[10px] font-black uppercase flex items-center gap-0.5",
+                              isIncrease ? "text-american-red" : "text-emerald-600"
+                            )}>
+                              {isIncrease ? '↑' : '↓'} {formatCurrency(Math.abs(diff))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-[#999999] font-bold uppercase tracking-widest">
+                          <span>{new Date(entry.date).toLocaleDateString()}</span>
+                          <span className="w-1 h-1 rounded-full bg-[#CCCCCC]" />
+                          <span>{entry.sourceType === 'manual' ? 'Manual Entry' : entry.sourceSupplierName || 'Supplier Quote'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {entry.sourceDocumentUrl && (
+                      <a 
+                        href={entry.sourceDocumentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-white shadow-sm border border-[#EEEEEE] text-[#999999] hover:text-emerald-600 hover:border-emerald-600 transition-all opacity-0 group-hover:opacity-100"
+                        title="View Source Document"
+                      >
+                        <Printer size={16} />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
 }
 
 export default function MaterialLibrary({ materials, setMaterials, user }: MaterialLibraryProps) {
@@ -69,6 +229,34 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<MaterialItem | null>(null);
+  const [historyMaterial, setHistoryMaterial] = React.useState<MaterialItem | null>(null);
+  const [materialHistory, setMaterialHistory] = React.useState<MaterialHistoryEntry[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
+
+  const fetchHistory = async (materialId: string) => {
+    setIsHistoryLoading(true);
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch(`/api/materials/history?materialId=${materialId}`, {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMaterialHistory(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch material history:', err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const handleOpenHistory = (material: MaterialItem) => {
+    setHistoryMaterial(material);
+    fetchHistory(material.id);
+  };
 
   // RFQ and Price Integrity Auditor states
   const [showRfqModal, setShowRfqModal] = React.useState(false);
@@ -399,6 +587,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                     {item.sku && (
                       <p className="text-[10px] font-mono text-american-blue uppercase tracking-tighter">SKU: {item.sku}</p>
                     )}
+                    <PriceSourceBadge item={item} onOpenHistory={handleOpenHistory} />
                   </div>
 
                   <div className="mt-6 pt-6 border-t border-[#F5F5F5] flex items-center justify-between">
@@ -456,6 +645,7 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                           <span className="font-bold text-[#1A1A1A]">{item.name}</span>
                           {item.sku && <span className="text-[9px] font-mono text-american-blue/60 uppercase">SKU: {item.sku}</span>}
                           <PriceIndicator status={getPriceStatus(item.lastPriceUpdate)} />
+                          <PriceSourceBadge item={item} onOpenHistory={handleOpenHistory} />
                         </div>
                       </div>
                     </td>
@@ -864,7 +1054,16 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
 
       {/* Add/Edit Modal */}
       <AnimatePresence>
-        {isModalOpen && (
+        {historyMaterial && (
+        <MaterialHistoryModal 
+          material={historyMaterial}
+          history={materialHistory}
+          isLoading={isHistoryLoading}
+          onClose={() => setHistoryMaterial(null)}
+        />
+      )}
+
+      {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}

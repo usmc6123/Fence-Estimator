@@ -14,6 +14,7 @@ import nodemailer from 'nodemailer';
 // Modular Admin APIs
 import adminHandler from './api/admin';
 import listMaterials from './api/materials/list';
+import materialHistory from './api/materials/history';
 import writeExpense from './api/expenses/write';
 import writeEstimate from './api/estimates/write';
 import writeQuote from './api/quotes/write';
@@ -500,6 +501,7 @@ async function startServer() {
   app.post('/api/materials/list', listMaterials);
   app.put('/api/materials/list', listMaterials);
   app.delete('/api/materials/list', listMaterials);
+  app.get('/api/materials/history', materialHistory);
 
   // GET /api/user/estimates - Get own estimates
   app.get('/api/user/estimates', async (req, res) => {

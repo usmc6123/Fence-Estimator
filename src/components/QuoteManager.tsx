@@ -239,7 +239,15 @@ export default function QuoteManager({
             action: 'bulk-sync',
             updates: itemsToUpdate.map(item => ({
               materialId: item.mappedMaterialId,
-              cost: item.unitPrice
+              cost: item.unitPrice,
+              libraryPriceSourceType: 'supplier_quote',
+              libraryPriceSourceSupplierName: selectedQuote.supplierName,
+              libraryPriceSourceQuoteDate: selectedQuote.date,
+              libraryPriceSourceFileName: selectedQuote.fileName,
+              libraryPriceSourceDocumentUrl: selectedQuote.fileUrl,
+              libraryPriceSourceQuoteSnapshotId: (selectedQuote as any).snapshotId,
+              libraryPriceSourceUpdatedAt: new Date().toISOString(),
+              libraryPriceSourceUpdatedBy: user?.email || 'Admin'
             }))
           })
         });
@@ -720,7 +728,7 @@ export default function QuoteManager({
     }
   };
 
-  const updateMaterialPrice = async (materialId: string, newPrice: number) => {
+  const updateMaterialPrice = async (materialId: string, newPrice: number, sourceInfo?: Partial<MaterialItem>) => {
     const mat = materials.find(m => m.id === materialId);
     if (user) {
       try {
@@ -734,7 +742,8 @@ export default function QuoteManager({
           body: JSON.stringify({
             id: materialId,
             cost: newPrice,
-            lastPriceUpdate: new Date().toISOString()
+            lastPriceUpdate: new Date().toISOString(),
+            ...sourceInfo
           })
         });
 
@@ -885,7 +894,7 @@ export default function QuoteManager({
 
   // Comparison Logic: Group by mapped materials
   const compareData = React.useMemo(() => {
-    const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string, fileUrl?: string }[] }> = {};
+    const comparison: Record<string, { materialName: string, suppliers: { supplierName: string, price: number, quoteId: string, fileUrl?: string, date?: string, fileName?: string, snapshotId?: string }[] }> = {};
 
     const normalizeName = (name: string) => {
       return getCanonicalSupplierName(name).toLowerCase();
@@ -914,13 +923,19 @@ export default function QuoteManager({
               existingInMat.quoteId = quote.id;
               existingInMat.supplierName = quote.supplierName;
               existingInMat.fileUrl = quote.fileUrl;
+              existingInMat.date = quote.date;
+              existingInMat.fileName = quote.fileName;
+              existingInMat.snapshotId = (quote as any).snapshotId;
             }
           } else {
             comparison[item.mappedMaterialId].suppliers.push({
               supplierName: quote.supplierName,
               price: item.unitPrice,
               quoteId: quote.id,
-              fileUrl: quote.fileUrl
+              fileUrl: quote.fileUrl,
+              date: quote.date,
+              fileName: quote.fileName,
+              snapshotId: (quote as any).snapshotId
             });
           }
         }
@@ -937,39 +952,11 @@ export default function QuoteManager({
 
   // History Logic: Group all instances of a material across time
   const historyData = React.useMemo(() => {
-    const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId?: string, snapshotId?: string, type: 'quote' | 'snapshot' }[] }> = {};
+    const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId?: string, snapshotId?: string, type: 'quote' | 'snapshot', fileName?: string, fileUrl?: string }[] }> = {};
 
     const normalizeName = (name: string) => {
       return getCanonicalSupplierName(name).toLowerCase();
     };
-
-    // Process Legacy Quotes
-    quotes.forEach(quote => {
-      quote.items.forEach(item => {
-        if (item.mappedMaterialId) {
-          if (!history[item.mappedMaterialId]) {
-            const mat = materials.find(m => m.id === item.mappedMaterialId);
-            history[item.mappedMaterialId] = {
-              materialName: mat?.name || item.materialName,
-              entries: []
-            };
-          }
-
-          const normCurrent = normalizeName(quote.supplierName);
-          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent && e.date === quote.date);
-          
-          if (!existingEntry) {
-            history[item.mappedMaterialId].entries.push({
-              supplierName: quote.supplierName,
-              price: item.unitPrice,
-              date: quote.date,
-              quoteId: quote.id,
-              type: 'quote'
-            });
-          }
-        }
-      });
-    });
 
     // Process Snapshots (Immutable History)
     snapshots.forEach(snap => {
@@ -992,7 +979,40 @@ export default function QuoteManager({
               price: item.newPrice,
               date: snap.date,
               snapshotId: snap.id,
-              type: 'snapshot'
+              type: 'snapshot',
+              fileName: snap.sourceFileName,
+              fileUrl: snap.sourceFileUrl
+            });
+          }
+        }
+      });
+    });
+
+    // Process Legacy Quotes
+    quotes.forEach(quote => {
+      quote.items.forEach(item => {
+        if (item.mappedMaterialId) {
+          if (!history[item.mappedMaterialId]) {
+            const mat = materials.find(m => m.id === item.mappedMaterialId);
+            history[item.mappedMaterialId] = {
+              materialName: mat?.name || item.materialName,
+              entries: []
+            };
+          }
+
+          const normCurrent = normalizeName(quote.supplierName);
+          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent && e.date === quote.date);
+          
+          if (!existingEntry) {
+            history[item.mappedMaterialId].entries.push({
+              supplierName: quote.supplierName,
+              price: item.unitPrice,
+              date: quote.date,
+              quoteId: quote.id,
+              type: 'quote',
+              fileName: quote.fileName,
+              fileUrl: quote.fileUrl,
+              snapshotId: (quote as any).snapshotId
             });
           }
         }
@@ -1473,7 +1493,16 @@ export default function QuoteManager({
                                   <td className="px-6 py-5 text-right">
                                     {mat && isDifferent ? (
                                       <button 
-                                        onClick={() => updateMaterialPrice(mat.id, item.unitPrice)}
+                                        onClick={() => updateMaterialPrice(mat.id, item.unitPrice, {
+                                          libraryPriceSourceType: 'supplier_quote',
+                                          libraryPriceSourceSupplierName: selectedQuote.supplierName,
+                                          libraryPriceSourceQuoteDate: selectedQuote.date,
+                                          libraryPriceSourceFileName: selectedQuote.fileName,
+                                          libraryPriceSourceDocumentUrl: selectedQuote.fileUrl,
+                                          libraryPriceSourceQuoteSnapshotId: (selectedQuote as any).snapshotId,
+                                          libraryPriceSourceUpdatedAt: new Date().toISOString(),
+                                          libraryPriceSourceUpdatedBy: user?.email || 'Admin'
+                                        })}
                                         className="flex items-center gap-2 ml-auto px-4 py-2 bg-american-blue text-white hover:bg-american-blue/90 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
                                       >
                                         <TrendingUp size={12} />
@@ -1603,7 +1632,16 @@ export default function QuoteManager({
                                         </a>
                                       )}
                                       <button 
-                                        onClick={() => updateMaterialPrice(item.id, s.price)}
+                                        onClick={() => updateMaterialPrice(item.id, s.price, {
+                                          libraryPriceSourceType: 'supplier_quote',
+                                          libraryPriceSourceSupplierName: s.supplierName,
+                                          libraryPriceSourceQuoteDate: s.date,
+                                          libraryPriceSourceFileName: s.fileName,
+                                          libraryPriceSourceDocumentUrl: s.fileUrl,
+                                          libraryPriceSourceQuoteSnapshotId: s.snapshotId,
+                                          libraryPriceSourceUpdatedAt: new Date().toISOString(),
+                                          libraryPriceSourceUpdatedBy: user?.email || 'Admin'
+                                        })}
                                         className="text-[8px] font-black text-american-blue hover:text-american-red transition-colors uppercase tracking-widest"
                                       >
                                         Use Price
@@ -1750,7 +1788,17 @@ export default function QuoteManager({
                                         <Search size={14} />
                                       </button>
                                       <button 
-                                        onClick={() => updateMaterialPrice(material.id, entry.price)}
+                                        onClick={() => updateMaterialPrice(material.id, entry.price, {
+                                          libraryPriceSourceType: 'supplier_quote',
+                                          libraryPriceSourceSupplierName: entry.supplierName,
+                                          libraryPriceSourceQuoteDate: entry.date,
+                                          libraryPriceSourceFileName: (entry as any).fileName,
+                                          libraryPriceSourceDocumentUrl: (entry as any).fileUrl,
+                                          libraryPriceSourceQuoteSnapshotId: entry.snapshotId,
+                                          libraryPriceSourceId: entry.quoteId,
+                                          libraryPriceSourceUpdatedAt: new Date().toISOString(),
+                                          libraryPriceSourceUpdatedBy: user?.email || 'Admin'
+                                        })}
                                         className="px-4 py-2 bg-american-blue text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-american-red transition-all"
                                       >
                                         Use This Price

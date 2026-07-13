@@ -18,6 +18,34 @@ export interface MaterialItem {
   supplierItemName?: string;
   packageQuantity?: number; // Quantity per package (e.g., 80 for hog rings)
   isMaterialItem?: boolean; // Flag to show on crew checklist
+  
+  // Price Source Metadata
+  libraryPriceSourceType?: 'manual' | 'supplier_quote' | 'legacy_import' | 'unknown';
+  libraryPriceSourceId?: string;
+  libraryPriceSourceSupplierId?: string;
+  libraryPriceSourceSupplierName?: string;
+  libraryPriceSourceQuoteSnapshotId?: string;
+  libraryPriceSourceDocumentUrl?: string;
+  libraryPriceSourceDocumentPath?: string;
+  libraryPriceSourceFileName?: string;
+  libraryPriceSourceQuoteDate?: string;
+  libraryPriceSourceUpdatedAt?: string;
+  libraryPriceSourceUpdatedBy?: string;
+}
+
+export interface MaterialHistoryEntry {
+  id: string;
+  materialId: string;
+  price: number;
+  date: string; // ISO string
+  reason?: string;
+  updatedBy?: string;
+  sourceType: 'manual' | 'supplier_quote' | 'legacy_import' | 'unknown';
+  sourceSupplierName?: string;
+  sourceQuoteSnapshotId?: string;
+  sourceDocumentUrl?: string;
+  sourceFileName?: string;
+  previousPrice?: number;
 }
 
 export interface FenceStyle {

@@ -221,6 +221,13 @@ service cloud.firestore {
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
     }
 
+    match /materialHistory/{historyId} {
+      allow get, list: if isCompanyMember();
+      allow create:    if canWriteData();
+      allow update:    if canWriteData();
+      allow delete:    if isAdmin();
+    }
+
     match /customPhotos/{photoId} {
       allow get, list: if true;
       allow create, update: if canWriteData();

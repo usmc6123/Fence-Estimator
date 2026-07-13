@@ -199,6 +199,26 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "supplierId", "supplierName", "uploadedAt", "status"]
+    },
+    "MaterialHistory": {
+      "title": "Material History",
+      "description": "Historical record of material price changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "materialId": { "type": "string" },
+        "price": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "sourceType": { "type": "string", "enum": ["manual", "supplier_quote", "legacy_import", "unknown"] },
+        "sourceSupplierName": { "type": "string" },
+        "sourceQuoteSnapshotId": { "type": "string" },
+        "sourceDocumentUrl": { "type": "string" },
+        "sourceFileName": { "type": "string" },
+        "previousPrice": { "type": "number" }
+      },
+      "required": ["id", "materialId", "price", "date", "sourceType"]
     }
   },
   "firestore": {
@@ -229,6 +249,10 @@
     "/materials/{materialId}": {
       "schema": "Material",
       "description": "Company material library"
+    },
+    "/materialHistory/{historyId}": {
+      "schema": "MaterialHistory",
+      "description": "Historical records of material price changes"
     },
     "/quotes/{quoteId}": {
       "schema": "Quote",

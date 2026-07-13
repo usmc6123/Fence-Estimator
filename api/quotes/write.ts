@@ -249,8 +249,56 @@ export default async function handler(req: any, res: any) {
         };
 
         await db.collection('quotes').doc(quoteData.id).set(quoteData);
+
+        // 3. Sync material prices and create history
+        const batch = db.batch();
+        const now = new Date().toISOString();
+        let updateCount = 0;
+
+        for (const item of snapData.lineItems) {
+          if (item.mappedMaterialId && item.newPrice !== undefined) {
+            const matRef = db.collection('materials').doc(item.mappedMaterialId);
+            const matDoc = await matRef.get();
+            const matData = matDoc.exists ? matDoc.data() : null;
+            const prevPrice = matData?.cost || 0;
+
+            batch.update(matRef, {
+              cost: item.newPrice,
+              lastPriceUpdate: now,
+              updatedAt: now,
+              libraryPriceSourceType: 'supplier_quote',
+              libraryPriceSourceSupplierName: snapData.supplierName,
+              libraryPriceSourceQuoteDate: snapData.date,
+              libraryPriceSourceFileName: snapData.sourceFileName,
+              libraryPriceSourceDocumentUrl: snapData.sourceFileUrl,
+              libraryPriceSourceQuoteSnapshotId: snapshotId,
+              libraryPriceSourceUpdatedAt: now,
+              libraryPriceSourceUpdatedBy: decoded.email || decoded.uid
+            });
+
+            const historyRef = db.collection('materialHistory').doc();
+            batch.set(historyRef, {
+              id: historyRef.id,
+              materialId: item.mappedMaterialId,
+              price: item.newPrice,
+              previousPrice: prevPrice,
+              date: now,
+              updatedBy: decoded.email || decoded.uid,
+              sourceType: 'supplier_quote',
+              sourceSupplierName: snapData.supplierName,
+              sourceQuoteSnapshotId: snapshotId,
+              sourceDocumentUrl: snapData.sourceFileUrl,
+              sourceFileName: snapData.sourceFileName
+            });
+            updateCount++;
+          }
+        }
+
+        if (updateCount > 0) {
+          await batch.commit();
+        }
         
-        return res.status(200).json({ success: true, quote: quoteData });
+        return res.status(200).json({ success: true, quote: quoteData, updateCount });
       }
 
       const quoteData = { ...req.body };

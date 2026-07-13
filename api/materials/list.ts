@@ -138,11 +138,48 @@ export default async function handler(req: any, res: any) {
           if (isNaN(cost)) continue;
 
           const docRef = db.collection('materials').doc(mId);
-          batch.update(docRef, {
+          const historyRef = db.collection('materialHistory').doc();
+          
+          // Get current price for history
+          const currentDoc = await docRef.get();
+          const currentData = currentDoc.exists ? currentDoc.data() : null;
+          const prevPrice = currentData?.cost || 0;
+
+          const updateObj: any = {
             cost: cost,
             lastPriceUpdate: now,
             updatedAt: now
+          };
+
+          // Copy source fields if present
+          const sourceFields = [
+            'libraryPriceSourceType', 'libraryPriceSourceId', 'libraryPriceSourceSupplierId',
+            'libraryPriceSourceSupplierName', 'libraryPriceSourceQuoteSnapshotId',
+            'libraryPriceSourceDocumentUrl', 'libraryPriceSourceDocumentPath',
+            'libraryPriceSourceFileName', 'libraryPriceSourceQuoteDate',
+            'libraryPriceSourceUpdatedAt', 'libraryPriceSourceUpdatedBy'
+          ];
+          sourceFields.forEach(f => {
+            if (item[f] !== undefined) updateObj[f] = item[f];
           });
+
+          batch.update(docRef, updateObj);
+          
+          // Create history record
+          batch.set(historyRef, {
+            id: historyRef.id,
+            materialId: mId,
+            price: cost,
+            previousPrice: prevPrice,
+            date: now,
+            updatedBy: item.libraryPriceSourceUpdatedBy || decoded.email || decoded.uid,
+            sourceType: item.libraryPriceSourceType || 'supplier_quote',
+            sourceSupplierName: item.libraryPriceSourceSupplierName,
+            sourceQuoteSnapshotId: item.libraryPriceSourceQuoteSnapshotId,
+            sourceDocumentUrl: item.libraryPriceSourceDocumentUrl,
+            sourceFileName: item.libraryPriceSourceFileName
+          });
+          
           count++;
         }
 
@@ -175,8 +212,46 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Missing material ID in request body' });
       }
 
-      updateFields.updatedAt = new Date().toISOString();
       const docRef = db.collection('materials').doc(id);
+      const currentDoc = await docRef.get();
+      const currentData = currentDoc.exists ? currentDoc.data() : null;
+      
+      const isPriceChanged = updateFields.cost !== undefined && currentData && updateFields.cost !== currentData.cost;
+      const now = new Date().toISOString();
+
+      if (isPriceChanged) {
+        updateFields.lastPriceUpdate = now;
+        
+        // If not explicitly provided, default to manual
+        if (!updateFields.libraryPriceSourceType) {
+          updateFields.libraryPriceSourceType = 'manual';
+          updateFields.libraryPriceSourceUpdatedAt = now;
+          updateFields.libraryPriceSourceUpdatedBy = decoded.email || decoded.uid;
+          // Clear current quote references as per requirement for manual changes
+          updateFields.libraryPriceSourceSupplierName = admin.firestore.FieldValue.delete();
+          updateFields.libraryPriceSourceQuoteSnapshotId = admin.firestore.FieldValue.delete();
+          updateFields.libraryPriceSourceDocumentUrl = admin.firestore.FieldValue.delete();
+          updateFields.libraryPriceSourceFileName = admin.firestore.FieldValue.delete();
+        }
+
+        // Create history record
+        const historyRef = db.collection('materialHistory').doc();
+        await historyRef.set({
+          id: historyRef.id,
+          materialId: id,
+          price: updateFields.cost,
+          previousPrice: currentData?.cost || 0,
+          date: now,
+          updatedBy: updateFields.libraryPriceSourceUpdatedBy || decoded.email || decoded.uid,
+          sourceType: updateFields.libraryPriceSourceType,
+          sourceSupplierName: updateFields.libraryPriceSourceSupplierName !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceSupplierName : undefined,
+          sourceQuoteSnapshotId: updateFields.libraryPriceSourceQuoteSnapshotId !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceQuoteSnapshotId : undefined,
+          sourceDocumentUrl: updateFields.libraryPriceSourceDocumentUrl !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceDocumentUrl : undefined,
+          sourceFileName: updateFields.libraryPriceSourceFileName !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceFileName : undefined
+        });
+      }
+
+      updateFields.updatedAt = now;
       await docRef.update(updateFields);
 
       const updatedSnap = await docRef.get();
