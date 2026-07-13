@@ -318,7 +318,8 @@ export default function CustomerContract({
         hasTrim: run.hasTrim,
         picketStyle: run.picketStyle,
         ironInstallType: run.ironInstallType,
-        ironPanelType: run.ironPanelType
+        ironPanelType: run.ironPanelType,
+        chainLinkFabricGauge: run.chainLinkFabricGauge
       };
     });
   }, [data.runs, markupFactor, taxFactor, isCustomerView, estimate.contractSnapshot]);

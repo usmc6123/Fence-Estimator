@@ -86,37 +86,39 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'GET') {
       const uid = decoded.uid;
       const isAdmin = decoded.isAdmin || uid === 'braden-lonestar-uid';
+      const isSnapshotRequest = req.query.snapshots === 'true';
 
-      const quotesList: any[] = [];
+      const results: any[] = [];
+      const collectionName = isSnapshotRequest ? 'supplierQuoteSnapshots' : 'quotes';
 
       if (isAdmin) {
-        const snap = await db.collection('quotes').get();
+        const snap = await db.collection(collectionName).get();
         snap.forEach(doc => {
-          quotesList.push({ id: doc.id, ...doc.data() });
+          results.push({ id: doc.id, ...doc.data() });
         });
       } else {
-        const snap = await db.collection('quotes').where('userId', '==', uid).get();
+        const snap = await db.collection(collectionName).where('userId', '==', uid).get();
         snap.forEach(doc => {
-          quotesList.push({ id: doc.id, ...doc.data() });
+          results.push({ id: doc.id, ...doc.data() });
         });
       }
 
-      quotesList.sort((a, b) => {
+      results.sort((a, b) => {
         const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : (a.date ? new Date(a.date).getTime() : 0);
         const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : (b.date ? new Date(b.date).getTime() : 0);
         return timeB - timeA;
       });
 
-      const cleanQuotesList = quotesList.map(quote => {
+      const cleanResults = results.map(item => {
         return {
-          ...quote,
-          createdAt: cleanTimestamp(quote.createdAt || quote.date),
-          updatedAt: cleanTimestamp(quote.updatedAt || quote.createdAt || quote.date),
-          date: quote.date || new Date().toISOString()
+          ...item,
+          createdAt: cleanTimestamp(item.createdAt || item.date),
+          updatedAt: cleanTimestamp(item.updatedAt || item.createdAt || item.date),
+          date: item.date || new Date().toISOString()
         };
       });
 
-      return res.status(200).json(cleanQuotesList);
+      return res.status(200).json(cleanResults);
     }
 
     const decodedEmail = decoded.email?.toLowerCase();
@@ -129,6 +131,7 @@ export default async function handler(req: any, res: any) {
 
     if (method === 'POST') {
       if (req.body && req.body.action === 'upload') {
+        // ... (existing upload logic remains same)
         const { fileData, fileName, fileType, pathPrefix } = req.body;
         if (!fileData || !fileName) {
           return res.status(400).json({ error: 'Missing fileData or fileName in body' });
@@ -181,6 +184,73 @@ export default async function handler(req: any, res: any) {
           console.error('Failed upload to storage:', uploadErr);
           return res.status(500).json({ error: 'Failed to upload file to storage: ' + uploadErr.message });
         }
+      }
+
+      // Handle Snapshots
+      if (req.body && req.body.action === 'snapshot') {
+        const snapshotData = { ...req.body.snapshot };
+        snapshotData.userId = decoded.uid;
+        snapshotData.companyId = 'lonestarfence';
+        
+        if (!snapshotData.id) {
+          snapshotData.id = db.collection('supplierQuoteSnapshots').doc().id;
+        }
+        
+        await db.collection('supplierQuoteSnapshots').doc(snapshotData.id).set(snapshotData);
+        return res.status(200).json(snapshotData);
+      }
+
+      // Handle Activation
+      if (req.body && req.body.action === 'activate') {
+        const { snapshotId, supplierId } = req.body;
+        if (!snapshotId) return res.status(400).json({ error: 'Missing snapshotId' });
+        
+        const snapRef = db.collection('supplierQuoteSnapshots').doc(snapshotId);
+        const snapDoc = await snapRef.get();
+        if (!snapDoc.exists) return res.status(404).json({ error: 'Snapshot not found' });
+        
+        const snapData = snapDoc.data();
+        
+        // 1. Mark snapshot as active
+        await snapRef.update({ 
+          status: 'active',
+          activatedAt: new Date().toISOString(),
+          activatedBy: decoded.uid
+        });
+        
+        // 2. Update the main quote document for this supplier to maintain backward compatibility
+        // Find existing quote for this supplier
+        const quotesSnap = await db.collection('quotes')
+          .where('supplierName', '==', snapData.supplierName)
+          .get();
+        
+        const quoteItems = snapData.lineItems.map((li: any) => ({
+          id: db.collection('quotes').doc().id,
+          materialName: li.materialName,
+          partNumber: li.partNumber,
+          unit: li.unit,
+          unitPrice: li.newPrice,
+          totalPrice: li.newPrice, // Total price for 1 unit in the reference quote
+          mappedMaterialId: li.mappedMaterialId
+        }));
+
+        const quoteData = {
+          id: quotesSnap.empty ? db.collection('quotes').doc().id : quotesSnap.docs[0].id,
+          companyId: 'lonestarfence',
+          supplierName: snapData.supplierName,
+          date: new Date().toISOString(),
+          items: quoteItems,
+          totalAmount: quoteItems.reduce((sum: number, i: any) => sum + i.totalPrice, 0),
+          fileName: snapData.sourceFileName,
+          fileType: 'application/pdf',
+          fileUrl: snapData.sourceFileUrl,
+          userId: decoded.uid,
+          snapshotId: snapshotId // Link back to the snapshot
+        };
+
+        await db.collection('quotes').doc(quoteData.id).set(quoteData);
+        
+        return res.status(200).json({ success: true, quote: quoteData });
       }
 
       const quoteData = { ...req.body };

@@ -5,7 +5,7 @@ import {
   CheckCircle2, Loader2, ChevronRight, Scale, ExternalLink,
   Plus, History, DollarSign, Search, ChevronDown, GitMerge
 } from 'lucide-react';
-import { SupplierQuote, QuoteItem, MaterialItem, User, Estimate } from '../types';
+import { SupplierQuote, QuoteItem, MaterialItem, User, Estimate, SupplierQuoteSnapshot, SnapshotLineItem, ComparisonSummary } from '../types';
 import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -97,6 +97,8 @@ interface QuoteManagerProps {
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   quotes: SupplierQuote[];
   setQuotes: React.Dispatch<React.SetStateAction<SupplierQuote[]>>;
+  snapshots: SupplierQuoteSnapshot[];
+  setSnapshots: React.Dispatch<React.SetStateAction<SupplierQuoteSnapshot[]>>;
   user: User | null;
   estimate: Partial<Estimate>;
   setEstimate: React.Dispatch<React.SetStateAction<Partial<Estimate>>>;
@@ -109,6 +111,8 @@ export default function QuoteManager({
   setMaterials, 
   quotes, 
   setQuotes, 
+  snapshots,
+  setSnapshots,
   user, 
   estimate, 
   setEstimate,
@@ -285,6 +289,219 @@ export default function QuoteManager({
     showToast(`Synchronized ${itemsToUpdate.length} prices from quote`);
   };
 
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const [reviewSnapshot, setReviewSnapshot] = React.useState<SupplierQuoteSnapshot | null>(null);
+
+  const calculateComparison = (newLineItems: SnapshotLineItem[], prevSnapshot?: SupplierQuoteSnapshot): ComparisonSummary => {
+    if (!prevSnapshot) {
+      return {
+        itemsIncreased: 0,
+        itemsDecreased: 0,
+        unchangedItems: 0,
+        newItems: newLineItems.length,
+        missingItems: 0,
+        averagePercentageChange: 0
+      };
+    }
+
+    let increased = 0;
+    let decreased = 0;
+    let unchanged = 0;
+    let newItems = 0;
+    let totalChangePercent = 0;
+    let matchedCount = 0;
+
+    newLineItems.forEach(item => {
+      const prevItem = prevSnapshot.lineItems.find(pi => 
+        (pi.mappedMaterialId && pi.mappedMaterialId === item.mappedMaterialId) || 
+        (pi.materialName === item.materialName)
+      );
+
+      if (prevItem) {
+        matchedCount++;
+        const change = ((item.newPrice - prevItem.newPrice) / prevItem.newPrice) * 100;
+        totalChangePercent += change;
+
+        if (item.newPrice > prevItem.newPrice) increased++;
+        else if (item.newPrice < prevItem.newPrice) decreased++;
+        else unchanged++;
+      } else {
+        newItems++;
+      }
+    });
+
+    const missingItems = prevSnapshot.lineItems.filter(pi => 
+      !newLineItems.find(ni => 
+        (ni.mappedMaterialId && ni.mappedMaterialId === pi.mappedMaterialId) || 
+        (ni.materialName === pi.materialName)
+      )
+    ).length;
+
+    return {
+      itemsIncreased: increased,
+      itemsDecreased: decreased,
+      unchangedItems: unchanged,
+      newItems: newItems,
+      missingItems: missingItems,
+      averagePercentageChange: matchedCount > 0 ? totalChangePercent / matchedCount : 0
+    };
+  };
+
+  const handleActivateSnapshot = async (snapshotId: string) => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const adminToken = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'activate',
+          snapshotId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to activate snapshot");
+      }
+
+      showToast("Snapshot activated and material prices updated");
+      setReviewSnapshot(null);
+      window.dispatchEvent(new Event('company_quotes_updated'));
+      window.dispatchEvent(new Event('company_materials_updated'));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to activate snapshot");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const SnapshotReview = ({ snapshot, onClose }: { snapshot: SupplierQuoteSnapshot, onClose: () => void }) => {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+        >
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Scale className="w-5 h-5 text-american-blue" />
+                Review Quote: {snapshot.supplierName}
+              </h3>
+              <p className="text-sm text-gray-500 font-mono">
+                {new Date(snapshot.date).toLocaleDateString()} • {snapshot.sourceFileName}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+              <Plus className="w-5 h-5 text-gray-500 rotate-45" />
+            </button>
+          </div>
+
+          {/* Comparison Summary Cards */}
+          <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-white">
+            <div className="p-4 rounded-xl border border-red-100 bg-red-50/30">
+              <p className="text-xs font-bold text-red-600 uppercase tracking-wider mb-1">Increases</p>
+              <p className="text-2xl font-black text-red-700">{snapshot.comparisonSummary.itemsIncreased}</p>
+            </div>
+            <div className="p-4 rounded-xl border border-green-100 bg-green-50/30">
+              <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">Decreases</p>
+              <p className="text-2xl font-black text-green-700">{snapshot.comparisonSummary.itemsDecreased}</p>
+            </div>
+            <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/30">
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">New Items</p>
+              <p className="text-2xl font-black text-blue-700">{snapshot.comparisonSummary.newItems}</p>
+            </div>
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/30">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Avg Change</p>
+              <p className={cn(
+                "text-2xl font-black",
+                snapshot.comparisonSummary.averagePercentageChange > 0 ? "text-red-700" : "text-green-700"
+              )}>
+                {snapshot.comparisonSummary.averagePercentageChange > 0 ? '+' : ''}
+                {snapshot.comparisonSummary.averagePercentageChange.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+
+          {/* Line Items Table */}
+          <div className="flex-1 overflow-y-auto px-6">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="border-b border-gray-100">
+                  <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Material</th>
+                  <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Old Price</th>
+                  <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">New Price</th>
+                  <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Change</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {snapshot.lineItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="py-4">
+                      <p className="text-sm font-bold text-gray-900">{item.materialName}</p>
+                      {item.partNumber && <p className="text-[10px] font-mono text-gray-400">{item.partNumber}</p>}
+                    </td>
+                    <td className="py-4 text-right font-mono text-sm text-gray-500">
+                      {item.oldPrice > 0 ? formatCurrency(item.oldPrice) : '—'}
+                    </td>
+                    <td className="py-4 text-right font-mono text-sm font-bold text-gray-900">
+                      {formatCurrency(item.newPrice)}
+                    </td>
+                    <td className="py-4 text-right">
+                      {item.oldPrice > 0 ? (
+                        <span className={cn(
+                          "text-xs font-bold px-2 py-0.5 rounded-full",
+                          item.changeType === 'increase' ? "bg-red-100 text-red-700" :
+                          item.changeType === 'decrease' ? "bg-green-100 text-green-700" :
+                          "bg-gray-100 text-gray-600"
+                        )}>
+                          {item.newPrice > item.oldPrice ? '+' : ''}
+                          {(((item.newPrice - item.oldPrice) / item.oldPrice) * 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NEW</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-amber-600 font-medium">
+              <CheckCircle2 className="w-4 h-4" />
+              Activation will update current material prices.
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={onClose}
+                className="px-6 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleActivateSnapshot(snapshot.id)}
+                disabled={isProcessing}
+                className="px-8 py-2 rounded-xl text-sm font-black text-white bg-american-blue hover:bg-american-blue/90 shadow-lg shadow-american-blue/20 flex items-center gap-2 disabled:opacity-50"
+              >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
+                Activate Prices
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -393,6 +610,63 @@ export default function QuoteManager({
       const sanitizedQuote = sanitize(newQuote);
       
       const adminToken = localStorage.getItem('company_admin_token');
+      
+      // 5. Create Snapshot
+      const prevSnapshot = snapshots
+        .filter(s => s.supplierName === supplierName)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+      const lineItems: SnapshotLineItem[] = items.map(item => ({
+        id: Math.random().toString(36).substr(2, 9),
+        materialId: item.mappedMaterialId || null,
+        materialName: item.materialName,
+        partNumber: item.partNumber,
+        unit: item.unit,
+        newPrice: item.unitPrice,
+        oldPrice: snapshots
+          .filter(s => s.supplierName === supplierName)
+          .flatMap(s => s.lineItems)
+          .find(li => li.materialName === item.materialName)?.newPrice || 0,
+        changeType: 'new', // Will be calculated in summary
+        mappedMaterialId: item.mappedMaterialId
+      })).map(li => {
+        if (li.oldPrice === 0) return { ...li, changeType: 'new' as const };
+        if (li.newPrice > li.oldPrice) return { ...li, changeType: 'increase' as const };
+        if (li.newPrice < li.oldPrice) return { ...li, changeType: 'decrease' as const };
+        return { ...li, changeType: 'none' as const };
+      });
+
+      const comparisonSummary = calculateComparison(lineItems, prevSnapshot);
+
+      const newSnapshot: SupplierQuoteSnapshot = {
+        id: doc(collection(db, 'supplierQuoteSnapshots')).id,
+        supplierName,
+        date: new Date().toISOString(),
+        sourceFileName: file.name,
+        sourceFileUrl: downloadUrl || '',
+        status: 'pending',
+        lineItems,
+        comparisonSummary
+      };
+
+      // 6. Save Snapshot
+      const responseSnapshot = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'snapshot',
+          snapshot: sanitize(newSnapshot)
+        })
+      });
+
+      if (!responseSnapshot.ok) {
+        throw new Error("Failed to save snapshot");
+      }
+
+      // 7. Save to Firestore (Legacy)
       const response = await fetch('/api/quotes/write', {
         method: 'POST',
         headers: {
@@ -408,8 +682,9 @@ export default function QuoteManager({
       }
 
       window.dispatchEvent(new Event('company_quotes_updated'));
+      setReviewSnapshot(newSnapshot); // Open review modal immediately
       setSelectedQuoteId(newQuoteId);
-      showToast("Quote processed and saved to cloud");
+      showToast("Quote processed and snapshot created");
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to process quote");
@@ -662,12 +937,13 @@ export default function QuoteManager({
 
   // History Logic: Group all instances of a material across time
   const historyData = React.useMemo(() => {
-    const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId: string }[] }> = {};
+    const history: Record<string, { materialName: string, entries: { supplierName: string, price: number, date: string, quoteId?: string, snapshotId?: string, type: 'quote' | 'snapshot' }[] }> = {};
 
     const normalizeName = (name: string) => {
       return getCanonicalSupplierName(name).toLowerCase();
     };
 
+    // Process Legacy Quotes
     quotes.forEach(quote => {
       quote.items.forEach(item => {
         if (item.mappedMaterialId) {
@@ -679,22 +955,46 @@ export default function QuoteManager({
             };
           }
 
-          // Use normalized name to ensure consistency in history view
-          let displayName = quote.supplierName;
           const normCurrent = normalizeName(quote.supplierName);
+          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent && e.date === quote.date);
           
-          // If we already have a display name for this normalized supplier in this material's history, use it
-          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent);
-          if (existingEntry) {
-            displayName = existingEntry.supplierName;
+          if (!existingEntry) {
+            history[item.mappedMaterialId].entries.push({
+              supplierName: quote.supplierName,
+              price: item.unitPrice,
+              date: quote.date,
+              quoteId: quote.id,
+              type: 'quote'
+            });
+          }
+        }
+      });
+    });
+
+    // Process Snapshots (Immutable History)
+    snapshots.forEach(snap => {
+      snap.lineItems.forEach(item => {
+        if (item.mappedMaterialId) {
+          if (!history[item.mappedMaterialId]) {
+            const mat = materials.find(m => m.id === item.mappedMaterialId);
+            history[item.mappedMaterialId] = {
+              materialName: mat?.name || item.materialName,
+              entries: []
+            };
           }
 
-          history[item.mappedMaterialId].entries.push({
-            supplierName: displayName,
-            price: item.unitPrice,
-            date: quote.date,
-            quoteId: quote.id
-          });
+          const normCurrent = normalizeName(snap.supplierName);
+          const existingEntry = history[item.mappedMaterialId].entries.find(e => normalizeName(e.supplierName) === normCurrent && e.date === snap.date);
+          
+          if (!existingEntry) {
+            history[item.mappedMaterialId].entries.push({
+              supplierName: snap.supplierName,
+              price: item.newPrice,
+              date: snap.date,
+              snapshotId: snap.id,
+              type: 'snapshot'
+            });
+          }
         }
       });
     });
@@ -708,7 +1008,7 @@ export default function QuoteManager({
       id,
       ...data
     })).sort((a, b) => a.materialName.localeCompare(b.materialName));
-  }, [quotes, materials]);
+  }, [quotes, snapshots, materials]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -725,6 +1025,13 @@ export default function QuoteManager({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {reviewSnapshot && (
+        <SnapshotReview 
+          snapshot={reviewSnapshot} 
+          onClose={() => setReviewSnapshot(null)} 
+        />
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[40px] shadow-xl border-2 border-american-blue/5">
         <div>
@@ -912,6 +1219,87 @@ export default function QuoteManager({
                     </div>
                     <ChevronRight size={16} className={cn("transition-transform", selectedQuoteId === quote.id ? "text-american-blue translate-x-1" : "text-[#CCCCCC]")} />
                   </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Supplier Price History Section */}
+          <div className="bg-white rounded-[40px] p-8 shadow-xl border-2 border-american-blue/5 space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-american-blue">
+                <History size={20} />
+                <h2 className="font-black uppercase tracking-tight">Price History</h2>
+              </div>
+              <span className="px-2 py-0.5 bg-american-blue/10 text-american-blue rounded-full text-[9px] font-black uppercase tracking-widest">
+                Immutable Records
+              </span>
+            </div>
+            
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {snapshots.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-[10px] font-bold text-[#CCCCCC] uppercase tracking-widest">No historical snapshots yet</p>
+                </div>
+              ) : (
+                snapshots.map(snap => (
+                  <div key={snap.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50/30 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-black text-american-blue">{snap.supplierName}</p>
+                        <p className="text-[10px] font-medium text-gray-500">
+                          {new Date(snap.date).toLocaleDateString()} • {snap.sourceFileName}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                        snap.status === 'active' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                      )}>
+                        {snap.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-1.5 rounded bg-white border border-gray-100">
+                        <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Up</p>
+                        <p className="text-xs font-black text-red-600">+{snap.comparisonSummary.itemsIncreased}</p>
+                      </div>
+                      <div className="text-center p-1.5 rounded bg-white border border-gray-100">
+                        <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Down</p>
+                        <p className="text-xs font-black text-green-600">-{snap.comparisonSummary.itemsDecreased}</p>
+                      </div>
+                      <div className="text-center p-1.5 rounded bg-white border border-gray-100">
+                        <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Avg</p>
+                        <p className={cn(
+                          "text-xs font-black",
+                          snap.comparisonSummary.averagePercentageChange > 0 ? "text-red-600" : "text-green-600"
+                        )}>
+                          {snap.comparisonSummary.averagePercentageChange > 0 ? '+' : ''}
+                          {snap.comparisonSummary.averagePercentageChange.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setReviewSnapshot(snap)}
+                        className="flex-1 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Search size={10} />
+                        Review
+                      </button>
+                      {snap.sourceFileUrl && (
+                        <a 
+                          href={snap.sourceFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center"
+                        >
+                          <ExternalLink size={10} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 ))
               )}
             </div>
@@ -1314,7 +1702,7 @@ export default function QuoteManager({
                             {material.entries.map((entry, idx) => {
                               const isNewest = idx === 0;
                               return (
-                                <div key={`${entry.quoteId}-${idx}`} className={cn(
+                                <div key={`${entry.type === 'snapshot' ? entry.snapshotId : entry.quoteId}-${idx}`} className={cn(
                                   "flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-3xl border-2 transition-all",
                                   isNewest ? "bg-american-blue/5 border-american-blue/10" : "bg-white border-[#F8F9FA]"
                                 )}>
@@ -1323,12 +1711,19 @@ export default function QuoteManager({
                                       "h-10 w-10 rounded-xl flex items-center justify-center",
                                       isNewest ? "bg-american-blue text-white" : "bg-[#F5F5F7] text-american-blue"
                                     )}>
-                                      <DollarSign size={18} />
+                                      {entry.type === 'snapshot' ? <History size={18} /> : <FileText size={18} />}
                                     </div>
                                     <div>
                                       <p className="text-sm font-black text-american-blue">{entry.supplierName}</p>
-                                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
+                                      <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest flex items-center gap-2">
                                         {new Date(entry.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                        <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                        <span className={cn(
+                                          "px-1.5 py-0.5 rounded text-[8px] font-black",
+                                          entry.type === 'snapshot' ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+                                        )}>
+                                          {entry.type.toUpperCase()}
+                                        </span>
                                       </p>
                                     </div>
                                   </div>
@@ -1340,11 +1735,19 @@ export default function QuoteManager({
                                     </div>
                                     <div className="flex gap-2">
                                       <button 
-                                        onClick={() => { setSelectedQuoteId(entry.quoteId); setActiveView('list'); }}
+                                        onClick={() => { 
+                                          if (entry.type === 'snapshot') {
+                                            const snap = snapshots.find(s => s.id === entry.snapshotId);
+                                            if (snap) setReviewSnapshot(snap);
+                                          } else {
+                                            setSelectedQuoteId(entry.quoteId!); 
+                                            setActiveView('list'); 
+                                          }
+                                        }}
                                         className="p-2 bg-white text-american-blue border border-[#E5E5E5] rounded-xl hover:bg-american-blue hover:text-white hover:border-american-blue transition-all shadow-sm"
-                                        title="View Original Quote"
+                                        title={entry.type === 'snapshot' ? "Review Snapshot" : "View Original Quote"}
                                       >
-                                        <ExternalLink size={14} />
+                                        <Search size={14} />
                                       </button>
                                       <button 
                                         onClick={() => updateMaterialPrice(material.id, entry.price)}

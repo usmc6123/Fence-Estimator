@@ -83,6 +83,12 @@ service cloud.firestore {
       return data.companyId == 'lonestarfence';
     }
 
+    function isValidSnapshot(data) {
+      return data.supplierId is string
+        && data.status in ['active', 'superseded', 'draft']
+        && data.uploadedAt is string;
+    }
+
     function isValidMaterial(data) {
       return data.companyId == 'lonestarfence'
         && data.id is string
@@ -199,6 +205,13 @@ service cloud.firestore {
       allow create:    if canWriteData() && isValidQuote(incoming());
       allow update:    if canWriteData() && resource.data.companyId == 'lonestarfence' && isValidQuote(incoming());
       allow delete:    if canWriteData() && resource.data.companyId == 'lonestarfence';
+    }
+
+    match /supplierQuoteSnapshots/{snapshotId} {
+      allow get, list: if isCompanyMember();
+      allow create:    if canWriteData() && isValidSnapshot(incoming());
+      allow update:    if canWriteData() && isValidSnapshot(incoming());
+      allow delete:    if isAdmin();
     }
 
     match /materials/{materialId} {

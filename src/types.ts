@@ -132,6 +132,39 @@ export interface QuoteItem {
   mappedAt?: string;
 }
 
+export interface SnapshotLineItem {
+  id: string;
+  materialId: string | null; // Mapped library material ID
+  materialName: string;      // Name from supplier quote
+  partNumber?: string;
+  unit: string;
+  newPrice: number;          // Current quoted price
+  oldPrice: number;          // Previous price for comparison
+  changeType: 'increase' | 'decrease' | 'none' | 'new';
+  mappedMaterialId?: string; // Duplicate of materialId for safety during transition
+}
+
+export interface ComparisonSummary {
+  itemsIncreased: number;
+  itemsDecreased: number;
+  unchangedItems: number;
+  newItems: number;
+  missingItems: number;
+  averagePercentageChange: number;
+  totalDollarEffect?: number;
+}
+
+export interface SupplierQuoteSnapshot {
+  id: string;
+  supplierName: string;
+  date: string;              // ISO string
+  sourceFileName: string;
+  sourceFileUrl: string;
+  status: 'active' | 'pending' | 'superseded';
+  lineItems: SnapshotLineItem[];
+  comparisonSummary: ComparisonSummary;
+}
+
 export interface SupplierQuote {
   id: string;
   companyId?: string;

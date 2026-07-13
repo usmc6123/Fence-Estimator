@@ -25,7 +25,7 @@ import CustomerSignaturePortal from './components/CustomerSignaturePortal';
 import CrewSchedulePortal from './components/CrewSchedulePortal';
 import JobPortal from './components/JobPortal';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
-import { MaterialItem, LaborRates, Estimate, SupplierQuote, SavedEstimate, User } from './types';
+import { MaterialItem, LaborRates, Estimate, SupplierQuote, SupplierQuoteSnapshot, SavedEstimate, User } from './types';
 import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminConsole from './pages/admin-console';
@@ -378,6 +378,10 @@ export default function App() {
       ...q,
       supplierName: getCanonicalSupplierName(q.supplierName || '')
     }));
+  });
+
+  const [snapshots, setSnapshots] = React.useState<SupplierQuoteSnapshot[]>(() => {
+    return getInitialValue('snapshots', 'fence_pro_snapshots', []);
   });
 
   const [laborRates, setLaborRates] = React.useState<LaborRates>(() => {
@@ -821,6 +825,26 @@ export default function App() {
     }
   }, [user]);
 
+  const fetchSnapshots = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('company_admin_token');
+      const response = await fetch('/api/quotes/list?snapshots=true', {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSnapshots(data);
+      } else {
+        console.error('Failed to fetch snapshots via API:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Network error fetching snapshots via API:', err);
+    }
+  }, [user]);
+
   // Fetch quotes from Firestore if user is logged in
   React.useEffect(() => {
     if (!user) {
@@ -833,9 +857,11 @@ export default function App() {
     }
 
     fetchQuotes();
+    fetchSnapshots();
 
     const handleSync = () => {
       fetchQuotes();
+      fetchSnapshots();
     };
     window.addEventListener('company_quotes_updated', handleSync);
     window.addEventListener('focus', handleSync);
@@ -887,6 +913,7 @@ export default function App() {
     localStorage.setItem('fence_pro_labor_rates', JSON.stringify(laborRates));
     localStorage.setItem('fence_pro_active_tab', JSON.stringify(activeTab));
     localStorage.setItem('fence_pro_quotes', JSON.stringify(quotes));
+    localStorage.setItem('fence_pro_snapshots', JSON.stringify(snapshots));
     localStorage.setItem('fence_pro_materials', JSON.stringify(materials));
     localStorage.setItem('fence_pro_ai_scope', JSON.stringify(aiProjectScope));
     localStorage.setItem('fence_pro_customer_contract_ai_scope', JSON.stringify(aiContractScope));
@@ -1283,6 +1310,8 @@ export default function App() {
               setMaterials={setMaterials} 
               quotes={quotes} 
               setQuotes={setQuotes} 
+              snapshots={snapshots}
+              setSnapshots={setSnapshots}
               user={user}
               estimate={estimate}
               setEstimate={setEstimate}

@@ -175,6 +175,30 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "tier", "createdAt"]
+    },
+    "SupplierQuoteSnapshot": {
+      "title": "Supplier Quote Snapshot",
+      "description": "Immutable historical snapshot of a supplier quote",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "quoteNumber": { "type": "string" },
+        "quoteDate": { "type": "string" },
+        "effectiveDate": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" },
+        "uploadedBy": { "type": "string" },
+        "documentUrl": { "type": "string" },
+        "documentPath": { "type": "string" },
+        "originalFilename": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "superseded", "draft"] },
+        "lineItems": { "type": "array" },
+        "comparisonSummary": { "type": "object" },
+        "previousSnapshotId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "supplierId", "supplierName", "uploadedAt", "status"]
     }
   },
   "firestore": {
@@ -209,6 +233,10 @@
     "/quotes/{quoteId}": {
       "schema": "Quote",
       "description": "Supplier quotes"
+    },
+    "/supplierQuoteSnapshots/{snapshotId}": {
+      "schema": "SupplierQuoteSnapshot",
+      "description": "Historical snapshots of supplier quotes"
     },
     "/companySettings/{settingId}": {
       "schema": "CompanySettings",

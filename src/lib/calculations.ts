@@ -69,6 +69,7 @@ export interface RunTakeOff {
   deeperPostMaterialDiff?: number;
   deeperPostLaborCost?: number;
   chainLinkFenceRunCount?: number;
+  chainLinkFabricGauge?: '9ga' | '11ga';
   debugData?: any;
 }
 
@@ -2134,6 +2135,7 @@ export function calculateDetailedTakeOff(
       stainSides: run.stainSides,
       picketStyle: (run.visualStyleId === 'w-bob') ? 'Board on Board' : ((run.visualStyleId === 'w-side' || run.visualStyleId === 'side-by-side') ? 'Side by Side' : run.visualStyleId),
       chainLinkGrade: run.chainLinkGrade || (runStyle.type === 'Chain Link' ? 'Residential' : undefined),
+      chainLinkFabricGauge: run.chainLinkFabricGauge,
       hasBottomRail: run.hasBottomRail,
       ironInstallType: run.ironInstallType || estimate.ironInstallType,
       ironPanelType: run.ironPanelType || estimate.ironPanelType,
