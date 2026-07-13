@@ -12,6 +12,7 @@ export default function AdminSidebar({ activeSubTab, setActiveSubTab }: AdminSid
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'tiers', label: 'Subscription Tiers', icon: CreditCard },
+    { id: 'catalog', label: 'Material Catalog', icon: FileText },
     { id: 'settings', label: 'Admin Settings', icon: Settings },
     { id: 'activity', label: 'Activity Logs', icon: FileText }
   ];

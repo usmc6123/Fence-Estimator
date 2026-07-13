@@ -5,8 +5,9 @@ import AdminDashboard from '../components/AdminDashboard';
 import AdminUserManagement from '../components/AdminUserManagement';
 import AdminSubscriptionTiers from '../components/AdminSubscriptionTiers';
 import AdminSettings from '../components/AdminSettings';
+import AdminCatalogValidation from '../components/AdminCatalogValidation';
 import { motion, AnimatePresence } from 'motion/react';
-import { User } from '../types';
+import { User, MaterialItem } from '../types';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc } from 'firebase/firestore';
 
@@ -40,10 +41,11 @@ interface AdminConsoleProps {
   setAdminToken: (token: string | null) => void;
   onNavigate: (path: string) => void;
   currentUser: User | null;
+  materials: MaterialItem[];
   isAdminVerifying?: boolean;
 }
 
-export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, isAdminVerifying = false }: AdminConsoleProps) {
+export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, materials, isAdminVerifying = false }: AdminConsoleProps) {
   if (!currentUser?.isAdmin) {
     return <AccessDenied />;
   }
@@ -154,6 +156,8 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
         );
       case 'tiers':
         return <AdminSubscriptionTiers users={users} />;
+      case 'catalog':
+        return <AdminCatalogValidation materials={materials} />;
       case 'settings':
         return (
           <AdminSettings 

@@ -369,7 +369,16 @@ export default function App() {
   }, [currentPath]);
   
   const [materials, setMaterials] = React.useState<MaterialItem[]>(() => {
-    return getInitialValue('materials', 'fence_pro_materials', MATERIALS);
+    const saved = getInitialValue('materials', 'fence_pro_materials', MATERIALS);
+    // Ensure new records from MATERIALS constant are merged in if missing from saved state
+    if (Array.isArray(saved) && Array.isArray(MATERIALS)) {
+      const savedIds = new Set(saved.map(m => m.id));
+      const missing = MATERIALS.filter(m => !savedIds.has(m.id));
+      if (missing.length > 0) {
+        return [...saved, ...missing];
+      }
+    }
+    return saved;
   });
 
   const [quotes, setQuotes] = React.useState<SupplierQuote[]>(() => {
@@ -1324,6 +1333,7 @@ export default function App() {
           {activeTab === 'admin-console' && (
             <AdminConsole 
               adminToken={adminToken}
+              materials={materials}
               setAdminToken={(token) => {
                 setAdminToken(token);
                 if (token) {

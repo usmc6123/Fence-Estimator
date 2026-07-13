@@ -1561,16 +1561,36 @@ export function calculateDetailedTakeOff(
       const hasBottomRail = run.hasBottomRail && isCommercial;
       const height = run.height || 6;
 
+      const resolveFinishId = (baseId: string) => {
+        if (!isBlack) return baseId;
+        // Inject '-black-' or '-black' correctly into the ID
+        if (baseId.includes('-comm')) return baseId.replace('-comm', '-black-comm');
+        if (baseId.includes('-res')) return baseId.replace('-res', '-black-res');
+        
+        // Handle specific hardware patterns
+        if (baseId.startsWith('cl-hw-')) {
+          const parts = baseId.split('-');
+          parts.splice(2, 0, 'black');
+          return parts.join('-');
+        }
+        
+        // Fallback for simple patterns
+        return baseId.replace('cl-', 'cl-black-');
+      };
+
       const findMaterial = (id: string, fallbackName: string) => {
         const mat = materials.find(m => m.id === id);
         if (mat) return mat;
+        
+        // If not found in library, return a "Needs Pricing" placeholder instead of "MISSING"
         return {
           id,
-          name: `MISSING: ${fallbackName} (${id})`,
+          name: `${fallbackName} (Not in Library)`,
           cost: 0,
           unit: 'each',
           category: 'Hardware',
-          isMissing: true
+          isMissing: true,
+          priceStatus: 'Needs Pricing'
         } as any;
       };
 
