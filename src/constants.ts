@@ -148,6 +148,20 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'cl-hw-ez-tie-black-178', name: '1-7/8" Black EZ Tie (Line Post)', category: 'Hardware', unit: 'each', cost: 1.35 },
   { id: 'cl-hw-hog-ring-black', name: 'Black Hog Ring', category: 'Hardware', unit: 'each', cost: 0.25 },
 
+  // Chain Link Gate Hardware (Galvanized)
+  { id: 'cl-gate-hinge-male-238', name: '2-3/8" Male Gate Hinge', category: 'Hardware', unit: 'each', cost: 5.50 },
+  { id: 'cl-gate-hinge-female-138', name: '1-3/8" Female Gate Hinge', category: 'Hardware', unit: 'each', cost: 4.50 },
+  { id: 'cl-gate-fork-latch-238', name: '2-3/8" x 1-3/8" Fork Latch', category: 'Hardware', unit: 'each', cost: 12.00 },
+  { id: 'cl-gate-elbow-138', name: '1-3/8" Gate Corner Elbow', category: 'Hardware', unit: 'each', cost: 3.50 },
+  { id: 'cl-gate-frame-138', name: '1-3/8" Gate Frame Pipe (LF)', category: 'Gate', unit: 'lf', cost: 3.25 },
+
+  // Chain Link Gate Hardware (Black)
+  { id: 'cl-gate-hinge-male-black-238', name: '2-3/8" Black Male Gate Hinge', category: 'Hardware', unit: 'each', cost: 7.50 },
+  { id: 'cl-gate-hinge-female-black-138', name: '1-3/8" Black Female Gate Hinge', category: 'Hardware', unit: 'each', cost: 6.50 },
+  { id: 'cl-gate-fork-latch-black-238', name: '2-3/8" x 1-3/8" Black Fork Latch', category: 'Hardware', unit: 'each', cost: 16.00 },
+  { id: 'cl-gate-elbow-black-138', name: '1-3/8" Black Gate Corner Elbow', category: 'Hardware', unit: 'each', cost: 5.50 },
+  { id: 'cl-gate-frame-black-138', name: '1-3/8" Black Gate Frame Pipe (LF)', category: 'Gate', unit: 'lf', cost: 4.50 },
+
   // Metal Structure
   { id: 'm-post-2x2-5', name: '2x2 x 5\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 32.00, description: 'For 3ft fence' },
   { id: 'm-post-2x2-6', name: '2x2 x 6\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 38.00, description: 'For 4ft fence', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
@@ -373,9 +387,9 @@ export const FENCE_STYLES: FenceStyle[] = [
     description: 'Durable and affordable galvanized steel mesh fence.',
     availableHeights: [4, 5, 6],
     availableWidths: [10],
-    availableColors: ['Galvanized'],
+    availableColors: [],
     visualStyles: [
-      { id: 'cl-std', name: "9ga Galv Mesh 6'", priceModifier: 0, imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
+      { id: 'cl-std', name: "Standard Mesh", priceModifier: 0, imageUrl: 'https://image.made-in-china.com/318f0j00YTqfkIjPqHgb/-mp4.webp' },
       { id: 'cl-slat', name: 'Privacy Slats', priceModifier: 14.00, imageUrl: 'https://www.hooverfence.com/mas_assets/cache/image/1/0/a/0/x600-68106.Jpg' },
     ],
     calcLogic: { postsPerLF: 0.1, railsPerLF: 0.1, picketsPerLF: 1, concretePerPost: 1.2 },

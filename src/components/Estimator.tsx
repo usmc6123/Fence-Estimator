@@ -1787,17 +1787,40 @@ export default function Estimator({
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Pattern</label>
-                              <select 
-                                value={run.visualStyleId}
-                                onChange={(e) => {
-                                  const newRuns = [...estimate.runs!];
-                                  newRuns[idx].visualStyleId = e.target.value;
-                                  setEstimate({ ...estimate, runs: newRuns });
-                                }}
-                                className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
-                              >
-                                {runStyle.visualStyles.map(vs => <option key={vs.id} value={vs.id}>{vs.name}</option>)}
-                              </select>
+                              {runStyle.type === 'Chain Link' ? (
+                                <div className="flex bg-[#F0F0F0] p-0.5 rounded-xl">
+                                  {runStyle.visualStyles.map(vs => (
+                                    <button 
+                                      key={vs.id}
+                                      onClick={() => {
+                                        const newRuns = [...estimate.runs!];
+                                        newRuns[idx].visualStyleId = vs.id;
+                                        setEstimate({ ...estimate, runs: newRuns });
+                                      }}
+                                      className={cn(
+                                        "flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                        run.visualStyleId === vs.id 
+                                          ? "bg-white text-american-blue shadow-sm" 
+                                          : "text-american-blue/40 hover:text-american-blue"
+                                      )}
+                                    >
+                                      {vs.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <select 
+                                  value={run.visualStyleId}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].visualStyleId = e.target.value;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                >
+                                  {runStyle.visualStyles.map(vs => <option key={vs.id} value={vs.id}>{vs.name}</option>)}
+                                </select>
+                              )}
                             </div>
 
                             {runStyle.type === 'Wood' && (
@@ -1921,20 +1944,22 @@ export default function Estimator({
                               </select>
                             </div>
 
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Color/Finish</label>
-                              <select 
-                                value={run.color || estimate.defaultColor}
-                                onChange={(e) => {
-                                  const newRuns = [...estimate.runs!];
-                                  newRuns[idx].color = e.target.value;
-                                  setEstimate({ ...estimate, runs: newRuns });
-                                }}
-                                className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
-                              >
-                                {runStyle.availableColors.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                            </div>
+                            {runStyle.type !== 'Chain Link' && (
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 ml-1">Color/Finish</label>
+                                <select 
+                                  value={run.color || estimate.defaultColor}
+                                  onChange={(e) => {
+                                    const newRuns = [...estimate.runs!];
+                                    newRuns[idx].color = e.target.value;
+                                    setEstimate({ ...estimate, runs: newRuns });
+                                  }}
+                                  className="w-full rounded-xl border-2 border-white bg-white px-3 py-2.5 text-[11px] font-bold focus:border-american-blue outline-none shadow-sm"
+                                >
+                                  {runStyle.availableColors.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                              </div>
+                            )}
 
                             {runStyle.type === 'Chain Link' && (
                               <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
