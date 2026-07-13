@@ -192,6 +192,7 @@ export interface SupplierQuoteSnapshot {
   date: string;              // ISO string
   sourceFileName: string;
   sourceFileUrl: string;
+  sourceFilePath?: string;
   status: 'active' | 'pending' | 'superseded';
   lineItems: SnapshotLineItem[];
   comparisonSummary: ComparisonSummary;
@@ -207,6 +208,7 @@ export interface SupplierQuote {
   fileUrl?: string; // For the "uploaded" visual
   fileName?: string;
   fileType?: string;
+  snapshotId?: string;
 }
 
 export type JobStatus = 'Estimate Pending' | 'Estimate Sent' | 'Accepted' | 'Approved' | 'Completed' | 'Draft' | 'Proposed' | 'In Progress' | 'Cancelled' | 'Declined';

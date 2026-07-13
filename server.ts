@@ -150,7 +150,7 @@ async function startServer() {
     if (req.originalUrl === '/api/webhooks/stripe') {
       next();
     } else {
-      express.json()(req, res, next);
+      express.json({ limit: '50mb' })(req, res, next);
     }
   });
 

@@ -132,18 +132,27 @@ export default async function handler(req: any, res: any) {
 
     if (method === 'POST') {
       if (req.body && req.body.action === 'upload') {
-        // ... (existing upload logic remains same)
-        const { fileData, fileName, fileType, pathPrefix } = req.body;
+        const { fileData, fileName, fileType, pathPrefix, supplierId } = req.body;
+        console.log(`SUPPLIER_QUOTE_UPLOAD_1: request received - supplierId: ${supplierId}, filename: ${fileName}, type: ${fileType}`);
+        
         if (!fileData || !fileName) {
-          return res.status(400).json({ error: 'Missing fileData or fileName in body' });
+          console.error('SUPPLIER_QUOTE_UPLOAD_FAILED - step: validation, message: Missing fileData or fileName');
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Missing fileData or fileName in body',
+            failedStep: 'validation'
+          });
         }
+        console.log(`SUPPLIER_QUOTE_UPLOAD_2: file validated - size: ${fileData.length} chars`);
 
         const cleanPrefix = pathPrefix || 'quotes/';
         const timestamp = Date.now();
         const filePath = `${cleanPrefix}${decoded.uid}/${timestamp}-${fileName}`;
 
         try {
-          const bucket = admin.storage().bucket('dazzling-card-485210-r8.firebasestorage.app');
+          const bucketName = 'dazzling-card-485210-r8.firebasestorage.app';
+          console.log(`SUPPLIER_QUOTE_UPLOAD_3: storage upload started - bucket: ${bucketName}, path: ${filePath}`);
+          const bucket = admin.storage().bucket(bucketName);
           const file = bucket.file(filePath);
 
           let cleanBase64 = fileData;
@@ -152,11 +161,23 @@ export default async function handler(req: any, res: any) {
           }
           const buffer = Buffer.from(cleanBase64, 'base64');
 
+          // Check file size (Vercel limit is ~4.5MB, but we should be safe up to 10MB on most Cloud Run setups)
+          if (buffer.length > 10 * 1024 * 1024) {
+            console.error('SUPPLIER_QUOTE_UPLOAD_FAILED - step: size_check, message: File too large');
+            return res.status(400).json({
+              success: false,
+              error: 'File too large',
+              code: 'FILE_TOO_LARGE',
+              failedStep: 'size_check'
+            });
+          }
+
           await file.save(buffer, {
             metadata: {
               contentType: fileType || 'application/octet-stream',
             }
           });
+          console.log(`SUPPLIER_QUOTE_UPLOAD_4: storage upload completed - path: ${filePath}`);
 
           let downloadUrl = '';
           try {
@@ -176,20 +197,31 @@ export default async function handler(req: any, res: any) {
             downloadUrl = signedUrl;
           }
 
+          console.log(`SUPPLIER_QUOTE_UPLOAD_9: response returned - url: ${downloadUrl}`);
           return res.status(200).json({
+            success: true,
             downloadUrl,
             fileUrl: downloadUrl,
-            signedUrl
+            signedUrl,
+            filePath: filePath,
+            bucket: bucket.name
           });
         } catch (uploadErr: any) {
-          console.error('Failed upload to storage:', uploadErr);
-          return res.status(500).json({ error: 'Failed to upload file to storage: ' + uploadErr.message });
+          console.error('SUPPLIER_QUOTE_UPLOAD_FAILED - step: storage_save, message:', uploadErr.message, 'supplierId:', supplierId, 'filename:', fileName);
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Failed to upload file to storage',
+            failedStep: 'storage_save',
+            details: uploadErr.message,
+            storagePath: filePath
+          });
         }
       }
 
       // Handle Snapshots
       if (req.body && req.body.action === 'snapshot') {
-        const snapshotData = { ...req.body.snapshot };
+        console.log(`SUPPLIER_QUOTE_UPLOAD_5: quote snapshot payload built`);
+        const snapshotData = sanitizeForFirestore({ ...req.body.snapshot });
         snapshotData.userId = decoded.uid;
         snapshotData.companyId = 'lonestarfence';
         
@@ -197,8 +229,20 @@ export default async function handler(req: any, res: any) {
           snapshotData.id = db.collection('supplierQuoteSnapshots').doc().id;
         }
         
-        await db.collection('supplierQuoteSnapshots').doc(snapshotData.id).set(sanitizeForFirestore(snapshotData));
-        return res.status(200).json(snapshotData);
+        try {
+          await db.collection('supplierQuoteSnapshots').doc(snapshotData.id).set(snapshotData);
+          console.log(`SUPPLIER_QUOTE_UPLOAD_6: quote snapshot saved - snapshotId: ${snapshotData.id}`);
+          return res.status(200).json({ success: true, ...snapshotData });
+        } catch (snapErr: any) {
+          console.error('SUPPLIER_QUOTE_UPLOAD_FAILED - step: quote_snapshot_save, message:', snapErr.message, 'snapshotId:', snapshotData.id);
+          return res.status(500).json({
+            success: false,
+            error: 'Supplier quote upload failed',
+            failedStep: 'quote_snapshot_save',
+            details: snapErr.message,
+            snapshotId: snapshotData.id
+          });
+        }
       }
 
       // Handle Activation
@@ -373,7 +417,14 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Unhandled request action' });
 
   } catch (error: any) {
-    console.error('Server Quotes Write Handler Error:', error);
-    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+    console.error('SUPPLIER_QUOTE_UPLOAD_FAILED - global catch');
+    console.error('message:', error.message);
+    console.error('stack:', error.stack);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Supplier quote operation failed',
+      details: error.message,
+      failedStep: 'global_handler'
+    });
   }
 }

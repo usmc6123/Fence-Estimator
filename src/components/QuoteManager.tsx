@@ -522,6 +522,7 @@ export default function QuoteManager({
     setError(null);
 
     try {
+      console.log('SUPPLIER_QUOTE_UPLOAD_1: request started');
       // 1. Convert file to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -551,37 +552,82 @@ export default function QuoteManager({
       });
 
       if (!responseUpload.ok) {
-        const errData = await responseUpload.json().catch(() => ({}));
-        throw new Error(errData.error || `Upload HTTP error ${responseUpload.status}`);
+        let errorMessage = `Upload HTTP error ${responseUpload.status}`;
+        try {
+          const errData = await responseUpload.json();
+          errorMessage = `Supplier quote upload failed at: ${errData.failedStep || 'upload'}\n${errData.details || errData.error || errorMessage}`;
+        } catch (e) {
+          const textError = await responseUpload.text().catch(() => "Unknown error");
+          errorMessage = `Upload HTTP error ${responseUpload.status}: ${textError}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const uploadResult = await responseUpload.json();
       const downloadUrl = uploadResult.downloadUrl || uploadResult.fileUrl;
+      const storagePath = uploadResult.filePath;
+      console.log('SUPPLIER_QUOTE_UPLOAD_4: storage upload completed', storagePath);
 
-      // 3. Extract data with Gemini using base64Data
+      // 3. Create initial immutable quote snapshot (Step 3 & 4)
+      const initialSnapshotId = doc(collection(db, 'supplierQuoteSnapshots')).id;
+      const responseSnapshot = await fetch('/api/quotes/write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'snapshot',
+          snapshot: {
+            id: initialSnapshotId,
+            supplierName: 'Pending Analysis...',
+            date: new Date().toISOString(),
+            sourceFileName: file.name,
+            sourceFileUrl: downloadUrl || '',
+            sourceFilePath: storagePath,
+            status: 'pending',
+            lineItems: [],
+            comparisonSummary: {
+              itemsIncreased: 0,
+              itemsDecreased: 0,
+              newItems: 0,
+              averagePercentageChange: 0
+            }
+          }
+        })
+      });
+
+      if (!responseSnapshot.ok) {
+        let errorMessage = "Failed to save initial snapshot";
+        try {
+          const errData = await responseSnapshot.json();
+          errorMessage = `Supplier quote upload failed at: ${errData.failedStep || 'snapshot_creation'}\n${errData.details || errData.error || errorMessage}`;
+        } catch (e) {
+          const textError = await responseSnapshot.text().catch(() => "Unknown error");
+          errorMessage = `Snapshot HTTP error ${responseSnapshot.status}: ${textError}`;
+        }
+        throw new Error(errorMessage);
+      }
+      console.log('SUPPLIER_QUOTE_UPLOAD_6: initial snapshot saved', initialSnapshotId);
+
+      // 4. Extract data with Gemini using base64Data (Step 6)
+      console.log('SUPPLIER_QUOTE_UPLOAD_7: parsing started');
       const extractedData = await analyzeQuoteDocument(base64Data, file.type);
+      console.log('SUPPLIER_QUOTE_UPLOAD_8: parsing completed');
       
       let supplierName = getCanonicalSupplierName(extractedData.supplierName || 'Unknown Supplier');
 
-      const newQuoteId = Math.random().toString(36).substr(2, 9);
-
-      // 3. Prepare quote object with explicit mapping to avoid garbage fields
+      // 5. Map items and update snapshot (Step 7)
       const items = (extractedData.items || []).map((item: any) => {
         const itemNameLower = (item.materialName || '').toLowerCase();
         const partNumberLower = (item.partNumber || '').toLowerCase();
 
         const match = materials.find(m => {
-          // 1. Part Number Exact Match (Highest confidence)
           if (partNumberLower && m.sku && m.sku.toLowerCase() === partNumberLower) return true;
-          
-          // 2. Alias Match (User-learned memory)
           if (m.aliases?.some(alias => alias.toLowerCase() === itemNameLower)) return true;
           if (partNumberLower && m.aliases?.some(alias => alias.toLowerCase() === partNumberLower)) return true;
-
-          // 3. Name Match (Fuzzy)
           if (m.name.toLowerCase() === itemNameLower) return true;
           if (m.name.toLowerCase().includes(itemNameLower) || itemNameLower.includes(m.name.toLowerCase())) return true;
-          
           return false;
         });
         
@@ -597,33 +643,6 @@ export default function QuoteManager({
         };
       });
 
-      const newQuote: SupplierQuote = {
-        id: newQuoteId,
-        companyId: 'lonestarfence',
-        supplierName: supplierName,
-        date: new Date().toISOString(),
-        items: items,
-        totalAmount: Number(extractedData.totalAmount) || items.reduce((sum, i) => sum + i.totalPrice, 0),
-        fileName: file.name || 'document',
-        fileType: file.type || 'application/pdf',
-        fileUrl: downloadUrl || ''
-      };
-
-      // 4. Save to Firestore
-      // Deep sanitization to ensure no undefined values
-      const sanitize = (obj: any): any => {
-        return JSON.parse(JSON.stringify(obj, (_, v) => v === undefined ? null : v));
-      };
-      
-      const sanitizedQuote = sanitize(newQuote);
-      
-      const adminToken = localStorage.getItem('company_admin_token');
-      
-      // 5. Create Snapshot
-      const prevSnapshot = snapshots
-        .filter(s => s.supplierName === supplierName)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-
       const lineItems: SnapshotLineItem[] = items.map(item => ({
         id: Math.random().toString(36).substr(2, 9),
         materialId: item.mappedMaterialId || null,
@@ -635,7 +654,7 @@ export default function QuoteManager({
           .filter(s => s.supplierName === supplierName)
           .flatMap(s => s.lineItems)
           .find(li => li.materialName === item.materialName)?.newPrice || 0,
-        changeType: 'new', // Will be calculated in summary
+        changeType: 'new' as const,
         mappedMaterialId: item.mappedMaterialId
       })).map(li => {
         if (li.oldPrice === 0) return { ...li, changeType: 'new' as const };
@@ -644,57 +663,66 @@ export default function QuoteManager({
         return { ...li, changeType: 'none' as const };
       });
 
+      const prevSnapshot = snapshots
+        .filter(s => s.supplierName === supplierName)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
       const comparisonSummary = calculateComparison(lineItems, prevSnapshot);
 
-      const newSnapshot: SupplierQuoteSnapshot = {
-        id: doc(collection(db, 'supplierQuoteSnapshots')).id,
+      const finalSnapshot: SupplierQuoteSnapshot = {
+        id: initialSnapshotId,
         supplierName,
         date: new Date().toISOString(),
         sourceFileName: file.name,
         sourceFileUrl: downloadUrl || '',
+        sourceFilePath: storagePath,
         status: 'pending',
         lineItems,
         comparisonSummary
       };
 
-      // 6. Save Snapshot
-      const responseSnapshot = await fetch('/api/quotes/write', {
+      // Update the snapshot with the full parsed data
+      await fetch('/api/quotes/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           action: 'snapshot',
-          snapshot: sanitize(newSnapshot)
+          snapshot: JSON.parse(JSON.stringify(finalSnapshot, (_, v) => v === undefined ? null : v))
         })
       });
 
-      if (!responseSnapshot.ok) {
-        throw new Error("Failed to save snapshot");
-      }
+      // 6. Save legacy quote record (Step 5 - but linked to snapshot)
+      const newQuote: SupplierQuote = {
+        id: Math.random().toString(36).substr(2, 9),
+        companyId: 'lonestarfence',
+        supplierName: supplierName,
+        date: new Date().toISOString(),
+        items: items,
+        totalAmount: Number(extractedData.totalAmount) || items.reduce((sum, i) => sum + i.totalPrice, 0),
+        fileName: file.name,
+        fileType: file.type || 'application/pdf',
+        fileUrl: downloadUrl || '',
+        snapshotId: initialSnapshotId
+      };
 
-      // 7. Save to Firestore (Legacy)
-      const response = await fetch('/api/quotes/write', {
+      await fetch('/api/quotes/write', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(sanitizedQuote)
+        body: JSON.stringify(JSON.parse(JSON.stringify(newQuote, (_, v) => v === undefined ? null : v)))
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP error ${response.status}`);
-      }
-
       window.dispatchEvent(new Event('company_quotes_updated'));
-      setReviewSnapshot(newSnapshot); // Open review modal immediately
-      setSelectedQuoteId(newQuoteId);
+      setReviewSnapshot(finalSnapshot);
+      setSelectedQuoteId(newQuote.id);
       showToast("Quote processed and snapshot created");
-    } catch (err) {
-      console.error(err);
+      console.log('SUPPLIER_QUOTE_UPLOAD_9: response returned');
+    } catch (err: any) {
+      console.error('SUPPLIER_QUOTE_UPLOAD_FAILED', err);
       setError(err instanceof Error ? err.message : "Failed to process quote");
     } finally {
       setIsUploading(false);
