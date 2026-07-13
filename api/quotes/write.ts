@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
+import { sanitizeForFirestore } from '../utils';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
@@ -196,7 +197,7 @@ export default async function handler(req: any, res: any) {
           snapshotData.id = db.collection('supplierQuoteSnapshots').doc().id;
         }
         
-        await db.collection('supplierQuoteSnapshots').doc(snapshotData.id).set(snapshotData);
+        await db.collection('supplierQuoteSnapshots').doc(snapshotData.id).set(sanitizeForFirestore(snapshotData));
         return res.status(200).json(snapshotData);
       }
 
@@ -248,7 +249,7 @@ export default async function handler(req: any, res: any) {
           snapshotId: snapshotId // Link back to the snapshot
         };
 
-        await db.collection('quotes').doc(quoteData.id).set(quoteData);
+        await db.collection('quotes').doc(quoteData.id).set(sanitizeForFirestore(quoteData));
 
         // 3. Sync material prices and create history
         const batch = db.batch();
@@ -262,7 +263,7 @@ export default async function handler(req: any, res: any) {
             const matData = matDoc.exists ? matDoc.data() : null;
             const prevPrice = matData?.cost || 0;
 
-            batch.update(matRef, {
+            batch.update(matRef, sanitizeForFirestore({
               cost: item.newPrice,
               lastPriceUpdate: now,
               updatedAt: now,
@@ -274,10 +275,10 @@ export default async function handler(req: any, res: any) {
               libraryPriceSourceQuoteSnapshotId: snapshotId,
               libraryPriceSourceUpdatedAt: now,
               libraryPriceSourceUpdatedBy: decoded.email || decoded.uid
-            });
+            }));
 
             const historyRef = db.collection('materialHistory').doc();
-            batch.set(historyRef, {
+            batch.set(historyRef, sanitizeForFirestore({
               id: historyRef.id,
               materialId: item.mappedMaterialId,
               price: item.newPrice,
@@ -288,8 +289,11 @@ export default async function handler(req: any, res: any) {
               sourceSupplierName: snapData.supplierName,
               sourceQuoteSnapshotId: snapshotId,
               sourceDocumentUrl: snapData.sourceFileUrl,
-              sourceFileName: snapData.sourceFileName
-            });
+              sourceDocumentPath: snapData.sourceFilePath,
+              sourceFileName: snapData.sourceFileName,
+              sourceQuoteDate: snapData.date,
+              sourceUpdatedAt: now
+            }));
             updateCount++;
           }
         }
@@ -311,7 +315,7 @@ export default async function handler(req: any, res: any) {
         quoteData.id = docId;
       }
 
-      await db.collection('quotes').doc(docId).set(quoteData);
+      await db.collection('quotes').doc(docId).set(sanitizeForFirestore(quoteData));
       return res.status(200).json(quoteData);
     }
 
@@ -336,7 +340,7 @@ export default async function handler(req: any, res: any) {
         return res.status(403).json({ error: 'Forbidden: You do not own this quote record' });
       }
 
-      await docRef.update(updateFields);
+      await docRef.update(sanitizeForFirestore(updateFields));
       const updatedSnap = await docRef.get();
       return res.status(200).json(updatedSnap.data());
     }

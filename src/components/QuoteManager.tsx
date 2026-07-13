@@ -749,15 +749,17 @@ export default function QuoteManager({
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `HTTP error ${response.status}`);
+          throw new Error(errData.details || errData.error || "Unable to update library price. The quote source information could not be saved.");
         }
 
-        const updatedMaterial = await response.json();
+        const result = await response.json();
+        const updatedMaterial = result.success ? result : result;
         setMaterials(prev => prev.map(m => m.id === materialId ? updatedMaterial : m));
         window.dispatchEvent(new Event('company_materials_updated'));
+        showToast("Library price updated successfully");
       } catch (error: any) {
         console.error(error);
-        showToast(error.message || "Failed to update material price on server");
+        showToast(error.message || "Unable to update library price. The quote source information could not be saved.");
         return;
       }
     } else {

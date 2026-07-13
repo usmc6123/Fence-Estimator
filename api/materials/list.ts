@@ -1,6 +1,7 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import jwt from 'jsonwebtoken';
+import { sanitizeForFirestore } from '../utils';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lone-star-fence-secret';
 const CUSTOM_DB_ID = 'ai-studio-326159a1-d34a-4219-9e8c-edc19a926edb';
@@ -130,6 +131,7 @@ export default async function handler(req: any, res: any) {
         const batch = db.batch();
         let count = 0;
         const now = new Date().toISOString();
+        const results = [];
 
         for (const item of updatesList) {
           const mId = item.materialId || item.id;
@@ -145,28 +147,49 @@ export default async function handler(req: any, res: any) {
           const currentData = currentDoc.exists ? currentDoc.data() : null;
           const prevPrice = currentData?.cost || 0;
 
-          const updateObj: any = {
+          // Snapshot ID resolution
+          let resolvedSnapshotId = item.libraryPriceSourceQuoteSnapshotId || 
+                                   item.sourceQuoteSnapshotId || 
+                                   item.snapshotId || 
+                                   item.quoteSnapshotId ||
+                                   item.supplierQuoteSnapshotId;
+          
+          const quoteId = item.libraryPriceSourceId || item.quoteId;
+
+          // If still missing, check the quote in Firestore
+          if (!resolvedSnapshotId && quoteId) {
+            try {
+              const quoteDoc = await db.collection('quotes').doc(quoteId).get();
+              if (quoteDoc.exists) {
+                resolvedSnapshotId = quoteDoc.data()?.snapshotId;
+              }
+            } catch (e) {
+              console.warn(`Could not lookup quote ${quoteId} for snapshot resolution`);
+            }
+          }
+
+          const updateObj: any = sanitizeForFirestore({
             cost: cost,
             lastPriceUpdate: now,
-            updatedAt: now
-          };
-
-          // Copy source fields if present
-          const sourceFields = [
-            'libraryPriceSourceType', 'libraryPriceSourceId', 'libraryPriceSourceSupplierId',
-            'libraryPriceSourceSupplierName', 'libraryPriceSourceQuoteSnapshotId',
-            'libraryPriceSourceDocumentUrl', 'libraryPriceSourceDocumentPath',
-            'libraryPriceSourceFileName', 'libraryPriceSourceQuoteDate',
-            'libraryPriceSourceUpdatedAt', 'libraryPriceSourceUpdatedBy'
-          ];
-          sourceFields.forEach(f => {
-            if (item[f] !== undefined) updateObj[f] = item[f];
+            updatedAt: now,
+            // Copy source fields if present
+            libraryPriceSourceType: item.libraryPriceSourceType || 'supplier_quote',
+            libraryPriceSourceId: quoteId,
+            libraryPriceSourceSupplierId: item.libraryPriceSourceSupplierId,
+            libraryPriceSourceSupplierName: item.libraryPriceSourceSupplierName,
+            libraryPriceSourceQuoteSnapshotId: resolvedSnapshotId,
+            libraryPriceSourceDocumentUrl: item.libraryPriceSourceDocumentUrl,
+            libraryPriceSourceDocumentPath: item.libraryPriceSourceDocumentPath,
+            libraryPriceSourceFileName: item.libraryPriceSourceFileName,
+            libraryPriceSourceQuoteDate: item.libraryPriceSourceQuoteDate,
+            libraryPriceSourceUpdatedAt: now,
+            libraryPriceSourceUpdatedBy: item.libraryPriceSourceUpdatedBy || decoded.email || decoded.uid
           });
 
           batch.update(docRef, updateObj);
           
           // Create history record
-          batch.set(historyRef, {
+          batch.set(historyRef, sanitizeForFirestore({
             id: historyRef.id,
             materialId: mId,
             price: cost,
@@ -174,11 +197,15 @@ export default async function handler(req: any, res: any) {
             date: now,
             updatedBy: item.libraryPriceSourceUpdatedBy || decoded.email || decoded.uid,
             sourceType: item.libraryPriceSourceType || 'supplier_quote',
+            sourceSupplierId: item.libraryPriceSourceSupplierId,
             sourceSupplierName: item.libraryPriceSourceSupplierName,
-            sourceQuoteSnapshotId: item.libraryPriceSourceQuoteSnapshotId,
+            sourceQuoteSnapshotId: resolvedSnapshotId,
             sourceDocumentUrl: item.libraryPriceSourceDocumentUrl,
-            sourceFileName: item.libraryPriceSourceFileName
-          });
+            sourceDocumentPath: item.libraryPriceSourceDocumentPath,
+            sourceFileName: item.libraryPriceSourceFileName,
+            sourceQuoteDate: item.libraryPriceSourceQuoteDate,
+            sourceUpdatedAt: now
+          }));
           
           count++;
         }
@@ -222,6 +249,26 @@ export default async function handler(req: any, res: any) {
       if (isPriceChanged) {
         updateFields.lastPriceUpdate = now;
         
+        // Snapshot ID resolution
+        let resolvedSnapshotId = updateFields.libraryPriceSourceQuoteSnapshotId || 
+                                 updateFields.sourceQuoteSnapshotId || 
+                                 updateFields.snapshotId || 
+                                 updateFields.quoteSnapshotId ||
+                                 updateFields.supplierQuoteSnapshotId;
+        
+        const quoteId = updateFields.libraryPriceSourceId || updateFields.quoteId;
+
+        if (!resolvedSnapshotId && quoteId) {
+          try {
+            const quoteDoc = await db.collection('quotes').doc(quoteId).get();
+            if (quoteDoc.exists) {
+              resolvedSnapshotId = quoteDoc.data()?.snapshotId;
+            }
+          } catch (e) {
+             console.warn(`Could not lookup quote ${quoteId} for snapshot resolution`);
+          }
+        }
+
         // If not explicitly provided, default to manual
         if (!updateFields.libraryPriceSourceType) {
           updateFields.libraryPriceSourceType = 'manual';
@@ -232,11 +279,16 @@ export default async function handler(req: any, res: any) {
           updateFields.libraryPriceSourceQuoteSnapshotId = admin.firestore.FieldValue.delete();
           updateFields.libraryPriceSourceDocumentUrl = admin.firestore.FieldValue.delete();
           updateFields.libraryPriceSourceFileName = admin.firestore.FieldValue.delete();
+        } else {
+          // If we found a snapshot ID, ensure it's in the updateFields
+          if (resolvedSnapshotId) {
+            updateFields.libraryPriceSourceQuoteSnapshotId = resolvedSnapshotId;
+          }
         }
 
         // Create history record
         const historyRef = db.collection('materialHistory').doc();
-        await historyRef.set({
+        await historyRef.set(sanitizeForFirestore({
           id: historyRef.id,
           materialId: id,
           price: updateFields.cost,
@@ -244,19 +296,46 @@ export default async function handler(req: any, res: any) {
           date: now,
           updatedBy: updateFields.libraryPriceSourceUpdatedBy || decoded.email || decoded.uid,
           sourceType: updateFields.libraryPriceSourceType,
+          sourceSupplierId: updateFields.libraryPriceSourceSupplierId,
           sourceSupplierName: updateFields.libraryPriceSourceSupplierName !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceSupplierName : undefined,
-          sourceQuoteSnapshotId: updateFields.libraryPriceSourceQuoteSnapshotId !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceQuoteSnapshotId : undefined,
+          sourceQuoteSnapshotId: resolvedSnapshotId,
           sourceDocumentUrl: updateFields.libraryPriceSourceDocumentUrl !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceDocumentUrl : undefined,
-          sourceFileName: updateFields.libraryPriceSourceFileName !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceFileName : undefined
-        });
+          sourceDocumentPath: updateFields.libraryPriceSourceDocumentPath,
+          sourceFileName: updateFields.libraryPriceSourceFileName !== admin.firestore.FieldValue.delete() ? updateFields.libraryPriceSourceFileName : undefined,
+          sourceQuoteDate: updateFields.libraryPriceSourceQuoteDate,
+          sourceUpdatedAt: now
+        }));
       }
 
       updateFields.updatedAt = now;
-      await docRef.update(updateFields);
+      const sanitizedUpdate = sanitizeForFirestore(updateFields);
+      
+      try {
+        await docRef.update(sanitizedUpdate);
+      } catch (firestoreErr: any) {
+        console.error('Firestore update error:', firestoreErr);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to update library price",
+          field: "sourceQuoteSnapshotId",
+          details: firestoreErr.message || "Unable to update library price. The quote source information could not be saved."
+        });
+      }
 
+      // Read-after-write verification
       const updatedSnap = await docRef.get();
       const updatedData: any = { id, ...updatedSnap.data() };
+      
+      if (updateFields.cost !== undefined && updatedData.cost !== updateFields.cost) {
+        return res.status(500).json({
+          success: false,
+          error: "Failed to update library price",
+          details: `Verification failed: Requested price ${updateFields.cost} does not match saved price ${updatedData.cost}`
+        });
+      }
+
       return res.status(200).json({
+        success: true,
         ...updatedData,
         createdAt: cleanTimestamp(updatedData.createdAt),
         updatedAt: cleanTimestamp(updatedData.updatedAt || updatedData.createdAt),

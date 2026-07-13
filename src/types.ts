@@ -41,10 +41,14 @@ export interface MaterialHistoryEntry {
   reason?: string;
   updatedBy?: string;
   sourceType: 'manual' | 'supplier_quote' | 'legacy_import' | 'unknown';
+  sourceSupplierId?: string;
   sourceSupplierName?: string;
   sourceQuoteSnapshotId?: string;
   sourceDocumentUrl?: string;
+  sourceDocumentPath?: string;
   sourceFileName?: string;
+  sourceQuoteDate?: string;
+  sourceUpdatedAt?: string;
   previousPrice?: number;
 }
 
