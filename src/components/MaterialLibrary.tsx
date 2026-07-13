@@ -947,6 +947,17 @@ export default function MaterialLibrary({ materials, setMaterials, user }: Mater
                     />
                   </div>
                   <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">Package Quantity (e.g. 80 per box)</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      value={formData.packageQuantity || ''}
+                      onChange={(e) => setFormData({...formData, packageQuantity: e.target.value ? Number(e.target.value) : undefined})}
+                      placeholder="1 (Default)"
+                      className="w-full rounded-xl border border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3 text-sm focus:border-[#1A1A1A] focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-[#666666]">SKU / Part Number</label>
                     <input 
                       type="text" 

@@ -842,7 +842,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                                    <td className="px-6 py-4 text-center font-black text-american-blue">
+                                      {item.packageQuantity && item.packageQuantity > 1 ? (
+                                        <div className="flex flex-col items-center">
+                                          <span>{item.qty} (Req)</span>
+                                          <span className="text-[9px] text-[#999999] uppercase font-bold mt-1">
+                                            Buy {item.purchaseQty} {item.unit === 'each' ? 'box' : item.unit}(s)
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        item.qty
+                                      )}
+                                    </td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
@@ -909,7 +920,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                           )}
                                         </div>
                                       </td>
-                                      <td className="px-6 py-4 text-center font-black text-american-blue">{item.qty}</td>
+                                      <td className="px-6 py-4 text-center font-black text-american-blue">
+                                        {item.packageQuantity && item.packageQuantity > 1 ? (
+                                          <div className="flex flex-col items-center">
+                                            <span>{item.qty} (Req)</span>
+                                            <span className="text-[9px] text-[#999999] uppercase font-bold mt-1">
+                                              Buy {item.purchaseQty} {item.unit === 'each' ? 'box' : item.unit}(s)
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          item.qty
+                                        )}
+                                      </td>
                                       <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
@@ -983,6 +1005,11 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-[11px] font-bold text-[#666666] group-hover:text-american-blue transition-colors truncate">
                                         {gi.qty}x {gi.name}
+                                        {gi.packageQuantity && gi.packageQuantity > 1 && (
+                                          <span className="ml-2 text-[9px] text-american-red/60 uppercase">
+                                            (Buy {gi.purchaseQty} pk)
+                                          </span>
+                                        )}
                                       </span>
                                       {renderPriceStatusBadge(gi)}
                                     </div>
@@ -1067,7 +1094,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-center">{item.qty}</td>
+                            <td className="px-6 py-4 text-center">
+                              {item.packageQuantity && item.packageQuantity > 1 ? (
+                                <div className="flex flex-col items-center">
+                                  <span className="font-bold">{item.qty} {item.unit}</span>
+                                  <span className="text-[9px] text-[#999999] uppercase font-black mt-1">
+                                    Buy {item.purchaseQty} {item.unit === 'each' ? 'box' : item.unit}(s)
+                                  </span>
+                                </div>
+                              ) : (
+                                item.qty
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
                             {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666]">{formatCurrency(item.unitCost)}</td>}
                             {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue">{formatCurrency(sellingPrice)}</td>}
@@ -1146,7 +1184,20 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                             </div>
                           </td>
                         <td className="px-8 py-5 text-center">
-                          <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">{item.qty} {item.unit}</span>
+                          {item.packageQuantity && item.packageQuantity > 1 ? (
+                            <div className="flex flex-col items-center">
+                              <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">
+                                {item.qty} {item.unit}
+                              </span>
+                              <span className="text-[9px] text-[#999999] uppercase font-black mt-1">
+                                Buy {item.purchaseQty} {item.unit === 'each' ? 'box' : item.unit}(s)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="px-3 py-1 bg-american-blue/5 text-american-blue rounded-full text-xs font-black print:bg-transparent print:p-0">
+                              {item.qty} {item.unit}
+                            </span>
+                          )}
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>
@@ -1286,7 +1337,18 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                           </button>
                         </td>
                         <td className="px-8 py-5 text-center">
-                          <span className="px-3 py-1 bg-american-red/5 text-american-red rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                          {item.packageQuantity && item.packageQuantity > 1 ? (
+                            <div className="flex flex-col items-center">
+                              <span className="px-3 py-1 bg-american-red/5 text-american-red rounded-full text-xs font-black">
+                                {item.qty} {item.unit}
+                              </span>
+                              <span className="text-[9px] text-[#999999] uppercase font-black mt-1">
+                                Buy {item.purchaseQty} {item.unit === 'each' ? 'box' : item.unit}(s)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="px-3 py-1 bg-american-red/5 text-american-red rounded-full text-xs font-black">{item.qty} {item.unit}</span>
+                          )}
                         </td>
                         <td className="px-8 py-5">
                           <span className="text-[10px] font-black uppercase tracking-widest text-[#999999]">{item.category}</span>

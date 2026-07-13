@@ -10,6 +10,8 @@ export interface TakeOffItem {
   priceSource?: string;
   total: number;
   category: string;
+  packageQuantity?: number;
+  purchaseQty?: number;
   formula?: string;
   originalPostName?: string;
   longerMatchingPostName?: string;
@@ -187,6 +189,34 @@ function getPostDimensions(name: string, id: string): string {
   if (nameLower.includes('t-post') || idLower.includes('-t')) return 't-post';
   
   return '';
+}
+
+function createTakeOffItem(
+  material: MaterialItem, 
+  qty: number, 
+  category?: string,
+  formula?: string,
+  unitCostOverride?: number,
+  overrides?: Partial<TakeOffItem>
+): TakeOffItem {
+  const packageQuantity = material.packageQuantity || 1;
+  const purchaseQty = Math.ceil(qty / packageQuantity);
+  const cost = unitCostOverride !== undefined ? unitCostOverride : material.cost;
+  const total = purchaseQty * cost;
+  
+  return {
+    id: material.id,
+    name: material.name,
+    qty,
+    unit: material.unit,
+    unitCost: cost,
+    total,
+    category: category || material.category,
+    packageQuantity: packageQuantity > 1 ? packageQuantity : undefined,
+    purchaseQty: packageQuantity > 1 ? purchaseQty : undefined,
+    formula,
+    ...overrides
+  };
 }
 
 function resolvePostMat(
@@ -413,7 +443,15 @@ export function calculateDetailedTakeOff(
     const key = `${item.name}-${item.unitCost}`;
     if (summaryMap[key]) {
       summaryMap[key].qty += item.qty;
-      summaryMap[key].total += item.total;
+      
+      // If the item has a package quantity, we must re-calculate purchaseQty and total
+      // based on the NEW cumulative quantity.
+      if (summaryMap[key].packageQuantity && summaryMap[key].packageQuantity > 1) {
+        summaryMap[key].purchaseQty = Math.ceil(summaryMap[key].qty / summaryMap[key].packageQuantity);
+        summaryMap[key].total = (summaryMap[key].purchaseQty || 1) * summaryMap[key].unitCost;
+      } else {
+        summaryMap[key].total += item.total;
+      }
     } else {
       summaryMap[key] = { ...item };
     }
@@ -1505,18 +1543,9 @@ export function calculateDetailedTakeOff(
       const loopCapId = isCommercial ? 'cl-hw-loop-178' : 'cl-hw-loop-158';
       const loopCapMat = materials.find(m => m.id === loopCapId);
       if (loopCapMat && runLinePosts > 0) {
-        const lcCost = runLinePosts * loopCapMat.cost;
-        runFenceMaterialCost += lcCost;
-        runItems.push({ 
-          id: loopCapMat.id, 
-          name: loopCapMat.name, 
-          qty: runLinePosts, 
-          unit: 'each', 
-          unitCost: loopCapMat.cost, 
-          total: lcCost, 
-          category: 'Hardware',
-          formula: `${runLinePosts} line posts`
-        });
+        const lcItem = createTakeOffItem(loopCapMat, runLinePosts, 'Hardware', `${runLinePosts} line posts`);
+        runFenceMaterialCost += lcItem.total;
+        runItems.push(lcItem);
       }
 
       // Tension Bars (2 per fence run)
@@ -1524,54 +1553,27 @@ export function calculateDetailedTakeOff(
       const barMat = materials.find(m => m.id === tensionBarId) || materials.find(m => m.id === 'cl-hw-tension-bar-6');
       if (barMat) {
         const barQty = chainLinkFenceRunCount * 2;
-        const barCost = barQty * barMat.cost;
-        runFenceMaterialCost += barCost;
-        runItems.push({ 
-          id: barMat.id, 
-          name: barMat.name, 
-          qty: barQty, 
-          unit: 'each', 
-          unitCost: barMat.cost, 
-          total: barCost, 
-          category: 'Hardware',
-          formula: `${chainLinkFenceRunCount} runs × 2 bars/run`
-        });
+        const barItem = createTakeOffItem(barMat, barQty, 'Hardware', `${chainLinkFenceRunCount} runs × 2 bars/run`);
+        runFenceMaterialCost += barItem.total;
+        runItems.push(barItem);
       }
 
       // Tension Bands (1 per 1' of height per bar - 2 3/8")
       const tensionBandMat = materials.find(m => m.id === 'cl-hw-tension-band-238');
       if (tensionBandMat) {
         const bandQty = chainLinkFenceRunCount * 2 * height;
-        const bandCost = bandQty * tensionBandMat.cost;
-        runFenceMaterialCost += bandCost;
-        runItems.push({ 
-          id: tensionBandMat.id, 
-          name: tensionBandMat.name, 
-          qty: bandQty, 
-          unit: 'each', 
-          unitCost: tensionBandMat.cost, 
-          total: bandCost, 
-          category: 'Hardware',
-          formula: `${chainLinkFenceRunCount} runs × 2 bars × ${height}' height`
-        });
+        const bandItem = createTakeOffItem(tensionBandMat, bandQty, 'Hardware', `${chainLinkFenceRunCount} runs × 2 bars × ${height}' height`);
+        runFenceMaterialCost += bandItem.total;
+        runItems.push(bandItem);
       }
 
       // Brace Bands (4 per fence run - 2 3/8")
       const braceBandMat = materials.find(m => m.id === 'cl-hw-brace-band-238');
       if (braceBandMat) {
         const bbQty = chainLinkFenceRunCount * 4;
-        const bbCost = bbQty * braceBandMat.cost;
-        runFenceMaterialCost += bbCost;
-        runItems.push({ 
-          id: braceBandMat.id, 
-          name: braceBandMat.name, 
-          qty: bbQty, 
-          unit: 'each', 
-          unitCost: braceBandMat.cost, 
-          total: bbCost, 
-          category: 'Hardware',
-          formula: `${chainLinkFenceRunCount} runs × 4 bands/run`
-        });
+        const bbItem = createTakeOffItem(braceBandMat, bbQty, 'Hardware', `${chainLinkFenceRunCount} runs × 4 bands/run`);
+        runFenceMaterialCost += bbItem.total;
+        runItems.push(bbItem);
       }
 
       // Rail End Cups (2 per fence run)
@@ -1579,18 +1581,9 @@ export function calculateDetailedTakeOff(
       const cupMat = materials.find(m => m.id === cupId);
       if (cupMat) {
         const cupQty = chainLinkFenceRunCount * 2;
-        const cupCost = cupQty * cupMat.cost;
-        runFenceMaterialCost += cupCost;
-        runItems.push({ 
-          id: cupMat.id, 
-          name: cupMat.name, 
-          qty: cupQty, 
-          unit: 'each', 
-          unitCost: cupMat.cost, 
-          total: cupCost, 
-          category: 'Hardware',
-          formula: `${chainLinkFenceRunCount} runs × 2 cups/run`
-        });
+        const cupItem = createTakeOffItem(cupMat, cupQty, 'Hardware', `${chainLinkFenceRunCount} runs × 2 cups/run`);
+        runFenceMaterialCost += cupItem.total;
+        runItems.push(cupItem);
       }
 
       // Rail EZ Ties (1 per 2 LF) - 1-5/8" Comm, 1-3/8" Res
@@ -1598,9 +1591,9 @@ export function calculateDetailedTakeOff(
       const railTieMat = materials.find(m => m.id === railTieId);
       if (railTieMat) {
         const tieQty = Math.ceil(runLF / 2);
-        const tieCost = tieQty * railTieMat.cost;
-        runFenceMaterialCost += tieCost;
-        runItems.push({ id: railTieMat.id, name: railTieMat.name, qty: tieQty, unit: 'each', unitCost: railTieMat.cost, total: tieCost, category: 'Hardware' });
+        const tieItem = createTakeOffItem(railTieMat, tieQty, 'Hardware');
+        runFenceMaterialCost += tieItem.total;
+        runItems.push(tieItem);
       }
 
       // Post EZ Ties (1 per 1' of height x total number of line posts) - 1-7/8" Comm, 1-5/8" Res
@@ -1608,18 +1601,18 @@ export function calculateDetailedTakeOff(
       const postTieMat = materials.find(m => m.id === postTieId);
       if (postTieMat) {
         const tieQty = height * runLinePosts;
-        const tieCost = tieQty * postTieMat.cost;
-        runFenceMaterialCost += tieCost;
-        runItems.push({ id: postTieMat.id, name: postTieMat.name, qty: tieQty, unit: 'each', unitCost: postTieMat.cost, total: tieCost, category: 'Hardware' });
+        const tieItem = createTakeOffItem(postTieMat, tieQty, 'Hardware');
+        runFenceMaterialCost += tieItem.total;
+        runItems.push(tieItem);
       }
 
       // Hog Rings (1 for every 2 LF)
       const hogRingMat = materials.find(m => m.id === 'cl-hw-hog-ring');
       if (hogRingMat) {
         const hrQty = Math.ceil(runLF / 2);
-        const hrCost = hrQty * hogRingMat.cost;
-        runFenceMaterialCost += hrCost;
-        runItems.push({ id: hogRingMat.id, name: hogRingMat.name, qty: hrQty, unit: 'each', unitCost: hogRingMat.cost, total: hrCost, category: 'Hardware' });
+        const hrItem = createTakeOffItem(hogRingMat, hrQty, 'Hardware', `1 per 2 LF`);
+        runFenceMaterialCost += hrItem.total;
+        runItems.push(hrItem);
       }
 
       // Tension Wire OR Bottom Rail
@@ -1642,33 +1635,17 @@ export function calculateDetailedTakeOff(
         const boulevardMat = materials.find(m => m.id === 'cl-hw-boulevard');
         if (boulevardMat) {
           const bQty = runLinePosts;
-          const bCost = bQty * boulevardMat.cost;
-          runFenceMaterialCost += bCost;
-          runItems.push({
-            id: boulevardMat.id,
-            name: boulevardMat.name,
-            qty: bQty,
-            unit: 'each',
-            unitCost: boulevardMat.cost,
-            total: bCost,
-            category: 'Hardware'
-          });
+          const bItem = createTakeOffItem(boulevardMat, bQty, 'Hardware');
+          runFenceMaterialCost += bItem.total;
+          runItems.push(bItem);
         }
       } else {
         // Tension Wire (Commercial uses LF match)
         const tensionMat = materials.find(m => m.id === 'cl-tension-wire');
         if (tensionMat) {
-          const tensionCost = runLF * tensionMat.cost;
-          runFenceMaterialCost += tensionCost;
-          runItems.push({
-            id: tensionMat.id,
-            name: tensionMat.name,
-            qty: runLF,
-            unit: tensionMat.unit,
-            unitCost: tensionMat.cost,
-            total: tensionCost,
-            category: 'Hardware'
-          });
+          const tensionItem = createTakeOffItem(tensionMat, runLF, 'Hardware');
+          runFenceMaterialCost += tensionItem.total;
+          runItems.push(tensionItem);
         }
       }
 
@@ -2266,16 +2243,7 @@ export function calculateDetailedTakeOff(
       const mat = materials.find(m => m.id === key || m.name === key);
       if (mat) {
         const unitCost = estimate.manualPrices?.[key] ?? mat.cost;
-        manualSummary.push({
-          id: mat.id,
-          name: mat.name,
-          qty,
-          unit: mat.unit,
-          unitCost,
-          priceSource: mat.priceSource,
-          total: qty * unitCost,
-          category: mat.category
-        });
+        manualSummary.push(createTakeOffItem(mat, numericQty, mat.category, undefined, unitCost));
       }
     });
   }

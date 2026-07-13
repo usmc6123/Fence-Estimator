@@ -16,6 +16,7 @@ export interface MaterialItem {
   supplierAlias?: string;
   supplierPartNumber?: string;
   supplierItemName?: string;
+  packageQuantity?: number; // Quantity per package (e.g., 80 for hog rings)
   isMaterialItem?: boolean; // Flag to show on crew checklist
 }
 
