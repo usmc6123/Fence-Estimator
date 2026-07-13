@@ -97,6 +97,57 @@ export const MATERIALS: MaterialItem[] = [
   { id: 'cl-hw-ez-tie-178', name: '1-7/8" EZ Tie (Line Post)', category: 'Hardware', unit: 'each', cost: 0.95 },
   { id: 'cl-hw-hog-ring', name: 'Hog Ring', category: 'Hardware', unit: 'each', cost: 0.15 },
   
+  // Black Chain Link Structure
+  { id: 'cl-post-term-black-5', name: '2-3/8" x 5\' Terminal Post (Black)', category: 'Post', unit: 'each', cost: 32.00, description: 'Black vinyl coated for 3ft fence' },
+  { id: 'cl-post-term-black-6', name: '2-3/8" x 6\' Terminal Post (Black)', category: 'Post', unit: 'each', cost: 38.00, description: 'Black vinyl coated for 4ft fence' },
+  { id: 'cl-post-term-black-7', name: '2-3/8" x 7\' Terminal Post (Black)', category: 'Post', unit: 'each', cost: 44.00, description: 'Black vinyl coated for 5ft fence' },
+  { id: 'cl-post-term-black-8', name: '2-3/8" x 8\' Terminal Post (Black)', category: 'Post', unit: 'each', cost: 50.00, description: 'Black vinyl coated for 6ft fence' },
+  
+  { id: 'cl-post-line-black-res-5', name: '1-5/8" x 5\' Line Post (Black Residential)', category: 'Post', unit: 'each', cost: 24.50, description: 'Black vinyl coated for 3ft fence' },
+  { id: 'cl-post-line-black-res-6', name: '1-5/8" x 6\' Line Post (Black Residential)', category: 'Post', unit: 'each', cost: 28.50, description: 'Black vinyl coated for 4ft fence' },
+  { id: 'cl-post-line-black-res-7', name: '1-5/8" x 7\' Line Post (Black Residential)', category: 'Post', unit: 'each', cost: 32.50, description: 'Black vinyl coated for 5ft fence' },
+  { id: 'cl-post-line-black-res-8', name: '1-5/8" x 8\' Line Post (Black Residential)', category: 'Post', unit: 'each', cost: 36.50, description: 'Black vinyl coated for 6ft fence' },
+  
+  { id: 'cl-post-line-black-comm-5', name: '1-7/8" x 5\' Line Post (Black Commercial)', category: 'Post', unit: 'each', cost: 38.50, description: 'Black vinyl coated for 3ft fence' },
+  { id: 'cl-post-line-black-comm-6', name: '1-7/8" x 6\' Line Post (Black Commercial)', category: 'Post', unit: 'each', cost: 44.50, description: 'Black vinyl coated for 4ft fence' },
+  { id: 'cl-post-line-black-comm-7', name: '1-7/8" x 7\' Line Post (Black Commercial)', category: 'Post', unit: 'each', cost: 50.50, description: 'Black vinyl coated for 5ft fence' },
+  { id: 'cl-post-line-black-comm-8', name: '1-7/8" x 8\' Line Post (Black Commercial)', category: 'Post', unit: 'each', cost: 56.50, description: 'Black vinyl coated for 6ft fence' },
+  
+  { id: 'cl-rail-top-black', name: '1-3/8" x 21\' Top Rail (Black Residential)', category: 'Rail', unit: 'each', cost: 82.25, description: '21ft black horizontal top pipe' },
+  { id: 'cl-rail-top-black-comm', name: '1-5/8" x 21\' Top Rail (Black Commercial)', category: 'Rail', unit: 'each', cost: 114.75, description: '21ft black commercial grade horizontal rail' },
+  { id: 'cl-rail-bottom-black', name: '1-5/8" x 21\' Bottom Rail (Black Commercial)', category: 'Rail', unit: 'each', cost: 114.75, description: '21ft black used instead of tension wire' },
+  
+  // Black Residential Mesh (11 Gauge)
+  { id: 'cl-mesh-black-res-3', name: '11ga Black Mesh 3\' (Residential)', category: 'Picket', unit: 'lf', cost: 4.25, description: '3ft black vinyl fabric' },
+  { id: 'cl-mesh-black-res-4', name: '11ga Black Mesh 4\' (Residential)', category: 'Picket', unit: 'lf', cost: 5.50, description: '4ft black vinyl fabric' },
+  { id: 'cl-mesh-black-res-5', name: '11ga Black Mesh 5\' (Residential)', category: 'Picket', unit: 'lf', cost: 6.75, description: '5ft black vinyl fabric' },
+  { id: 'cl-mesh-black-res-6', name: '11ga Black Mesh 6\' (Residential)', category: 'Picket', unit: 'lf', cost: 7.75, description: '6ft black vinyl fabric' },
+  
+  // Black Commercial Mesh (9 Gauge)
+  { id: 'cl-mesh-black-comm-3', name: '9ga Black Mesh 3\' (Commercial)', category: 'Picket', unit: 'lf', cost: 5.25, description: '3ft black vinyl fabric' },
+  { id: 'cl-mesh-black-comm-4', name: '9ga Black Mesh 4\' (Commercial)', category: 'Picket', unit: 'lf', cost: 6.50, description: '4ft black vinyl fabric' },
+  { id: 'cl-mesh-black-comm-5', name: '9ga Black Mesh 5\' (Commercial)', category: 'Picket', unit: 'lf', cost: 7.75, description: '5ft black vinyl fabric' },
+  { id: 'cl-mesh-black-comm-6', name: '9ga Black Mesh 6\' (Commercial)', category: 'Picket', unit: 'lf', cost: 8.75, description: '6ft black vinyl fabric' },
+  
+  { id: 'cl-tension-wire-black', name: 'Black Bottom Tension Wire', category: 'Hardware', unit: 'lf', cost: 0.85, description: 'Black vinyl coated' },
+  { id: 'cl-hw-boulevard-black', name: 'Black Boulevard Bracket (1-7/8" x 1-5/8")', category: 'Hardware', unit: 'each', cost: 10.50, description: 'Black vinyl coated' },
+  { id: 'cl-hw-brace-black-comm', name: '1-7/8" Black Brace Band', category: 'Hardware', unit: 'each', cost: 3.25 },
+  { id: 'cl-hw-cup-black-comm', name: '1-5/8" Black Rail End Cup', category: 'Hardware', unit: 'each', cost: 4.75 },
+  { id: 'cl-hw-cup-black-res', name: '1-3/8" Black Rail End Cup', category: 'Hardware', unit: 'each', cost: 4.25 },
+  { id: 'cl-hw-tension-bar-black-3', name: "3' Black Tension Bar", category: 'Hardware', unit: 'each', cost: 10.50 },
+  { id: 'cl-hw-tension-bar-black-4', name: "4' Black Tension Bar", category: 'Hardware', unit: 'each', cost: 12.50 },
+  { id: 'cl-hw-tension-bar-black-5', name: "5' Black Tension Bar", category: 'Hardware', unit: 'each', cost: 14.50 },
+  { id: 'cl-hw-tension-bar-black-6', name: "6' Black Tension Bar", category: 'Hardware', unit: 'each', cost: 16.50 },
+  { id: 'cl-hw-tension-band-black-238', name: '2-3/8" Black Tension Band', category: 'Hardware', unit: 'each', cost: 2.85 },
+  { id: 'cl-hw-brace-band-black-238', name: '2-3/8" Black Brace Band', category: 'Hardware', unit: 'each', cost: 2.95 },
+  { id: 'cl-hw-dome-black-238', name: '2-3/8" Black Dome Cap', category: 'Hardware', unit: 'each', cost: 5.50 },
+  { id: 'cl-hw-loop-black-178', name: '1-7/8" Black Loop Cap', category: 'Hardware', unit: 'each', cost: 4.75 },
+  { id: 'cl-hw-loop-black-158', name: '1-5/8" Black Loop Cap', category: 'Hardware', unit: 'each', cost: 4.25 },
+  { id: 'cl-hw-ez-tie-black-138', name: '1-3/8" Black EZ Tie (Rail)', category: 'Hardware', unit: 'each', cost: 1.15 },
+  { id: 'cl-hw-ez-tie-black-158', name: '1-5/8" Black EZ Tie (Rail/Post)', category: 'Hardware', unit: 'each', cost: 1.25 },
+  { id: 'cl-hw-ez-tie-black-178', name: '1-7/8" Black EZ Tie (Line Post)', category: 'Hardware', unit: 'each', cost: 1.35 },
+  { id: 'cl-hw-hog-ring-black', name: 'Black Hog Ring', category: 'Hardware', unit: 'each', cost: 0.25 },
+
   // Metal Structure
   { id: 'm-post-2x2-5', name: '2x2 x 5\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 32.00, description: 'For 3ft fence' },
   { id: 'm-post-2x2-6', name: '2x2 x 6\' Wrought Iron Post', category: 'Post', unit: 'each', cost: 38.00, description: 'For 4ft fence', imageUrl: 'https://quickshipaluminumfence.com/store/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/a/b/abp27b_black-aluminum-blank-post-2in-x-2in-x7ft_02.jpg' },
@@ -272,6 +323,7 @@ export const DEFAULT_ESTIMATE: Partial<Estimate> = {
   isPreStained: false,
   hasRotBoard: true,
   defaultChainLinkGrade: 'Residential',
+  defaultChainLinkFinish: 'galvanized',
   defaultHasBottomRail: false,
   pipeInstallType: 'Set in Concrete',
   increasePostDepth: false,

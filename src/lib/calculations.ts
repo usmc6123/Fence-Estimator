@@ -1026,9 +1026,10 @@ export function calculateDetailedTakeOff(
         } else if (runStyle.type === 'Chain Link') {
           const grade = run.chainLinkGrade || 'Residential';
           const postHeight = (run.height || 4) + 2;
+          const isBlack = run.chainLinkFinish === 'black';
           
           // Line Posts
-          const linePostId = `cl-post-line-${grade === 'Commercial' ? 'comm' : 'res'}-${postHeight}`;
+          const linePostId = `cl-post-line-${isBlack ? 'black-' : ''}${grade === 'Commercial' ? 'comm' : 'res'}-${postHeight}`;
           const linePostMat = materials.find(m => m.id === linePostId);
           if (linePostMat && runLinePosts > 0) {
             const finalLinePost = processPost(materials, linePostMat, !!estimate.increasePostDepth);
@@ -1053,7 +1054,7 @@ export function calculateDetailedTakeOff(
           }
           
           // Terminal Posts (Ends, Corners, and Gates)
-          const terminalPostId = `cl-post-term-${postHeight}`;
+          const terminalPostId = `cl-post-term-${isBlack ? 'black-' : ''}${postHeight}`;
           const termPostMat = materials.find(m => m.id === terminalPostId);
           const tpCount = (runCornerPosts + startEndPosts + (run.corners || 0)) + (run.gateDetails?.length * 2 || 0);
           
@@ -1485,6 +1486,7 @@ export function calculateDetailedTakeOff(
     } else if (runStyle.type === 'Chain Link') {
       const grade = run.chainLinkGrade || 'Residential';
       const isCommercial = grade === 'Commercial';
+      const isBlack = run.chainLinkFinish === 'black';
       const hasBottomRail = run.hasBottomRail && isCommercial;
       const height = run.height || 6;
 
@@ -1496,12 +1498,12 @@ export function calculateDetailedTakeOff(
       } else {
         meshGrade = isCommercial ? 'comm' : 'res';
       }
-      const meshMat = materials.find(m => m.id === `cl-mesh-${meshGrade}-${height}`) || materials.find(m => m.id === `cl-mesh-${meshGrade}-6`) || materials[0];
+      const meshMat = materials.find(m => m.id === `cl-mesh-${isBlack ? 'black-' : ''}${meshGrade}-${height}`) || materials.find(m => m.id === `cl-mesh-${isBlack ? 'black-' : ''}${meshGrade}-6`) || materials[0];
       const meshCost = runLF * meshMat.cost;
       runFenceMaterialCost += meshCost;
       runItems.push({
         id: meshMat.id,
-        name: `Chain-Link Fabric: ${meshGrade === 'comm' ? '9 Gauge' : '11 Gauge'} (${height}')`,
+        name: `Chain-Link Fabric: ${isBlack ? 'Black ' : ''}${meshGrade === 'comm' ? '9 Gauge' : '11 Gauge'} (${height}')`,
         qty: runLF,
         unit: meshMat.unit,
         unitCost: meshMat.cost,
@@ -1510,7 +1512,9 @@ export function calculateDetailedTakeOff(
       });
 
       // Top Rail
-      const railId = isCommercial ? 'cl-rail-top-comm' : 'cl-rail-top';
+      const railId = isCommercial 
+        ? (isBlack ? 'cl-rail-top-black-comm' : 'cl-rail-top-comm') 
+        : (isBlack ? 'cl-rail-top-black' : 'cl-rail-top');
       const topRailMat = materials.find(m => m.id === railId) || materials[0];
       const railQty = Math.ceil(runLF / 21);
       const topRailCost = railQty * topRailMat.cost;
@@ -1530,7 +1534,7 @@ export function calculateDetailedTakeOff(
 
       // Dome Caps (1 per 2-3/8" Post)
       const terminalCount = (runCornerPosts + startEndPosts + (run.corners || 0)) + (run.gateDetails?.length * 2 || 0);
-      const domeCapMat = materials.find(m => m.id === 'cl-hw-dome-238');
+      const domeCapMat = materials.find(m => m.id === `cl-hw-dome-${isBlack ? 'black-' : ''}238`);
       if (domeCapMat && terminalCount > 0) {
         const dcCost = terminalCount * domeCapMat.cost;
         runFenceMaterialCost += dcCost;
@@ -1547,7 +1551,9 @@ export function calculateDetailedTakeOff(
       }
 
       // Loop Caps (1 per Line Post - 1-7/8" Comm, 1-5/8" Res)
-      const loopCapId = isCommercial ? 'cl-hw-loop-178' : 'cl-hw-loop-158';
+      const loopCapId = isCommercial 
+        ? (isBlack ? 'cl-hw-loop-black-178' : 'cl-hw-loop-178') 
+        : (isBlack ? 'cl-hw-loop-black-158' : 'cl-hw-loop-158');
       const loopCapMat = materials.find(m => m.id === loopCapId);
       if (loopCapMat && runLinePosts > 0) {
         const lcItem = createTakeOffItem(loopCapMat, runLinePosts, 'Hardware', `${runLinePosts} line posts`);
@@ -1556,8 +1562,8 @@ export function calculateDetailedTakeOff(
       }
 
       // Tension Bars (2 per fence run)
-      const tensionBarId = `cl-hw-tension-bar-${height}`;
-      const barMat = materials.find(m => m.id === tensionBarId) || materials.find(m => m.id === 'cl-hw-tension-bar-6');
+      const tensionBarId = `cl-hw-tension-bar-${isBlack ? 'black-' : ''}${height}`;
+      const barMat = materials.find(m => m.id === tensionBarId) || materials.find(m => m.id === `cl-hw-tension-bar-${isBlack ? 'black-' : ''}6`);
       if (barMat) {
         const barQty = chainLinkFenceRunCount * 2;
         const barItem = createTakeOffItem(barMat, barQty, 'Hardware', `${chainLinkFenceRunCount} runs × 2 bars/run`);
@@ -1566,7 +1572,7 @@ export function calculateDetailedTakeOff(
       }
 
       // Tension Bands (1 per 1' of height per bar - 2 3/8")
-      const tensionBandMat = materials.find(m => m.id === 'cl-hw-tension-band-238');
+      const tensionBandMat = materials.find(m => m.id === `cl-hw-tension-band-${isBlack ? 'black-' : ''}238`);
       if (tensionBandMat) {
         const bandQty = chainLinkFenceRunCount * 2 * height;
         const bandItem = createTakeOffItem(tensionBandMat, bandQty, 'Hardware', `${chainLinkFenceRunCount} runs × 2 bars × ${height}' height`);
@@ -1575,7 +1581,7 @@ export function calculateDetailedTakeOff(
       }
 
       // Brace Bands (4 per fence run - 2 3/8")
-      const braceBandMat = materials.find(m => m.id === 'cl-hw-brace-band-238');
+      const braceBandMat = materials.find(m => m.id === `cl-hw-brace-band-${isBlack ? 'black-' : ''}238`);
       if (braceBandMat) {
         const bbQty = chainLinkFenceRunCount * 4;
         const bbItem = createTakeOffItem(braceBandMat, bbQty, 'Hardware', `${chainLinkFenceRunCount} runs × 4 bands/run`);
@@ -1584,7 +1590,9 @@ export function calculateDetailedTakeOff(
       }
 
       // Rail End Cups (2 per fence run)
-      const cupId = isCommercial ? 'cl-hw-cup-comm' : 'cl-hw-cup-res';
+      const cupId = isCommercial 
+        ? (isBlack ? 'cl-hw-cup-black-comm' : 'cl-hw-cup-comm') 
+        : (isBlack ? 'cl-hw-cup-black-res' : 'cl-hw-cup-res');
       const cupMat = materials.find(m => m.id === cupId);
       if (cupMat) {
         const cupQty = chainLinkFenceRunCount * 2;
@@ -1594,7 +1602,9 @@ export function calculateDetailedTakeOff(
       }
 
       // Rail EZ Ties (1 per 2 LF) - 1-5/8" Comm, 1-3/8" Res
-      const railTieId = isCommercial ? 'cl-hw-ez-tie-158' : 'cl-hw-ez-tie-138';
+      const railTieId = isCommercial 
+        ? (isBlack ? 'cl-hw-ez-tie-black-158' : 'cl-hw-ez-tie-158') 
+        : (isBlack ? 'cl-hw-ez-tie-black-138' : 'cl-hw-ez-tie-138');
       const railTieMat = materials.find(m => m.id === railTieId);
       if (railTieMat) {
         const tieQty = Math.ceil(runLF / 2);
@@ -1604,7 +1614,9 @@ export function calculateDetailedTakeOff(
       }
 
       // Post EZ Ties (1 per 1' of height x total number of line posts) - 1-7/8" Comm, 1-5/8" Res
-      const postTieId = isCommercial ? 'cl-hw-ez-tie-178' : 'cl-hw-ez-tie-158';
+      const postTieId = isCommercial 
+        ? (isBlack ? 'cl-hw-ez-tie-black-178' : 'cl-hw-ez-tie-178') 
+        : (isBlack ? 'cl-hw-ez-tie-black-158' : 'cl-hw-ez-tie-158');
       const postTieMat = materials.find(m => m.id === postTieId);
       if (postTieMat) {
         const tieQty = height * runLinePosts;
@@ -1614,7 +1626,7 @@ export function calculateDetailedTakeOff(
       }
 
       // Hog Rings (1 for every 2 LF)
-      const hogRingMat = materials.find(m => m.id === 'cl-hw-hog-ring');
+      const hogRingMat = materials.find(m => m.id === `cl-hw-hog-ring${isBlack ? '-black' : ''}`);
       if (hogRingMat) {
         const hrQty = Math.ceil(runLF / 2);
         const hrItem = createTakeOffItem(hogRingMat, hrQty, 'Hardware', `1 per 2 LF`);
@@ -1624,7 +1636,7 @@ export function calculateDetailedTakeOff(
 
       // Tension Wire OR Bottom Rail
       if (hasBottomRail) {
-        const bottomRailMat = materials.find(m => m.id === 'cl-rail-bottom') || materials[0];
+        const bottomRailMat = materials.find(m => m.id === (isBlack ? 'cl-rail-bottom-black' : 'cl-rail-bottom')) || materials[0];
         const brQty = Math.ceil(runLF / 21);
         const bottomRailCost = brQty * bottomRailMat.cost;
         runFenceMaterialCost += bottomRailCost;
@@ -1639,7 +1651,7 @@ export function calculateDetailedTakeOff(
         });
 
         // Boulevard Brackets (1 per line post)
-        const boulevardMat = materials.find(m => m.id === 'cl-hw-boulevard');
+        const boulevardMat = materials.find(m => m.id === `cl-hw-boulevard${isBlack ? '-black' : ''}`);
         if (boulevardMat) {
           const bQty = runLinePosts;
           const bItem = createTakeOffItem(boulevardMat, bQty, 'Hardware');
@@ -1648,7 +1660,7 @@ export function calculateDetailedTakeOff(
         }
       } else {
         // Tension Wire (Commercial uses LF match)
-        const tensionMat = materials.find(m => m.id === 'cl-tension-wire');
+        const tensionMat = materials.find(m => m.id === `cl-tension-wire${isBlack ? '-black' : ''}`);
         if (tensionMat) {
           const tensionItem = createTakeOffItem(tensionMat, runLF, 'Hardware');
           runFenceMaterialCost += tensionItem.total;

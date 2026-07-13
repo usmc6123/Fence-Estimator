@@ -17,6 +17,7 @@ export interface MaterialItem {
   supplierPartNumber?: string;
   supplierItemName?: string;
   packageQuantity?: number; // Quantity per package (e.g., 80 for hog rings)
+  finish?: 'galvanized' | 'black';
   isMaterialItem?: boolean; // Flag to show on crew checklist
   
   // Price Source Metadata
@@ -114,6 +115,7 @@ export interface FenceRun {
   ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   chainLinkGrade?: 'Residential' | 'Commercial';
+  chainLinkFinish?: 'galvanized' | 'black';
   chainLinkFabricGauge?: '9ga' | '11ga';
   pipeInstallType?: 'Set in Concrete' | 'Driven Posts';
   hasBottomRail?: boolean;
@@ -289,6 +291,7 @@ export interface Estimate {
   ironPanelType?: 'Fixed' | 'Racking';
   topStyle?: 'Dog Ear' | 'Flat Top';
   defaultChainLinkGrade?: 'Residential' | 'Commercial';
+  defaultChainLinkFinish?: 'galvanized' | 'black';
   defaultChainLinkFabricGauge?: '9ga' | '11ga';
   pipeInstallType?: 'Set in Concrete' | 'Driven Posts';
   defaultHasBottomRail?: boolean;
