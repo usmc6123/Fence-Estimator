@@ -143,4 +143,67 @@ export function getEstimateFinalPrice(estimate: any): number {
   return basePrice + customTotal;
 }
 
+/**
+ * Calculates the dollar and percentage difference between two prices.
+ */
+export function calculatePriceChange(
+  oldPrice: number | null | undefined,
+  newPrice: number | null | undefined
+) {
+  if (
+    typeof oldPrice !== "number" ||
+    typeof newPrice !== "number" ||
+    !Number.isFinite(oldPrice) ||
+    !Number.isFinite(newPrice)
+  ) {
+    return {
+      dollarDifference: null,
+      percentageDifference: null,
+    };
+  }
+
+  const dollarDifference = newPrice - oldPrice;
+
+  if (oldPrice === 0) {
+    return {
+      dollarDifference,
+      percentageDifference: null,
+    };
+  }
+
+  return {
+    dollarDifference,
+    percentageDifference: (dollarDifference / oldPrice) * 100,
+  };
+}
+
+/**
+ * Formats the price change result for display.
+ * Example: +$2.00 (+20.0%)
+ */
+export function formatPriceChange(
+  dollarDifference: number | null,
+  percentageDifference: number | null
+): string {
+  if (dollarDifference === null) return "—";
+
+  const sign = dollarDifference > 0 ? "+" : "";
+  const dollarStr = formatCurrency(dollarDifference);
+  
+  // Intl.NumberFormat for currency usually includes the negative sign if the number is negative
+  // formatCurrency(-2) -> -$2.00
+  // So we only manually add '+' for positive.
+  
+  let result = `${sign}${dollarStr}`;
+
+  if (percentageDifference !== null) {
+    const pSign = percentageDifference > 0 ? "+" : "";
+    result += ` (${pSign}${percentageDifference.toFixed(1)}%)`;
+  } else {
+    result += ` (N/A)`;
+  }
+
+  return result;
+}
+
 

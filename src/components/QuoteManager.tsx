@@ -6,7 +6,7 @@ import {
   Plus, History, DollarSign, Search, ChevronDown, GitMerge
 } from 'lucide-react';
 import { SupplierQuote, QuoteItem, MaterialItem, User, Estimate, SupplierQuoteSnapshot, SnapshotLineItem, ComparisonSummary } from '../types';
-import { cn, formatCurrency, getCanonicalSupplierName } from '../lib/utils';
+import { cn, formatCurrency, getCanonicalSupplierName, calculatePriceChange, formatPriceChange } from '../lib/utils';
 import { analyzeQuoteDocument } from '../services/geminiService';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, updateDoc, deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
@@ -470,8 +470,10 @@ export default function QuoteManager({
                           item.changeType === 'decrease' ? "bg-green-100 text-green-700" :
                           "bg-gray-100 text-gray-600"
                         )}>
-                          {item.newPrice > item.oldPrice ? '+' : ''}
-                          {(((item.newPrice - item.oldPrice) / item.oldPrice) * 100).toFixed(1)}%
+                          {(() => {
+                            const { dollarDifference, percentageDifference } = calculatePriceChange(item.oldPrice, item.newPrice);
+                            return formatPriceChange(dollarDifference, percentageDifference);
+                          })()}
                         </span>
                       ) : (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">NEW</span>
@@ -1514,7 +1516,10 @@ export default function QuoteManager({
                                             "text-[9px] font-bold uppercase",
                                             isHigher ? "text-american-red" : isLower ? "text-emerald-500" : "text-gray-400"
                                           )}>
-                                            Diff: {item.unitPrice > mat.cost ? '+' : ''}{formatCurrency(item.unitPrice - mat.cost)}
+                                            {(() => {
+                                              const { dollarDifference, percentageDifference } = calculatePriceChange(mat.cost, item.unitPrice);
+                                              return `Diff: ${formatPriceChange(dollarDifference, percentageDifference)}`;
+                                            })()}
                                           </p>
                                         </>
                                       )}
@@ -1618,7 +1623,12 @@ export default function QuoteManager({
                           <div className="flex justify-between items-end">
                             <h4 className="text-sm font-black text-american-blue uppercase tracking-tight">{item.materialName}</h4>
                             <div className="text-[10px] font-black uppercase tracking-widest text-[#999999]">
-                              Spread: <span className="text-american-red">{formatCurrency(item.maxPrice - item.minPrice)}</span>
+                              Spread: <span className="text-american-red">
+                                {(() => {
+                                  const { dollarDifference, percentageDifference } = calculatePriceChange(item.minPrice, item.maxPrice);
+                                  return formatPriceChange(dollarDifference, percentageDifference);
+                                })()}
+                              </span>
                             </div>
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
