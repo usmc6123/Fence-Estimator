@@ -113,6 +113,7 @@ export default function CustomerContract({
   const [sectionTotals, setSectionTotals] = useState<(number | null)[]>(estimate.manualSectionTotals || []);
   const [gateTotals, setGateTotals] = useState<(number | null)[]>(estimate.manualGateTotals || []);
   const [demoTotals, setDemoTotals] = useState<(number | null)[]>(estimate.manualDemoTotals || []);
+  const [stainTotals, setStainTotals] = useState<(number | null)[]>(estimate.manualStainTotals || []);
 
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
   const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
@@ -193,15 +194,18 @@ export default function CustomerContract({
             const finalFenceValue = run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge || run.finalFence || 0);
             const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || run.finalGate || 0);
             const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || run.finalDemo || 0);
+            const finalStainValue = run.stainTotal !== undefined ? run.stainTotal : (run.stainingCharge || run.finalStain || 0);
             return {
               runName: run.runName || run.name || `Section ${i + 1}`,
               totalFenceCharge: Number(finalFenceValue),
               totalGateCharge: Number(finalGateValue),
               demoCharge: Number(finalDemoValue),
+              stainingCharge: Number(finalStainValue),
               finalFence: Number(finalFenceValue),
               finalGate: Number(finalGateValue),
               finalDemo: Number(finalDemoValue),
-              totalSection: Number(run.sectionTotal || run.totalSectionCharge || (Number(finalFenceValue) + Number(finalGateValue) + Number(finalDemoValue))),
+              finalStain: Number(finalStainValue),
+              totalSection: Number(run.sectionTotal || run.totalSectionCharge || (Number(finalFenceValue) + Number(finalGateValue) + Number(finalDemoValue) + Number(finalStainValue))),
               netLF: Number(run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0))
             };
           }),
@@ -253,6 +257,8 @@ export default function CustomerContract({
         const finalFenceValue = run.fenceTotal !== undefined ? run.fenceTotal : (run.totalFenceCharge !== undefined ? run.totalFenceCharge : (run.finalFence || 0));
         const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0));
         const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0));
+        const finalStainValue = run.stainingTotal !== undefined ? run.stainingTotal : (run.stainingCharge !== undefined ? run.stainingCharge : (run.finalStain || 0));
+
         return {
           name: run.runName || run.name || `Section ${i + 1}`,
           netLF: run.linearFeet !== undefined ? Number(run.linearFeet) : (run.netLF || 0),
@@ -260,6 +266,7 @@ export default function CustomerContract({
           pricePerFoot: Number(run.fenceRate !== undefined ? run.fenceRate : (run.pricePerFoot || 0)),
           totalGateCharge: Number(finalGateValue),
           demoCharge: Number(finalDemoValue),
+          stainingCharge: Number(finalStainValue),
           gates: run.gateDetails || run.gates || [],
           style: run.fenceType || run.styleName || run.styleId || run.style || '',
           styleType: run.styleType || '',
@@ -276,10 +283,13 @@ export default function CustomerContract({
     }
 
     return data.runs.map(run => {
-      // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
-      const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
+      // Separate staining from pure fence installation
+      const pureFenceLabor = run.fenceLaborCost - run.stainingCharge;
+      const baseFenceCharge = (run.fenceMaterialCost + pureFenceLabor) * markupFactor;
       const fenceTax = run.fenceMaterialCost * taxFactor;
       const totalFenceCharge = baseFenceCharge + fenceTax;
+
+      const stainingCharge = run.stainingCharge * markupFactor;
       
       // Gate Charge calculation with fallback for missing labor in summary fields
       // We calculate from items to ensure parity with the Custom Gate Access Systems section
@@ -309,6 +319,7 @@ export default function CustomerContract({
         pricePerFoot: run.netLF > 0 ? totalFenceCharge / run.netLF : 0,
         totalGateCharge,
         demoCharge,
+        stainingCharge,
         gates: run.gates,
         style: run.styleName,
         styleType: run.styleType,
@@ -329,15 +340,17 @@ export default function CustomerContract({
     if (estimate.manualSectionTotals) setSectionTotals(estimate.manualSectionTotals);
     if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
     if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
+    if (estimate.manualStainTotals) setStainTotals(estimate.manualStainTotals);
     if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
     if (estimate.customContractLineItems) setCustomLineItems(estimate.customContractLineItems);
-  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal, estimate.customContractLineItems]);
+  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualStainTotals, estimate.manualGrandTotal, estimate.customContractLineItems]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
       setSectionTotals([]);
       setGateTotals([]);
       setDemoTotals([]);
+      setStainTotals([]);
       setManualGrandTotal(null);
       setManualGatePrices({});
       if (onUpdateEstimate) {
@@ -345,6 +358,7 @@ export default function CustomerContract({
           manualSectionTotals: [],
           manualGateTotals: [],
           manualDemoTotals: [],
+          manualStainTotals: [],
           manualGrandTotal: null,
           manualGatePrices: {}
         });
@@ -1320,7 +1334,7 @@ Please structure the contract narrative with professional Markdown bold headers 
 
                           <div className="space-y-3 pt-4 border-t border-[#F5F5F5]">
                             <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Total</span>
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Installation</span>
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
@@ -1337,6 +1351,9 @@ Please structure the contract narrative with professional Markdown bold headers 
                                         const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
                                         newTotals[i] = newVal;
                                         setSectionTotals(newTotals);
+                                        if (onUpdateEstimate) {
+                                          onUpdateEstimate({ manualSectionTotals: newTotals });
+                                        }
                                       }}
                                       className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
                                     />
@@ -1345,57 +1362,98 @@ Please structure the contract narrative with professional Markdown bold headers 
                               </div>
                             </div>
 
-                            <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates Total</span>
-                              <div className="flex items-center gap-1">
-                                {isCustomerView ? (
-                                  <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(getVal(gateTotals[i], run.totalGateCharge))}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="text-xs font-bold text-american-blue">$</span>
-                                    <input 
-                                      type="number" 
-                                      value={getVal(gateTotals[i], run.totalGateCharge).toFixed(2)}
-                                      onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
-                                        const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
-                                        newTotals[i] = newVal;
-                                        setGateTotals(newTotals);
-                                      }}
-                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                    />
-                                  </>
-                                )}
+                            {run.stainingCharge > 0 && (
+                              <div className="flex justify-between items-center group">
+                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Staining</span>
+                                <div className="flex items-center gap-1">
+                                  {isCustomerView ? (
+                                    <span className="font-bold text-american-blue text-xs">
+                                      {formatCurrency(getVal(stainTotals[i], run.stainingCharge))}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="text-xs font-bold text-american-blue">$</span>
+                                      <input 
+                                        type="number" 
+                                        value={getVal(stainTotals[i], run.stainingCharge).toFixed(2)}
+                                        onChange={(e) => {
+                                          const newVal = parseFloat(e.target.value) || 0;
+                                          const newTotals = stainTotals.length ? [...stainTotals] : projectBreakdown.map(r => r.stainingCharge);
+                                          newTotals[i] = newVal;
+                                          setStainTotals(newTotals);
+                                          if (onUpdateEstimate) {
+                                            onUpdateEstimate({ manualStainTotals: newTotals });
+                                          }
+                                        }}
+                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                      />
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            )}
 
-                            <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo Total</span>
-                              <div className="flex items-center gap-1">
-                                {isCustomerView ? (
-                                  <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(getVal(demoTotals[i], run.demoCharge))}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="text-xs font-bold text-american-blue">$</span>
-                                    <input 
-                                      type="number" 
-                                      value={getVal(demoTotals[i], run.demoCharge).toFixed(2)}
-                                      onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
-                                        const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
-                                        newTotals[i] = newVal;
-                                        setDemoTotals(newTotals);
-                                      }}
-                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                    />
-                                  </>
-                                )}
+                            {run.totalGateCharge > 0 && (
+                              <div className="flex justify-between items-center group">
+                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates Total</span>
+                                <div className="flex items-center gap-1">
+                                  {isCustomerView ? (
+                                    <span className="font-bold text-american-blue text-xs">
+                                      {formatCurrency(getVal(gateTotals[i], run.totalGateCharge))}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="text-xs font-bold text-american-blue">$</span>
+                                      <input 
+                                        type="number" 
+                                        value={getVal(gateTotals[i], run.totalGateCharge).toFixed(2)}
+                                        onChange={(e) => {
+                                          const newVal = parseFloat(e.target.value) || 0;
+                                          const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
+                                          newTotals[i] = newVal;
+                                          setGateTotals(newTotals);
+                                          if (onUpdateEstimate) {
+                                            onUpdateEstimate({ manualGateTotals: newTotals });
+                                          }
+                                        }}
+                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                      />
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            )}
+
+                            {run.demoCharge > 0 && (
+                              <div className="flex justify-between items-center group">
+                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo Total</span>
+                                <div className="flex items-center gap-1">
+                                  {isCustomerView ? (
+                                    <span className="font-bold text-american-blue text-xs">
+                                      {formatCurrency(getVal(demoTotals[i], run.demoCharge))}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="text-xs font-bold text-american-blue">$</span>
+                                      <input 
+                                        type="number" 
+                                        value={getVal(demoTotals[i], run.demoCharge).toFixed(2)}
+                                        onChange={(e) => {
+                                          const newVal = parseFloat(e.target.value) || 0;
+                                          const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
+                                          newTotals[i] = newVal;
+                                          setDemoTotals(newTotals);
+                                          if (onUpdateEstimate) {
+                                            onUpdateEstimate({ manualDemoTotals: newTotals });
+                                          }
+                                        }}
+                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           <div className="mt-auto pt-4 border-t-2 border-american-blue/5 flex justify-between items-center bg-american-blue/5 -mx-6 -mb-6 px-6 py-4 rounded-b-2xl">
@@ -1404,7 +1462,8 @@ Please structure the contract narrative with professional Markdown bold headers 
                               {formatCurrency(
                                 getVal(sectionTotals[i], run.totalFenceCharge) + 
                                 getVal(gateTotals[i], run.totalGateCharge) + 
-                                getVal(demoTotals[i], run.demoCharge)
+                                getVal(demoTotals[i], run.demoCharge) +
+                                getVal(stainTotals[i], run.stainingCharge)
                               )}
                             </span>
                           </div>
@@ -1451,9 +1510,10 @@ Please structure the contract narrative with professional Markdown bold headers 
                     {projectBreakdown.some(r => r.gates.length > 0) ? (
                       projectBreakdown.map((run, rIdx) => 
                         run.gates.map((gate, gIdx) => {
+                          const items = gate.items || gate.customItems || [];
                           // Estimate gate price
-                          const calculatedPrice = (gate.items.reduce((sum, item) => sum + item.total, 0)) * markupFactor + 
-                                               (gate.items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + item.total, 0)) * taxFactor;
+                          const calculatedPrice = (items.reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * markupFactor + 
+                                               (items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * taxFactor;
                           const displayPrice = manualGatePrices[gate.gateId] ?? calculatedPrice;
                           
                           return (

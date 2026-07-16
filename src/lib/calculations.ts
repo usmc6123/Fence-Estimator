@@ -59,6 +59,7 @@ export interface RunTakeOff {
   gateMaterialCost: number;
   gateLaborCost: number;
   demoCharge: number;
+  stainingCharge: number;
   gates: {
     gateId: string;
     type: string;
@@ -94,9 +95,11 @@ export interface DetailedTakeOff {
       totalFenceCharge: number;
       totalGateCharge: number;
       demoCharge: number;
+      stainingCharge: number;
       finalFence: number;
       finalGate: number;
       finalDemo: number;
+      finalStain: number;
       totalSection: number;
       netLF: number;
     }[];
@@ -2224,6 +2227,9 @@ export function calculateDetailedTakeOff(
     const laborTotal = runFenceLaborCost + runGateLaborCost;
     totalLabor += laborTotal;
 
+    // We subtract stain from fence labor to keep them separate for the contract breakdown
+    const pureFenceLabor = runFenceLaborCost - runStainLabor;
+
     runItems.forEach(i => {
       const isPartialWire = i.id.startsWith('partial-wire-');
       const isPartialPaint = i.id.startsWith('partial-paint-');
@@ -2269,6 +2275,7 @@ export function calculateDetailedTakeOff(
       gateMaterialCost: runGateMaterialCost,
       gateLaborCost: runGateLaborCost,
       demoCharge: runDemoCharge,
+      stainingCharge: runStainLabor,
       gates: runGates,
       deeperPostMaterialDiff: runDeeperPostMaterialDiff,
       deeperPostLaborCost: runDeeperPostLaborCost,
@@ -2451,10 +2458,13 @@ export function calculateDetailedTakeOff(
   const taxFactor = (estimate.taxPercentage || 0) / 100;
 
   const runsPricing = detailedRuns.map((run, i) => {
-    // Fence Charge = Base Labor + Base Materials + Markup + Tax on Materials
-    const baseFenceCharge = (run.fenceMaterialCost + run.fenceLaborCost) * markupFactor;
+    // Separate staining from pure fence installation
+    const pureFenceLabor = run.fenceLaborCost - run.stainingCharge;
+    const baseFenceCharge = (run.fenceMaterialCost + pureFenceLabor) * markupFactor;
     const fenceTax = run.fenceMaterialCost * taxFactor;
     const totalFenceCharge = baseFenceCharge + fenceTax;
+
+    const stainingCharge = run.stainingCharge * markupFactor;
 
     // Gate Charge - Use authoritative gate.items for total consistency
     const totalGateCharge = (run.gates || []).reduce((acc: number, gate: any) => {
@@ -2480,16 +2490,20 @@ export function calculateDetailedTakeOff(
       ? estimate.manualDemoTotals[i]!
       : demoCharge;
 
-    const totalSection = finalFence + finalGate + finalDemo;
+    const finalStain = stainingCharge;
+
+    const totalSection = finalFence + finalGate + finalDemo + finalStain;
 
     return {
       runName: run.runName,
       totalFenceCharge,
       totalGateCharge,
       demoCharge,
+      stainingCharge,
       finalFence,
       finalGate,
       finalDemo,
+      finalStain,
       totalSection,
       netLF: run.netLF
     };

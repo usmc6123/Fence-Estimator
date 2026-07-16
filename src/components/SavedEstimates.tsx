@@ -279,6 +279,7 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
           const finalFenceValue = pricingRun.finalFence !== undefined ? pricingRun.finalFence : (pricingRun.totalFenceCharge || run.totalFenceCharge || run.finalFence || 0);
           const finalGateValue = pricingRun.finalGate !== undefined ? pricingRun.finalGate : (pricingRun.totalGateCharge || run.totalGateCharge || run.finalGate || 0);
           const finalDemoValue = pricingRun.finalDemo !== undefined ? pricingRun.finalDemo : (pricingRun.demoCharge || run.demoCharge || run.finalDemo || 0);
+          const finalStainValue = pricingRun.finalStain !== undefined ? pricingRun.finalStain : (pricingRun.stainingCharge || run.stainingCharge || run.finalStain || 0);
           return {
             name: run.runName || origRun.name || `Section ${i + 1}`,
             runName: run.runName || origRun.name || `Section ${i + 1}`,
@@ -287,7 +288,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             pricePerFoot: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
             totalGateCharge: finalGateValue,
             demoCharge: finalDemoValue,
-            gateDetails: origRun.gateDetails || origRun.gates || [],
+            stainingCharge: finalStainValue,
+            gateDetails: run.gates || origRun.gateDetails || origRun.gates || [],
             styleName: run.style || '',
             styleType: run.styleType || '',
             height: run.height || 6,
@@ -304,7 +306,8 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
             fenceTotal: finalFenceValue,
             gatesTotal: finalGateValue,
             demoTotal: finalDemoValue,
-            sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue)
+            stainTotal: finalStainValue,
+            sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue + finalStainValue)
           };
         }),
         costSummaryRuns: costSummaryRuns,

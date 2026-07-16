@@ -1688,12 +1688,27 @@ export default function QuoteManager({
                                       </button>
                                     </div>
                                   </div>
-                                  <p className={cn(
-                                    "text-xl font-black",
-                                    isLowest ? "text-emerald-600" : isHighest ? "text-american-red" : "text-american-blue"
-                                  )}>
-                                    {formatCurrency(s.price)}
-                                  </p>
+                                  <div className="text-right">
+                                    <p className={cn(
+                                      "text-xl font-black",
+                                      isLowest ? "text-emerald-600" : isHighest ? "text-american-red" : "text-american-blue"
+                                    )}>
+                                      {formatCurrency(s.price)}
+                                    </p>
+                                    {(() => {
+                                      const mat = materials.find(m => m.id === item.id);
+                                      if (!mat) return null;
+                                      const { dollarDifference, percentageDifference } = calculatePriceChange(mat.cost, s.price);
+                                      return (
+                                        <p className={cn(
+                                          "text-[9px] font-bold uppercase",
+                                          dollarDifference > 0 ? "text-american-red" : dollarDifference < 0 ? "text-emerald-500" : "text-gray-400"
+                                        )}>
+                                          {formatPriceChange(dollarDifference, percentageDifference)}
+                                        </p>
+                                      );
+                                    })()}
+                                  </div>
                                 </div>
                               );
                             })}
