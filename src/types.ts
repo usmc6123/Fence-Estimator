@@ -335,7 +335,6 @@ export interface Estimate {
   manualSectionTotals?: (number | null)[];
   manualGateTotals?: (number | null)[];
   manualDemoTotals?: (number | null)[];
-  manualStainTotals?: (number | null)[];
   manualGatePrices?: Record<string, number>;
   contractSnapshot?: any;
   customContractLineItems?: CustomContractLineItem[];

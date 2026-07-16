@@ -113,7 +113,6 @@ export default function CustomerContract({
   const [sectionTotals, setSectionTotals] = useState<(number | null)[]>(estimate.manualSectionTotals || []);
   const [gateTotals, setGateTotals] = useState<(number | null)[]>(estimate.manualGateTotals || []);
   const [demoTotals, setDemoTotals] = useState<(number | null)[]>(estimate.manualDemoTotals || []);
-  const [stainTotals, setStainTotals] = useState<(number | null)[]>(estimate.manualStainTotals || []);
 
   const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
   const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
@@ -340,17 +339,15 @@ export default function CustomerContract({
     if (estimate.manualSectionTotals) setSectionTotals(estimate.manualSectionTotals);
     if (estimate.manualGateTotals) setGateTotals(estimate.manualGateTotals);
     if (estimate.manualDemoTotals) setDemoTotals(estimate.manualDemoTotals);
-    if (estimate.manualStainTotals) setStainTotals(estimate.manualStainTotals);
     if (estimate.manualGrandTotal !== undefined) setManualGrandTotal(estimate.manualGrandTotal);
     if (estimate.customContractLineItems) setCustomLineItems(estimate.customContractLineItems);
-  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualStainTotals, estimate.manualGrandTotal, estimate.customContractLineItems]);
+  }, [estimate.manualSectionTotals, estimate.manualGateTotals, estimate.manualDemoTotals, estimate.manualGrandTotal, estimate.customContractLineItems]);
 
   const handleResetManualOverrides = () => {
     if (confirm('Are you sure you want to reset all manual price overrides to calculated values?')) {
       setSectionTotals([]);
       setGateTotals([]);
       setDemoTotals([]);
-      setStainTotals([]);
       setManualGrandTotal(null);
       setManualGatePrices({});
       if (onUpdateEstimate) {
@@ -358,7 +355,6 @@ export default function CustomerContract({
           manualSectionTotals: [],
           manualGateTotals: [],
           manualDemoTotals: [],
-          manualStainTotals: [],
           manualGrandTotal: null,
           manualGatePrices: {}
         });
@@ -1219,7 +1215,7 @@ Please structure the contract narrative with professional Markdown bold headers 
 
           {/* Financial Breakdown (Client View) */}
           <div className="space-y-6">
-            <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center justify-between gap-3">
+            <h3 className="text-lg font-black text-american-blue uppercase tracking-tight flex items-center justify-between gap-4">
               <span className="flex items-center gap-3">
                 <span className="h-6 w-1 bg-american-red rounded-full" />
                 II. Cost Summary
@@ -1231,124 +1227,92 @@ Please structure the contract narrative with professional Markdown bold headers 
             </h3>
             
             <div className="space-y-6">
-              {showCostBreakdown ? (
-                isHomogeneous ? (
-                  <div className="space-y-6">
-                    {/* Unified Project Rate Card */}
-                    <div className="bg-white rounded-3xl p-8 border-2 border-american-blue/5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
-                        <Sparkles size={120} />
-                      </div>
-                      
-                      <div className="relative z-10 text-center md:text-left">
-                        <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
-                          Project-Wide Rate
-                        </div>
-                        <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h3>
-                        <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">
-                          {projectBreakdown[0]?.height}' {projectBreakdown[0]?.style} Specification
-                          {projectBreakdown[0]?.style?.includes('Iron') && (
-                            <>
-                              <span className="mx-2">•</span>
-                              {projectBreakdown[0]?.ironInstallType}
-                              <span className="mx-2">•</span>
-                              {projectBreakdown[0]?.ironPanelType} Panels
-                            </>
-                          )}
-                          {projectBreakdown[0]?.style?.includes('Chain Link') && projectBreakdown[0]?.chainLinkFabricGauge && (
-                            <>
-                              <span className="mx-2">•</span>
-                              {projectBreakdown[0]?.chainLinkFabricGauge === '9ga' ? '9 Gauge Fabric' : '11 Gauge Fabric'}
-                            </>
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="text-center md:text-right relative z-10">
-                        <div className="flex items-baseline justify-center md:justify-end gap-2">
-                          <span className="text-4xl font-black text-american-blue tabular-nums">{formatCurrency(globalPricePerFoot)}</span>
-                          <span className="text-sm font-black text-[#BBBBBB] uppercase tracking-widest">/ LF</span>
-                        </div>
-                        <p className="text-[10px] font-bold text-american-red uppercase tracking-widest mt-1">Guaranteed Custom Rate</p>
-                      </div>
-                    </div>
-
-                    {/* Individual Footages for Clarity */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                      {projectBreakdown.map((run, i) => (
-                        <div key={i} className="bg-[#F9F9F9] rounded-2xl p-4 border border-[#F0F0F0] flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">{run.name}</span>
-                          <span className="text-sm font-bold text-american-blue">{run.netLF.toFixed(1)}'</span>
-                        </div>
-                      ))}
-                    </div>
+              {isHomogeneous && (
+                <div className="bg-white rounded-3xl p-8 border-2 border-american-blue/5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity">
+                    <Sparkles size={120} />
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {projectBreakdown.map((run, i) => {
-                      return (
-                        <div key={i} className="bg-white rounded-2xl p-6 border border-[#E5E5E5] shadow-sm flex flex-col gap-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
-                              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
-                                {run.style} {run.height}'
-                                {(run.styleType === 'Metal' || (run.style || '').includes('Iron')) && (
-                                  <>
-                                    <span className="mx-1">•</span>
-                                    {run.ironInstallType}
-                                    <span className="mx-1">•</span>
-                                    {run.ironPanelType}
-                                  </>
-                                )}
-                                {(run.style || '').includes('Chain Link') && run.chainLinkFabricGauge && (
-                                  <>
-                                    <span className="mx-1">•</span>
-                                    {run.chainLinkFabricGauge === '9ga' ? '9 Gauge' : '11 Gauge'}
-                                  </>
-                                )}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs font-black text-american-red">
-                                {isCustomerView ? (
-                                  <span>{formatCurrency(getVal(sectionTotals[i], run.totalFenceCharge) / (run.netLF || 1))}</span>
-                                ) : (
-                                  <input 
-                                    type="number" 
-                                    value={(getVal(sectionTotals[i], run.totalFenceCharge) / (run.netLF || 1)).toFixed(2)}
-                                    onChange={(e) => {
-                                      const newRate = parseFloat(e.target.value) || 0;
-                                      const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
-                                      newTotals[i] = newRate * run.netLF;
-                                      setSectionTotals(newTotals);
-                                    }}
-                                    className="w-16 bg-transparent text-right outline-none"
-                                  /> 
-                                )}
-                                <span className="opacity-40">/ FT</span>
-                              </p>
-                              <p className="text-[9px] font-bold text-[#BBBBBB] uppercase">Fence Rate</p>
-                            </div>
-                          </div>
+                  
+                  <div className="relative z-10 text-center md:text-left">
+                    <div className="inline-block px-3 py-1 rounded-full bg-american-red/10 text-american-red text-[9px] font-black uppercase tracking-widest mb-3">
+                      Project-Wide Rate
+                    </div>
+                    <h3 className="text-xl font-black text-american-blue uppercase tracking-tight">Unified Fence Pricing</h3>
+                    <p className="text-xs font-bold text-[#999999] mt-1 italic uppercase tracking-wider">
+                      {projectBreakdown[0]?.height}' {projectBreakdown[0]?.style} Specification
+                      {projectBreakdown[0]?.style?.includes('Iron') && (
+                        <>
+                          <span className="mx-2">•</span>
+                          {projectBreakdown[0]?.ironInstallType}
+                          <span className="mx-2">•</span>
+                          {projectBreakdown[0]?.ironPanelType} Panels
+                        </>
+                      )}
+                      {projectBreakdown[0]?.style?.includes('Chain Link') && projectBreakdown[0]?.chainLinkFabricGauge && (
+                        <>
+                          <span className="mx-2">•</span>
+                          {projectBreakdown[0]?.chainLinkFabricGauge === '9ga' ? '9 Gauge Fabric' : '11 Gauge Fabric'}
+                        </>
+                      )}
+                    </p>
+                  </div>
 
+                  <div className="text-center md:text-right relative z-10">
+                    <div className="flex items-baseline justify-center md:justify-end gap-2">
+                      <span className="text-4xl font-black text-american-blue tabular-nums">{formatCurrency(globalPricePerFoot)}</span>
+                      <span className="text-sm font-black text-[#BBBBBB] uppercase tracking-widest">/ LF</span>
+                    </div>
+                    <p className="text-[10px] font-bold text-american-red uppercase tracking-widest mt-1">Guaranteed Custom Rate</p>
+                  </div>
+                </div>
+              )}
+
+              <div className={cn(
+                "grid gap-4",
+                showCostBreakdown ? "grid-cols-1 md:grid-cols-2" : (isHomogeneous ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-2")
+              )}>
+                {data.pricing.runsPricing.map((runPricing, i) => {
+                  const run = projectBreakdown[i];
+                  if (!run) return null;
+
+                  return (
+                    <div key={i} className={cn(
+                      "bg-white rounded-2xl border border-[#E5E5E5] shadow-sm flex flex-col transition-all duration-300",
+                      showCostBreakdown ? "p-6 gap-4" : "p-4 flex-row justify-between items-center bg-[#F9F9F9] border-[#F0F0F0]"
+                    )}>
+                      <div className={cn("flex flex-col", showCostBreakdown ? "" : "flex-1")}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-black text-american-blue uppercase tracking-tight text-sm">{run.name}</h4>
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">
+                              {run.netLF.toFixed(1)}' • {run.style} {run.height}'
+                            </p>
+                          </div>
+                          {!showCostBreakdown && (
+                            <span className="text-sm font-bold text-american-blue">{run.netLF.toFixed(1)}'</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {showCostBreakdown && (
+                        <>
                           <div className="space-y-3 pt-4 border-t border-[#F5F5F5]">
                             <div className="flex justify-between items-center group">
                               <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Installation</span>
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(getVal(sectionTotals[i], run.totalFenceCharge))}
+                                    {formatCurrency(runPricing.finalFence)}
                                   </span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-american-blue">$</span>
                                     <input 
                                       type="number" 
-                                      value={getVal(sectionTotals[i], run.totalFenceCharge).toFixed(2)}
+                                      value={runPricing.finalFence.toFixed(2)}
                                       onChange={(e) => {
                                         const newVal = parseFloat(e.target.value) || 0;
-                                        const newTotals = sectionTotals.length ? [...sectionTotals] : projectBreakdown.map(r => r.totalFenceCharge);
+                                        const newTotals = sectionTotals.length ? [...sectionTotals] : data.pricing.runsPricing.map(r => r.finalFence);
                                         newTotals[i] = newVal;
                                         setSectionTotals(newTotals);
                                         if (onUpdateEstimate) {
@@ -1362,142 +1326,87 @@ Please structure the contract narrative with professional Markdown bold headers 
                               </div>
                             </div>
 
-                            {run.stainingCharge > 0 && (
-                              <div className="flex justify-between items-center group">
-                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Staining</span>
-                                <div className="flex items-center gap-1">
-                                  {isCustomerView ? (
-                                    <span className="font-bold text-american-blue text-xs">
-                                      {formatCurrency(getVal(stainTotals[i], run.stainingCharge))}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="text-xs font-bold text-american-blue">$</span>
-                                      <input 
-                                        type="number" 
-                                        value={getVal(stainTotals[i], run.stainingCharge).toFixed(2)}
-                                        onChange={(e) => {
-                                          const newVal = parseFloat(e.target.value) || 0;
-                                          const newTotals = stainTotals.length ? [...stainTotals] : projectBreakdown.map(r => r.stainingCharge);
-                                          newTotals[i] = newVal;
-                                          setStainTotals(newTotals);
-                                          if (onUpdateEstimate) {
-                                            onUpdateEstimate({ manualStainTotals: newTotals });
-                                          }
-                                        }}
-                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                      />
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Staining</span>
+                              <span className="font-bold text-american-blue text-xs">
+                                {formatCurrency(runPricing.finalStain)}
+                              </span>
+                            </div>
 
-                            {run.totalGateCharge > 0 && (
-                              <div className="flex justify-between items-center group">
-                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates Total</span>
-                                <div className="flex items-center gap-1">
-                                  {isCustomerView ? (
-                                    <span className="font-bold text-american-blue text-xs">
-                                      {formatCurrency(getVal(gateTotals[i], run.totalGateCharge))}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="text-xs font-bold text-american-blue">$</span>
-                                      <input 
-                                        type="number" 
-                                        value={getVal(gateTotals[i], run.totalGateCharge).toFixed(2)}
-                                        onChange={(e) => {
-                                          const newVal = parseFloat(e.target.value) || 0;
-                                          const newTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
-                                          newTotals[i] = newVal;
-                                          setGateTotals(newTotals);
-                                          if (onUpdateEstimate) {
-                                            onUpdateEstimate({ manualGateTotals: newTotals });
-                                          }
-                                        }}
-                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                      />
-                                    </>
-                                  )}
-                                </div>
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo</span>
+                              <div className="flex items-center gap-1">
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(runPricing.finalDemo)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={runPricing.finalDemo.toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = demoTotals.length ? [...demoTotals] : data.pricing.runsPricing.map(r => r.finalDemo);
+                                        newTotals[i] = newVal;
+                                        setDemoTotals(newTotals);
+                                        if (onUpdateEstimate) {
+                                          onUpdateEstimate({ manualDemoTotals: newTotals });
+                                        }
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
                               </div>
-                            )}
+                            </div>
 
-                            {run.demoCharge > 0 && (
-                              <div className="flex justify-between items-center group">
-                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo Total</span>
-                                <div className="flex items-center gap-1">
-                                  {isCustomerView ? (
-                                    <span className="font-bold text-american-blue text-xs">
-                                      {formatCurrency(getVal(demoTotals[i], run.demoCharge))}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="text-xs font-bold text-american-blue">$</span>
-                                      <input 
-                                        type="number" 
-                                        value={getVal(demoTotals[i], run.demoCharge).toFixed(2)}
-                                        onChange={(e) => {
-                                          const newVal = parseFloat(e.target.value) || 0;
-                                          const newTotals = demoTotals.length ? [...demoTotals] : projectBreakdown.map(r => r.demoCharge);
-                                          newTotals[i] = newVal;
-                                          setDemoTotals(newTotals);
-                                          if (onUpdateEstimate) {
-                                            onUpdateEstimate({ manualDemoTotals: newTotals });
-                                          }
-                                        }}
-                                        className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                      />
-                                    </>
-                                  )}
-                                </div>
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Gates</span>
+                              <div className="flex items-center gap-1">
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(runPricing.finalGate)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={runPricing.finalGate.toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = gateTotals.length ? [...gateTotals] : data.pricing.runsPricing.map(r => r.finalGate);
+                                        newTotals[i] = newVal;
+                                        setGateTotals(newTotals);
+                                        if (onUpdateEstimate) {
+                                          onUpdateEstimate({ manualGateTotals: newTotals });
+                                        }
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </div>
 
                           <div className="mt-auto pt-4 border-t-2 border-american-blue/5 flex justify-between items-center bg-american-blue/5 -mx-6 -mb-6 px-6 py-4 rounded-b-2xl">
-                            <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Section Total</span>
+                            <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Run Total</span>
                             <span className="font-black text-american-blue text-lg">
-                              {formatCurrency(
-                                getVal(sectionTotals[i], run.totalFenceCharge) + 
-                                getVal(gateTotals[i], run.totalGateCharge) + 
-                                getVal(demoTotals[i], run.demoCharge) +
-                                getVal(stainTotals[i], run.stainingCharge)
-                              )}
+                              {formatCurrency(runPricing.totalSection)}
                             </span>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
-              ) : (
-                <div className="bg-[#F9F9F9] rounded-3xl p-8 border border-[#E5E5E5] text-center">
-                  <p className="text-sm font-bold text-american-blue uppercase">Refer to Quickbooks Estimate for detailed breakdown.</p>
-                  <div className="mt-2 flex items-center justify-center gap-1">
-                    {isCustomerView ? (
-                      <span className="text-xl font-black text-american-blue">
-                        {formatCurrency(data.pricing.baseFenceTotal)}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-xl font-black text-american-blue">$</span>
-                        <input 
-                          type="number"
-                          step="0.01"
-                          value={(data.pricing.baseFenceTotal).toFixed(2)}
-                          onChange={(e) => setManualGrandTotal(parseFloat(e.target.value) || 0)}
-                          className="text-xl font-black text-american-blue bg-transparent outline-none w-32"
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Gates Section - Listed Separately */}
-              {showCostBreakdown && (
+              {projectBreakdown.some(r => r.gates.length > 0) && (
                 <div className="bg-[#F8F9FA] rounded-3xl p-8 border border-[#E5E5E5]">
                   <div className="flex items-center gap-4 mb-6">
                     <div className="h-10 w-10 rounded-xl bg-american-blue flex items-center justify-center text-white">
@@ -1507,45 +1416,40 @@ Please structure the contract narrative with professional Markdown bold headers 
                   </div>
                   
                   <div className="space-y-3">
-                    {projectBreakdown.some(r => r.gates.length > 0) ? (
-                      projectBreakdown.map((run, rIdx) => 
-                        run.gates.map((gate, gIdx) => {
-                          const items = gate.items || gate.customItems || [];
-                          // Estimate gate price
-                          const calculatedPrice = (items.reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * markupFactor + 
-                                               (items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * taxFactor;
-                          const displayPrice = manualGatePrices[gate.gateId] ?? calculatedPrice;
-                          
-                          return (
-                            <div key={gate.gateId} className="flex items-center justify-between py-4 border-b border-[#E5E5E5] last:border-0 hover:bg-american-blue/[0.02] -mx-4 px-4 rounded-xl transition-colors">
-                              <div>
-                                <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate</p>
-                                <p className="text-[10px] font-bold text-[#999999] uppercase tracking-wider">{run.name} • Professionally Installed</p>
-                              </div>
-                              <div className="flex items-center gap-1 bg-white border border-[#E5E5E5] rounded-xl px-4 py-2 shadow-sm">
-                                {isCustomerView ? (
-                                  <span className="font-black text-american-blue text-sm">
-                                    {formatCurrency(displayPrice)}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="text-xs font-black text-american-blue">$</span>
-                                    <input 
-                                      type="number"
-                                      value={displayPrice.toFixed(2)}
-                                      onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
-                                      className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
-                                      step="0.01"
-                                    />
-                                  </>
-                                )}
-                              </div>
+                    {projectBreakdown.map((run, rIdx) => 
+                      run.gates.map((gate, gIdx) => {
+                        const items = gate.items || gate.customItems || [];
+                        const calculatedPrice = (items.reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * markupFactor + 
+                                             (items.filter(i => i.category !== 'Labor').reduce((sum, item) => sum + (item.total || (item.qty * item.unitCost)), 0)) * taxFactor;
+                        const displayPrice = manualGatePrices[gate.gateId] ?? calculatedPrice;
+                        
+                        return (
+                          <div key={gate.gateId} className="flex items-center justify-between py-4 border-b border-[#E5E5E5] last:border-0 hover:bg-american-blue/[0.02] -mx-4 px-4 rounded-xl transition-colors">
+                            <div>
+                              <p className="text-sm font-bold text-[#1A1A1A]">{gate.width}' {gate.type} Gate</p>
+                              <p className="text-[10px] font-bold text-[#999999] uppercase tracking-wider">{run.name} • Professionally Installed</p>
                             </div>
-                          );
-                        })
-                      )
-                    ) : (
-                      <p className="text-xs font-bold text-[#BBBBBB] uppercase italic tracking-widest">No custom gates included in this scope.</p>
+                            <div className="flex items-center gap-1 bg-white border border-[#E5E5E5] rounded-xl px-4 py-2 shadow-sm">
+                              {isCustomerView ? (
+                                <span className="font-black text-american-blue text-sm">
+                                  {formatCurrency(displayPrice)}
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-black text-american-blue">$</span>
+                                  <input 
+                                    type="number"
+                                    value={displayPrice.toFixed(2)}
+                                    onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
+                                    className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
+                                    step="0.01"
+                                  />
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
