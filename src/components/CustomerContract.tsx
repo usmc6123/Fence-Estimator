@@ -995,43 +995,48 @@ Please structure the contract narrative with professional Markdown bold headers 
               <div className="space-y-4">
                 {customLineItems.map((item) => (
                   <div key={item.id} className="p-6 bg-white rounded-3xl border border-american-blue/10 shadow-sm transition-all hover:shadow-md">
-                    <div className="flex flex-col lg:flex-row gap-6">
-                      {/* Primary Inputs */}
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="sm:col-span-1 md:col-span-1">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Title</label>
-                          <input
-                            type="text"
-                            value={item.title}
-                            placeholder="e.g. HOA Permit Processing"
-                            onChange={(e) => handleUpdateCustomLineItem(item.id, { title: e.target.value })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all"
-                          />
+                    <div className="flex flex-col gap-6">
+                      {/* Primary Inputs Row */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Title & Description Column */}
+                        <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-1">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 px-1">Title</label>
+                            <input
+                              type="text"
+                              value={item.title}
+                              placeholder="e.g. HOA Permit Processing"
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { title: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all shadow-sm"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 px-1">Description (Optional)</label>
+                            <input
+                              type="text"
+                              value={item.description || ''}
+                              placeholder="Brief details about this custom charge"
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { description: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-600 outline-none focus:border-american-blue focus:bg-white transition-all shadow-sm"
+                            />
+                          </div>
                         </div>
-                        <div className="sm:col-span-2 md:col-span-2">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Description (Optional)</label>
-                          <input
-                            type="text"
-                            value={item.description || ''}
-                            placeholder="Brief details about this custom charge"
-                            onChange={(e) => handleUpdateCustomLineItem(item.id, { description: e.target.value })}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-600 outline-none focus:border-american-blue focus:bg-white transition-all"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 md:col-span-1">
+
+                        {/* Amount & Pricing Column */}
+                        <div className="lg:col-span-4 grid grid-cols-2 gap-4">
                           <div>
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Amount ($)</label>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 px-1">Amount ($)</label>
                             <input
                               type="number"
                               step="0.01"
                               value={item.amount || ''}
                               placeholder="0.00"
                               onChange={(e) => handleUpdateCustomLineItem(item.id, { amount: parseFloat(e.target.value) || 0 })}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all shadow-sm"
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Pricing</label>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 px-1">Pricing</label>
                             <select
                               value={item.pricingMode || 'standalone_charge'}
                               onChange={(e) => {
@@ -1044,7 +1049,7 @@ Please structure the contract narrative with professional Markdown bold headers 
                                   handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
                                 }
                               }}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2.5 text-[10px] font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all appearance-none"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[10px] font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all appearance-none cursor-pointer shadow-sm"
                             >
                               <option value="standalone_charge">Standalone</option>
                               <option value="bundled_price">Bundled</option>
@@ -1053,58 +1058,60 @@ Please structure the contract narrative with professional Markdown bold headers 
                         </div>
                       </div>
 
-                      {/* Config & Actions */}
-                      <div className="flex flex-wrap items-center gap-4 lg:pt-6 border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1.5">
+                      {/* Config & Actions Row */}
+                      <div className="flex flex-wrap items-center gap-6 pt-4 border-t border-slate-100">
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
                               id={`taxable-${item.id}`}
                               checked={!!item.taxable}
                               onChange={(e) => handleUpdateCustomLineItem(item.id, { taxable: e.target.checked })}
-                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-4 w-4 cursor-pointer"
                             />
-                            <label htmlFor={`taxable-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                            <label htmlFor={`taxable-${item.id}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer select-none">
                               Taxable
                             </label>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
                               id={`show-${item.id}`}
                               checked={item.showOnContract}
                               onChange={(e) => handleUpdateCustomLineItem(item.id, { showOnContract: e.target.checked })}
-                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-4 w-4 cursor-pointer"
                             />
-                            <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
-                              Show
+                            <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer select-none">
+                              Show on Contract
                             </label>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
                               id={`ppf-${item.id}`}
                               checked={!!item.includeInPricePerFoot}
                               onChange={(e) => handleUpdateCustomLineItem(item.id, { includeInPricePerFoot: e.target.checked })}
-                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-4 w-4 cursor-pointer"
                             />
-                            <label htmlFor={`ppf-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
-                              PPF
+                            <label htmlFor={`ppf-${item.id}`} className="text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer select-none">
+                              Include in PPF
                             </label>
                           </div>
                         </div>
 
                         <button
                           onClick={() => handleDeleteCustomLineItem(item.id)}
-                          className="p-2.5 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto"
+                          className="flex items-center gap-2 px-4 py-2 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto text-[10px] font-black uppercase tracking-widest"
                           title="Delete line item"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </div>
+
 
 
                     {/* Bundle Internal Costs Section */}
@@ -1121,26 +1128,59 @@ Please structure the contract narrative with professional Markdown bold headers 
                             <div className="space-y-4">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Linked Custom Labor</label>
                               <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                {(estimate.customLaborItems || []).map(labor => (
-                                  <div key={labor.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 hover:border-american-blue/20 transition-all">
-                                    <div className="flex items-center gap-3">
-                                      <input
-                                        type="checkbox"
-                                        checked={labor.parentBundleId === item.id}
-                                        disabled={!!labor.parentBundleId && labor.parentBundleId !== item.id}
-                                        onChange={(e) => {
-                                          const updatedLabor = (estimate.customLaborItems || []).map(l => 
-                                            l.id === labor.id ? { ...l, parentBundleId: e.target.checked ? item.id : undefined } : l
-                                          );
-                                          onUpdateEstimate?.({ customLaborItems: updatedLabor });
-                                        }}
-                                        className="rounded-md border-slate-300 text-american-blue h-4 w-4"
-                                      />
-                                      <span className="text-xs font-bold text-slate-700">{labor.name}</span>
+                                {(estimate.customLaborItems || []).map(labor => {
+                                  const isChecked = item.linkedLaborItemIds?.includes(labor.id);
+                                  const alreadyBundledId = (estimate.customContractLineItems || []).find(cli => cli.id !== item.id && cli.linkedLaborItemIds?.includes(labor.id))?.id;
+                                  const alreadyBundledName = alreadyBundledId ? (estimate.customContractLineItems || []).find(cli => cli.id === alreadyBundledId)?.title : null;
+
+                                  const toggleLabor = () => {
+                                    if (alreadyBundledId) return;
+                                    const existing = item.linkedLaborItemIds ?? [];
+                                    const newLinked = isChecked 
+                                      ? existing.filter(id => id !== labor.id)
+                                      : [...existing, labor.id];
+                                    
+                                    handleUpdateCustomLineItem(item.id, { linkedLaborItemIds: newLinked });
+                                    
+                                    // Also sync back to the labor item for backward compatibility/referential ease
+                                    const updatedLabor = (estimate.customLaborItems || []).map(l => 
+                                      l.id === labor.id ? { ...l, parentBundleId: !isChecked ? item.id : undefined } : l
+                                    );
+                                    onUpdateEstimate?.({ customLaborItems: updatedLabor });
+                                  };
+
+                                  return (
+                                    <div 
+                                      key={labor.id} 
+                                      onClick={toggleLabor}
+                                      className={cn(
+                                        "flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group",
+                                        isChecked ? "bg-american-blue/5 border-american-blue/20" : "bg-slate-50 border-slate-100 hover:border-american-blue/20",
+                                        alreadyBundledId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          disabled={!!alreadyBundledId}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleLabor();
+                                          }}
+                                          className="rounded-md border-slate-300 text-american-blue h-4 w-4 pointer-events-none"
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-bold text-slate-700">{labor.name}</span>
+                                          {alreadyBundledId && (
+                                            <span className="text-[9px] text-amber-600 font-bold">Already bundled: {alreadyBundledName || 'Another Bundle'}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(labor.cost)}</span>
                                     </div>
-                                    <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(labor.cost)}</span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                                 {(estimate.customLaborItems || []).length === 0 && (
                                   <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-center">
                                     <p className="text-[10px] text-slate-400 font-bold uppercase">No custom labor items available</p>
@@ -1153,33 +1193,66 @@ Please structure the contract narrative with professional Markdown bold headers 
                             <div className="space-y-4">
                               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Linked Custom Materials</label>
                               <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                {data.manualSummary.map(mat => (
-                                  <div key={mat.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 hover:border-american-blue/20 transition-all">
-                                    <div className="flex items-center gap-3">
-                                      <input
-                                        type="checkbox"
-                                        checked={estimate.manualParentBundleIds?.[mat.id] === item.id}
-                                        disabled={!!estimate.manualParentBundleIds?.[mat.id] && estimate.manualParentBundleIds?.[mat.id] !== item.id}
-                                        onChange={(e) => {
-                                          const currentMap = estimate.manualParentBundleIds || {};
-                                          const updatedMap = { ...currentMap };
-                                          if (e.target.checked) {
-                                            updatedMap[mat.id] = item.id;
-                                          } else {
-                                            delete updatedMap[mat.id];
-                                          }
-                                          onUpdateEstimate?.({ manualParentBundleIds: updatedMap });
-                                        }}
-                                        className="rounded-md border-slate-300 text-american-blue h-4 w-4"
-                                      />
-                                      <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-slate-700">{mat.name}</span>
-                                        <span className="text-[9px] text-slate-400 font-medium">{mat.qty} {mat.unit}</span>
+                                {data.manualSummary.map(mat => {
+                                  const isChecked = item.linkedMaterialItemIds?.includes(mat.id);
+                                  const alreadyBundledId = (estimate.customContractLineItems || []).find(cli => cli.id !== item.id && cli.linkedMaterialItemIds?.includes(mat.id))?.id;
+                                  const alreadyBundledName = alreadyBundledId ? (estimate.customContractLineItems || []).find(cli => cli.id === alreadyBundledId)?.title : null;
+
+                                  const toggleMaterial = () => {
+                                    if (alreadyBundledId) return;
+                                    const existing = item.linkedMaterialItemIds ?? [];
+                                    const newLinked = isChecked 
+                                      ? existing.filter(id => id !== mat.id)
+                                      : [...existing, mat.id];
+                                    
+                                    handleUpdateCustomLineItem(item.id, { linkedMaterialItemIds: newLinked });
+
+                                    // Also sync back to the global map for backward compatibility
+                                    const currentMap = estimate.manualParentBundleIds || {};
+                                    const updatedMap = { ...currentMap };
+                                    if (!isChecked) {
+                                      updatedMap[mat.id] = item.id;
+                                    } else {
+                                      delete updatedMap[mat.id];
+                                    }
+                                    onUpdateEstimate?.({ manualParentBundleIds: updatedMap });
+                                  };
+
+                                  return (
+                                    <div 
+                                      key={mat.id} 
+                                      onClick={toggleMaterial}
+                                      className={cn(
+                                        "flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group",
+                                        isChecked ? "bg-american-blue/5 border-american-blue/20" : "bg-slate-50 border-slate-100 hover:border-american-blue/20",
+                                        alreadyBundledId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          disabled={!!alreadyBundledId}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleMaterial();
+                                          }}
+                                          className="rounded-md border-slate-300 text-american-blue h-4 w-4 pointer-events-none"
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-bold text-slate-700">{mat.name}</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] text-slate-400 font-medium">{mat.qty} {mat.unit}</span>
+                                            {alreadyBundledId && (
+                                              <span className="text-[9px] text-amber-600 font-bold">• Bundled: {alreadyBundledName || 'Another Bundle'}</span>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
+                                      <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
                                     </div>
-                                    <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                                 {data.manualSummary.length === 0 && (
                                   <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-center">
                                     <p className="text-[10px] text-slate-400 font-bold uppercase">No manual materials available</p>
@@ -1187,18 +1260,16 @@ Please structure the contract narrative with professional Markdown bold headers 
                                 )}
                               </div>
                             </div>
+
                           </div>
 
                           {/* Internal Cost Summary */}
                           <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 grid grid-cols-2 md:grid-cols-5 gap-6">
                             {(() => {
-                              const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === item.id);
+                              const linkedLabor = (estimate.customLaborItems || []).filter(l => item.linkedLaborItemIds?.includes(l.id));
                               const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
                               
-                              const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
-                                .filter(([_, bundleId]) => bundleId === item.id)
-                                .map(([id, _]) => id);
-                              const linkedMats = data.manualSummary.filter(m => linkedMatIds.includes(m.id));
+                              const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
                               const linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
                               
                               const totalCost = linkedLaborCost + linkedMatCost;

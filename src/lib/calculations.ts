@@ -2567,27 +2567,30 @@ export function calculateDetailedTakeOff(
       };
       allItems.push(customItem);
       extraLaborTakeoffItems.push(customItem);
-      extraLaborTotal += item.cost;
+      // EXCLUDE labor items that are linked to a bundle to prevent double charging in the run/section cost summaries
+      if (!item.parentBundleId) {
+        extraLaborTotal += item.cost;
+      }
     });
   }
 
   // To meet the requirement that the delivery fee and custom labor additions are included in the fence installation cost
   // and count towards the run/section cost summaries on the contract, we assign it to the first run (idx === 0).
   if (detailedRuns.length > 0) {
-    const manualMaterialOnlyTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
-    const manualLaborOnlyTotal = manualSummary.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
-    const manualDemoOnlyTotal = manualSummary.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
+    const manualMaterialOnlyTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
+    const manualLaborOnlyTotal = manualSummary.filter(i => i.category === 'Labor' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
+    const manualDemoOnlyTotal = manualSummary.filter(i => i.category === 'Demolition' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
 
     detailedRuns[0].fenceLaborCost += extraLaborTotal + manualLaborOnlyTotal;
     detailedRuns[0].fenceMaterialCost += manualMaterialOnlyTotal;
     detailedRuns[0].demoCharge += manualDemoOnlyTotal;
   }
 
-  // Re-calculate totals based on ALL items
-  totalMaterial = allItems.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
-  totalLabor = allItems.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
-  totalDemo = allItems.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
-  totalPrep = allItems.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  // Re-calculate totals based on ALL items (Excluding bundled internal costs)
+  totalMaterial = allItems.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
+  totalLabor = allItems.filter(i => i.category === 'Labor' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
+  totalDemo = allItems.filter(i => i.category === 'Demolition' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
+  totalPrep = allItems.filter(i => i.category === 'SitePrep' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
 
   // Definitive Post Count logic
   // Priority 1: Use allResolvedIronPosts for Wrought Iron sections
@@ -2731,7 +2734,7 @@ export function calculateDetailedTakeOff(
   const pricePerFoot = totalNetLF > 0 ? (finalCustomerPrice - totalGates - excludedCustomItemsTotal) / totalNetLF : 0;
 
   const fenceRunMaterialTotal = calculatedSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
-  const customMaterialTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  const customMaterialTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
 
   const pricing = {
     runsPricing,
