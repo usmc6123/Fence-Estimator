@@ -994,232 +994,250 @@ Please structure the contract narrative with professional Markdown bold headers 
             ) : (
               <div className="space-y-4">
                 {customLineItems.map((item) => (
-                  <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col md:flex-row gap-4 items-start md:items-center">
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full">
-                      <div className="sm:col-span-1 md:col-span-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Title</label>
-                        <input
-                          type="text"
-                          value={item.title}
-                          placeholder="e.g. HOA Permit Processing"
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { title: e.target.value })}
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-american-blue outline-none focus:border-american-blue"
-                        />
+                  <div key={item.id} className="p-6 bg-white rounded-3xl border border-american-blue/10 shadow-sm transition-all hover:shadow-md">
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      {/* Primary Inputs */}
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="sm:col-span-1 md:col-span-1">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Title</label>
+                          <input
+                            type="text"
+                            value={item.title}
+                            placeholder="e.g. HOA Permit Processing"
+                            onChange={(e) => handleUpdateCustomLineItem(item.id, { title: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 md:col-span-2">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Description (Optional)</label>
+                          <input
+                            type="text"
+                            value={item.description || ''}
+                            placeholder="Brief details about this custom charge"
+                            onChange={(e) => handleUpdateCustomLineItem(item.id, { description: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-600 outline-none focus:border-american-blue focus:bg-white transition-all"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 md:col-span-1">
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Amount ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={item.amount || ''}
+                              placeholder="0.00"
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { amount: parseFloat(e.target.value) || 0 })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Pricing</label>
+                            <select
+                              value={item.pricingMode || 'standalone_charge'}
+                              onChange={(e) => {
+                                const newMode = e.target.value as 'standalone_charge' | 'bundled_price';
+                                if (item.pricingMode === 'bundled_price' && newMode === 'standalone_charge') {
+                                  if (confirm('Switching to Standalone Charge will restore linked costs to their normal pricing. Continue?')) {
+                                    handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
+                                  }
+                                } else {
+                                  handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
+                                }
+                              }}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2.5 text-[10px] font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all appearance-none"
+                            >
+                              <option value="standalone_charge">Standalone</option>
+                              <option value="bundled_price">Bundled</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
-                      <div className="sm:col-span-2 md:col-span-2">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Description (Optional)</label>
-                        <input
-                          type="text"
-                          value={item.description || ''}
-                          placeholder="Brief details about this custom charge"
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { description: e.target.value })}
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-600 outline-none focus:border-american-blue"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Amount ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.amount || ''}
-                          placeholder="0.00"
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { amount: parseFloat(e.target.value) || 0 })}
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Pricing Mode</label>
-                        <select
-                          value={item.pricingMode || 'standalone_charge'}
-                          onChange={(e) => {
-                            const newMode = e.target.value as 'standalone_charge' | 'bundled_price';
-                            if (item.pricingMode === 'bundled_price' && newMode === 'standalone_charge') {
-                              if (confirm('Switching to Standalone Charge will restore linked costs to their normal pricing. Continue?')) {
-                                handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
-                              }
-                            } else {
-                              handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
-                            }
-                          }}
-                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-american-blue outline-none focus:border-american-blue"
+
+                      {/* Config & Actions */}
+                      <div className="flex flex-wrap items-center gap-4 lg:pt-6 border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              id={`taxable-${item.id}`}
+                              checked={!!item.taxable}
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { taxable: e.target.checked })}
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                            />
+                            <label htmlFor={`taxable-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                              Taxable
+                            </label>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              id={`show-${item.id}`}
+                              checked={item.showOnContract}
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { showOnContract: e.target.checked })}
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                            />
+                            <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                              Show
+                            </label>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              id={`ppf-${item.id}`}
+                              checked={!!item.includeInPricePerFoot}
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { includeInPricePerFoot: e.target.checked })}
+                              className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
+                            />
+                            <label htmlFor={`ppf-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
+                              PPF
+                            </label>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteCustomLineItem(item.id)}
+                          className="p-2.5 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto"
+                          title="Delete line item"
                         >
-                          <option value="standalone_charge">Standalone Charge</option>
-                          <option value="bundled_price">Bundled Price</option>
-                        </select>
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 w-full md:w-auto md:self-end md:mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          id={`taxable-${item.id}`}
-                          checked={!!item.taxable}
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { taxable: e.target.checked })}
-                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
-                        />
-                        <label htmlFor={`taxable-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
-                          Taxable
-                        </label>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          id={`show-${item.id}`}
-                          checked={item.showOnContract}
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { showOnContract: e.target.checked })}
-                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
-                        />
-                        <label htmlFor={`show-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
-                          Show on Contract
-                        </label>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          id={`ppf-${item.id}`}
-                          checked={!!item.includeInPricePerFoot}
-                          onChange={(e) => handleUpdateCustomLineItem(item.id, { includeInPricePerFoot: e.target.checked })}
-                          className="rounded border-slate-300 text-american-blue focus:ring-american-blue h-3.5 w-3.5"
-                        />
-                        <label htmlFor={`ppf-${item.id}`} className="text-[10px] font-black uppercase tracking-wider text-slate-500 cursor-pointer select-none">
-                          Include in PPF
-                        </label>
-                      </div>
-
-                      <button
-                        onClick={() => handleDeleteCustomLineItem(item.id)}
-                        className="p-2 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto md:ml-0"
-                        title="Delete line item"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
 
                     {/* Bundle Internal Costs Section */}
-                    <div className="w-full mt-4 pt-4 border-t border-slate-200">
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Layers size={14} className="text-american-blue" />
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-american-blue">Bundle Internal Costs</h4>
-                        </div>
+                    {item.pricingMode === 'bundled_price' && (
+                      <div className="w-full mt-6 pt-6 border-t border-slate-200">
+                        <div className="flex flex-col gap-5">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Layers size={16} className="text-american-blue" />
+                            <h4 className="text-[11px] font-black uppercase tracking-widest text-american-blue">Bundle Internal Costs</h4>
+                          </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Labor Linking */}
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Linked Custom Labor</label>
-                            <div className="space-y-2">
-                              {(estimate.customLaborItems || []).map(labor => (
-                                <div key={labor.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={labor.parentBundleId === item.id}
-                                      disabled={!!labor.parentBundleId && labor.parentBundleId !== item.id}
-                                      onChange={(e) => {
-                                        const updatedLabor = (estimate.customLaborItems || []).map(l => 
-                                          l.id === labor.id ? { ...l, parentBundleId: e.target.checked ? item.id : undefined } : l
-                                        );
-                                        onUpdateEstimate?.({ customLaborItems: updatedLabor });
-                                      }}
-                                      className="rounded border-slate-300 text-american-blue h-3.5 w-3.5"
-                                    />
-                                    <span className="text-xs font-bold text-slate-700">{labor.name}</span>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Labor Linking */}
+                            <div className="space-y-4">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Linked Custom Labor</label>
+                              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                {(estimate.customLaborItems || []).map(labor => (
+                                  <div key={labor.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 hover:border-american-blue/20 transition-all">
+                                    <div className="flex items-center gap-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={labor.parentBundleId === item.id}
+                                        disabled={!!labor.parentBundleId && labor.parentBundleId !== item.id}
+                                        onChange={(e) => {
+                                          const updatedLabor = (estimate.customLaborItems || []).map(l => 
+                                            l.id === labor.id ? { ...l, parentBundleId: e.target.checked ? item.id : undefined } : l
+                                          );
+                                          onUpdateEstimate?.({ customLaborItems: updatedLabor });
+                                        }}
+                                        className="rounded-md border-slate-300 text-american-blue h-4 w-4"
+                                      />
+                                      <span className="text-xs font-bold text-slate-700">{labor.name}</span>
+                                    </div>
+                                    <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(labor.cost)}</span>
                                   </div>
-                                  <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(labor.cost)}</span>
-                                </div>
-                              ))}
-                              {(estimate.customLaborItems || []).length === 0 && (
-                                <p className="text-[10px] text-slate-400 italic">No custom labor items available. Add them in the Labor section.</p>
-                              )}
+                                ))}
+                                {(estimate.customLaborItems || []).length === 0 && (
+                                  <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-center">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase">No custom labor items available</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Material Linking */}
+                            <div className="space-y-4">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block px-1">Linked Custom Materials</label>
+                              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                                {data.manualSummary.map(mat => (
+                                  <div key={mat.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 hover:border-american-blue/20 transition-all">
+                                    <div className="flex items-center gap-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={estimate.manualParentBundleIds?.[mat.id] === item.id}
+                                        disabled={!!estimate.manualParentBundleIds?.[mat.id] && estimate.manualParentBundleIds?.[mat.id] !== item.id}
+                                        onChange={(e) => {
+                                          const currentMap = estimate.manualParentBundleIds || {};
+                                          const updatedMap = { ...currentMap };
+                                          if (e.target.checked) {
+                                            updatedMap[mat.id] = item.id;
+                                          } else {
+                                            delete updatedMap[mat.id];
+                                          }
+                                          onUpdateEstimate?.({ manualParentBundleIds: updatedMap });
+                                        }}
+                                        className="rounded-md border-slate-300 text-american-blue h-4 w-4"
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-700">{mat.name}</span>
+                                        <span className="text-[9px] text-slate-400 font-medium">{mat.qty} {mat.unit}</span>
+                                      </div>
+                                    </div>
+                                    <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
+                                  </div>
+                                ))}
+                                {data.manualSummary.length === 0 && (
+                                  <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-center">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase">No manual materials available</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {/* Material Linking */}
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Linked Custom Materials</label>
-                            <div className="space-y-2">
-                              {data.manualSummary.map(mat => (
-                                <div key={mat.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={estimate.manualParentBundleIds?.[mat.id] === item.id}
-                                      disabled={!!estimate.manualParentBundleIds?.[mat.id] && estimate.manualParentBundleIds?.[mat.id] !== item.id}
-                                      onChange={(e) => {
-                                        const currentMap = estimate.manualParentBundleIds || {};
-                                        const updatedMap = { ...currentMap };
-                                        if (e.target.checked) {
-                                          updatedMap[mat.id] = item.id;
-                                        } else {
-                                          delete updatedMap[mat.id];
-                                        }
-                                        onUpdateEstimate?.({ manualParentBundleIds: updatedMap });
-                                      }}
-                                      className="rounded border-slate-300 text-american-blue h-3.5 w-3.5"
-                                    />
-                                    <span className="text-xs font-bold text-slate-700">{mat.name} ({mat.qty} {mat.unit})</span>
+                          {/* Internal Cost Summary */}
+                          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 grid grid-cols-2 md:grid-cols-5 gap-6">
+                            {(() => {
+                              const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === item.id);
+                              const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
+                              
+                              const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
+                                .filter(([_, bundleId]) => bundleId === item.id)
+                                .map(([id, _]) => id);
+                              const linkedMats = data.manualSummary.filter(m => linkedMatIds.includes(m.id));
+                              const linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
+                              
+                              const totalCost = linkedLaborCost + linkedMatCost;
+                              const profit = item.amount - totalCost;
+                              const margin = item.amount > 0 ? (profit / item.amount) * 100 : 0;
+
+                              return (
+                                <>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Labor Cost</p>
+                                    <p className="text-base font-black text-american-blue">{formatCurrency(linkedLaborCost)}</p>
                                   </div>
-                                  <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
-                                </div>
-                              ))}
-                              {data.manualSummary.length === 0 && (
-                                <p className="text-[10px] text-slate-400 italic">No manual materials available. Add them in the Summary section.</p>
-                              )}
-                            </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Material Cost</p>
+                                    <p className="text-base font-black text-american-blue">{formatCurrency(linkedMatCost)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Total Cost</p>
+                                    <p className="text-base font-black text-american-blue">{formatCurrency(totalCost)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Gross Profit</p>
+                                    <p className={`text-base font-black ${profit >= 0 ? 'text-emerald-600' : 'text-american-red'}`}>
+                                      {formatCurrency(profit)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Margin (%)</p>
+                                    <p className={`text-base font-black ${margin >= 30 ? 'text-emerald-600' : (margin >= 0 ? 'text-amber-500' : 'text-american-red')}`}>
+                                      {margin.toFixed(2)}%
+                                    </p>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
-                        </div>
-
-                        {/* Internal Cost Summary */}
-                        <div className="bg-white p-4 rounded-2xl border border-slate-200 grid grid-cols-2 md:grid-cols-5 gap-4">
-                          {(() => {
-                            const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === item.id);
-                            const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
-                            
-                            const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
-                              .filter(([_, bundleId]) => bundleId === item.id)
-                              .map(([id, _]) => id);
-                            const linkedMats = data.manualSummary.filter(m => linkedMatIds.includes(m.id));
-                            const linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
-                            
-                            const totalCost = linkedLaborCost + linkedMatCost;
-                            const profit = item.amount - totalCost;
-                            const margin = item.amount > 0 ? (profit / item.amount) * 100 : 0;
-
-                            return (
-                              <>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Labor Cost</p>
-                                  <p className="text-sm font-black text-american-blue">{formatCurrency(linkedLaborCost)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Cost</p>
-                                  <p className="text-sm font-black text-american-blue">{formatCurrency(linkedMatCost)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Cost</p>
-                                  <p className="text-sm font-black text-american-blue">{formatCurrency(totalCost)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Profit</p>
-                                  <p className={`text-sm font-black ${profit >= 0 ? 'text-emerald-600' : 'text-american-red'}`}>
-                                    {formatCurrency(profit)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Margin (%)</p>
-                                  <p className={`text-sm font-black ${margin >= 30 ? 'text-emerald-600' : (margin >= 0 ? 'text-amber-500' : 'text-american-red')}`}>
-                                    {margin.toFixed(2)}%
-                                  </p>
-                                </div>
-                              </>
-                            );
-                          })()}
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
