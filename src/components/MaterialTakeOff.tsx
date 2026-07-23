@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Printer, Eye, EyeOff, FileText, ChevronDown, ChevronRight, 
   Package, Hammer, Trash2, Settings as SettingsIcon, ExternalLink,
-  Plus, Search, X, AlertTriangle, Clock, ClipboardList, CheckCircle2
+  Plus, Search, X, AlertTriangle, Clock, ClipboardList, CheckCircle2,
+  ShieldCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote, User } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
@@ -38,9 +39,10 @@ interface MaterialTakeOffProps {
   setEstimate: (estimate: Partial<Estimate>) => void;
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   user: User | null;
+  onRefreshMaterials?: () => void;
 }
 
-export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user }: MaterialTakeOffProps) {
+export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user, onRefreshMaterials }: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
   const [editingGate, setEditingGate] = React.useState<{ runIndex: number, gateIndex: number, gateId: string } | null>(null);
@@ -146,6 +148,38 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
   const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, laborRates);
 
+  const [pricingItem, setPricingItem] = React.useState<MaterialItem | null>(null);
+  const [isUpdatingPrice, setIsUpdatingPrice] = React.useState(false);
+
+  const handleUpdateLibraryPrice = async (materialId: string, newPrice: number) => {
+    setIsUpdatingPrice(true);
+    const token = localStorage.getItem('company_admin_token');
+    try {
+      const response = await fetch('/api/materials/list', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          id: materialId,
+          cost: newPrice,
+          pricingStatus: 'Verified',
+          libraryPriceSourceType: 'manual'
+        })
+      });
+
+      if (response.ok) {
+        if (onRefreshMaterials) onRefreshMaterials();
+        setPricingItem(null);
+      }
+    } catch (err) {
+      console.error('Failed to update library price:', err);
+    } finally {
+      setIsUpdatingPrice(false);
+    }
+  };
+
   const getPriceStatusLocal = (lastUpdate?: string) => {
     if (!lastUpdate) return 'generic' as const;
     const updateDate = new Date(lastUpdate);
@@ -157,6 +191,17 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
   const renderPriceStatusBadge = (item: { id: string; name: string }) => {
     const orig = materials.find(m => m.id === item.id || m.name.toLowerCase() === item.name.toLowerCase());
+    
+    // Check if it specifically needs pricing
+    if (orig?.pricingStatus === 'Needs Pricing' || (orig && orig.cost === 0)) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-american-red/10 text-american-red text-[8px] font-black uppercase tracking-widest border border-american-red/20" title="This item has no price in the library. Update it in the Catalog.">
+          <span className="h-1.5 w-1.5 rounded-full bg-american-red" />
+          Needs Pricing
+        </span>
+      );
+    }
+
     let status: 'fresh' | 'stale' | 'generic' = 'generic';
     let title = 'Generic/Legacy price (never updated)';
     if (orig && orig.lastPriceUpdate) {
@@ -855,7 +900,32 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                       )}
                                     </td>
                                   <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
-                                  {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
+                                  {showPrices && (
+                                    <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">
+                                      {item.unitCost === 0 ? (
+                                        <button 
+                                          onClick={() => {
+                                            const m = materials.find(m => m.id === item.id);
+                                            if (m) setPricingItem(m);
+                                            else {
+                                              setPricingItem({
+                                                id: item.id,
+                                                name: item.name,
+                                                cost: 0,
+                                                unit: item.unit,
+                                                category: item.category
+                                              } as any);
+                                            }
+                                          }}
+                                          className="text-[9px] font-black uppercase text-american-red hover:underline"
+                                        >
+                                          Set Library Price
+                                        </button>
+                                      ) : (
+                                        formatCurrency(item.unitCost)
+                                      )}
+                                    </td>
+                                  )}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px] print:hidden">+{formatCurrency(unitTax)}</td>}
                                   {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue print:hidden">{formatCurrency(sellingPrice)}</td>}
@@ -933,7 +1003,32 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
                                         )}
                                       </td>
                                       <td className="px-6 py-4 text-[10px] uppercase font-black tracking-widest text-[#999999]">{item.unit}</td>
-                                      {showPrices && <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">{formatCurrency(item.unitCost)}</td>}
+                                      {showPrices && (
+                                        <td className="px-6 py-4 text-right tabular-nums text-[#666666] print:hidden">
+                                          {item.unitCost === 0 ? (
+                                            <button 
+                                              onClick={() => {
+                                                const m = materials.find(m => m.id === item.id);
+                                                if (m) setPricingItem(m);
+                                                else {
+                                                  setPricingItem({
+                                                    id: item.id,
+                                                    name: item.name,
+                                                    cost: 0,
+                                                    unit: item.unit,
+                                                    category: item.category
+                                                  } as any);
+                                                }
+                                              }}
+                                              className="text-[9px] font-black uppercase text-american-red hover:underline"
+                                            >
+                                              Set Library Price
+                                            </button>
+                                          ) : (
+                                            formatCurrency(item.unitCost)
+                                          )}
+                                        </td>
+                                      )}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-red/60 text-[10px] print:hidden">+{formatCurrency(unitMarkup)}</td>}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums text-american-blue/60 text-[10px] print:hidden">+{formatCurrency(unitTax)}</td>}
                                       {showPrices && <td className="px-6 py-4 text-right tabular-nums font-black text-american-blue print:hidden">{formatCurrency(sellingPrice)}</td>}
@@ -1691,6 +1786,75 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
               >
                 Confirm & Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Price Update Modal */}
+      {pricingItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-american-blue/40 backdrop-blur-sm animate-in fade-in duration-300 print:hidden">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden border-4 border-american-blue/5">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-american-red/10 text-american-red flex items-center justify-center">
+                    <AlertCircle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Update Library</h3>
+                    <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Global Catalog Price</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setPricingItem(null)}
+                  className="p-2 hover:bg-[#F5F5F7] rounded-full transition-colors"
+                >
+                  <X size={20} className="text-[#CCCCCC]" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-american-blue/5 rounded-2xl border border-american-blue/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-american-blue/40 mb-1">Item Identfied</p>
+                  <p className="text-sm font-bold text-american-blue leading-tight">{pricingItem.name}</p>
+                  <p className="text-[9px] font-bold text-[#999999] uppercase tracking-widest mt-1">{pricingItem.id}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#999999] ml-1">New Library Cost ($ per {pricingItem.unit})</label>
+                  <input
+                    autoFocus
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = parseFloat((e.target as HTMLInputElement).value);
+                        if (!isNaN(val)) handleUpdateLibraryPrice(pricingItem.id, val);
+                      }
+                    }}
+                    className="w-full px-5 py-4 bg-[#F5F5F7] border-none rounded-2xl text-xl font-black text-american-blue placeholder:text-[#CCCCCC] focus:ring-4 focus:ring-american-blue/5 outline-none transition-all"
+                  />
+                </div>
+
+                <p className="text-[10px] font-bold text-gray-400 italic text-center px-4 leading-relaxed">
+                  Saving this price will update the master catalog. All future estimates using this item will use this price.
+                </p>
+
+                <button
+                  onClick={() => {
+                    const input = document.querySelector('input[type="number"]') as HTMLInputElement;
+                    const val = parseFloat(input.value);
+                    if (!isNaN(val)) handleUpdateLibraryPrice(pricingItem.id, val);
+                  }}
+                  disabled={isUpdatingPrice}
+                  className="w-full py-4 bg-american-blue text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-american-blue/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isUpdatingPrice ? <RefreshCw size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                  {isUpdatingPrice ? 'Updating Catalog...' : 'Update Master Library'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

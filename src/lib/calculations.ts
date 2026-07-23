@@ -1585,15 +1585,16 @@ export function calculateDetailedTakeOff(
         const mat = materials.find(m => m.id === id);
         if (mat) return mat;
         
-        // If not found in library, return a "Needs Pricing" placeholder instead of "MISSING"
+        // If not found in library, return a standardized record with Needs Pricing status.
+        // This should be rare as we now ensure all chain-link components exist in the library.
         return {
           id,
-          name: `${fallbackName} (Not in Library)`,
+          name: fallbackName,
           cost: 0,
           unit: 'each',
           category: 'Hardware',
-          isMissing: true,
-          priceStatus: 'Needs Pricing'
+          pricingStatus: 'Needs Pricing',
+          priceSource: 'Not Yet Priced'
         } as any;
       };
 

@@ -19,6 +19,7 @@ export interface MaterialItem {
   packageQuantity?: number; // Quantity per package (e.g., 80 for hog rings)
   finish?: 'galvanized' | 'black';
   isMaterialItem?: boolean; // Flag to show on crew checklist
+  pricingStatus?: 'Needs Pricing';
   
   // Price Source Metadata
   libraryPriceSourceType?: 'manual' | 'supplier_quote' | 'legacy_import' | 'unknown';

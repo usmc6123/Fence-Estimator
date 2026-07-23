@@ -1348,6 +1348,7 @@ export default function App() {
               }}
               currentUser={user}
               isAdminVerifying={isAdminVerifying}
+              onRefreshMaterials={fetchMaterials}
             />
           )}
         </motion.div>

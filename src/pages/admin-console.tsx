@@ -43,9 +43,10 @@ interface AdminConsoleProps {
   currentUser: User | null;
   materials: MaterialItem[];
   isAdminVerifying?: boolean;
+  onRefreshMaterials?: () => void;
 }
 
-export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, materials, isAdminVerifying = false }: AdminConsoleProps) {
+export default function AdminConsole({ adminToken, setAdminToken, onNavigate, currentUser, materials, isAdminVerifying = false, onRefreshMaterials }: AdminConsoleProps) {
   if (!currentUser?.isAdmin) {
     return <AccessDenied />;
   }
@@ -157,7 +158,7 @@ export default function AdminConsole({ adminToken, setAdminToken, onNavigate, cu
       case 'tiers':
         return <AdminSubscriptionTiers users={users} />;
       case 'catalog':
-        return <AdminCatalogValidation materials={materials} />;
+        return <AdminCatalogValidation materials={materials} onRefresh={onRefreshMaterials} />;
       case 'settings':
         return (
           <AdminSettings 

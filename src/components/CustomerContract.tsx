@@ -1298,18 +1298,18 @@ Please structure the contract narrative with professional Markdown bold headers 
                         <>
                           <div className="space-y-3 pt-4 border-t border-[#F5F5F5]">
                             <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Installation</span>
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence</span>
                               <div className="flex items-center gap-1">
                                 {isCustomerView ? (
                                   <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(runPricing.finalFence)}
+                                    {formatCurrency(runPricing.finalFence + runPricing.finalStain)}
                                   </span>
                                 ) : (
                                   <>
                                     <span className="text-xs font-bold text-american-blue">$</span>
                                     <input 
                                       type="number" 
-                                      value={runPricing.finalFence.toFixed(2)}
+                                      value={(runPricing.finalFence + runPricing.finalStain).toFixed(2)}
                                       onChange={(e) => {
                                         const newVal = parseFloat(e.target.value) || 0;
                                         const newTotals = sectionTotals.length ? [...sectionTotals] : data.pricing.runsPricing.map(r => r.finalFence);
@@ -1317,42 +1317,6 @@ Please structure the contract narrative with professional Markdown bold headers 
                                         setSectionTotals(newTotals);
                                         if (onUpdateEstimate) {
                                           onUpdateEstimate({ manualSectionTotals: newTotals });
-                                        }
-                                      }}
-                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Fence Staining</span>
-                              <span className="font-bold text-american-blue text-xs">
-                                {formatCurrency(runPricing.finalStain)}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-between items-center group">
-                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo</span>
-                              <div className="flex items-center gap-1">
-                                {isCustomerView ? (
-                                  <span className="font-bold text-american-blue text-xs">
-                                    {formatCurrency(runPricing.finalDemo)}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="text-xs font-bold text-american-blue">$</span>
-                                    <input 
-                                      type="number" 
-                                      value={runPricing.finalDemo.toFixed(2)}
-                                      onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
-                                        const newTotals = demoTotals.length ? [...demoTotals] : data.pricing.runsPricing.map(r => r.finalDemo);
-                                        newTotals[i] = newVal;
-                                        setDemoTotals(newTotals);
-                                        if (onUpdateEstimate) {
-                                          onUpdateEstimate({ manualDemoTotals: newTotals });
                                         }
                                       }}
                                       className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
@@ -1390,10 +1354,39 @@ Please structure the contract narrative with professional Markdown bold headers 
                                 )}
                               </div>
                             </div>
+
+                            <div className="flex justify-between items-center group">
+                              <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Demo</span>
+                              <div className="flex items-center gap-1">
+                                {isCustomerView ? (
+                                  <span className="font-bold text-american-blue text-xs">
+                                    {formatCurrency(runPricing.finalDemo)}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-american-blue">$</span>
+                                    <input 
+                                      type="number" 
+                                      value={runPricing.finalDemo.toFixed(2)}
+                                      onChange={(e) => {
+                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const newTotals = demoTotals.length ? [...demoTotals] : data.pricing.runsPricing.map(r => r.finalDemo);
+                                        newTotals[i] = newVal;
+                                        setDemoTotals(newTotals);
+                                        if (onUpdateEstimate) {
+                                          onUpdateEstimate({ manualDemoTotals: newTotals });
+                                        }
+                                      }}
+                                      className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
                           <div className="mt-auto pt-4 border-t-2 border-american-blue/5 flex justify-between items-center bg-american-blue/5 -mx-6 -mb-6 px-6 py-4 rounded-b-2xl">
-                            <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Run Total</span>
+                            <span className="text-[10px] font-black text-american-blue uppercase tracking-widest">Run subtotal</span>
                             <span className="font-black text-american-blue text-lg">
                               {formatCurrency(runPricing.totalSection)}
                             </span>
