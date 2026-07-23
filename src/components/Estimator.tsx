@@ -3175,6 +3175,15 @@ export default function Estimator({
                         </div>
                         <h4 className="text-[11px] font-bold text-[#1A1A1A] mb-2 line-clamp-1">{item.name}</h4>
                         
+                        {item.parentBundleId && (
+                          <div className="mb-2 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-[9px] font-bold text-amber-700">
+                              BUNDLED: {estimate.customContractLineItems?.find(b => b.id === item.parentBundleId)?.title || 'Custom Item'}
+                            </p>
+                            <p className="text-[8px] text-amber-600 font-medium">Internal cost only • Not charged separately</p>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2">
                           <div className="flex-1 space-y-0.5">
                             <label className="text-[8px] font-bold uppercase tracking-wider text-[#999999]">Qty</label>
@@ -3368,6 +3377,11 @@ export default function Estimator({
                         <td className="py-4">
                           <p className="font-bold text-sm">{item.name}</p>
                           <p className="text-[10px] text-[#999999] uppercase">{item.category}</p>
+                          {item.parentBundleId && (
+                            <p className="text-[9px] font-bold text-amber-600 mt-0.5">
+                              BUNDLED: {estimate.customContractLineItems?.find(b => b.id === item.parentBundleId)?.title || 'Custom Item'} (Internal cost only)
+                            </p>
+                          )}
                         </td>
                         <td className="py-4 text-center text-sm">{item.qty}</td>
                         <td className="py-4 text-right text-sm font-mono">{formatCurrency(item.unitCost)}</td>

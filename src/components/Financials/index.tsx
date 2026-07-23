@@ -366,6 +366,62 @@ function JobDetailView({ job, onBack, expenses }: { job: SavedEstimate, onBack: 
         </div>
       </div>
 
+      {/* Bundled Package Performance */}
+      {job.customContractLineItems && job.customContractLineItems.some(item => item.pricingMode === 'bundled_price') && (
+        <div className="bg-white rounded-3xl border-2 border-american-blue/5 shadow-sm p-8">
+          <div className="flex items-center gap-2 mb-6">
+            <Package size={18} className="text-american-red" />
+            <h3 className="text-lg font-black text-american-blue uppercase tracking-tight">Bundled Package Performance</h3>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {job.customContractLineItems
+              .filter(item => item.pricingMode === 'bundled_price')
+              .map(item => {
+                const linkedLabor = (job.customLaborItems || []).filter(l => l.parentBundleId === item.id);
+                const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
+                
+                // For materials, we need to approximate based on the manual quantities and their unit costs if available
+                // In a real scenario, we'd use the linkedMaterialItemIds or similar
+                // But the job object is a Snapshot. Let's check if snapshots have the linking info.
+                
+                const linkedMatIds = Object.entries(job.manualParentBundleIds || {})
+                  .filter(([_, bundleId]) => bundleId === item.id)
+                  .map(([mid]) => mid);
+                
+                // Assuming actual materials linked to this bundle would be found in expenses or in the estimate's summary
+                // For the "Estimated/Projected" view, we use the snapshot's data
+                
+                const totalCost = linkedLaborCost; // Plus materials if we can track them
+                const profit = item.amount - totalCost;
+
+                return (
+                  <div key={item.id} className="p-6 rounded-2xl bg-[#FBFBFB] border border-american-blue/5 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-black text-american-blue text-sm uppercase tracking-tight">{item.title}</h4>
+                      <span className="px-2 py-1 rounded-md bg-american-blue/10 text-american-blue text-[8px] font-black uppercase">Bundled</span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-bold">
+                        <span className="text-[#999999]">REVENUE</span>
+                        <span className="text-american-blue">{formatCurrency(item.amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] font-bold">
+                        <span className="text-[#999999]">LINKED LABOR COST</span>
+                        <span className="text-american-red">{formatCurrency(linkedLaborCost)}</span>
+                      </div>
+                      <div className="pt-2 border-t border-american-blue/5 flex justify-between items-baseline">
+                        <span className="text-[10px] font-black text-[#999999]">GROSS PROFIT</span>
+                        <span className="text-lg font-black text-emerald-600">{formatCurrency(profit)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="bg-white rounded-3xl border-2 border-american-blue/5 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-american-blue/5 flex items-center justify-between bg-[#FBFBFB]">

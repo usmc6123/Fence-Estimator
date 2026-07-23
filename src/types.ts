@@ -235,6 +235,9 @@ export interface CustomContractLineItem {
   taxable?: boolean;
   showOnContract: boolean;
   includeInPricePerFoot?: boolean;
+  pricingMode?: 'standalone_charge' | 'bundled_price';
+  linkedLaborItemIds?: string[];
+  linkedMaterialItemIds?: string[];
   sortOrder?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -332,6 +335,7 @@ export interface Estimate {
   deliveryFee: number;
   manualQuantities: Record<string, number>; // itemId -> qty
   manualPrices: Record<string, number>; // itemId -> price
+  manualParentBundleIds?: Record<string, string>; // itemId -> parentBundleId
   manualGrandTotal?: number | null;
   manualSectionTotals?: (number | null)[];
   manualGateTotals?: (number | null)[];
@@ -405,7 +409,12 @@ export interface Estimate {
 
   // Supplier Quotes
   quotes?: SupplierQuote[];
-  customLaborItems?: { id: string; name: string; cost: number }[];
+  customLaborItems?: { 
+    id: string; 
+    name: string; 
+    cost: number;
+    parentBundleId?: string; // Link to CustomContractLineItem id
+  }[];
   photos?: JobPhoto[];
   diagrams?: JobDiagram[];
 

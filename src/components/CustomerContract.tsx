@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2 } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2, Layers } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote, CustomContractLineItem } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency, getEstimateFinalPrice } from '../lib/utils';
@@ -162,6 +162,34 @@ export default function CustomerContract({
   };
 
   const handleDeleteCustomLineItem = (id: string) => {
+    const item = customLineItems.find(i => i.id === id);
+    if (!item) return;
+
+    const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === id);
+    const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
+      .filter(([_, bundleId]) => bundleId === id)
+      .map(([mid]) => mid);
+
+    if (linkedLabor.length > 0 || linkedMatIds.length > 0) {
+      if (!confirm(`This bundle has linked costs. Deleting the bundle will unlink these costs and restore them to normal pricing. Continue?`)) {
+        return;
+      }
+      
+      // Unlink labor
+      const updatedLabor = (estimate.customLaborItems || []).map(l => 
+        l.parentBundleId === id ? { ...l, parentBundleId: undefined } : l
+      );
+      
+      // Unlink materials
+      const updatedMatMap = { ...(estimate.manualParentBundleIds || {}) };
+      linkedMatIds.forEach(mid => delete updatedMatMap[mid]);
+      
+      onUpdateEstimate?.({ 
+        customLaborItems: updatedLabor,
+        manualParentBundleIds: updatedMatMap
+      });
+    }
+
     const updated = customLineItems.filter(item => item.id !== id);
     setCustomLineItems(updated);
     setHasUnsavedChanges(true);
@@ -999,9 +1027,29 @@ Please structure the contract narrative with professional Markdown bold headers 
                           className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-american-blue outline-none focus:border-american-blue"
                         />
                       </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Pricing Mode</label>
+                        <select
+                          value={item.pricingMode || 'standalone_charge'}
+                          onChange={(e) => {
+                            const newMode = e.target.value as 'standalone_charge' | 'bundled_price';
+                            if (item.pricingMode === 'bundled_price' && newMode === 'standalone_charge') {
+                              if (confirm('Switching to Standalone Charge will restore linked costs to their normal pricing. Continue?')) {
+                                handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
+                              }
+                            } else {
+                              handleUpdateCustomLineItem(item.id, { pricingMode: newMode });
+                            }
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-american-blue outline-none focus:border-american-blue"
+                        >
+                          <option value="standalone_charge">Standalone Charge</option>
+                          <option value="bundled_price">Bundled Price</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-4 w-full md:w-auto md:self-end md:mb-1">
+                    <div className="flex flex-wrap items-center gap-4 w-full md:w-auto md:self-end md:mb-1">
                       <div className="flex items-center gap-1.5">
                         <input
                           type="checkbox"
@@ -1048,6 +1096,129 @@ Please structure the contract narrative with professional Markdown bold headers 
                       >
                         <Trash2 size={16} />
                       </button>
+                    </div>
+
+                    {/* Bundle Internal Costs Section */}
+                    <div className="w-full mt-4 pt-4 border-t border-slate-200">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Layers size={14} className="text-american-blue" />
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-american-blue">Bundle Internal Costs</h4>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Labor Linking */}
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Linked Custom Labor</label>
+                            <div className="space-y-2">
+                              {(estimate.customLaborItems || []).map(labor => (
+                                <div key={labor.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={labor.parentBundleId === item.id}
+                                      disabled={!!labor.parentBundleId && labor.parentBundleId !== item.id}
+                                      onChange={(e) => {
+                                        const updatedLabor = (estimate.customLaborItems || []).map(l => 
+                                          l.id === labor.id ? { ...l, parentBundleId: e.target.checked ? item.id : undefined } : l
+                                        );
+                                        onUpdateEstimate?.({ customLaborItems: updatedLabor });
+                                      }}
+                                      className="rounded border-slate-300 text-american-blue h-3.5 w-3.5"
+                                    />
+                                    <span className="text-xs font-bold text-slate-700">{labor.name}</span>
+                                  </div>
+                                  <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(labor.cost)}</span>
+                                </div>
+                              ))}
+                              {(estimate.customLaborItems || []).length === 0 && (
+                                <p className="text-[10px] text-slate-400 italic">No custom labor items available. Add them in the Labor section.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Material Linking */}
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Linked Custom Materials</label>
+                            <div className="space-y-2">
+                              {data.manualSummary.map(mat => (
+                                <div key={mat.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={estimate.manualParentBundleIds?.[mat.id] === item.id}
+                                      disabled={!!estimate.manualParentBundleIds?.[mat.id] && estimate.manualParentBundleIds?.[mat.id] !== item.id}
+                                      onChange={(e) => {
+                                        const currentMap = estimate.manualParentBundleIds || {};
+                                        const updatedMap = { ...currentMap };
+                                        if (e.target.checked) {
+                                          updatedMap[mat.id] = item.id;
+                                        } else {
+                                          delete updatedMap[mat.id];
+                                        }
+                                        onUpdateEstimate?.({ manualParentBundleIds: updatedMap });
+                                      }}
+                                      className="rounded border-slate-300 text-american-blue h-3.5 w-3.5"
+                                    />
+                                    <span className="text-xs font-bold text-slate-700">{mat.name} ({mat.qty} {mat.unit})</span>
+                                  </div>
+                                  <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
+                                </div>
+                              ))}
+                              {data.manualSummary.length === 0 && (
+                                <p className="text-[10px] text-slate-400 italic">No manual materials available. Add them in the Summary section.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Internal Cost Summary */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 grid grid-cols-2 md:grid-cols-5 gap-4">
+                          {(() => {
+                            const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === item.id);
+                            const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
+                            
+                            const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
+                              .filter(([_, bundleId]) => bundleId === item.id)
+                              .map(([id, _]) => id);
+                            const linkedMats = data.manualSummary.filter(m => linkedMatIds.includes(m.id));
+                            const linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
+                            
+                            const totalCost = linkedLaborCost + linkedMatCost;
+                            const profit = item.amount - totalCost;
+                            const margin = item.amount > 0 ? (profit / item.amount) * 100 : 0;
+
+                            return (
+                              <>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Labor Cost</p>
+                                  <p className="text-sm font-black text-american-blue">{formatCurrency(linkedLaborCost)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Cost</p>
+                                  <p className="text-sm font-black text-american-blue">{formatCurrency(linkedMatCost)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Cost</p>
+                                  <p className="text-sm font-black text-american-blue">{formatCurrency(totalCost)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Profit</p>
+                                  <p className={`text-sm font-black ${profit >= 0 ? 'text-emerald-600' : 'text-american-red'}`}>
+                                    {formatCurrency(profit)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Margin (%)</p>
+                                  <p className={`text-sm font-black ${margin >= 30 ? 'text-emerald-600' : (margin >= 0 ? 'text-amber-500' : 'text-american-red')}`}>
+                                    {margin.toFixed(2)}%
+                                  </p>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}

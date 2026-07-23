@@ -12,6 +12,7 @@ export interface TakeOffItem {
   category: string;
   packageQuantity?: number;
   purchaseQty?: number;
+  parentBundleId?: string;
   formula?: string;
   originalPostName?: string;
   longerMatchingPostName?: string;
@@ -2524,7 +2525,8 @@ export function calculateDetailedTakeOff(
       const mat = materials.find(m => m.id === key || m.name === key);
       if (mat) {
         const unitCost = estimate.manualPrices?.[key] ?? mat.cost;
-        manualSummary.push(createTakeOffItem(mat, numericQty, mat.category, undefined, unitCost));
+        const parentBundleId = estimate.manualParentBundleIds?.[key];
+        manualSummary.push(createTakeOffItem(mat, numericQty, mat.category, undefined, unitCost, { parentBundleId }));
       }
     });
   }
@@ -2560,7 +2562,8 @@ export function calculateDetailedTakeOff(
         unit: 'each',
         unitCost: item.cost,
         total: item.cost,
-        category: 'Labor'
+        category: 'Labor',
+        parentBundleId: item.parentBundleId
       };
       allItems.push(customItem);
       extraLaborTakeoffItems.push(customItem);
@@ -2604,6 +2607,22 @@ export function calculateDetailedTakeOff(
   
   // deliveryFee is now included in totalLabor and subtotal
   const grandTotal = subtotal + markup + tax;
+
+  // Bundled logic: Identify items linked to a 'bundled_price' custom contract line item
+  const bundledPriceBundleIds = new Set(
+    (estimate.customContractLineItems || [])
+      .filter(b => b.pricingMode === 'bundled_price')
+      .map(b => b.id)
+  );
+
+  // revenueItems are items NOT linked to a bundled_price bundle
+  // These items are charged normally (cost + markup + tax) to the customer in the base fence price
+  const revenueItems = allItems.filter(i => !i.parentBundleId || !bundledPriceBundleIds.has(i.parentBundleId));
+
+  const totalMaterialRevenue = revenueItems.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+  const totalLaborRevenue = revenueItems.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
+  const totalDemoRevenue = revenueItems.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
+  const totalPrepRevenue = revenueItems.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
 
   // Append extraLaborTakeoffItems to the returned summary so they show up in the Subcontractor Labor Manifest
   const finalSummary = [...calculatedSummary, ...extraLaborTakeoffItems];
@@ -2675,8 +2694,8 @@ export function calculateDetailedTakeOff(
   // Discount
   const discountAmount = estimate.discountAmount || 0;
 
-  // Authoritative Grand Total from Takeoff (Materials + Labor + Demo + Prep + Markup + Tax)
-  const authoritativeGrandTotal = (totalMaterial + totalLabor + totalDemo + totalPrep) * markupFactor + (totalMaterial * taxFactor);
+  // Authoritative Grand Total from Takeoff (Excluding bundled price internal costs)
+  const authoritativeGrandTotal = (totalMaterialRevenue + totalLaborRevenue + totalDemoRevenue + totalPrepRevenue) * markupFactor + (totalMaterialRevenue * taxFactor);
 
   // Calculated overall base fence total (excluding custom contract line items)
   // This should match authoritativeGrandTotal minus discount
