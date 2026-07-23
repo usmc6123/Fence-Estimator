@@ -1806,111 +1806,285 @@ Please structure the contract narrative with professional Markdown bold headers 
 
               {/* Debug Pricing Breakdown (Visible on dev/admin view only) */}
               {!isCustomerView && (
-                <div id="debug-pricing-breakdown" className="mt-6 p-6 bg-slate-900 border border-slate-700 rounded-3xl text-slate-300 font-mono text-xs space-y-4 shadow-inner">
-                  <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider border-b border-slate-700 pb-2">
-                    <AlertCircle size={16} />
-                    <span>Debug Admin Pricing Source of Truth</span>
+                <div id="debug-pricing-breakdown" className="mt-8 p-8 bg-slate-950 border border-slate-800 rounded-[2rem] text-slate-300 font-mono text-xs space-y-8 shadow-2xl no-print">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-3 text-amber-400 font-black uppercase tracking-[0.2em]">
+                      <AlertCircle size={20} />
+                      <span>Debug Admin Pricing Source of Truth</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                      v2.0 Audit Clean
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-amber-500 font-bold border-b border-slate-800 pb-1">
-                      <span>Required Diagnoses</span>
-                      <span>Values</span>
-                    </div>
-                    <div className="flex justify-between text-white font-semibold">
-                      <span>Admin Displayed Total:</span>
-                      <span>{formatCurrency(finalProjectTotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Firestore finalCustomerPrice:</span>
-                      <span className="text-green-400">{estimate.finalCustomerPrice !== undefined && estimate.finalCustomerPrice !== null ? formatCurrency(Number(estimate.finalCustomerPrice)) : "undefined"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Firestore manualGrandTotal:</span>
-                      <span className="text-amber-300">{estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? formatCurrency(Number(estimate.manualGrandTotal)) : "undefined"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Firestore estimatedPrice:</span>
-                      <span>{estimate.estimatedPrice !== undefined && estimate.estimatedPrice !== null ? formatCurrency(Number(estimate.estimatedPrice)) : "undefined"}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800 pb-1.5 mb-1.5">
-                      <span>Firestore grandTotal:</span>
-                      <span>{estimate.grandTotal !== undefined && estimate.grandTotal !== null ? formatCurrency(Number(estimate.grandTotal)) : "undefined"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>contractSnapshot.finalCustomerPrice:</span>
-                      <span className="text-blue-400">{estimate.contractSnapshot?.finalCustomerPrice !== undefined ? formatCurrency(Number(estimate.contractSnapshot.finalCustomerPrice)) : "None (Not Sent)"}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-emerald-400 border-b border-slate-800 pb-1.5 mb-1.5">
-                      <span>Public Portal Displayed Total:</span>
-                      <span>{formatCurrency(getEstimateFinalPrice(estimate))}</span>
-                    </div>
-                    
-                    <div className="flex justify-between pt-1 font-semibold text-slate-400">
-                      <span>Sum of Run Section Totals:</span>
-                      <span className="text-white font-bold">{formatCurrency(data.pricing.totalSectionsSum)}</span>
-                    </div>
-                    {data.pricing.runsPricing.map((run, i) => (
-                      <div key={i} className="pl-4 flex justify-between text-slate-500 text-[11px]">
-                        <span>- Run {i + 1} ({run.runName || `Section ${i + 1}`}):</span>
-                        <span>Fence: {formatCurrency(run.finalFence)} | Gates: {formatCurrency(run.finalGate)} | Demo: {formatCurrency(run.finalDemo)} &rarr; Sub: {formatCurrency(run.totalSection)}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between mt-2 pt-2 border-t border-slate-800/80">
-                      <span className="text-slate-400">Site Prep Add-on (addOnSitePrepPrice):</span>
-                      <span className="text-white">{formatCurrency(data.pricing.addOnSitePrepPrice)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Demolition (demoRemovalPrice):</span>
-                      <span className="text-white">{formatCurrency(data.pricing.demoRemovalPrice)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Discount Amount:</span>
-                      <span className="text-white">-{formatCurrency(data.pricing.discountAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Additional Contract Line Items:</span>
-                      <span className="text-white">+{formatCurrency(customContractLineItemsTotal)}</span>
-                    </div>
-                    <div className="flex justify-between font-bold border-t border-slate-700/60 pt-2 text-amber-300">
-                      <span>Calculated Grand Total:</span>
-                      <span>{formatCurrency(data.pricing.calculatedTotal)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Manual Grand Total Override (Base Fence):</span>
-                      <span className="text-white">{data.pricing.manualGrandTotal !== null ? formatCurrency(data.pricing.manualGrandTotal) : "None (Using Calculated)"}</span>
-                    </div>
-                    <div className="flex justify-between font-extrabold border-t-2 border-slate-700/80 pt-2 text-green-400">
-                      <span>Final Customer Price:</span>
-                      <span>{formatCurrency(data.pricing.finalCustomerPrice)}</span>
-                    </div>
 
-                    <div className="mt-4 pt-4 border-t border-slate-700 space-y-1">
-                      <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Takeoff Material Breakdown</div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Fence Run Material Total:</span>
-                        <span className="text-white">{formatCurrency(data.pricing.fenceRunMaterialTotal || 0)}</span>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                    {/* CUSTOMER REVENUE SECTION */}
+                    <div className="space-y-6">
+                      <div className="text-sky-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                        Customer Revenue
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Custom Material Total:</span>
-                        <span className="text-white">{formatCurrency(data.pricing.customMaterialTotal || 0)}</span>
-                      </div>
-                      <div className="flex justify-between font-bold text-blue-300">
-                        <span className="text-slate-300">Material Takeoff Final Total (Incl. Markup/Tax):</span>
-                        <span>{formatCurrency(data.pricing.materialTakeoffFinalTotal || 0)}</span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-slate-500">Material Source:</span>
-                        <span className="text-slate-400">{data.pricing.customerContractMaterialSource}</span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-slate-500">Contract Displayed Material (Total):</span>
-                        <span className="text-slate-400">{formatCurrency(data.pricing.customerContractDisplayedMaterialTotal || 0)}</span>
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Fence Installation Total</span>
+                            <span className="text-white font-bold">{formatCurrency(data.pricing.baseFenceTotal)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.pricing.baseFenceTotal</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Additional Contract Items</span>
+                            <span className="text-white font-bold">{formatCurrency(customContractLineItemsTotal)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: customContractLineItemsTotal</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Discounts</span>
+                            <span className="text-rose-400 font-bold">-{formatCurrency(data.pricing.discountAmount)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.pricing.discountAmount</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Tax (Total)</span>
+                            <span className="text-white font-bold">{formatCurrency(data.totals.tax)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.totals.tax</span>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-800">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sky-400 font-black uppercase text-[11px]">Grand Total</span>
+                              <span className="text-sky-400 font-black text-lg">{formatCurrency(data.pricing.finalCustomerPrice)}</span>
+                            </div>
+                            <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.pricing.finalCustomerPrice</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex justify-between text-[11px] text-slate-500 pt-2">
-                      <span>Overall Price Per Foot:</span>
-                      <span>{formatCurrency(data.pricing.pricePerFoot)} / FT</span>
+                    {/* INTERNAL COSTS SECTION */}
+                    <div className="space-y-6">
+                      <div className="text-emerald-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Internal Costs
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Fence Material Cost</span>
+                            <span className="text-white font-bold">{formatCurrency(data.pricing.fenceRunMaterialTotal || 0)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.pricing.fenceRunMaterialTotal</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Custom Material Cost</span>
+                            <span className="text-white font-bold">{formatCurrency(data.pricing.customMaterialTotal || 0)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.pricing.customMaterialTotal</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Labor Cost</span>
+                            <span className="text-white font-bold">{formatCurrency(data.totals.labor)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.totals.labor</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Demo Cost</span>
+                            <span className="text-white font-bold">{formatCurrency(data.totals.demo)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.totals.demo</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[11px]">Other Internal Costs</span>
+                            <span className="text-white font-bold">{formatCurrency(data.totals.prep)}</span>
+                          </div>
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.totals.prep</span>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-800">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                              <span className="text-emerald-400 font-black uppercase text-[11px]">Total Job Cost</span>
+                              <span className="text-emerald-400 font-black text-lg">{formatCurrency(data.totals.subtotal)}</span>
+                            </div>
+                            <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">Source: data.totals.subtotal</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PROFITABILITY SECTION */}
+                    <div className="space-y-6">
+                      <div className="text-amber-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Profitability
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 text-[11px]">Customer Revenue</span>
+                          <span className="text-white font-bold">{formatCurrency(data.pricing.finalCustomerPrice)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 text-[11px]">Total Job Cost</span>
+                          <span className="text-white font-bold">{formatCurrency(data.totals.subtotal)}</span>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-slate-800">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                              <span className="text-amber-400 font-black uppercase text-[11px]">Gross Profit</span>
+                              <span className="text-emerald-400 font-black text-lg">{formatCurrency(data.pricing.finalCustomerPrice - data.totals.subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-1">
+                              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Gross Margin %</span>
+                              <span className="text-emerald-400 font-black text-sm">
+                                {data.pricing.finalCustomerPrice > 0 
+                                  ? (((data.pricing.finalCustomerPrice - data.totals.subtotal) / data.pricing.finalCustomerPrice) * 100).toFixed(1) 
+                                  : '0.0'}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* VERIFICATION & VALIDATION */}
+                  <div className="space-y-4 pt-8 border-t border-slate-800">
+                    <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                      Validation & Verification
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Check 1: Run Totals vs Fence Total */}
+                      {(() => {
+                        const expected = data.pricing.totalSectionsSum;
+                        const actual = data.pricing.baseFenceTotal || 0;
+                        const diff = Math.abs(expected - actual);
+                        const isPass = diff < 0.01;
+                        return (
+                          <div className={cn("p-4 rounded-2xl border transition-all", isPass ? "bg-emerald-400/5 border-emerald-400/20" : "bg-rose-400/5 border-rose-400/20")}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Run Totals Match Fence Total</span>
+                              <span className={cn("text-[10px] font-black uppercase px-2 py-0.5 rounded-full", isPass ? "bg-emerald-400/20 text-emerald-400" : "bg-rose-400/20 text-rose-400")}>
+                                {isPass ? 'PASS' : 'FAIL'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block uppercase tracking-tighter text-[9px]">Expected (Sum of Runs)</span>
+                                <span className="text-white font-bold">{formatCurrency(expected)}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block uppercase tracking-tighter text-[9px]">Actual (Base Total)</span>
+                                <span className="text-white font-bold">{formatCurrency(actual)}</span>
+                              </div>
+                            </div>
+                            {!isPass && (
+                              <div className="mt-2 text-rose-400 text-[10px] font-bold border-t border-rose-400/10 pt-2">
+                                Difference: {formatCurrency(diff)} | Check markup/tax application on runs vs total.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Check 2: Contract Total Matches Final Price */}
+                      {(() => {
+                        const expected = (data.pricing.baseFenceTotal || 0) + customContractLineItemsTotal;
+                        const actual = data.pricing.finalCustomerPrice;
+                        const diff = Math.abs(expected - actual);
+                        const isPass = diff < 0.01;
+                        return (
+                          <div className={cn("p-4 rounded-2xl border transition-all", isPass ? "bg-emerald-400/5 border-emerald-400/20" : "bg-rose-400/5 border-rose-400/20")}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Contract Total Matches Final Price</span>
+                              <span className={cn("text-[10px] font-black uppercase px-2 py-0.5 rounded-full", isPass ? "bg-emerald-400/20 text-emerald-400" : "bg-rose-400/20 text-rose-400")}>
+                                {isPass ? 'PASS' : 'FAIL'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block uppercase tracking-tighter text-[9px]">Expected (Sum vs Items)</span>
+                                <span className="text-white font-bold">{formatCurrency(expected)}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block uppercase tracking-tighter text-[9px]">Actual (Final Price)</span>
+                                <span className="text-white font-bold">{formatCurrency(actual)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* RUN-BY-RUN BREAKDOWN */}
+                  <div className="space-y-4 pt-8 border-t border-slate-800">
+                    <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                      Run-by-Run Revenue Breakdown
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {data.pricing.runsPricing.map((run, i) => (
+                        <div key={i} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex flex-col">
+                              <span className="text-sky-400 font-black uppercase tracking-tight text-[11px]">{run.runName || `Run ${i + 1}`}</span>
+                              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{run.netLF.toFixed(1)}' • Source: runsPricing[{i}]</span>
+                            </div>
+                            <span className="text-sky-400 font-black text-sm">{formatCurrency(run.totalSection)}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 border-t border-slate-800/50 pt-2">
+                            <div className="flex flex-col">
+                              <span className="text-[8px] text-slate-500 uppercase font-black">Fence</span>
+                              <span className="text-[10px] font-bold text-slate-300">{formatCurrency(run.finalFence)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[8px] text-slate-500 uppercase font-black">Gate</span>
+                              <span className="text-[10px] font-bold text-slate-300">{formatCurrency(run.finalGate)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[8px] text-slate-500 uppercase font-black">Demo</span>
+                              <span className="text-[10px] font-bold text-slate-300">{formatCurrency(run.finalDemo)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FIRESTORE SYNC MONITOR */}
+                  <div className="space-y-4 pt-8 border-t border-slate-800">
+                    <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                      Firestore Sync Monitor (Data Source Validation)
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800 space-y-2">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">estimate.finalCustomerPrice</span>
+                        <span className="text-white font-bold block">{estimate.finalCustomerPrice !== undefined ? formatCurrency(Number(estimate.finalCustomerPrice)) : "UNDEFINED"}</span>
+                      </div>
+                      <div className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800 space-y-2">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">estimate.manualGrandTotal</span>
+                        <span className="text-amber-400 font-bold block">{estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? formatCurrency(Number(estimate.manualGrandTotal)) : "NULL (Calculated)"}</span>
+                      </div>
+                      <div className="bg-slate-900/40 p-4 rounded-2xl border border-slate-800 space-y-2">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">contractSnapshot Display</span>
+                        <span className="text-sky-400 font-bold block">{estimate.contractSnapshot?.finalCustomerPrice !== undefined ? formatCurrency(Number(estimate.contractSnapshot.finalCustomerPrice)) : "NO SNAPSHOT"}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2034,12 +2208,13 @@ Please structure the contract narrative with professional Markdown bold headers 
                 { title: "10. Spoil Haul-Off", content: "Spoil removal (excavated dirt, concrete, etc.) is not included in the base estimate. LSFW offers spoil haul-off for an additional fee that varies depending on the scope of the job, upon request." },
                 { title: "11. Fence Length Tolerance", content: "All fence length estimates include a tolerance of ±5 feet. Final pricing may reflect minor adjustments based on actual field measurements." },
                 { title: "12. Weather Delays", content: "In the event of rain or inclement weather, the scheduled job date may be delayed. Each weather day may result in up to a 2-day delay to the original schedule." },
-                { title: "13. Fence Clearance & Swing Gap", content: "Due to natural variations in terrain, a gap of up to 3 inches between the bottom of the fence and the ground may be necessary for proper installation. Fence gates may have up to a 4-inch gap to allow for smooth swing and operation." },
-                { title: "14. Painting & Staining Surfaces", content: "Variations in color, tone, and absorption are natural due to wood grain, age, and moisture content. LSFW is not responsible for color inconsistencies. Application is weather-dependent; rain, humidity, or extreme temperature variations may affect final appearance or curing." }
+                { title: "13. Fence Clearance & Swing Gap", content: "Ground clearances are necessary to accommodate natural variations in terrain, drainage, vegetation, and proper gate operation. Unless otherwise specified in writing, fence installations may include ground gaps of up to 4 inches. Wrought iron fences may include ground gaps of up to 6 inches to allow for proper installation and operation.\n\nIf you have specific clearance requirements, need a tighter ground gap, or have unique site conditions (including pets, pool requirements, HOA standards, or other concerns), you must notify Lone Star Fence Works before signing this contract. Additional labor, grading, retaining, or custom installation methods may be required and could affect the final project cost." },
+                { title: "14. Painting & Staining Surfaces", content: "Variations in color, tone, and absorption are natural due to wood grain, age, and moisture content. LSFW is not responsible for color inconsistencies. Application is weather-dependent; rain, humidity, or extreme temperature variations may affect final appearance or curing." },
+                { title: "15. Permit Fees", content: "Permit fees are not included in the base estimate. If a permit is required for the project, Lone Star Fence Works will obtain the necessary permit for a processing fee of $100, which will be added to the final project cost." }
               ].map((term, idx) => (
                 <div key={idx} className="space-y-2">
                   <p className="font-black text-american-blue uppercase tracking-widest">{term.title}</p>
-                  <p className="font-medium">{term.content}</p>
+                  <p className="font-medium whitespace-pre-wrap">{term.content}</p>
                 </div>
               ))}
             </div>
