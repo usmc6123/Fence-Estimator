@@ -186,7 +186,8 @@ export default function CustomerContract({
           subtotal: Number(snap.subtotalBeforeDiscount || 0),
           markup: 0,
           tax: 0,
-          grandTotal: Number(snap.finalCustomerPrice || snap.totalInvestment || 0)
+          grandTotal: Number(snap.finalCustomerPrice || snap.totalInvestment || 0),
+          postCount: 0
         },
         pricing: {
           runsPricing: (runsToUse as any[]).map((run, i) => {

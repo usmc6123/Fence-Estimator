@@ -98,6 +98,7 @@ export interface DetailedTakeOff {
     markup: number;
     tax: number;
     grandTotal: number;
+    postCount: number;
   };
   pricing: {
     runsPricing: {
@@ -1494,7 +1495,7 @@ export function calculateDetailedTakeOff(
           runFenceMaterialCost += cost;
           runItems.push({
             id: finalPost.id,
-            name: finalPost.name,
+            name: finalPost.name.toLowerCase().includes('post') ? finalPost.name : `${finalPost.name} Post`,
             qty: ironPostsCount,
             unit: finalPost.unit,
             unitCost: finalPost.cost,
@@ -2586,6 +2587,17 @@ export function calculateDetailedTakeOff(
   totalLabor = allItems.filter(i => i.category === 'Labor').reduce((sum, i) => sum + i.total, 0);
   totalDemo = allItems.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
   totalPrep = allItems.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
+
+  // Definitive Post Count logic
+  // Priority 1: Use allResolvedIronPosts for Wrought Iron sections
+  // Priority 2: Use summary filter for all other sections (Wood, Chain Link, Pipe)
+  const ironPostTotal = allResolvedIronPosts.length;
+  // When counting 'other' posts, we MUST exclude the wrought iron posts to avoid double-counting
+  const otherPostTotal = allItems
+    .filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post') && !i.id.startsWith('m-post-'))
+    .reduce((sum, i) => sum + i.qty, 0);
+  
+  const postCountTotal = ironPostTotal + otherPostTotal;
   
   const subtotal = totalMaterial + totalLabor + totalDemo + totalPrep;
   const markup = subtotal * ((estimate.markupPercentage || 0) / 100);
@@ -2740,7 +2752,8 @@ export function calculateDetailedTakeOff(
       subtotal,
       markup,
       tax,
-      grandTotal
+      grandTotal,
+      postCount: postCountTotal
     },
     pricing
   };

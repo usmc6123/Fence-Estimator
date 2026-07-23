@@ -598,7 +598,30 @@ export default function Estimator({
     const totalPrepCharge = detailedData.totals.prep * markupFactor;
 
     const gateCount = detailedData.runs.reduce((sum, r) => sum + r.gates.length, 0) || estimate.gateCount || 0;
-    const postCount = detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
+    
+    // Use the definitive postCount from the calculation engine
+    const postCount = detailedData.totals.postCount;
+
+    // Runtime assertion for admin debugging
+    if (adminToken) {
+      const ironMarkerCount = detailedData.allResolvedIronPosts?.length || 0;
+      const wroughtIronRunCount = (estimate.runs || []).filter(r => {
+        const s = FENCE_STYLES.find(fs => fs.id === r.styleId);
+        return s?.type === 'Metal';
+      }).length;
+
+      if (wroughtIronRunCount > 0) {
+        console.assert(
+          postCount >= ironMarkerCount,
+          "Wrought iron post mismatch detected",
+          {
+            totalPostCount: postCount,
+            renderedMarkerCount: ironMarkerCount,
+            detailedSummary: detailedData.summary.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post'))
+          }
+        );
+      }
+    }
 
     return {
       items: [...detailedData.summary, ...detailedData.manualSummary],
