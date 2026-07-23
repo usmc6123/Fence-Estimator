@@ -377,14 +377,14 @@ export function resolveWroughtIronPosts(runs: FenceRun[]): ResolvedWroughtIronPo
     const isLastOfSection = !nextRun || !!nextRun.isStartOfNewSection;
 
     // 1. Initial Terminal Posts
-    if (isFirstOfSection) {
-      postMap.set(0, {
-        id: `post-${run.id}-start`,
-        runId: run.id,
-        position: 0,
-        type: 'end'
-      });
-    }
+    // Always add a post at 0 for spacing/checkpoint calculation
+    // Even if it's shared with the previous run, we need it here to anchor line posts.
+    postMap.set(0, {
+      id: `post-${run.id}-start`,
+      runId: run.id,
+      position: 0,
+      type: isFirstOfSection ? 'end' : 'corner'
+    });
     
     postMap.set(run.linearFeet, {
       id: `post-${run.id}-end`,
@@ -447,14 +447,12 @@ export function resolveWroughtIronPosts(runs: FenceRun[]): ResolvedWroughtIronPo
     }
 
     // 4. Handle Shared Corner Posts
-    // If this is not the first run, the start post (at 0) might be shared with the previous run's end post
+    // If this is not the first run, the start post (at 0) IS shared with the previous run's end post
     if (!isFirstOfSection && idx > 0) {
       const startPost = postMap.get(0);
       const prevRun = runs[idx - 1];
       if (startPost) {
         startPost.sharedWithRunId = prevRun.id;
-        // In a shared corner, we mark it as 'corner' type
-        startPost.type = 'corner';
       }
     }
 
@@ -2593,8 +2591,9 @@ export function calculateDetailedTakeOff(
   // Priority 2: Use summary filter for all other sections (Wood, Chain Link, Pipe)
   const ironPostTotal = allResolvedIronPosts.length;
   // When counting 'other' posts, we MUST exclude the wrought iron posts to avoid double-counting
+  // We check for both 'Structure' and 'Post' categories to be robust
   const otherPostTotal = allItems
-    .filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post') && !i.id.startsWith('m-post-'))
+    .filter(i => (i.category === 'Structure' || i.category === 'Post') && i.name.toLowerCase().includes('post') && !i.id.startsWith('m-post-'))
     .reduce((sum, i) => sum + i.qty, 0);
   
   const postCountTotal = ironPostTotal + otherPostTotal;

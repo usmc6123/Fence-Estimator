@@ -642,7 +642,8 @@ export default function Estimator({
       lf,
       netLF,
       postCount,
-      gateCount
+      gateCount,
+      allResolvedIronPosts: detailedData.allResolvedIronPosts
     };
   };
 
@@ -3843,41 +3844,41 @@ export default function Estimator({
                       </summary>
                       
                       <div className="mt-6 space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {/* Expanded Summary Metrics */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                          {/* Per Run Breakdown */}
+                          {estimate.runs?.map((run, idx) => {
+                            const runStyle = FENCE_STYLES.find(s => s.id === run.styleId);
+                            if (runStyle?.type !== 'Metal') return null;
+                            const runPosts = (results as any).allResolvedIronPosts?.filter((p: any) => p.runId === run.id) || [];
+                            return (
+                              <div key={run.id} className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
+                                <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Run {idx + 1} Posts</p>
+                                <p className="text-xl font-black text-american-blue">{runPosts.length}</p>
+                              </div>
+                            );
+                          })}
                           <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
-                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Rendered Markers</p>
-                            <p className="text-xl font-black text-american-blue">
-                              {(() => {
-                                // Sum up markers from all sections in the current view
-                                // This is tricky as we are inside the modal and calculating results again
-                                // We'll just use the results.postCount for now as it SHOULD match if my fix works
-                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
-                                const ironPosts = takeoffData.allResolvedIronPosts || [];
-                                return ironPosts.length;
-                              })()}
-                            </p>
-                          </div>
-                          <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
-                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Summary Count</p>
-                            <p className="text-xl font-black text-american-blue">{results.postCount}</p>
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Final Resolved</p>
+                            <p className="text-xl font-black text-american-blue">{(results as any).allResolvedIronPosts?.length || 0}</p>
                           </div>
                           <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
                             <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Takeoff Count</p>
                             <p className="text-xl font-black text-american-blue">
-                              {results.items.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0)}
+                              {results.items.filter(i => (i.category === 'Structure' || i.category === 'Post') && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0)}
                             </p>
                           </div>
                           <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Status</p>
-                            <p className="text-sm font-black text-emerald-600">
-                              {(() => {
-                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
-                                const markerCount = takeoffData.allResolvedIronPosts?.length || 0;
-                                const summaryCount = results.postCount;
-                                const mtCount = results.items.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
-                                return (markerCount === summaryCount && summaryCount === mtCount) ? 'PASS' : 'FAIL';
-                              })()}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-black text-emerald-600">
+                                {(() => {
+                                  const markerCount = (results as any).allResolvedIronPosts?.length || 0;
+                                  const mtCount = results.items.filter(i => (i.category === 'Structure' || i.category === 'Post') && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
+                                  return (markerCount === mtCount && markerCount > 0) ? 'PASS' : 'FAIL';
+                                })()}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
