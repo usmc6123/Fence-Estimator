@@ -32,6 +32,14 @@ export interface PipeCuttingGuide {
   efficiency: number;
 }
 
+export interface ResolvedWroughtIronPost {
+  id: string;
+  runId: string;
+  position: number;
+  type: 'line' | 'end' | 'corner' | 'gate-hinge' | 'gate-latch';
+  sharedWithRunId?: string;
+}
+
 export interface RunTakeOff {
   runId: string;
   runName: string;
@@ -71,6 +79,7 @@ export interface RunTakeOff {
   deeperPostLaborCost?: number;
   chainLinkFenceRunCount?: number;
   chainLinkFabricGauge?: '9ga' | '11ga';
+  resolvedIronPosts?: ResolvedWroughtIronPost[];
   debugData?: any;
 }
 
@@ -79,6 +88,7 @@ export interface DetailedTakeOff {
   manualSummary: TakeOffItem[];
   runs: RunTakeOff[];
   pipeCuttingSummary?: PipeCuttingGuide;
+  allResolvedIronPosts?: ResolvedWroughtIronPost[];
   totals: {
     material: number;
     labor: number;
@@ -350,6 +360,123 @@ function processPost(
   };
 }
 
+/**
+ * Resolves all post positions for a Wrought Iron section, handling gates and corners correctly.
+ * This is the single source of truth for diagram, summary, and material takeoff.
+ */
+export function resolveWroughtIronPosts(runs: FenceRun[]): ResolvedWroughtIronPost[] {
+  const allPosts: ResolvedWroughtIronPost[] = [];
+  const panelWidth = 8; // Standard Wrought Iron panel width
+
+  runs.forEach((run, idx) => {
+    const postMap = new Map<number, ResolvedWroughtIronPost>();
+    
+    const nextRun = runs[idx + 1];
+    const isFirstOfSection = idx === 0 || !!run.isStartOfNewSection;
+    const isLastOfSection = !nextRun || !!nextRun.isStartOfNewSection;
+
+    // 1. Initial Terminal Posts
+    if (isFirstOfSection) {
+      postMap.set(0, {
+        id: `post-${run.id}-start`,
+        runId: run.id,
+        position: 0,
+        type: 'end'
+      });
+    }
+    
+    postMap.set(run.linearFeet, {
+      id: `post-${run.id}-end`,
+      runId: run.id,
+      position: run.linearFeet,
+      type: isLastOfSection ? 'end' : 'corner'
+    });
+
+    // 2. Add Gate Posts (Hinge and Latch)
+    const sortedGates = [...(run.gateDetails || [])].sort((a, b) => (a.position || 0) - (b.position || 0));
+    sortedGates.forEach(g => {
+      const gStart = g.position || 0;
+      const gEnd = gStart + g.width;
+
+      // Hinge post (always gate-hinge)
+      postMap.set(gStart, {
+        id: `post-${run.id}-gate-${g.id}-hinge`,
+        runId: run.id,
+        position: gStart,
+        type: 'gate-hinge'
+      });
+
+      // Latch post (double gates have two hinge-like posts, but we'll mark as gate-latch for clarity)
+      postMap.set(gEnd, {
+        id: `post-${run.id}-gate-${g.id}-latch`,
+        runId: run.id,
+        position: gEnd,
+        type: g.type === 'Double' ? 'gate-hinge' : 'gate-latch'
+      });
+    });
+
+    // 3. Fill Line Posts
+    const checkpoints = Array.from(postMap.keys()).sort((a, b) => a - b);
+    for (let j = 0; j < checkpoints.length - 1; j++) {
+      const start = checkpoints[j];
+      const end = checkpoints[j+1];
+      const gapSize = end - start;
+      
+      const isGate = sortedGates.some(g => 
+        Math.abs((g.position || 0) - start) < 0.1 && 
+        Math.abs(((g.position || 0) + g.width) - end) < 0.1
+      );
+
+      if (!isGate && gapSize > (panelWidth + 0.1)) {
+        const numSubPanels = Math.round(gapSize / panelWidth);
+        const spacing = gapSize / numSubPanels;
+        for (let k = 1; k < numSubPanels; k++) {
+          const pos = start + k * spacing;
+          const posKey = Math.round(pos * 100) / 100;
+          if (!postMap.has(posKey)) {
+            postMap.set(posKey, {
+              id: `post-${run.id}-line-${posKey}`,
+              runId: run.id,
+              position: pos,
+              type: 'line'
+            });
+          }
+        }
+      }
+    }
+
+    // 4. Handle Shared Corner Posts
+    // If this is not the first run, the start post (at 0) might be shared with the previous run's end post
+    if (!isFirstOfSection && idx > 0) {
+      const startPost = postMap.get(0);
+      const prevRun = runs[idx - 1];
+      if (startPost) {
+        startPost.sharedWithRunId = prevRun.id;
+        // In a shared corner, we mark it as 'corner' type
+        startPost.type = 'corner';
+      }
+    }
+
+    // Convert map to array and add to allPosts
+    Array.from(postMap.values()).forEach(p => {
+      // Don't add if it's a duplicate position from a previous run's end post
+      // We identify duplicates by looking for sharedWithRunId
+      if (p.sharedWithRunId) {
+        // Find the previous post and update its type if needed
+        const prevRun = runs[idx - 1];
+        const existing = allPosts.find(ap => ap.runId === p.sharedWithRunId && Math.abs(ap.position - prevRun.linearFeet) < 0.1);
+        if (existing) {
+          existing.type = 'corner';
+          return; // Skip adding the duplicate
+        }
+      }
+      allPosts.push(p);
+    });
+  });
+
+  return allPosts;
+}
+
 export function calculateDetailedTakeOff(
   estimate: Partial<Estimate>,
   rawMaterials: MaterialItem[],
@@ -606,6 +733,8 @@ export function calculateDetailedTakeOff(
       });
     }
   }
+
+  const allResolvedIronPosts = resolveWroughtIronPosts(runs);
 
   runs.forEach((run, idx) => {
     const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || FENCE_STYLES[0];
@@ -1076,6 +1205,11 @@ export function calculateDetailedTakeOff(
     const startEndPosts = (isFirstOfSection ? 1 : 0) + (isLastOfSection ? 1 : 0);
     const runPostCount = runLinePosts + runCornerPosts + startEndPosts;
     
+    // Resolve Wrought Iron Posts for this run from the global list
+    const resolvedIronPosts = runStyle.type === 'Metal' 
+      ? allResolvedIronPosts.filter(p => p.runId === run.id)
+      : [];
+
     let gatePostCountForRun = 0;
     if (run.gateDetails) {
       if (runStyle.type === 'Metal') {
@@ -1087,9 +1221,9 @@ export function calculateDetailedTakeOff(
       }
     }
 
-    const stdPostCount = (runStyle.type === 'Pipe' || runStyle.type === 'Metal')
+    const stdPostCount = (runStyle.type === 'Pipe')
       ? Math.max(0, runPostCount - gatePostCountForRun)
-      : Math.max(0, runPostCount - hingePostCount);
+      : (runStyle.type === 'Metal' ? 0 : Math.max(0, runPostCount - hingePostCount));
 
     if (!run.reusePosts) {
       // Standard Posts
@@ -1303,71 +1437,78 @@ export function calculateDetailedTakeOff(
             });
           }
         }
-      }
-
-      // Gate Posts for Pipe and Metal Fence
-      if ((runStyle.type === 'Pipe' || runStyle.type === 'Metal') && gatePostCountForRun > 0) {
+            // Gate Posts for Pipe and Metal Fence
+      if (runStyle.type === 'Pipe' && gatePostCountForRun > 0) {
         const postHeight = (run.height || 4) + 3;
         
-        if (runStyle.type === 'Metal') {
-          // Wrought Iron: Use 2x2 posts for all gates (Single or Double)
-          const gatePostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-${postHeight - 1}`);
-          if (gatePostMat) {
-            const finalGatePost = processPost(materials, gatePostMat, !!estimate.increasePostDepth);
-            if (estimate.increasePostDepth) {
-              runDeeperPostMaterialDiff += gatePostCountForRun * (finalGatePost.cost - gatePostMat.cost);
-            }
-            const cost = gatePostCountForRun * finalGatePost.cost;
-            runFenceMaterialCost += cost;
-            runItems.push({
-              id: finalGatePost.id,
-              name: `${finalGatePost.name} (Gate Post)`,
-              qty: gatePostCountForRun,
-              unit: finalGatePost.unit,
-              unitCost: finalGatePost.cost,
-              priceSource: finalGatePost.priceSource,
-              total: cost,
-              category: 'Structure',
-              originalPostName: finalGatePost.originalPostName,
-              longerMatchingPostName: finalGatePost.longerMatchingPostName,
-              deeperWarning: finalGatePost.deeperWarning,
-              increasedDepth: finalGatePost.increasedDepth
-            });
+        // Pipe Fence logic remains the same
+        const prefix = 'p-post-238-';
+        const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`);
+        
+        if (gatePostMat) {
+          const finalGatePost = processPost(materials, gatePostMat, !!estimate.increasePostDepth);
+          if (estimate.increasePostDepth) {
+            runDeeperPostMaterialDiff += gatePostCountForRun * (finalGatePost.cost - gatePostMat.cost);
           }
-        } else {
-          // Pipe Fence logic remains the same
-          const prefix = 'p-post-238-';
-          const gatePostMat = materials.find(m => m.id === `${prefix}${postHeight}`) || materials.find(m => m.id === `${prefix}${postHeight - 1}`);
-          
-          if (gatePostMat) {
-            const finalGatePost = processPost(materials, gatePostMat, !!estimate.increasePostDepth);
-            if (estimate.increasePostDepth) {
-              runDeeperPostMaterialDiff += gatePostCountForRun * (finalGatePost.cost - gatePostMat.cost);
-            }
-            const finalLength = getPostLength(finalGatePost as MaterialItem) || (postHeight + (estimate.increasePostDepth ? 1 : 0));
-            // Collect for optimization
-            for (let i = 0; i < gatePostCountForRun; i++) {
-              allPipeSegments.push(finalLength);
-            }
-            const cost = gatePostCountForRun * finalGatePost.cost;
-            runFenceMaterialCost += cost;
-            runItems.push({
-              id: finalGatePost.id,
-              name: `${finalGatePost.name} (Gate Post)`,
-              qty: gatePostCountForRun,
-              unit: finalGatePost.unit,
-              unitCost: finalGatePost.cost,
-              priceSource: finalGatePost.priceSource,
-              total: cost,
-              category: 'Structure',
-              originalPostName: finalGatePost.originalPostName,
-              longerMatchingPostName: finalGatePost.longerMatchingPostName,
-              deeperWarning: finalGatePost.deeperWarning,
-              increasedDepth: finalGatePost.increasedDepth
-            });
+          const finalLength = getPostLength(finalGatePost as MaterialItem) || (postHeight + (estimate.increasePostDepth ? 1 : 0));
+          // Collect for optimization
+          for (let i = 0; i < gatePostCountForRun; i++) {
+            allPipeSegments.push(finalLength);
           }
+
+          const cost = gatePostCountForRun * finalGatePost.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: finalGatePost.id,
+            name: `${finalGatePost.name} (Gate Post)`,
+            qty: gatePostCountForRun,
+            unit: finalGatePost.unit,
+            unitCost: finalGatePost.cost,
+            priceSource: finalGatePost.priceSource,
+            total: cost,
+            category: 'Structure',
+            originalPostName: finalGatePost.originalPostName,
+            longerMatchingPostName: finalGatePost.longerMatchingPostName,
+            deeperWarning: finalGatePost.deeperWarning,
+            increasedDepth: finalGatePost.increasedDepth
+          });
         }
       }
+
+      // New Unified Wrought Iron Post Logic
+      if (runStyle.type === 'Metal' && !run.reusePosts) {
+        const postHeight = (run.height || 4) + 2;
+        const ironPostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || 
+                           materials.find(m => m.id === `m-post-2x2-${postHeight + 1}`) || 
+                           materials.find(m => m.category === 'Post' && m.id.startsWith('m')) || 
+                           materials[0];
+        
+        const finalPost = processPost(materials, ironPostMat, !!estimate.increasePostDepth);
+        const ironPostsCount = resolvedIronPosts.length;
+
+        if (ironPostsCount > 0) {
+          if (estimate.increasePostDepth) {
+            runDeeperPostMaterialDiff += ironPostsCount * (finalPost.cost - ironPostMat.cost);
+          }
+          const cost = ironPostsCount * finalPost.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: finalPost.id,
+            name: finalPost.name,
+            qty: ironPostsCount,
+            unit: finalPost.unit,
+            unitCost: finalPost.cost,
+            priceSource: finalPost.priceSource,
+            total: cost,
+            category: 'Structure',
+            originalPostName: finalPost.originalPostName,
+            longerMatchingPostName: finalPost.longerMatchingPostName,
+            deeperWarning: finalPost.deeperWarning,
+            increasedDepth: finalPost.increasedDepth
+          });
+        }
+      }
+ }
 
       // Hinge Posts (1' deeper) for Wood Fence
       if (hingePostCount > 0 && runStyle.type === 'Wood') {
@@ -2278,6 +2419,7 @@ export function calculateDetailedTakeOff(
       demoCharge: runDemoCharge,
       stainingCharge: runStainLabor,
       gates: runGates,
+      resolvedIronPosts,
       deeperPostMaterialDiff: runDeeperPostMaterialDiff,
       deeperPostLaborCost: runDeeperPostLaborCost,
       chainLinkFenceRunCount: runStyle.type === 'Chain Link' ? (1 + (run.corners || 0) + (run.gateDetails?.length || 0)) : undefined,
@@ -2589,6 +2731,7 @@ export function calculateDetailedTakeOff(
     manualSummary: manualSummary,
     runs: detailedRuns,
     pipeCuttingSummary,
+    allResolvedIronPosts,
     totals: {
       material: totalMaterial,
       labor: totalLabor,

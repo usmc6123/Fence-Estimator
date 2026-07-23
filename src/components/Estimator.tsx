@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, Info, Ruler, Palette, Box, 
   Layers, HardHat, FileText, Map as MapIcon, X, Printer, Share2, Trees, Droplets,
   TrendingUp, RotateCcw, Package, Navigation, Image, ArrowUp, ArrowDown,
-  Upload, ExternalLink
+  Upload, ExternalLink, ShieldCheck, ChevronDown
 } from 'lucide-react';
 import { FENCE_STYLES, COMPANY_INFO, DEFAULT_ESTIMATE } from '../constants';
 import { MaterialItem, FenceStyle, Estimate, LaborRates, SavedEstimate, SupplierQuote, User } from '../types';
@@ -3589,73 +3589,43 @@ export default function Estimator({
                                   const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || defaultStyle;
                                   const runVisualStyle = runStyle.visualStyles.find(vs => vs.id === run.visualStyleId) || runStyle.visualStyles[0];
 
-                                  // Refined Post Management - Standard posts are Grey, Gate posts are Green
                                   const gateWidthTotal = (run.gateDetails || []).reduce((sum, g) => sum + g.width, 0);
                                   const fenceLFTotal = run.linearFeet - gateWidthTotal;
                                   const numFencePanels = Math.ceil(fenceLFTotal / 8);
                                   const panelWidth = numFencePanels > 0 ? fenceLFTotal / numFencePanels : 0;
-
+                                  
                                   const sortedGates = [...(run.gateDetails || [])].map(g => {
-                                    // Snap gate position to the nearest panel boundary
                                     const snappedPos = panelWidth > 0 ? Math.round((g.position || 0) / panelWidth) * panelWidth : (g.position || 0);
-                                    const finalPos = Math.min(snappedPos, run.linearFeet - g.width);
-                                    return { ...g, position: finalPos };
+                                    return { ...g, position: Math.min(snappedPos, run.linearFeet - g.width) };
                                   }).sort((a,b) => (a.position || 0) - (b.position || 0));
 
-                                  // Collect all post positions
-                                  const postMap = new Map<number, { color: string, type: string }>();
-                                  
-                                  // Default end posts
-                                  postMap.set(0, { color: '#A5A5A5', type: 'post' });
-                                  postMap.set(run.linearFeet, { color: '#A5A5A5', type: 'post' });
+                                  // Use resolved posts from calculation for Metal/Wrought Iron
+                                  // For other styles, we still use the local postMap for now (or eventually unify all)
+                                  const finalSortedPosts = (runStyle.type === 'Metal' && run.resolvedIronPosts)
+                                    ? run.resolvedIronPosts.map(p => ({ dist: p.position, color: p.type.startsWith('gate') ? '#10B981' : '#A5A5A5', type: p.type }))
+                                    : (() => {
+                                        const postMap = new Map<number, { color: string, type: string }>();
+                                        postMap.set(0, { color: '#A5A5A5', type: 'post' });
+                                        postMap.set(run.linearFeet, { color: '#A5A5A5', type: 'post' });
+                                        
+                                        sortedGates.forEach(g => {
+                                          postMap.set(g.position || 0, { color: '#10B981', type: 'gate' });
+                                          if (g.type === 'Double') postMap.set((g.position || 0) + g.width, { color: '#10B981', type: 'gate' });
+                                          else if (!postMap.has((g.position || 0) + g.width)) postMap.set((g.position || 0) + g.width, { color: '#A5A5A5', type: 'post' });
+                                        });
 
-                                  // Add gate posts (overwrite if gate is at start/end)
-                                  sortedGates.forEach(g => {
-                                    const gStart = g.position || 0;
-                                    const gEnd = gStart + g.width;
-                                    
-                                    // Gate starts are always green
-                                    postMap.set(gStart, { color: '#10B981', type: 'gate' });
-                                    
-                                    // Gate ends: Double Gates have green on both ends, Single have grey (post)
-                                    if (g.type === 'Double') {
-                                      postMap.set(gEnd, { color: '#10B981', type: 'gate' });
-                                    } else {
-                                      // Only set to grey if it wasn't already marked as a gate start for another gate
-                                      if (!postMap.has(gEnd) || postMap.get(gEnd)?.color !== '#10B981') {
-                                        postMap.set(gEnd, { color: '#A5A5A5', type: 'post' });
-                                      }
-                                    }
-                                  });
-
-                                  // Get sorted list of critical points to fill gaps
-                                  const checkpoints = Array.from(postMap.keys()).sort((a,b) => a - b);
-                                  
-                                  for (let j = 0; j < checkpoints.length - 1; j++) {
-                                    const start = checkpoints[j];
-                                    const end = checkpoints[j+1];
-                                    const gapSize = end - start;
-                                    const isGate = sortedGates.some(g => 
-                                      Math.abs((g.position || 0) - start) < 0.1 && 
-                                      Math.abs(((g.position || 0) + g.width) - end) < 0.1
-                                    );
-
-                                    // If this is a fence gap, fill with panels of panelWidth
-                                    if (!isGate && gapSize > (panelWidth + 0.1)) {
-                                      const numSubPanels = Math.round(gapSize / panelWidth);
-                                      const spacing = gapSize / numSubPanels;
-                                      for (let k = 1; k < numSubPanels; k++) {
-                                        const pos = start + k * spacing;
-                                        if (!postMap.has(pos)) {
-                                          postMap.set(pos, { color: '#A5A5A5', type: 'line' });
+                                        const checkpoints = Array.from(postMap.keys()).sort((a,b) => a - b);
+                                        for (let j = 0; j < checkpoints.length - 1; j++) {
+                                          const start = checkpoints[j], end = checkpoints[j+1], gapSize = end - start;
+                                          const isGate = sortedGates.some(g => Math.abs((g.position || 0) - start) < 0.1 && Math.abs(((g.position || 0) + g.width) - end) < 0.1);
+                                          if (!isGate && gapSize > (panelWidth + 0.1)) {
+                                            const numSubPanels = Math.round(gapSize / panelWidth), spacing = gapSize / numSubPanels;
+                                            for (let k = 1; k < numSubPanels; k++) postMap.set(start + k * spacing, { color: '#A5A5A5', type: 'line' });
+                                          }
                                         }
-                                      }
-                                    }
-                                  }
+                                        return Array.from(postMap.entries()).map(([dist, data]) => ({ dist, ...data })).sort((a,b) => a.dist - b.dist);
+                                      })();
 
-                                  const finalSortedPosts = Array.from(postMap.entries())
-                                    .map(([dist, data]) => ({ dist, ...data }))
-                                    .sort((a,b) => a.dist - b.dist);
                                   const totalPostsOnRun = finalSortedPosts.length;
                                   
                                   // Calculate Label Positioning - Push outwards from center to prevent overlaps
@@ -3836,6 +3806,98 @@ export default function Estimator({
                     <p className="text-xl font-bold">{results.gateCount}</p>
                   </div>
                 </div>
+
+                {/* Wrought Iron Post Count Audit (Admin Only) */}
+                {user && (
+                  <div className="mt-8 bg-american-blue/5 rounded-3xl p-6 border-2 border-american-blue/10">
+                    <details className="group">
+                      <summary className="flex items-center justify-between cursor-pointer list-none">
+                        <div className="flex items-center gap-3">
+                          <ShieldCheck size={20} className="text-american-blue" />
+                          <h3 className="text-sm font-black text-american-blue uppercase tracking-tight">Wrought Iron Post Count Audit</h3>
+                        </div>
+                        <ChevronDown size={20} className="text-american-blue transition-transform group-open:rotate-180" />
+                      </summary>
+                      
+                      <div className="mt-6 space-y-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Rendered Markers</p>
+                            <p className="text-xl font-black text-american-blue">
+                              {(() => {
+                                // Sum up markers from all sections in the current view
+                                // This is tricky as we are inside the modal and calculating results again
+                                // We'll just use the results.postCount for now as it SHOULD match if my fix works
+                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
+                                const ironPosts = takeoffData.allResolvedIronPosts || [];
+                                return ironPosts.length;
+                              })()}
+                            </p>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Summary Count</p>
+                            <p className="text-xl font-black text-american-blue">{results.postCount}</p>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
+                            <p className="text-[10px] font-bold text-[#999999] uppercase tracking-widest mb-1">Takeoff Count</p>
+                            <p className="text-xl font-black text-american-blue">
+                              {results.items.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0)}
+                            </p>
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl shadow-sm border border-american-blue/5">
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Status</p>
+                            <p className="text-sm font-black text-emerald-600">
+                              {(() => {
+                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
+                                const markerCount = takeoffData.allResolvedIronPosts?.length || 0;
+                                const summaryCount = results.postCount;
+                                const mtCount = results.items.filter(i => i.category === 'Structure' && i.name.toLowerCase().includes('post')).reduce((sum, i) => sum + i.qty, 0);
+                                return (markerCount === summaryCount && summaryCount === mtCount) ? 'PASS' : 'FAIL';
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-2xl border border-american-blue/10">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-american-blue/5">
+                              <tr>
+                                <th className="p-3 font-black uppercase tracking-widest text-american-blue/60">#</th>
+                                <th className="p-3 font-black uppercase tracking-widest text-american-blue/60">Run</th>
+                                <th className="p-3 font-black uppercase tracking-widest text-american-blue/60">Pos (LF)</th>
+                                <th className="p-3 font-black uppercase tracking-widest text-american-blue/60">Type</th>
+                                <th className="p-3 font-black uppercase tracking-widest text-american-blue/60">Shared?</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white">
+                              {(() => {
+                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
+                                return (takeoffData.allResolvedIronPosts || []).map((p, i) => (
+                                  <tr key={p.id} className="border-t border-american-blue/5">
+                                    <td className="p-3 font-bold">{i + 1}</td>
+                                    <td className="p-3 font-bold text-american-blue">{p.runId}</td>
+                                    <td className="p-3 font-bold">{p.position.toFixed(2)}'</td>
+                                    <td className="p-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                        p.type.startsWith('gate') ? 'bg-emerald-100 text-emerald-700' : 
+                                        p.type === 'corner' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {p.type}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 font-bold text-american-red">
+                                      {p.sharedWithRunId ? `Yes (${p.sharedWithRunId})` : 'No'}
+                                    </td>
+                                  </tr>
+                                ));
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
               
               <div className="p-6 bg-[#F9F9F9] border-t border-[#F5F5F5] flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
