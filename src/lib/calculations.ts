@@ -1234,7 +1234,7 @@ export function calculateDetailedTakeOff(
     const stdPostCount = (runStyle.type === 'Pipe')
       ? Math.max(0, runPostCount - gatePostCountForRun)
       : (runStyle.type === 'Metal' ? 0 : Math.max(0, runPostCount - hingePostCount));
-
+    
     if (!run.reusePosts) {
       // Standard Posts
       if (stdPostCount > 0) {
@@ -1422,47 +1422,57 @@ export function calculateDetailedTakeOff(
                 increasedDepth: finalPost.increasedDepth
               });
             }
-          } else if (runStyle.type === 'Metal') {
-            const postHeight = (run.height || 4) + 2;
-            const defaultPostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-8`) || materials[0];
-            
-            resolvedIronPosts.forEach(p => {
-              let currentPostMat = defaultPostMat;
-              
-              // If it's a gate post, we might want 4x4 for drive gates
-              if (p.type === 'gate-hinge' || p.type === 'gate-latch') {
-                const gate = run.gateDetails?.find(g => 
-                  (p.id.includes(g.id) || (p.position >= (g.position || 0) && p.position <= ((g.position || 0) + g.width + 0.1)))
-                );
-                if (gate && gate.type === 'Double') {
-                  const drivePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-8`);
-                  if (drivePostMat) currentPostMat = drivePostMat;
-                }
-              }
-
-              const finalPost = processPost(materials, currentPostMat, !!estimate.increasePostDepth);
-              if (estimate.increasePostDepth) {
-                runDeeperPostMaterialDiff += (finalPost.cost - currentPostMat.cost);
-              }
-              runFenceMaterialCost += finalPost.cost;
-              runItems.push({
-                id: finalPost.id,
-                name: finalPost.name,
-                qty: 1,
-                unit: finalPost.unit,
-                unitCost: finalPost.cost,
-                priceSource: finalPost.priceSource,
-                total: finalPost.cost,
-                category: 'Structure',
-                originalPostName: finalPost.originalPostName,
-                longerMatchingPostName: finalPost.longerMatchingPostName,
-                deeperWarning: finalPost.deeperWarning,
-                increasedDepth: finalPost.increasedDepth
-              });
-            });
           }
         }
-            // Gate Posts for Pipe and Metal Fence
+      } else if (runStyle.type === 'Metal' && resolvedIronPosts.length > 0) {
+        const postHeight = (run.height || 4) + 2;
+        const defaultPostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-8`) || materials[0];
+        
+        const groupedPosts: Record<string, { material: any, count: number }> = {};
+
+        resolvedIronPosts.forEach(p => {
+          let currentPostMat = defaultPostMat;
+          if (p.type === 'gate-hinge' || p.type === 'gate-latch') {
+            const gate = run.gateDetails?.find(g => 
+              (p.id.includes(g.id) || (p.position >= (g.position || 0) && p.position <= ((g.position || 0) + g.width + 0.1)))
+            );
+            if (gate && gate.type === 'Double') {
+              const drivePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-8`);
+              if (drivePostMat) currentPostMat = drivePostMat;
+            }
+          }
+          const finalPost = processPost(materials, currentPostMat, !!estimate.increasePostDepth);
+          if (estimate.increasePostDepth) {
+            runDeeperPostMaterialDiff += (finalPost.cost - currentPostMat.cost);
+          }
+          
+          if (!groupedPosts[finalPost.id]) {
+            groupedPosts[finalPost.id] = { material: finalPost, count: 0 };
+          }
+          groupedPosts[finalPost.id].count++;
+        });
+
+        Object.values(groupedPosts).forEach(group => {
+          const { material: finalPost, count } = group;
+          const cost = count * finalPost.cost;
+          runFenceMaterialCost += cost;
+          runItems.push({
+            id: finalPost.id,
+            name: finalPost.name,
+            qty: count,
+            unit: finalPost.unit,
+            unitCost: finalPost.cost,
+            priceSource: finalPost.priceSource,
+            total: cost,
+            category: 'Structure',
+            originalPostName: finalPost.originalPostName,
+            longerMatchingPostName: finalPost.longerMatchingPostName,
+            deeperWarning: finalPost.deeperWarning,
+            increasedDepth: finalPost.increasedDepth
+          });
+        });
+      }
+         // Gate Posts for Pipe and Metal Fence
       if (runStyle.type === 'Pipe' && gatePostCountForRun > 0) {
         const postHeight = (run.height || 4) + 3;
         
@@ -1499,41 +1509,6 @@ export function calculateDetailedTakeOff(
           });
         }
       }
-
-      // New Unified Wrought Iron Post Logic
-      if (runStyle.type === 'Metal' && !run.reusePosts) {
-        const postHeight = (run.height || 4) + 2;
-        const ironPostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || 
-                           materials.find(m => m.id === `m-post-2x2-${postHeight + 1}`) || 
-                           materials.find(m => m.category === 'Post' && m.id.startsWith('m')) || 
-                           materials[0];
-        
-        const finalPost = processPost(materials, ironPostMat, !!estimate.increasePostDepth);
-        const ironPostsCount = resolvedIronPosts.length;
-
-        if (ironPostsCount > 0) {
-          if (estimate.increasePostDepth) {
-            runDeeperPostMaterialDiff += ironPostsCount * (finalPost.cost - ironPostMat.cost);
-          }
-          const cost = ironPostsCount * finalPost.cost;
-          runFenceMaterialCost += cost;
-          runItems.push({
-            id: finalPost.id,
-            name: finalPost.name.toLowerCase().includes('post') ? finalPost.name : `${finalPost.name} Post`,
-            qty: ironPostsCount,
-            unit: finalPost.unit,
-            unitCost: finalPost.cost,
-            priceSource: finalPost.priceSource,
-            total: cost,
-            category: 'Structure',
-            originalPostName: finalPost.originalPostName,
-            longerMatchingPostName: finalPost.longerMatchingPostName,
-            deeperWarning: finalPost.deeperWarning,
-            increasedDepth: finalPost.increasedDepth
-          });
-        }
-      }
- }
 
       // Hinge Posts (1' deeper) for Wood Fence
       if (hingePostCount > 0 && runStyle.type === 'Wood') {
@@ -1625,6 +1600,16 @@ export function calculateDetailedTakeOff(
         if (concreteMat) {
           const runConcreteCost = postsInConcrete * bagsPerPost * concreteMat.cost;
           runFenceMaterialCost += runConcreteCost;
+          runItems.push({
+            id: concreteMat.id,
+            name: `${concreteMat.name} (8' Wood - ${bagsPerPost} bags/post)`,
+            qty: postsInConcrete * bagsPerPost,
+            unit: concreteMat.unit,
+            unitCost: concreteMat.cost,
+            priceSource: concreteMat.priceSource,
+            total: runConcreteCost,
+            category: 'Concrete'
+          });
         }
       } else {
         // Standard Rule: 1.25 bags of Quickset per post
@@ -1632,6 +1617,16 @@ export function calculateDetailedTakeOff(
         if (quicksetMat) {
           const runConcreteCost = postsInConcrete * 1.25 * quicksetMat.cost;
           runFenceMaterialCost += runConcreteCost;
+          runItems.push({
+            id: quicksetMat.id,
+            name: `${quicksetMat.name} (1.25 bags/post)`,
+            qty: postsInConcrete * 1.25,
+            unit: quicksetMat.unit,
+            unitCost: quicksetMat.cost,
+            priceSource: quicksetMat.priceSource,
+            total: runConcreteCost,
+            category: 'Concrete'
+          });
         }
       }
 
@@ -2405,17 +2400,19 @@ export function calculateDetailedTakeOff(
     runItems.forEach(i => {
       const isPartialWire = i.id.startsWith('partial-wire-');
       const isPartialPaint = i.id.startsWith('partial-paint-');
+      const isGlobalConcrete = i.category === 'Concrete';
+      
       if (i.category === 'Labor') {
         // Already handled by totalLabor += laborTotal
       } else if (i.category === 'Demolition') {
         // Already handled by totalDemo += demoCost
       } else {
-        if (!isPartialWire && !isPartialPaint) {
+        if (!isPartialWire && !isPartialPaint && !isGlobalConcrete) {
           totalMaterial += i.total;
         }
       }
       
-      if (!isPartialWire && !isPartialPaint) {
+      if (!isPartialWire && !isPartialPaint && !isGlobalConcrete) {
         addToSummary(i);
       }
     });
@@ -2472,14 +2469,17 @@ export function calculateDetailedTakeOff(
     const qty = Math.ceil(totalStandardConcretePosts * 1.25);
     addToSummary({
       id: quicksetMat.id,
-      name: `${quicksetMat.name} (1.25 bags/post)`,
+      name: `${quicksetMat.name} (Standard Concrete)`,
       qty,
       unit: quicksetMat.unit,
       unitCost: quicksetMat.cost,
       priceSource: quicksetMat.priceSource,
       total: qty * quicksetMat.cost,
-      category: 'Installation'
+      category: 'Concrete'
     });
+    totalMaterial += qty * quicksetMat.cost;
+  } else if (totalStandardConcretePosts > 0) {
+    console.error(`Quickset concrete material mapping failed. Standard post count: ${totalStandardConcretePosts}, Calculated bags: ${totalStandardConcretePosts * 1.25}, Quickset material ID requested: i-concrete-quickset`);
   }
 
   Object.values(concrete8ftWoodBuckets).forEach(bucket => {
@@ -2489,17 +2489,27 @@ export function calculateDetailedTakeOff(
         const qty = Math.ceil(bucket.count * bucket.bagsPerPost);
         addToSummary({
           id: mat.id,
-          name: `${mat.name} (8' Wood - ${bucket.bagsPerPost} bags/post)`,
+          name: `${mat.name} (8' Wood Concrete)`,
           qty,
           unit: mat.unit,
           unitCost: mat.cost,
           priceSource: mat.priceSource,
           total: qty * mat.cost,
-          category: 'Installation'
+          category: 'Concrete'
         });
+        totalMaterial += qty * mat.cost;
+      } else {
+        console.error(`8ft Wood concrete material mapping failed. Count: ${bucket.count}, Bags per post: ${bucket.bagsPerPost}, Requested material ID: ${bucket.materialId}`);
       }
     }
   });
+
+  // Verification Logs for Wrought Iron
+  const ironPostCount = allResolvedIronPosts.length;
+  const ironPostTakeoffQty = Object.values(summaryMap).filter(i => (i.category === 'Structure' || i.category === 'Post') && i.id.startsWith('m-post-')).reduce((sum, i) => sum + i.qty, 0);
+  if (ironPostCount > 0 && ironPostTakeoffQty === 0) {
+    console.error(`Wrought-iron post material mapping failed. Resolved posts: ${ironPostCount}, Generated post rows: 0, Requested material keys: m-post-2x2-*, m-post-4x4-*`);
+  }
 
   // Global Items
   const totalLF = detailedRuns.reduce((sum, r) => sum + r.linearFeet, 0);
