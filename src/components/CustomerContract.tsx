@@ -270,6 +270,8 @@ export default function CustomerContract({
     return calculated;
   }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal]);
 
+  const hasIron = data.runs.some(r => r.styleType === 'Metal');
+
   const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
   const taxFactor = (estimate.taxPercentage || 0) / 100;
 
@@ -2064,6 +2066,63 @@ Please structure the contract narrative with professional Markdown bold headers 
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* MATERIAL TAKEOFF VERIFICATION */}
+                  {hasIron && (
+                    <div className="space-y-4 pt-8 border-t border-slate-800">
+                      <div className="text-amber-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                        <AlertCircle size={14} />
+                        Wrought Iron Material Takeoff Verification
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Resolved Diagram Posts</span>
+                          <span className="text-sky-400 text-lg font-black block">{data.pricing.ironPostResolvedCount || 0}</span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Takeoff Post Rows Sum</span>
+                          <span className="text-emerald-400 text-lg font-black block">{data.pricing.ironPostTakeoffCount || 0}</span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Wrought Iron Dome Caps</span>
+                          <span className="text-rose-400 text-lg font-black block">
+                            {data.summary.find(i => i.id.startsWith('pc-') && i.name.toLowerCase().includes('dome'))?.qty || 0}
+                          </span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Verification Status</span>
+                          <span className={cn(
+                            "text-xs font-black uppercase px-2 py-1 rounded-lg inline-block mt-1",
+                            data.pricing.ironPostResolvedCount === data.pricing.ironPostTakeoffCount ? "bg-emerald-400/20 text-emerald-400" : "bg-rose-400/20 text-rose-400"
+                          )}>
+                            {data.pricing.ironPostResolvedCount === data.pricing.ironPostTakeoffCount ? 'MATCHED' : 'MISMATCH'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CONCRETE VERIFICATION */}
+                  <div className="space-y-4 pt-8 border-t border-slate-800">
+                    <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">
+                      Concrete Calculation Audit
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">Standard Rule Posts</span>
+                        <span className="text-white font-bold block">{data.pricing.totalStandardConcretePosts || 0}</span>
+                        <span className="text-[9px] text-slate-600 font-bold uppercase">Rate: 1.25 bags/post (Quickset)</span>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">Raw Concrete (Standard)</span>
+                        <span className="text-white font-bold block">{(data.pricing.totalStandardConcretePosts || 0) * 1.25} bags</span>
+                      </div>
+                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                        <span className="text-[9px] text-slate-500 uppercase font-black block">Final Purchase Qty</span>
+                        <span className="text-emerald-400 font-black block">{data.summary.find(i => i.id === 'i-concrete-quickset')?.qty || 0} bags</span>
+                      </div>
                     </div>
                   </div>
 

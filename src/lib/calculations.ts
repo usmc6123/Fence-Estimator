@@ -128,6 +128,10 @@ export interface DetailedTakeOff {
     grandTotal: number;
     subtotalBeforeDiscount: number;
     pricePerFoot: number;
+    // Verification & Debug fields
+    ironPostResolvedCount?: number;
+    ironPostTakeoffCount?: number;
+    totalStandardConcretePosts?: number;
     // Debug fields
     fenceRunMaterialTotal?: number;
     customMaterialTotal?: number;
@@ -736,6 +740,11 @@ export function calculateDetailedTakeOff(
 
   const allResolvedIronPosts = resolveWroughtIronPosts(runs);
 
+  // Global concrete tracking for deduplicated rounding
+  let totalStandardConcretePosts = 0;
+  const concrete8ftWoodBuckets: Record<string, { bagsPerPost: number, count: number, materialId: string }> = {};
+  const quicksetMat = materials.find(m => m.id === 'i-concrete-quickset') || materials.find(m => m.id === 'i-concrete-80');
+
   runs.forEach((run, idx) => {
     const runStyle = FENCE_STYLES.find(s => s.id === run.styleId) || FENCE_STYLES[0];
     const logic = runStyle.calcLogic;
@@ -1209,6 +1218,7 @@ export function calculateDetailedTakeOff(
     const resolvedIronPosts = runStyle.type === 'Metal' 
       ? allResolvedIronPosts.filter(p => p.runId === run.id)
       : [];
+    const runPostCountForTakeoff = runStyle.type === 'Metal' ? resolvedIronPosts.length : runPostCount;
 
     let gatePostCountForRun = 0;
     if (run.gateDetails) {
@@ -1414,26 +1424,41 @@ export function calculateDetailedTakeOff(
             }
           } else if (runStyle.type === 'Metal') {
             const postHeight = (run.height || 4) + 2;
-            postMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || postMat;
-            const finalPost = processPost(materials, postMat, !!estimate.increasePostDepth);
-            if (estimate.increasePostDepth) {
-              runDeeperPostMaterialDiff += stdPostCount * (finalPost.cost - postMat.cost);
-            }
-            const cost = stdPostCount * finalPost.cost;
-            runFenceMaterialCost += cost;
-            runItems.push({
-              id: finalPost.id,
-              name: finalPost.name,
-              qty: stdPostCount,
-              unit: finalPost.unit,
-              unitCost: finalPost.cost,
-              priceSource: finalPost.priceSource,
-              total: cost,
-              category: 'Structure',
-              originalPostName: finalPost.originalPostName,
-              longerMatchingPostName: finalPost.longerMatchingPostName,
-              deeperWarning: finalPost.deeperWarning,
-              increasedDepth: finalPost.increasedDepth
+            const defaultPostMat = materials.find(m => m.id === `m-post-2x2-${postHeight}`) || materials.find(m => m.id === `m-post-2x2-8`) || materials[0];
+            
+            resolvedIronPosts.forEach(p => {
+              let currentPostMat = defaultPostMat;
+              
+              // If it's a gate post, we might want 4x4 for drive gates
+              if (p.type === 'gate-hinge' || p.type === 'gate-latch') {
+                const gate = run.gateDetails?.find(g => 
+                  (p.id.includes(g.id) || (p.position >= (g.position || 0) && p.position <= ((g.position || 0) + g.width + 0.1)))
+                );
+                if (gate && gate.type === 'Double') {
+                  const drivePostMat = materials.find(m => m.id === `m-post-4x4-${postHeight}`) || materials.find(m => m.id === `m-post-4x4-8`);
+                  if (drivePostMat) currentPostMat = drivePostMat;
+                }
+              }
+
+              const finalPost = processPost(materials, currentPostMat, !!estimate.increasePostDepth);
+              if (estimate.increasePostDepth) {
+                runDeeperPostMaterialDiff += (finalPost.cost - currentPostMat.cost);
+              }
+              runFenceMaterialCost += finalPost.cost;
+              runItems.push({
+                id: finalPost.id,
+                name: finalPost.name,
+                qty: 1,
+                unit: finalPost.unit,
+                unitCost: finalPost.cost,
+                priceSource: finalPost.priceSource,
+                total: finalPost.cost,
+                category: 'Structure',
+                originalPostName: finalPost.originalPostName,
+                longerMatchingPostName: finalPost.longerMatchingPostName,
+                deeperWarning: finalPost.deeperWarning,
+                increasedDepth: finalPost.increasedDepth
+              });
             });
           }
         }
@@ -1544,11 +1569,12 @@ export function calculateDetailedTakeOff(
       const capMat = materials.find(m => m.id === capId) || materials.find(m => m.id === 'pc-dome');
       
       // Post caps will only be used at end posts, corner posts, and gate posts for Pipe Fence
-      const capQty = runStyle.type === 'Pipe' 
+      // Wrought Iron (Metal) does NOT use these dome caps
+      const capQty = (runStyle.type === 'Pipe') 
         ? Math.max(0, (runPostCount - runLinePosts) + gatePostCountForRun) 
-        : runPostCount;
+        : (runStyle.type === 'Metal' ? 0 : runPostCount);
 
-      if (capQty > 0 && capMat) {
+      if (capQty > 0 && capMat && runStyle.type !== 'Metal') {
         const capCost = capQty * capMat.cost;
         runFenceMaterialCost += capCost;
         runItems.push({
@@ -1567,42 +1593,46 @@ export function calculateDetailedTakeOff(
       const runConcreteType = run.concreteType || effectiveConcreteType || 'Maximizer';
       const is8ftWood = runStyle.type === 'Wood' && run.height === 8;
       
-      let bagsPerPost = 0.7; // Standard fallthrough
-      let concreteMatId = 'i-concrete-80';
-
-      if (runConcreteType === 'Quickset') {
-        bagsPerPost = is8ftWood ? 3 : 2;
-        concreteMatId = 'i-concrete-quickset';
-      } else if (runConcreteType === 'Maximizer') {
-        bagsPerPost = is8ftWood ? 1 : 0.7;
-        concreteMatId = 'i-concrete-maximizer';
-      } else {
-        bagsPerPost = logic.concretePerPost;
+      let postsInConcrete = runPostCountForTakeoff;
+      if (runStyle.type === 'Pipe' && run.pipeInstallType === 'Driven Posts') {
+        const cornerAndEndPosts = runCornerPosts + startEndPosts;
+        const concreteIntervalCount = Math.floor(runLF / 96);
+        const concretePostCount = Math.min(stdPostCount, cornerAndEndPosts + concreteIntervalCount);
+        postsInConcrete = gatePostCountForRun + concretePostCount;
       }
 
-      const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80');
-      if (concreteMat) {
-        let postsInConcrete = runPostCount;
-        if (runStyle.type === 'Pipe' && run.pipeInstallType === 'Driven Posts') {
-          const cornerAndEndPosts = runCornerPosts + startEndPosts;
-          const concreteIntervalCount = Math.floor(runLF / 96);
-          const concretePostCount = Math.min(stdPostCount, cornerAndEndPosts + concreteIntervalCount);
-          postsInConcrete = gatePostCountForRun + concretePostCount;
+      if (is8ftWood) {
+        let bagsPerPost = 0.7; 
+        let concreteMatId = 'i-concrete-80';
+
+        if (runConcreteType === 'Quickset') {
+          bagsPerPost = 3;
+          concreteMatId = 'i-concrete-quickset';
+        } else if (runConcreteType === 'Maximizer') {
+          bagsPerPost = 1;
+          concreteMatId = 'i-concrete-maximizer';
+        } else {
+          bagsPerPost = logic.concretePerPost;
         }
 
-        const concreteQty = Math.ceil(postsInConcrete * bagsPerPost);
-        const concreteCost = concreteQty * concreteMat.cost;
-        runFenceMaterialCost += concreteCost;
-        runItems.push({
-          id: concreteMat.id,
-          name: concreteMat.name,
-          qty: concreteQty,
-          unit: concreteMat.unit,
-          unitCost: concreteMat.cost,
-          priceSource: concreteMat.priceSource,
-          total: concreteCost,
-          category: 'Installation'
-        });
+        if (!concrete8ftWoodBuckets[concreteMatId]) {
+          concrete8ftWoodBuckets[concreteMatId] = { bagsPerPost, count: 0, materialId: concreteMatId };
+        }
+        concrete8ftWoodBuckets[concreteMatId].count += postsInConcrete;
+        
+        // For per-run cost attribution, we use fractional bags to ensure total matches sum of runs
+        const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80');
+        if (concreteMat) {
+          const runConcreteCost = postsInConcrete * bagsPerPost * concreteMat.cost;
+          runFenceMaterialCost += runConcreteCost;
+        }
+      } else {
+        // Standard Rule: 1.25 bags of Quickset per post
+        totalStandardConcretePosts += postsInConcrete;
+        if (quicksetMat) {
+          const runConcreteCost = postsInConcrete * 1.25 * quicksetMat.cost;
+          runFenceMaterialCost += runConcreteCost;
+        }
       }
 
       // Brackets and Lags for Wood Fence
@@ -2437,6 +2467,40 @@ export function calculateDetailedTakeOff(
     });
   });
 
+  // Finalize Global Concrete Items
+  if (totalStandardConcretePosts > 0 && quicksetMat) {
+    const qty = Math.ceil(totalStandardConcretePosts * 1.25);
+    addToSummary({
+      id: quicksetMat.id,
+      name: `${quicksetMat.name} (1.25 bags/post)`,
+      qty,
+      unit: quicksetMat.unit,
+      unitCost: quicksetMat.cost,
+      priceSource: quicksetMat.priceSource,
+      total: qty * quicksetMat.cost,
+      category: 'Installation'
+    });
+  }
+
+  Object.values(concrete8ftWoodBuckets).forEach(bucket => {
+    if (bucket.count > 0) {
+      const mat = materials.find(m => m.id === bucket.materialId) || materials.find(m => m.id === 'i-concrete-80');
+      if (mat) {
+        const qty = Math.ceil(bucket.count * bucket.bagsPerPost);
+        addToSummary({
+          id: mat.id,
+          name: `${mat.name} (8' Wood - ${bucket.bagsPerPost} bags/post)`,
+          qty,
+          unit: mat.unit,
+          unitCost: mat.cost,
+          priceSource: mat.priceSource,
+          total: qty * mat.cost,
+          category: 'Installation'
+        });
+      }
+    }
+  });
+
   // Global Items
   const totalLF = detailedRuns.reduce((sum, r) => sum + r.linearFeet, 0);
 
@@ -2751,7 +2815,11 @@ export function calculateDetailedTakeOff(
     grandTotal: finalCustomerPrice,
     subtotalBeforeDiscount,
     pricePerFoot,
-    // Debug fields
+    // Verification & Debug fields
+    ironPostResolvedCount: allResolvedIronPosts.length,
+    ironPostTakeoffCount: allItems.filter(i => (i.category === 'Structure' || i.category === 'Post') && i.id.startsWith('m-post-')).reduce((sum, i) => sum + i.qty, 0),
+    totalStandardConcretePosts,
+    // Existing fields
     fenceRunMaterialTotal,
     customMaterialTotal,
     materialTakeoffFinalTotal: authoritativeGrandTotal,
