@@ -2504,6 +2504,43 @@ export function calculateDetailedTakeOff(
     }
   });
 
+  // Reconcile Concrete Costs in detailedRuns to match rounded Takeoff
+  // This ensures Run Totals sum exactly to the Final Project Total
+  const standardFractionalBags = totalStandardConcretePosts * 1.25;
+  const standardRoundedBags = Math.ceil(standardFractionalBags);
+  const standardMultiplier = standardFractionalBags > 0 ? (standardRoundedBags / standardFractionalBags) : 1;
+
+  const bucketMultipliers: Record<string, number> = {};
+  Object.entries(concrete8ftWoodBuckets).forEach(([matId, bucket]) => {
+    const fractional = bucket.count * bucket.bagsPerPost;
+    const rounded = Math.ceil(fractional);
+    bucketMultipliers[matId] = fractional > 0 ? (rounded / fractional) : 1;
+  });
+
+  detailedRuns.forEach(run => {
+    let concreteAdjustment = 0;
+    run.items.forEach(item => {
+      if (item.category === 'Concrete') {
+        let mult = 1;
+        if (item.name.includes('(1.25 bags/post)')) {
+          mult = standardMultiplier;
+        } else if (item.name.includes('(8\' Wood')) {
+          // Identify which bucket by matching the material ID if possible, 
+          // or just assume the bucket multiplier for that material ID
+          mult = bucketMultipliers[item.id] || 1;
+        }
+
+        if (mult !== 1) {
+          const oldTotal = item.total;
+          item.qty = item.qty * mult;
+          item.total = item.qty * item.unitCost;
+          concreteAdjustment += (item.total - oldTotal);
+        }
+      }
+    });
+    run.fenceMaterialCost += concreteAdjustment;
+  });
+
   // Verification Logs for Wrought Iron
   const ironPostCount = allResolvedIronPosts.length;
   const ironPostTakeoffQty = Object.values(summaryMap).filter(i => (i.category === 'Structure' || i.category === 'Post') && i.id.startsWith('m-post-')).reduce((sum, i) => sum + i.qty, 0);
@@ -2834,7 +2871,10 @@ export function calculateDetailedTakeOff(
     customMaterialTotal,
     materialTakeoffFinalTotal: authoritativeGrandTotal,
     customerContractMaterialSource: customMaterialTotal > 0 ? 'Mixed (Runs + Manual)' : 'Runs Only',
-    customerContractDisplayedMaterialTotal: totalMaterial
+    customerContractDisplayedMaterialTotal: totalMaterial,
+    runTotalsMatchFail: Math.abs(totalSectionsSum - baseFenceTotal) > 0.01,
+    runTotalsDiff: totalSectionsSum - baseFenceTotal,
+    concreteReconciliationApplied: true
   };
 
   return {
