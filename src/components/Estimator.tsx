@@ -510,34 +510,7 @@ export default function Estimator({
   };
 
   const calculateCosts = () => {
-    // Resolve materials based on chosen strategy
-    const pricingStrategy = estimate.pricingStrategy || 'best';
-    const selectedSupplier = estimate.selectedSupplier || '';
-
-    let resolvedMaterials = materials;
-    if (pricingStrategy === 'supplier' && selectedSupplier) {
-      const supplierQuotes = quotes
-        .filter(q => q.supplierName === selectedSupplier)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      resolvedMaterials = materials.map(m => {
-        let quotedPrice: number | undefined;
-        for (const quote of supplierQuotes) {
-          const item = quote.items.find(i => i.mappedMaterialId === m.id);
-          if (item) {
-            quotedPrice = item.unitPrice;
-            break;
-          }
-        }
-
-        if (quotedPrice !== undefined) {
-          return { ...m, cost: quotedPrice };
-        }
-        return m;
-      });
-    }
-
-    const detailedData = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates);
+    const detailedData = calculateDetailedTakeOff(estimate, materials, globalLaborRates, quotes);
 
     const runBreakdown = detailedData.runs.map(run => {
       const chargeTotal = ((run.fenceMaterialCost + run.fenceLaborCost) * markupFactor) + (run.fenceMaterialCost * taxFactor);

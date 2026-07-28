@@ -1,4 +1,4 @@
-import { MaterialItem, LaborRates, Estimate, FenceRun, GateDetail } from '../types';
+import { MaterialItem, LaborRates, Estimate, FenceRun, GateDetail, SupplierQuote } from '../types';
 import { FENCE_STYLES } from '../constants';
 
 export interface TakeOffItem {
@@ -481,22 +481,28 @@ export function resolveWroughtIronPosts(runs: FenceRun[]): ResolvedWroughtIronPo
   return allPosts;
 }
 
-export function calculateDetailedTakeOff(
+/**
+ * Shared helper to resolve material prices based on estimate pricing strategy and supplier quotes.
+ */
+export function resolveEstimateMaterialPricing(
   estimate: Partial<Estimate>,
-  rawMaterials: MaterialItem[],
-  laborRates: LaborRates
-): DetailedTakeOff {
-  let materials = rawMaterials;
+  baseMaterials: MaterialItem[],
+  allQuotes: SupplierQuote[]
+): MaterialItem[] {
+  const pricingStrategy = estimate.pricingStrategy || 'best';
+  const selectedSupplier = estimate.selectedSupplier || '';
   const defaultSupplier = estimate.defaultMaterialPricingSupplierId;
-  if (defaultSupplier) {
-    const supplierQuotes = (estimate.quotes || [])
-      .filter(q => q.supplierName === defaultSupplier)
+  const quoteData = estimate.quotes || allQuotes || [];
+
+  // 1. If strategy is 'supplier' and we have a selected supplier, use that.
+  if (pricingStrategy === 'supplier' && selectedSupplier) {
+    const supplierQuotes = quoteData
+      .filter(q => q.supplierName === selectedSupplier)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    materials = rawMaterials.map(m => {
+    return baseMaterials.map(m => {
       let quotedPrice: number | undefined;
       let source = 'Library fallback';
-      
       for (const quote of supplierQuotes) {
         const item = quote.items.find(i => i.mappedMaterialId === m.id);
         if (item && item.unitPrice > 0) {
@@ -512,6 +518,61 @@ export function calculateDetailedTakeOff(
       return { ...m, priceSource: 'Library fallback' };
     });
   }
+
+  // 2. Fallback to default supplier if set
+  if (defaultSupplier) {
+    const supplierQuotes = quoteData
+      .filter(q => q.supplierName === defaultSupplier)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return baseMaterials.map(m => {
+      let quotedPrice: number | undefined;
+      let source = 'Library fallback';
+      for (const quote of supplierQuotes) {
+        const item = quote.items.find(i => i.mappedMaterialId === m.id);
+        if (item && item.unitPrice > 0) {
+          quotedPrice = item.unitPrice;
+          source = quote.supplierName;
+          break;
+        }
+      }
+
+      if (quotedPrice !== undefined) {
+        return { ...m, cost: quotedPrice, priceSource: source };
+      }
+      return { ...m, priceSource: 'Library fallback' };
+    });
+  }
+
+  // 3. Handle 'best' pricing strategy (find lowest across all quotes)
+  if (pricingStrategy === 'best') {
+    return baseMaterials.map(m => {
+      let bestPrice = m.cost;
+      let source = 'Library';
+
+      quoteData.forEach(quote => {
+        const item = quote.items.find(i => i.mappedMaterialId === m.id);
+        if (item && item.unitPrice > 0 && (item.unitPrice < bestPrice || source === 'Library')) {
+          bestPrice = item.unitPrice;
+          source = quote.supplierName;
+        }
+      });
+
+      return { ...m, cost: bestPrice, priceSource: source };
+    });
+  }
+
+  // Default: Return library materials
+  return baseMaterials.map(m => ({ ...m, priceSource: 'Library' }));
+}
+
+export function calculateDetailedTakeOff(
+  estimate: Partial<Estimate>,
+  rawMaterials: MaterialItem[],
+  laborRates: LaborRates,
+  allQuotes: SupplierQuote[] = []
+): DetailedTakeOff {
+  const materials = resolveEstimateMaterialPricing(estimate, rawMaterials, allQuotes);
 
   const rawRuns = estimate.runs || [];
   let activeRuns = [...rawRuns];

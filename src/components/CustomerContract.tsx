@@ -69,36 +69,6 @@ export default function CustomerContract({
     return email;
   }, [resolvedMetaSource.customerEmail]);
 
-  // Resolve materials based on chosen strategy
-  const pricingStrategy = estimate.pricingStrategy || 'best';
-  const selectedSupplier = estimate.selectedSupplier || '';
-
-  const resolvedMaterials = React.useMemo(() => {
-    let resolved = materials;
-    if (pricingStrategy === 'supplier' && selectedSupplier) {
-      const supplierQuotes = quotes
-        .filter(q => q.supplierName === selectedSupplier)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      resolved = materials.map(m => {
-        let quotedPrice: number | undefined;
-        for (const quote of supplierQuotes) {
-          const item = quote.items.find(i => i.mappedMaterialId === m.id);
-          if (item) {
-            quotedPrice = item.unitPrice;
-            break;
-          }
-        }
-
-        if (quotedPrice !== undefined) {
-          return { ...m, cost: quotedPrice };
-        }
-        return m;
-      });
-    }
-    return resolved;
-  }, [materials, pricingStrategy, selectedSupplier, quotes]);
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.contractScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');
@@ -265,10 +235,10 @@ export default function CustomerContract({
       customContractLineItems: customLineItems,
       customContractLineItemsTotal: customContractLineItemsTotal
     };
-    const calculated = calculateDetailedTakeOff(mergedEstimate, resolvedMaterials, laborRates);
+    const calculated = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes);
     
     return calculated;
-  }, [estimate, resolvedMaterials, laborRates, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal]);
+  }, [estimate, materials, laborRates, quotes, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal]);
 
   const hasIron = data.runs.some(r => r.styleType === 'Metal');
 

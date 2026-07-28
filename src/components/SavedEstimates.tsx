@@ -6,7 +6,7 @@ import {
   Shield, Check, Briefcase, CheckCircle2, Image as ImageIcon,
   FolderOpen, ArrowLeft, ChevronDown, Mail, Send, Eye, Clock, Lock, AlertCircle, Copy, History
 } from 'lucide-react';
-import { SavedEstimate, JobStatus, JobPhoto, User, MaterialItem, LaborRates } from '../types';
+import { SavedEstimate, JobStatus, JobPhoto, User, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { formatCurrency, cn, assignEstimateNumbers, getEstimateFinalPrice } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, getEstimateDoc } from '../lib/firebase';
@@ -21,6 +21,7 @@ interface SavedEstimatesProps {
   user: User | null;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  quotes?: SupplierQuote[];
 }
 
 const STATUS_FLOW: JobStatus[] = ['Estimate Pending', 'Estimate Sent', 'Accepted', 'Completed'];
@@ -62,7 +63,16 @@ const getStatusStyle = (statusLabel: string) => {
   }
 };
 
-export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLoadEstimate, setActiveTab, user, materials, laborRates }: SavedEstimatesProps) {
+export default function SavedEstimates({ 
+  savedEstimates, 
+  setSavedEstimates, 
+  onLoadEstimate, 
+  setActiveTab, 
+  user, 
+  materials, 
+  laborRates,
+  quotes = []
+}: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'declined' | 'archived'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
@@ -204,9 +214,23 @@ export default function SavedEstimates({ savedEstimates, setSavedEstimates, onLo
         manualGatePrices: sendModalEstimate.manualGatePrices || {}
       } as any;
       
-      const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materials, laborRates);
+      const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes);
       const pricing = recalculatedTakeOff.pricing;
       const finalPrice = pricing.finalCustomerPrice;
+
+      // VALIDATION: Compare with authoritative total
+      const currentAuthoritativeTotal = Number(mergedEstimate.finalCustomerPrice || mergedEstimate.grandTotal || mergedEstimate.totalInvestment || 0);
+      const diff = Math.abs(finalPrice - currentAuthoritativeTotal);
+
+      // Check if estimate is already signed/accepted - if so, we should NOT regenerate the snapshot
+      const isSigned = !!(sendModalEstimate.customerSignature || sendModalEstimate.customerDecision === 'accepted' || sendModalEstimate.jobStatus === 'Approved' || sendModalEstimate.jobStatus === 'Accepted');
+
+      if (!isSigned && diff > 0.01) {
+         setIsSendingEmail(false);
+         const mismatchDetails = `Pricing mismatch detected. Current Estimate: ${formatCurrency(currentAuthoritativeTotal)}, Regenerated: ${formatCurrency(finalPrice)}, Diff: ${formatCurrency(finalPrice - currentAuthoritativeTotal)}. Pricing Strategy: ${mergedEstimate.pricingStrategy || 'best'}, Selected Supplier: ${mergedEstimate.selectedSupplier || 'N/A'}.`;
+         setSendErrorMessage(`Contract regeneration blocked: ${mismatchDetails} Please verify estimate pricing before resending.`);
+         return;
+      }
 
       // Gate Summary construction
       let gateCount = 0;

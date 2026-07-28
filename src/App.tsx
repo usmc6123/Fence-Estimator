@@ -1261,6 +1261,7 @@ export default function App() {
               user={user}
               materials={materials}
               laborRates={laborRates}
+              quotes={quotes}
             />
           )}
           {activeTab === 'financials' && (
@@ -1311,7 +1312,7 @@ export default function App() {
             />
           )}
           {activeTab === 'supplier-order' && (
-            <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} />
+            <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} quotes={quotes} />
           )}
           {activeTab === 'quotes' && (
             <QuoteManager 

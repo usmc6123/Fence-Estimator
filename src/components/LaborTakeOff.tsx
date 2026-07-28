@@ -28,7 +28,7 @@ export default function LaborTakeOff({
   setAiProjectScope,
   onUpdateEstimate
 }: LaborTakeOffProps) {
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes);
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.laborScope || aiProjectScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');

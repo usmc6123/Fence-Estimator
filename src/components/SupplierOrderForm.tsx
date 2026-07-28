@@ -1,6 +1,6 @@
 import React from 'react';
 import { Printer, FileText, Package, ExternalLink } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates } from '../types';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { COMPANY_INFO } from '../constants';
 
@@ -8,10 +8,11 @@ interface SupplierOrderFormProps {
   estimate: Partial<Estimate>;
   materials: MaterialItem[];
   laborRates: LaborRates;
+  quotes: SupplierQuote[];
 }
 
-export default function SupplierOrderForm({ estimate, materials, laborRates }: SupplierOrderFormProps) {
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates);
+export default function SupplierOrderForm({ estimate, materials, laborRates, quotes }: SupplierOrderFormProps) {
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes);
 
   // Consolidate all materials into one master list
   const consolidatedMaterials = [
