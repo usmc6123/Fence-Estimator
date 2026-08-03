@@ -69,6 +69,7 @@ export interface RunTakeOff {
   gateLaborCost: number;
   demoCharge: number;
   stainingCharge: number;
+  finalPrep?: number;
   gates: {
     gateId: string;
     type: string;
@@ -112,6 +113,7 @@ export interface DetailedTakeOff {
       finalGate: number;
       finalDemo: number;
       finalStain: number;
+      finalPrep: number;
       totalSection: number;
       netLF: number;
     }[];
@@ -2825,6 +2827,9 @@ export function calculateDetailedTakeOff(
     // Demo Charge
     const demoCharge = run.demoCharge * markupFactor;
 
+    // Site Prep Charge (Assign global site prep revenue to the first run)
+    const finalPrep = i === 0 ? (totalPrepRevenue * markupFactor) : 0;
+
     // Apply Overrides
     const finalFence = (estimate.manualSectionTotals?.[i] !== undefined && estimate.manualSectionTotals?.[i] !== null)
       ? estimate.manualSectionTotals[i]!
@@ -2840,7 +2845,7 @@ export function calculateDetailedTakeOff(
 
     const finalStain = stainingCharge;
 
-    const totalSection = finalFence + finalGate + finalDemo + finalStain;
+    const totalSection = finalFence + finalGate + finalDemo + finalStain + finalPrep;
 
     return {
       runName: run.runName,
@@ -2852,12 +2857,36 @@ export function calculateDetailedTakeOff(
       finalGate,
       finalDemo,
       finalStain,
+      finalPrep,
       totalSection,
       netLF: run.netLF
     };
   });
 
   // Sum up section totals
+  const totalSectionsSumBeforeAdjustment = runsPricing.reduce((sum, r) => sum + r.totalSection, 0);
+
+  // Authoritative Grand Total from Takeoff (Excluding bundled price internal costs)
+  const authoritativeGrandTotal = (totalMaterialRevenue + totalLaborRevenue + totalDemoRevenue + totalPrepRevenue) * markupFactor + (totalMaterialRevenue * taxFactor);
+
+  // Discount
+  const discountAmount = estimate.discountAmount || 0;
+
+  // Calculated overall base fence total (excluding custom contract line items)
+  // This should match authoritativeGrandTotal minus discount
+  let baseFenceCalculatedTotal = authoritativeGrandTotal - discountAmount;
+
+  // Final Single-Source-of-Truth Reconciliation Adjustment
+  // We apply the difference between the authoritative total and the sum of sections to the first section.
+  // This captures global items like pipe stick optimization differences, concrete rounding, etc.
+  const reconciliationAdjustment = baseFenceCalculatedTotal - totalSectionsSumBeforeAdjustment;
+  
+  if (runsPricing.length > 0) {
+    runsPricing[0].finalFence += reconciliationAdjustment;
+    runsPricing[0].totalSection += reconciliationAdjustment;
+  }
+
+  // Recalculate definitive total sections sum after reconciliation
   const totalSectionsSum = runsPricing.reduce((sum, r) => sum + r.totalSection, 0);
 
   // Prep cost charge
@@ -2865,16 +2894,6 @@ export function calculateDetailedTakeOff(
 
   // Demo removal charge
   const demoRemovalPrice = runsPricing.reduce((sum, r) => sum + r.finalDemo, 0);
-
-  // Discount
-  const discountAmount = estimate.discountAmount || 0;
-
-  // Authoritative Grand Total from Takeoff (Excluding bundled price internal costs)
-  const authoritativeGrandTotal = (totalMaterialRevenue + totalLaborRevenue + totalDemoRevenue + totalPrepRevenue) * markupFactor + (totalMaterialRevenue * taxFactor);
-
-  // Calculated overall base fence total (excluding custom contract line items)
-  // This should match authoritativeGrandTotal minus discount
-  let baseFenceCalculatedTotal = authoritativeGrandTotal - discountAmount;
 
   // Override or Calculated for base fence
   const manualGrandTotal = estimate.manualGrandTotal !== undefined && estimate.manualGrandTotal !== null ? estimate.manualGrandTotal : null;

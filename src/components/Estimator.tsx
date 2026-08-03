@@ -3255,6 +3255,7 @@ export default function Estimator({
                   estimate={estimate}
                   materials={materials}
                   laborRates={globalLaborRates}
+                  quotes={quotes}
                 />
               </div>
             </motion.div>

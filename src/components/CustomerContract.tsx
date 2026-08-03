@@ -193,6 +193,7 @@ export default function CustomerContract({
             const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge || run.finalGate || 0);
             const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge || run.finalDemo || 0);
             const finalStainValue = run.stainTotal !== undefined ? run.stainTotal : (run.stainingCharge || run.finalStain || 0);
+            const finalPrepValue = run.prepTotal !== undefined ? run.prepTotal : (run.finalPrep || 0);
             return {
               runName: run.runName || run.name || `Section ${i + 1}`,
               totalFenceCharge: Number(finalFenceValue),
@@ -203,7 +204,8 @@ export default function CustomerContract({
               finalGate: Number(finalGateValue),
               finalDemo: Number(finalDemoValue),
               finalStain: Number(finalStainValue),
-              totalSection: Number(run.sectionTotal || run.totalSectionCharge || (Number(finalFenceValue) + Number(finalGateValue) + Number(finalDemoValue) + Number(finalStainValue))),
+              finalPrep: Number(finalPrepValue),
+              totalSection: Number(run.sectionTotal || run.totalSectionCharge || (Number(finalFenceValue) + Number(finalGateValue) + Number(finalDemoValue) + Number(finalStainValue) + Number(finalPrepValue))),
               netLF: Number(run.linearFeet !== undefined ? run.linearFeet : (run.netLF || 0))
             };
           }),
@@ -258,6 +260,7 @@ export default function CustomerContract({
         const finalGateValue = run.gatesTotal !== undefined ? run.gatesTotal : (run.totalGateCharge !== undefined ? run.totalGateCharge : (run.finalGate || 0));
         const finalDemoValue = run.demoTotal !== undefined ? run.demoTotal : (run.demoCharge !== undefined ? run.demoCharge : (run.finalDemo || 0));
         const finalStainValue = run.stainingTotal !== undefined ? run.stainingTotal : (run.stainingCharge !== undefined ? run.stainingCharge : (run.finalStain || 0));
+        const finalPrepValue = run.prepTotal !== undefined ? run.prepTotal : (run.finalPrep || 0);
 
         return {
           name: run.runName || run.name || `Section ${i + 1}`,
@@ -267,6 +270,7 @@ export default function CustomerContract({
           totalGateCharge: Number(finalGateValue),
           demoCharge: Number(finalDemoValue),
           stainingCharge: Number(finalStainValue),
+          finalPrep: Number(finalPrepValue),
           gates: run.gateDetails || run.gates || [],
           style: run.fenceType || run.styleName || run.styleId || run.style || '',
           styleType: run.styleType || '',
@@ -312,6 +316,8 @@ export default function CustomerContract({
       // Demo Charge
       const demoCharge = run.demoCharge * markupFactor;
 
+      const finalPrep = run.finalPrep || 0;
+
       return {
         name: run.runName,
         netLF: run.netLF,
@@ -320,6 +326,7 @@ export default function CustomerContract({
         totalGateCharge,
         demoCharge,
         stainingCharge,
+        finalPrep,
         gates: run.gates,
         style: run.styleName,
         styleType: run.styleType,
@@ -1616,6 +1623,15 @@ Please structure the contract narrative with professional Markdown bold headers 
                                 )}
                               </div>
                             </div>
+
+                            {runPricing.finalPrep > 0 && (
+                              <div className="flex justify-between items-center group">
+                                <span className="text-[10px] font-bold text-[#999999] uppercase tracking-widest">Site Prep</span>
+                                <span className="font-bold text-american-blue text-xs">
+                                  {formatCurrency(runPricing.finalPrep)}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="mt-auto pt-4 border-t-2 border-american-blue/5 flex justify-between items-center bg-american-blue/5 -mx-6 -mb-6 px-6 py-4 rounded-b-2xl">
