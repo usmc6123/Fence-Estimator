@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2, Layers } from 'lucide-react';
+import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2, Layers, Package } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote, CustomContractLineItem } from '../types';
 import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
 import { cn, formatCurrency, getEstimateFinalPrice } from '../lib/utils';
@@ -2087,6 +2087,46 @@ Please structure the contract narrative with professional Markdown bold headers 
                           </span>
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* PIPE OPTIMIZATION AUDIT */}
+                  {data.pipeAudit && (
+                    <div className="space-y-4 pt-8 border-t border-slate-800">
+                      <div className="text-sky-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2">
+                        <Package size={14} />
+                        Pipe Stock Optimization Audit
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Required Footage</span>
+                          <span className="text-white text-lg font-black block">{data.pipeAudit.requiredLinearFeet.toFixed(1)} LF</span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Optimized Sticks (32')</span>
+                          <span className="text-emerald-400 text-lg font-black block">{data.pipeAudit.optimizedStickCount}</span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Purchased Footage</span>
+                          <span className="text-sky-400 text-lg font-black block">{data.pipeAudit.purchasedLinearFeet} LF</span>
+                        </div>
+                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black block">Total Waste</span>
+                          <span className="text-rose-400 text-lg font-black block">{data.pipeAudit.totalWaste.toFixed(1)} LF</span>
+                        </div>
+                      </div>
+
+                      {data.pipeAudit.optimizedStickCount !== data.pipeAudit.minSticksTheoretical && (
+                        <div className="bg-amber-400/10 border border-amber-400/20 p-4 rounded-2xl">
+                          <div className="flex items-center gap-2 text-amber-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                            <AlertCircle size={14} />
+                            Optimization Efficiency Warning
+                          </div>
+                          <p className="text-slate-400 text-[11px] leading-relaxed">
+                            Theoretical minimum is {data.pipeAudit.minSticksTheoretical} sticks based on linear feet, but optimization requires {data.pipeAudit.optimizedStickCount} sticks due to individual cut constraints.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 

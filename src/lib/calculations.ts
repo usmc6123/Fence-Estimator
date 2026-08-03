@@ -91,6 +91,17 @@ export interface DetailedTakeOff {
   runs: RunTakeOff[];
   pipeCuttingSummary?: PipeCuttingGuide;
   allResolvedIronPosts?: ResolvedWroughtIronPost[];
+  pipeAudit?: {
+    requiredLinearFeet: number;
+    stockLength: number;
+    minSticksTheoretical: number;
+    optimizedStickCount: number;
+    purchasedLinearFeet: number;
+    totalWaste: number;
+    pricingQuantity: number;
+    rawMaterialCost: number;
+    sellingPriceTotal: number;
+  };
   totals: {
     material: number;
     labor: number;
@@ -182,15 +193,21 @@ function calculateStickOptimization(requiredLengths: number[], stickLength: numb
 }
 
 function getPostLength(item: MaterialItem): number | null {
+  // If it's explicitly a stick or rail item, don't treat it as a post with a fixed length
+  if (item.id.includes('stick') || item.id.includes('rail')) return null;
+
   // Try ID suffix first, e.g., m-post-2x2-10 or w-post-metal-12
   const idMatch = item.id.match(/-(\d+)(?:-|$)/);
   if (idMatch) {
-    return parseInt(idMatch[1], 10);
+    const val = parseInt(idMatch[1], 10);
+    // Sanity check: posts are usually between 4 and 15 feet
+    if (val >= 4 && val <= 15) return val;
   }
   // Try name pattern, e.g., "6' Steel T-Post" or "8' Sch 20 Metal Post"
   const nameMatch = item.name.match(/(\d+)'/);
   if (nameMatch) {
-    return parseInt(nameMatch[1], 10);
+    const val = parseInt(nameMatch[1], 10);
+    if (val >= 4 && val <= 15) return val;
   }
   return null;
 }
@@ -2652,21 +2669,39 @@ export function calculateDetailedTakeOff(
     }
   }
 
+  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
+  const taxFactor = (estimate.taxPercentage || 0) / 100;
+
   // Pipe Stick Optimization
   let pipeCuttingSummary: PipeCuttingGuide | undefined;
+  let pipeAudit: any = undefined;
+  
   if (allPipeSegments.length > 0) {
-    pipeCuttingSummary = calculateStickOptimization(allPipeSegments, 32);
+    const stockLength = 32;
+    pipeCuttingSummary = calculateStickOptimization(allPipeSegments, stockLength);
     const stickMat = materials.find(m => m.id === 'p-stick-32');
-    if (stickMat && pipeCuttingSummary.sticks.length > 0) {
+    
+    const requiredLF = allPipeSegments.reduce((sum, s) => sum + s, 0);
+    const optimizedCount = pipeCuttingSummary.sticks.length;
+    const purchasedLF = optimizedCount * stockLength;
+    const wasteLF = pipeCuttingSummary.totalWaste;
+
+    if (stickMat && optimizedCount > 0) {
       // Remove individual pipe items from summaryMap to replace with optimized sticks
+      let removedPipeCost = 0;
       Object.keys(summaryMap).forEach(key => {
-        if (key.includes('2-3/8" Sch 40 Top Rail Pipe') || key.includes('Sch 40 Pipe Post')) {
+        // Match both standard names and those with extra labels (like " (Project Extra)")
+        if (key.includes('2-3/8" Sch 40 Top Rail Pipe') || key.includes('Sch 40 Pipe Post') || key.includes('2-3/8" x 32\' Sch 40 Pipe Stick')) {
+          removedPipeCost += summaryMap[key].total;
           delete summaryMap[key];
         }
       });
+      
+      // Update totalMaterial by subtracting what we removed
+      totalMaterial -= removedPipeCost;
 
       // Add optimized sticks
-      const qty = pipeCuttingSummary.sticks.length;
+      const qty = optimizedCount;
       const stickItem = {
         id: stickMat.id,
         name: stickMat.name,
@@ -2677,7 +2712,22 @@ export function calculateDetailedTakeOff(
         total: qty * stickMat.cost,
         category: 'Rail'
       };
+      
+      // Add stick total to material total
+      totalMaterial += stickItem.total;
       addToSummary(stickItem);
+
+      pipeAudit = {
+        requiredLinearFeet: requiredLF,
+        stockLength,
+        minSticksTheoretical: Math.ceil(requiredLF / stockLength),
+        optimizedStickCount: optimizedCount,
+        purchasedLinearFeet: purchasedLF,
+        totalWaste: wasteLF,
+        pricingQuantity: qty,
+        rawMaterialCost: stickMat.cost,
+        sellingPriceTotal: stickItem.total * markupFactor * (1 + taxFactor)
+      };
     }
   }
 
@@ -2801,11 +2851,7 @@ export function calculateDetailedTakeOff(
   const totalDemoRevenue = revenueItems.filter(i => i.category === 'Demolition').reduce((sum, i) => sum + i.total, 0);
   const totalPrepRevenue = revenueItems.filter(i => i.category === 'SitePrep').reduce((sum, i) => sum + i.total, 0);
 
-  // Append extraLaborTakeoffItems to the returned summary so they show up in the Subcontractor Labor Manifest
   const finalSummary = [...calculatedSummary, ...extraLaborTakeoffItems];
-
-  const markupFactor = 1 + (estimate.markupPercentage || 0) / 100;
-  const taxFactor = (estimate.taxPercentage || 0) / 100;
 
   const runsPricing = detailedRuns.map((run, i) => {
     // Separate staining from pure fence installation
@@ -2882,7 +2928,13 @@ export function calculateDetailedTakeOff(
   const reconciliationAdjustment = baseFenceCalculatedTotal - totalSectionsSumBeforeAdjustment;
   
   if (runsPricing.length > 0) {
-    runsPricing[0].finalFence += reconciliationAdjustment;
+    // For pipe fences, we want to specifically label the reconciliation if it's large
+    if (hasAnyPipe && Math.abs(reconciliationAdjustment) > 1) {
+       // We'll keep it in finalFence for now but it's important to know why it's there
+       runsPricing[0].finalFence += reconciliationAdjustment;
+    } else {
+       runsPricing[0].finalFence += reconciliationAdjustment;
+    }
     runsPricing[0].totalSection += reconciliationAdjustment;
   }
 
@@ -2962,6 +3014,7 @@ export function calculateDetailedTakeOff(
     manualSummary: manualSummary,
     runs: detailedRuns,
     pipeCuttingSummary,
+    pipeAudit,
     allResolvedIronPosts,
     totals: {
       material: totalMaterial,
