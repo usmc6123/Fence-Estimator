@@ -2130,28 +2130,6 @@ Please structure the contract narrative with professional Markdown bold headers 
                     </div>
                   )}
 
-                  {/* CONCRETE VERIFICATION */}
-                  <div className="space-y-4 pt-8 border-t border-slate-800">
-                    <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">
-                      Concrete Calculation Audit
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
-                        <span className="text-[9px] text-slate-500 uppercase font-black block">Standard Rule Posts</span>
-                        <span className="text-white font-bold block">{data.pricing.totalStandardConcretePosts || 0}</span>
-                        <span className="text-[9px] text-slate-600 font-bold uppercase">Rate: 1.25 bags/post (Quickset)</span>
-                      </div>
-                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
-                        <span className="text-[9px] text-slate-500 uppercase font-black block">Raw Concrete (Standard)</span>
-                        <span className="text-white font-bold block">{(data.pricing.totalStandardConcretePosts || 0) * 1.25} bags</span>
-                      </div>
-                      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
-                        <span className="text-[9px] text-slate-500 uppercase font-black block">Final Purchase Qty</span>
-                        <span className="text-emerald-400 font-black block">{data.summary.find(i => i.id === 'i-concrete-quickset')?.qty || 0} bags</span>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* FIRESTORE SYNC MONITOR */}
                   <div className="space-y-4 pt-8 border-t border-slate-800">
                     <div className="text-slate-400 font-black uppercase tracking-widest text-[10px]">

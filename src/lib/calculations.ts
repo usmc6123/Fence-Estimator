@@ -144,7 +144,6 @@ export interface DetailedTakeOff {
     // Verification & Debug fields
     ironPostResolvedCount?: number;
     ironPostTakeoffCount?: number;
-    totalStandardConcretePosts?: number;
     // Debug fields
     fenceRunMaterialTotal?: number;
     customMaterialTotal?: number;
@@ -821,8 +820,7 @@ export function calculateDetailedTakeOff(
   const allResolvedIronPosts = resolveWroughtIronPosts(runs);
 
   // Global concrete tracking for deduplicated rounding
-  let totalStandardConcretePosts = 0;
-  const concrete8ftWoodBuckets: Record<string, { bagsPerPost: number, count: number, materialId: string }> = {};
+  const concreteBuckets: Record<string, { bagsPerPost: number, count: number, materialId: string }> = {};
   const quicksetMat = materials.find(m => m.id === 'i-concrete-quickset') || materials.find(m => m.id === 'i-concrete-80');
 
   runs.forEach((run, idx) => {
@@ -1646,7 +1644,18 @@ export function calculateDetailedTakeOff(
 
       // Concrete Calculation
       const runConcreteType = run.concreteType || effectiveConcreteType || 'Maximizer';
-      const is8ftWood = runStyle.type === 'Wood' && run.height === 8;
+      let bagsPerPost = 0.75; 
+      let concreteMatId = 'i-concrete-maximizer';
+
+      if (runConcreteType === 'Quickset') {
+        const is8ftWood = runStyle.type === 'Wood' && run.height === 8;
+        bagsPerPost = is8ftWood ? 3 : 1.25;
+        concreteMatId = 'i-concrete-quickset';
+      } else {
+        // Maximizer is exactly 0.75 bags per post as requested
+        bagsPerPost = 0.75;
+        concreteMatId = 'i-concrete-maximizer';
+      }
       
       let postsInConcrete = runPostCountForTakeoff;
       if (runStyle.type === 'Pipe' && run.pipeInstallType === 'Driven Posts') {
@@ -1656,24 +1665,12 @@ export function calculateDetailedTakeOff(
         postsInConcrete = gatePostCountForRun + concretePostCount;
       }
 
-      if (is8ftWood) {
-        let bagsPerPost = 0.7; 
-        let concreteMatId = 'i-concrete-80';
-
-        if (runConcreteType === 'Quickset') {
-          bagsPerPost = 3;
-          concreteMatId = 'i-concrete-quickset';
-        } else if (runConcreteType === 'Maximizer') {
-          bagsPerPost = 1;
-          concreteMatId = 'i-concrete-maximizer';
-        } else {
-          bagsPerPost = logic.concretePerPost;
+      if (postsInConcrete > 0) {
+        const bucketKey = `${concreteMatId}-${bagsPerPost}`;
+        if (!concreteBuckets[bucketKey]) {
+          concreteBuckets[bucketKey] = { bagsPerPost, count: 0, materialId: concreteMatId };
         }
-
-        if (!concrete8ftWoodBuckets[concreteMatId]) {
-          concrete8ftWoodBuckets[concreteMatId] = { bagsPerPost, count: 0, materialId: concreteMatId };
-        }
-        concrete8ftWoodBuckets[concreteMatId].count += postsInConcrete;
+        concreteBuckets[bucketKey].count += postsInConcrete;
         
         // For per-run cost attribution, we use fractional bags to ensure total matches sum of runs
         const concreteMat = materials.find(m => m.id === concreteMatId) || materials.find(m => m.id === 'i-concrete-80');
@@ -1682,28 +1679,11 @@ export function calculateDetailedTakeOff(
           runFenceMaterialCost += runConcreteCost;
           runItems.push({
             id: concreteMat.id,
-            name: `${concreteMat.name} (8' Wood - ${bagsPerPost} bags/post)`,
+            name: `${concreteMat.name} (${bagsPerPost} bags/post)`,
             qty: postsInConcrete * bagsPerPost,
             unit: concreteMat.unit,
             unitCost: concreteMat.cost,
             priceSource: concreteMat.priceSource,
-            total: runConcreteCost,
-            category: 'Concrete'
-          });
-        }
-      } else {
-        // Standard Rule: 1.25 bags of Quickset per post
-        totalStandardConcretePosts += postsInConcrete;
-        if (quicksetMat) {
-          const runConcreteCost = postsInConcrete * 1.25 * quicksetMat.cost;
-          runFenceMaterialCost += runConcreteCost;
-          runItems.push({
-            id: quicksetMat.id,
-            name: `${quicksetMat.name} (1.25 bags/post)`,
-            qty: postsInConcrete * 1.25,
-            unit: quicksetMat.unit,
-            unitCost: quicksetMat.cost,
-            priceSource: quicksetMat.priceSource,
             total: runConcreteCost,
             category: 'Concrete'
           });
@@ -2545,31 +2525,14 @@ export function calculateDetailedTakeOff(
   });
 
   // Finalize Global Concrete Items
-  if (totalStandardConcretePosts > 0 && quicksetMat) {
-    const qty = Math.ceil(totalStandardConcretePosts * 1.25);
-    addToSummary({
-      id: quicksetMat.id,
-      name: `${quicksetMat.name} (Standard Concrete)`,
-      qty,
-      unit: quicksetMat.unit,
-      unitCost: quicksetMat.cost,
-      priceSource: quicksetMat.priceSource,
-      total: qty * quicksetMat.cost,
-      category: 'Concrete'
-    });
-    totalMaterial += qty * quicksetMat.cost;
-  } else if (totalStandardConcretePosts > 0) {
-    console.error(`Quickset concrete material mapping failed. Standard post count: ${totalStandardConcretePosts}, Calculated bags: ${totalStandardConcretePosts * 1.25}, Quickset material ID requested: i-concrete-quickset`);
-  }
-
-  Object.values(concrete8ftWoodBuckets).forEach(bucket => {
+  Object.values(concreteBuckets).forEach(bucket => {
     if (bucket.count > 0) {
       const mat = materials.find(m => m.id === bucket.materialId) || materials.find(m => m.id === 'i-concrete-80');
       if (mat) {
         const qty = Math.ceil(bucket.count * bucket.bagsPerPost);
         addToSummary({
           id: mat.id,
-          name: `${mat.name} (8' Wood Concrete)`,
+          name: `${mat.name} (${bucket.bagsPerPost} bags/post)`,
           qty,
           unit: mat.unit,
           unitCost: mat.cost,
@@ -2579,42 +2542,37 @@ export function calculateDetailedTakeOff(
         });
         totalMaterial += qty * mat.cost;
       } else {
-        console.error(`8ft Wood concrete material mapping failed. Count: ${bucket.count}, Bags per post: ${bucket.bagsPerPost}, Requested material ID: ${bucket.materialId}`);
+        console.error(`Concrete material mapping failed. Count: ${bucket.count}, Bags per post: ${bucket.bagsPerPost}, Requested material ID: ${bucket.materialId}`);
       }
     }
   });
 
   // Reconcile Concrete Costs in detailedRuns to match rounded Takeoff
   // This ensures Run Totals sum exactly to the Final Project Total
-  const standardFractionalBags = totalStandardConcretePosts * 1.25;
-  const standardRoundedBags = Math.ceil(standardFractionalBags);
-  const standardMultiplier = standardFractionalBags > 0 ? (standardRoundedBags / standardFractionalBags) : 1;
-
   const bucketMultipliers: Record<string, number> = {};
-  Object.entries(concrete8ftWoodBuckets).forEach(([matId, bucket]) => {
+  Object.entries(concreteBuckets).forEach(([bucketKey, bucket]) => {
     const fractional = bucket.count * bucket.bagsPerPost;
     const rounded = Math.ceil(fractional);
-    bucketMultipliers[matId] = fractional > 0 ? (rounded / fractional) : 1;
+    bucketMultipliers[bucketKey] = fractional > 0 ? (rounded / fractional) : 1;
   });
 
   detailedRuns.forEach(run => {
     let concreteAdjustment = 0;
     run.items.forEach(item => {
       if (item.category === 'Concrete') {
-        let mult = 1;
-        if (item.name.includes('(1.25 bags/post)')) {
-          mult = standardMultiplier;
-        } else if (item.name.includes('(8\' Wood')) {
-          // Identify which bucket by matching the material ID if possible, 
-          // or just assume the bucket multiplier for that material ID
-          mult = bucketMultipliers[item.id] || 1;
-        }
+        // Extract rate from name: "Maximizer Concrete (0.75 bags/post)"
+        const rateMatch = item.name.match(/\(([\d.]+)\s*bags\/post\)/);
+        if (rateMatch) {
+          const rate = parseFloat(rateMatch[1]);
+          const bucketKey = `${item.id}-${rate}`;
+          const mult = bucketMultipliers[bucketKey] || 1;
 
-        if (mult !== 1) {
-          const oldTotal = item.total;
-          item.qty = item.qty * mult;
-          item.total = item.qty * item.unitCost;
-          concreteAdjustment += (item.total - oldTotal);
+          if (mult !== 1) {
+            const oldTotal = item.total;
+            item.qty = item.qty * mult;
+            item.total = item.qty * item.unitCost;
+            concreteAdjustment += (item.total - oldTotal);
+          }
         }
       }
     });
@@ -2997,7 +2955,6 @@ export function calculateDetailedTakeOff(
     // Verification & Debug fields
     ironPostResolvedCount: allResolvedIronPosts.length,
     ironPostTakeoffCount: allItems.filter(i => (i.category === 'Structure' || i.category === 'Post') && i.id.startsWith('m-post-')).reduce((sum, i) => sum + i.qty, 0),
-    totalStandardConcretePosts,
     // Existing fields
     fenceRunMaterialTotal,
     customMaterialTotal,

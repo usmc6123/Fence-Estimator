@@ -2484,7 +2484,7 @@ export default function Estimator({
                       ))}
                     </div>
                     <p className="text-[9px] text-[#BBBBBB] italic mt-1">
-                      {estimate.concreteType === 'Quickset' ? '2.0 Bags per post' : '0.7 Bags per post'}
+                      {estimate.concreteType === 'Quickset' ? '1.25 Bags per post (Standard)' : '0.75 Bags per post'}
                     </p>
                   </div>
                   {defaultStyle.type === 'Wood' && (

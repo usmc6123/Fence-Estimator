@@ -299,7 +299,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
 
       if (cap) addItemToDossier(cap.id, qty);
       if (concrete) {
-        const bagsPerPost = estimate.concreteType === 'Quickset' ? 2 : (estimate.concreteType === 'Maximizer' ? 0.7 : 0.7);
+        const bagsPerPost = estimate.concreteType === 'Quickset' ? 1.25 : 0.75;
         addItemToDossier(concrete.id, Math.ceil(qty * bagsPerPost));
       }
       if (bracket && !skipHardware) addItemToDossier(bracket.id, qty * 4);
