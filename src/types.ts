@@ -5,7 +5,7 @@ export interface MaterialItem {
   companyId?: string;
   name: string;
   category: MaterialCategory;
-  unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip' | 'pint' | 'pair';
+  unit: 'each' | 'lf' | 'bag' | 'hour' | 'cu yd' | 'box' | 'gallon' | 'trip' | 'pint' | 'pair' | 'roll';
   cost: number;
   priceSource?: string;
   description?: string;

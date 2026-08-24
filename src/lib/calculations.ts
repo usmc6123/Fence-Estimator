@@ -1834,13 +1834,17 @@ export function calculateDetailedTakeOff(
       }
       const meshMatId = `cl-mesh-${isBlack ? 'black-' : ''}${meshGrade}-${height}`;
       const meshMat = findMaterial(meshMatId, `${isBlack ? 'Black ' : ''}${meshGrade === 'comm' ? '9ga' : '11ga'} Mesh ${height}'`);
-      const meshCost = runLF * meshMat.cost;
+      
+      // Calculate quantity in 50' rolls
+      const meshRolls = Math.ceil(runLF / 50);
+      const meshCost = meshRolls * meshMat.cost;
+      
       runFenceMaterialCost += meshCost;
       runItems.push({
         id: meshMat.id,
-        name: meshMat.name,
-        qty: runLF,
-        unit: meshMat.unit,
+        name: `${meshMat.name} (50' Roll)`,
+        qty: meshRolls,
+        unit: 'roll',
         unitCost: meshMat.cost,
         total: meshCost,
         category: meshMat.category || 'Picket'
