@@ -2823,6 +2823,11 @@ export function calculateDetailedTakeOff(
 
   const finalSummary = [...calculatedSummary, ...extraLaborTakeoffItems];
 
+  const hasManualSectionOverrides = !!(estimate.manualSectionTotals?.some(v => v !== null && v !== undefined));
+  const hasManualGateOverrides = !!(estimate.manualGateTotals?.some(v => v !== null && v !== undefined));
+  const hasManualDemoOverrides = !!(estimate.manualDemoTotals?.some(v => v !== null && v !== undefined));
+  const hasAnyLineOverride = hasManualSectionOverrides || hasManualGateOverrides || hasManualDemoOverrides;
+
   const runsPricing = detailedRuns.map((run, i) => {
     // Separate staining from pure fence installation
     const pureFenceLabor = run.fenceLaborCost - run.stainingCharge;
@@ -2846,9 +2851,12 @@ export function calculateDetailedTakeOff(
     // Site Prep Charge (Assign global site prep revenue to the first run)
     const finalPrep = i === 0 ? (totalPrepRevenue * markupFactor) : 0;
 
+    const finalStain = stainingCharge;
+
     // Apply Overrides
+    // Note: manualSectionTotals overrides the combined Fence + Stain price in the UI
     const finalFence = (estimate.manualSectionTotals?.[i] !== undefined && estimate.manualSectionTotals?.[i] !== null)
-      ? estimate.manualSectionTotals[i]!
+      ? estimate.manualSectionTotals[i]! - finalStain
       : totalFenceCharge;
 
     const finalGate = (estimate.manualGateTotals?.[i] !== undefined && estimate.manualGateTotals?.[i] !== null)
@@ -2858,8 +2866,6 @@ export function calculateDetailedTakeOff(
     const finalDemo = (estimate.manualDemoTotals?.[i] !== undefined && estimate.manualDemoTotals?.[i] !== null)
       ? estimate.manualDemoTotals[i]!
       : demoCharge;
-
-    const finalStain = stainingCharge;
 
     // Run-specific custom additions
     const customContractLineItems = estimate.customContractLineItems || [];
@@ -2897,6 +2903,13 @@ export function calculateDetailedTakeOff(
   // Calculated overall base fence total (excluding custom contract line items)
   // This should match authoritativeGrandTotal minus discount
   let baseFenceCalculatedTotal = authoritativeGrandTotal - discountAmount;
+
+  // IF we have manual line overrides, the "Calculated" total for the base fence 
+  // should actually be the SUM of the sections (respecting those overrides).
+  // This prevents reconciliation from cancelling out manual overrides.
+  if (hasAnyLineOverride) {
+    baseFenceCalculatedTotal = totalSectionsSumBeforeAdjustment;
+  }
 
   // Final Single-Source-of-Truth Reconciliation Adjustment
   // We apply the difference between the authoritative total and the sum of sections to the first section.

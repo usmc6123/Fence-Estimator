@@ -546,8 +546,13 @@ export default function CustomerContract({
     return overrideVal !== null && overrideVal !== undefined ? overrideVal : snapVal;
   };
 
-  const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number) => {
-    const updatedPrices = { ...manualGatePrices, [gateId]: newPrice };
+  const handleGatePriceChange = (runIdx: number, gateId: string, newPrice: number | null) => {
+    const updatedPrices = { ...manualGatePrices };
+    if (newPrice === null) {
+      delete updatedPrices[gateId];
+    } else {
+      updatedPrices[gateId] = newPrice;
+    }
     setManualGatePrices(updatedPrices);
 
     // Calculate new total for this run
@@ -561,6 +566,14 @@ export default function CustomerContract({
     const newGateTotals = gateTotals.length ? [...gateTotals] : projectBreakdown.map(r => r.totalGateCharge);
     newGateTotals[runIdx] = newRunGateTotal;
     setGateTotals(newGateTotals);
+
+    if (onUpdateEstimate) {
+      onUpdateEstimate({ 
+        manualGatePrices: updatedPrices,
+        manualGateTotals: newGateTotals
+      });
+    }
+    setHasUnsavedChanges(true);
   };
 
   const handlePrint = () => {
@@ -1565,13 +1578,15 @@ Please structure the contract narrative with professional Markdown bold headers 
                                       type="number" 
                                       value={(runPricing.finalFence + runPricing.finalStain).toFixed(2)}
                                       onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const raw = e.target.value;
+                                        const newVal = raw === '' ? null : parseFloat(raw);
                                         const newTotals = sectionTotals.length ? [...sectionTotals] : data.pricing.runsPricing.map(r => r.finalFence);
                                         newTotals[i] = newVal;
                                         setSectionTotals(newTotals);
                                         if (onUpdateEstimate) {
                                           onUpdateEstimate({ manualSectionTotals: newTotals });
                                         }
+                                        setHasUnsavedChanges(true);
                                       }}
                                       className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
                                     />
@@ -1594,13 +1609,15 @@ Please structure the contract narrative with professional Markdown bold headers 
                                       type="number" 
                                       value={runPricing.finalGate.toFixed(2)}
                                       onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const raw = e.target.value;
+                                        const newVal = raw === '' ? null : parseFloat(raw);
                                         const newTotals = gateTotals.length ? [...gateTotals] : data.pricing.runsPricing.map(r => r.finalGate);
                                         newTotals[i] = newVal;
                                         setGateTotals(newTotals);
                                         if (onUpdateEstimate) {
                                           onUpdateEstimate({ manualGateTotals: newTotals });
                                         }
+                                        setHasUnsavedChanges(true);
                                       }}
                                       className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
                                     />
@@ -1623,13 +1640,15 @@ Please structure the contract narrative with professional Markdown bold headers 
                                       type="number" 
                                       value={runPricing.finalDemo.toFixed(2)}
                                       onChange={(e) => {
-                                        const newVal = parseFloat(e.target.value) || 0;
+                                        const raw = e.target.value;
+                                        const newVal = raw === '' ? null : parseFloat(raw);
                                         const newTotals = demoTotals.length ? [...demoTotals] : data.pricing.runsPricing.map(r => r.finalDemo);
                                         newTotals[i] = newVal;
                                         setDemoTotals(newTotals);
                                         if (onUpdateEstimate) {
                                           onUpdateEstimate({ manualDemoTotals: newTotals });
                                         }
+                                        setHasUnsavedChanges(true);
                                       }}
                                       className="font-bold text-american-blue text-right w-24 outline-none hover:bg-gray-50 focus:bg-gray-50 rounded px-1 transition-colors"
                                     />
@@ -1696,7 +1715,11 @@ Please structure the contract narrative with professional Markdown bold headers 
                                   <input 
                                     type="number"
                                     value={displayPrice.toFixed(2)}
-                                    onChange={(e) => handleGatePriceChange(rIdx, gate.gateId, parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      const val = raw === '' ? null : parseFloat(raw);
+                                      handleGatePriceChange(rIdx, gate.gateId, val);
+                                    }}
                                     className="font-black text-american-blue text-sm w-24 outline-none text-right bg-transparent tabular-nums"
                                     step="0.01"
                                   />
