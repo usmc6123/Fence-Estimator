@@ -236,6 +236,7 @@ export interface CustomContractLineItem {
   showOnContract: boolean;
   includeInPricePerFoot?: boolean;
   pricingMode?: 'standalone_charge' | 'bundled_price';
+  linkedRunId?: string; // Links to a specific fence run ID
   linkedLaborItemIds?: string[];
   linkedMaterialItemIds?: string[];
   sortOrder?: number;

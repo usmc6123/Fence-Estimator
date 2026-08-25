@@ -375,7 +375,7 @@ export const FENCE_STYLES: FenceStyle[] = [
     name: 'Wood Privacy',
     type: 'Wood',
     description: 'Classic vertical wood privacy fence with cedar pickets.',
-    availableHeights: [4, 6, 8],
+    availableHeights: [4, 6, 8, 10],
     availableWidths: [8],
     availableColors: ['Natural', 'Cedar Stain', 'Dark Walnut'],
     visualStyles: [

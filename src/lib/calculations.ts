@@ -1281,7 +1281,7 @@ export function calculateDetailedTakeOff(
     
     // 6' Wood Fence Specific Logic
     const is6ftWood = runStyle.type === 'Wood' && run.height === 6;
-    const maxSpacing = (runStyle.type === 'Wood' && run.height === 8) ? 6 : (runStyle.type === 'Chain Link' ? (run.hasBottomRail ? 7 : 8) : 8);
+    const maxSpacing = (runStyle.type === 'Wood' && run.height >= 8) ? 6 : (runStyle.type === 'Chain Link' ? (run.hasBottomRail ? 7 : 8) : 8);
     
     const nextRun = runs[idx + 1];
     const isLastOfSection = !nextRun || nextRun.isStartOfNewSection;
@@ -1318,7 +1318,7 @@ export function calculateDetailedTakeOff(
       if (stdPostCount > 0) {
         let postMat = materials.find(m => m.category === 'Post' && m.id.startsWith(runStyle.type.toLowerCase().charAt(0))) || materials[0];
         if (runStyle.type === 'Wood') {
-          postMat = materials.find(m => m.id === (run.height === 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
+          postMat = materials.find(m => m.id === (run.height >= 8 ? 'w-post-metal-11' : 'w-post-metal-8')) || postMat;
         } else if (runStyle.type === 'Chain Link') {
           const grade = run.chainLinkGrade || 'Residential';
           const postHeight = (run.height || 4) + 2;
@@ -1740,13 +1740,13 @@ export function calculateDetailedTakeOff(
     
     if (runStyle.type === 'Wood') {
       if (woodType === 'PT Pine') {
-        const baseId = run.height === 8 ? 'w-picket-pine-8' : 'w-picket-pine';
+        const baseId = run.height >= 8 ? 'w-picket-pine-8' : 'w-picket-pine';
         panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
       } else if (woodType === 'Japanese Cedar') {
-        const baseId = run.height === 8 ? 'w-picket-j-cedar-8' : 'w-picket-j-cedar';
+        const baseId = run.height >= 8 ? 'w-picket-j-cedar-8' : 'w-picket-j-cedar';
         panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
       } else if (woodType === 'Western Red Cedar') {
-        const baseId = run.height === 8 ? 'w-picket-w-cedar-8' : 'w-picket-w-cedar';
+        const baseId = run.height >= 8 ? 'w-picket-w-cedar-8' : 'w-picket-w-cedar';
         panelMat = materials.find(m => m.id === (isStained ? `${baseId}-stained` : baseId)) || panelMat;
       }
 
@@ -2122,9 +2122,11 @@ export function calculateDetailedTakeOff(
     if (runStyle.type === 'Wood') {
       const is6ft = run.height === 6;
       const is8ft = run.height === 8;
+      const is10ft = run.height === 10;
+      const is8ftBaseline = run.height >= 8;
       
       // Rails and Rot Board
-      const railsCount = is8ft ? 4 : (run.height > 6 ? 4 : 3);
+      const railsCount = is8ftBaseline ? 4 : (run.height > 6 ? 4 : 3);
       const railLength = is6ft ? 8 : 12;
       const sectionCount = Math.ceil(runLF / railLength);
       
@@ -2161,12 +2163,18 @@ export function calculateDetailedTakeOff(
 
       const hasRotBoard = !!(run.hasRotBoard ?? estimate.hasRotBoard);
       if (hasRotBoard) {
-        const rotBoardId = is8ft 
+        const rotBoardId = is8ftBaseline 
           ? (isStained ? 'w-rot-board-12-stained' : 'w-rot-board-12')
           : (isStained ? 'w-rot-board-16-stained' : 'w-rot-board-16');
         const rotBoardMat = materials.find(m => m.id === rotBoardId);
         if (rotBoardMat) {
-          const rotBoardQty = is8ft ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
+          let rotBoardQty = is8ftBaseline ? Math.ceil(runLF / 12) : Math.ceil(runLF / 16);
+          
+          // 10ft wood fence requires 4x the bottom 2x6 boards compared to 8ft baseline
+          if (is10ft) {
+            rotBoardQty *= 4;
+          }
+          
           const rotBoardCost = rotBoardQty * rotBoardMat.cost;
           runFenceMaterialCost += rotBoardCost;
           runItems.push({
@@ -2853,7 +2861,12 @@ export function calculateDetailedTakeOff(
 
     const finalStain = stainingCharge;
 
-    const totalSection = finalFence + finalGate + finalDemo + finalStain + finalPrep;
+    // Run-specific custom additions
+    const customContractLineItems = estimate.customContractLineItems || [];
+    const runCustomAdditions = customContractLineItems.filter(item => item.linkedRunId === run.runId && item.showOnContract);
+    const runCustomTotal = runCustomAdditions.reduce((sum, item) => sum + item.amount, 0);
+
+    const totalSection = finalFence + finalGate + finalDemo + finalStain + finalPrep + runCustomTotal;
 
     return {
       runName: run.runName,
@@ -2866,6 +2879,7 @@ export function calculateDetailedTakeOff(
       finalDemo,
       finalStain,
       finalPrep,
+      customCharges: runCustomTotal,
       totalSection,
       netLF: run.netLF
     };
@@ -2937,12 +2951,31 @@ export function calculateDetailedTakeOff(
     : additionalContractLineItemsTotal;
 
   const pricePerFoot = totalNetLF > 0 ? (finalCustomerPrice - totalGates - excludedCustomItemsTotal) / totalNetLF : 0;
+  
+  // Per-run price per foot should include run-specific additions if they are marked to be included
+  const runsWithPricing = runsPricing.map((rp, idx) => {
+    const run = detailedRuns[idx];
+    const runCustomAdditions = (estimate.customContractLineItems || [])
+      .filter(item => item.linkedRunId === run.runId && item.showOnContract && item.includeInPricePerFoot);
+    const runCustomIncludedTotal = runCustomAdditions.reduce((sum, item) => sum + item.amount, 0);
+    
+    // totalSection already includes ALL run-specific custom additions.
+    // However, price per foot might only include those marked as includeInPricePerFoot.
+    // The global pricePerFoot formula above subtracts excludedCustomItemsTotal.
+    // We should follow a similar logic for per-run price per foot.
+    const runPricePerFoot = rp.netLF > 0 ? (rp.totalSection - rp.finalGate - (rp.customCharges - runCustomIncludedTotal)) / rp.netLF : 0;
+    
+    return {
+      ...rp,
+      pricePerFoot: runPricePerFoot
+    };
+  });
 
   const fenceRunMaterialTotal = calculatedSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep').reduce((sum, i) => sum + i.total, 0);
   const customMaterialTotal = manualSummary.filter(i => i.category !== 'Labor' && i.category !== 'Demolition' && i.category !== 'SitePrep' && !i.parentBundleId).reduce((sum, i) => sum + i.total, 0);
 
   const pricing = {
-    runsPricing,
+    runsPricing: runsWithPricing,
     totalSectionsSum,
     addOnSitePrepPrice,
     demoRemovalPrice,

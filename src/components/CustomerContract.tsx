@@ -1078,6 +1078,20 @@ Please structure the contract narrative with professional Markdown bold headers 
                               Include in PPF
                             </label>
                           </div>
+
+                          <div className="flex items-center gap-2 ml-2 border-l border-slate-200 pl-4">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assign to Run:</label>
+                            <select
+                              value={item.linkedRunId || ''}
+                              onChange={(e) => handleUpdateCustomLineItem(item.id, { linkedRunId: e.target.value || undefined })}
+                              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1 text-[10px] font-bold text-american-blue outline-none focus:border-american-blue focus:bg-white transition-all appearance-none cursor-pointer shadow-sm min-w-[120px]"
+                            >
+                              <option value="">Global (Project Level)</option>
+                              {estimate.runs.map((run) => (
+                                <option key={run.id} value={run.id}>{run.name || `Run ${run.id.slice(0, 4)}`}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
 
                         <button
