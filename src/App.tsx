@@ -95,6 +95,17 @@ export default function App() {
   });
   const [isAdminVerifying, setIsAdminVerifying] = React.useState(!!localStorage.getItem('company_admin_token'));
 
+  // Firebase Auth diagnostic listener
+  React.useEffect(() => {
+    const { onAuthStateChanged, auth } = Promise.resolve().then(() => import('./lib/firebase')).then(m => ({ onAuthStateChanged: m.onAuthStateChanged, auth: m.auth }));
+    
+    // Using a simpler approach since we already import auth from lib/firebase at the top
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      console.log("[Firebase Auth Diagnostic] State:", fbUser ? `Signed in as ${fbUser.email} (UID: ${fbUser.uid})` : "Signed out");
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Sync adminToken with currentUser token for admins
   React.useEffect(() => {
     if (user?.isAdmin && user?.token && adminToken !== user.token) {
@@ -929,10 +940,13 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      const { signOut, auth } = await import('./lib/firebase');
+      await signOut(auth);
       setLocalUser(null);
       localStorage.removeItem('company_local_user');
       localStorage.removeItem('company_admin_token');
       setAdminToken(null);
+      console.log("[Firebase Auth] Signed out successfully during local logout");
     } catch (error) {
       console.error('Logout failed:', error);
     }

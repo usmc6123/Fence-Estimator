@@ -178,9 +178,18 @@ export default function CustomerContract({
     }
 
     setIsSavingTemplate(item.id);
+    console.log("[Template Save] 1 - handler started", { itemId: item.id, title: item.title });
     try {
+      if (!item.title) {
+        throw new Error("Item title is required to save a template.");
+      }
       const linkedLabor = (estimate.customLaborItems || []).filter(l => item.linkedLaborItemIds?.includes(l.id));
       const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
+
+      console.log("[Template Save] 2 - linked components gathered", { 
+        laborCount: linkedLabor.length, 
+        materialCount: linkedMats.length 
+      });
 
       const template: any = {
         title: item.title,
@@ -220,21 +229,37 @@ export default function CustomerContract({
         updatedAt: new Date().toISOString()
       };
 
+      console.log("[Template Save] 3 - payload created", JSON.parse(JSON.stringify(template)));
+
       const existing = contractItemTemplates.find(t => t.title.toLowerCase() === item.title.toLowerCase());
       
       let docRef;
       if (existing) {
         docRef = doc(db, 'contractItemTemplates', existing.id);
+        console.log("[Template Save] 4a - updating existing template", { id: existing.id });
       } else {
         docRef = doc(collection(db, 'contractItemTemplates'));
         template.createdAt = new Date().toISOString();
+        console.log("[Template Save] 4b - creating new template", { id: docRef.id });
       }
 
+      console.log("[Template Save] 5 - starting Firestore write", { path: docRef.path });
       await setDoc(docRef, template, { merge: true });
+      console.log("[Template Save] 6 - Firestore write successful");
+
       alert(existing ? 'Master template updated successfully.' : 'Template saved successfully.');
     } catch (err) {
-      console.error('Failed to save custom contract template:', err);
-      alert('Failed to save template. Check console for details.');
+      console.error(
+        "CUSTOM CONTRACT TEMPLATE SAVE FAILED",
+        {
+          error: err,
+          message: err instanceof Error ? err.message : String(err),
+          code: (err as any)?.code,
+          stack: err instanceof Error ? err.stack : undefined
+        }
+      );
+      const message = err instanceof Error ? err.message : String(err);
+      alert(`Failed to save template: ${message}`);
     } finally {
       setIsSavingTemplate(null);
     }

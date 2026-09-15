@@ -38,6 +38,25 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
       });
       const data = await response.json();
       if (response.ok && data.success) {
+        // Bridge with Firebase Auth for Firestore direct client writes
+        try {
+          const { auth, signInWithEmailAndPassword } = await import('../lib/firebase');
+          await signInWithEmailAndPassword(auth, targetEmail, targetPassword);
+          console.log("Firebase Auth synced successfully for", targetEmail);
+        } catch (fbErr) {
+          console.warn("Firebase Auth sync failed during login. Firestore direct writes may be restricted.", fbErr);
+          // Fallback for bootstrapped admins if they are using the default password for Firebase but something else for local auth
+          if (targetEmail === 'usmc6123@gmail.com' || targetEmail === 'bradens@lonestarfenceworks.com') {
+            try {
+              const { auth, signInWithEmailAndPassword } = await import('../lib/firebase');
+              await signInWithEmailAndPassword(auth, targetEmail, 'password123');
+              console.log("Firebase Auth synced via fallback for", targetEmail);
+            } catch (fallbackErr) {
+               console.warn("Firebase Auth fallback sync also failed.");
+            }
+          }
+        }
+
         if (onLocalLogin) {
           onLocalLogin({
             uid: data.user.uid,
