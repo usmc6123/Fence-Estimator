@@ -86,14 +86,49 @@ export default function CustomerContract({
     }
   };
   const [showCostBreakdown, setShowCostBreakdown] = useState(true);
-  const [sectionTotals, setSectionTotals] = useState<(number | null)[]>(estimate.manualSectionTotals || []);
-  const [gateTotals, setGateTotals] = useState<(number | null)[]>(estimate.manualGateTotals || []);
-  const [demoTotals, setDemoTotals] = useState<(number | null)[]>(estimate.manualDemoTotals || []);
+  const [sectionTotals, setSectionTotals] = useState<(number | null)[]>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.sectionTotals) {
+      return estimate.contractSnapshot.sectionTotals;
+    }
+    return estimate.manualSectionTotals || [];
+  });
+  const [gateTotals, setGateTotals] = useState<(number | null)[]>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.gateTotals) {
+      return estimate.contractSnapshot.gateTotals;
+    }
+    return estimate.manualGateTotals || [];
+  });
+  const [demoTotals, setDemoTotals] = useState<(number | null)[]>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.demoTotals) {
+      return estimate.contractSnapshot.demoTotals;
+    }
+    return estimate.manualDemoTotals || [];
+  });
 
-  const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(estimate.manualGrandTotal ?? null);
-  const [projectDate, setProjectDate] = useState<string>(estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
-  const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(estimate.manualGatePrices || {});
-  const [customLineItems, setCustomLineItems] = useState<CustomContractLineItem[]>(estimate.customContractLineItems || []);
+  const [manualGrandTotal, setManualGrandTotal] = useState<number | null>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.manualGrandTotal !== undefined) {
+      return estimate.contractSnapshot.manualGrandTotal;
+    }
+    return estimate.manualGrandTotal ?? null;
+  });
+  const [projectDate, setProjectDate] = useState<string>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.contractProjectDate) {
+      return estimate.contractSnapshot.contractProjectDate;
+    }
+    return estimate.contractProjectDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  });
+  const [manualGatePrices, setManualGatePrices] = useState<Record<string, number>>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.manualGatePrices) {
+      return estimate.contractSnapshot.manualGatePrices;
+    }
+    return estimate.manualGatePrices || {};
+  });
+  const [customLineItems, setCustomLineItems] = useState<CustomContractLineItem[]>(() => {
+    if (isCustomerView && estimate.contractSnapshot?.customContractLineItems) {
+      return estimate.contractSnapshot.customContractLineItems;
+    }
+    return estimate.customContractLineItems || [];
+  });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);

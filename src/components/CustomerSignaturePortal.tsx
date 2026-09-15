@@ -283,13 +283,15 @@ interface CustomerSignaturePortalProps {
   materials: MaterialItem[];
   laborRates: LaborRates;
   quotes: SupplierQuote[];
+  gatePackages?: Record<string, any[]>;
 }
 
 export default function CustomerSignaturePortal({
   estimateId,
   materials,
   laborRates,
-  quotes
+  quotes,
+  gatePackages = {}
 }: CustomerSignaturePortalProps) {
   const [estimate, setEstimate] = useState<SavedEstimate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -868,6 +870,7 @@ export default function CustomerSignaturePortal({
               materials={materials} 
               laborRates={laborRates} 
               quotes={quotes}
+              gatePackages={gatePackages}
               aiContractScope={estimate?.contractScope || ''}
               setAiContractScope={() => {}} // Disabled for public view
               isCustomerView={true} // Triggers read-only / hidden UI elements

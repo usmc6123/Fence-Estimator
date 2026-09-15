@@ -276,7 +276,8 @@ export default function SavedEstimates({
           fenceTotal: finalFenceValue,
           gatesTotal: finalGateValue,
           demoTotal: finalDemoValue,
-          sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue)
+          sectionTotal: pricingRun.totalSection !== undefined ? pricingRun.totalSection : (finalFenceValue + finalGateValue + finalDemoValue),
+          gateDetails: run.gates || origRun.gateDetails || origRun.gates || []
         };
       });
 
@@ -299,6 +300,8 @@ export default function SavedEstimates({
         fenceType: fenceType,
         height: height,
         linearFeet: Number(mergedEstimate.linearFeet || recalculatedTakeOff.runs.reduce((sum: number, r: any) => sum + r.netLF, 0) || 0),
+        profitMargin: mergedEstimate.profitMargin || 0,
+        taxRate: mergedEstimate.taxRate || 0,
         runs: recalculatedTakeOff.runs.map((run: any, i: number) => {
           const origRun: any = runsData[i] || {};
           const pricingRun = (pricing.runsPricing?.[i] || {}) as any;
@@ -359,7 +362,11 @@ export default function SavedEstimates({
         baseFenceTotal: pricing.baseFenceTotal || 0,
         additionalContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0,
         customContractLineItems: mergedEstimate.customContractLineItems || [],
-        customContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0
+        customContractLineItemsTotal: pricing.additionalContractLineItemsTotal || 0,
+        manualGatePrices: mergedEstimate.manualGatePrices || {},
+        manualSectionTotals: mergedEstimate.manualSectionTotals || [],
+        manualGateTotals: mergedEstimate.manualGateTotals || [],
+        manualDemoTotals: mergedEstimate.manualDemoTotals || []
       };
 
       const pricingUpdates = {

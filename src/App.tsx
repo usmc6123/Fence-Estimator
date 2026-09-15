@@ -1123,6 +1123,7 @@ export default function App() {
         materials={materials} 
         laborRates={laborRates} 
         quotes={quotes} 
+        gatePackages={gatePackages}
       />
     );
   }
