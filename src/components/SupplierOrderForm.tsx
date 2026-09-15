@@ -9,10 +9,11 @@ interface SupplierOrderFormProps {
   materials: MaterialItem[];
   laborRates: LaborRates;
   quotes: SupplierQuote[];
+  gatePackages?: Record<string, any[]>;
 }
 
-export default function SupplierOrderForm({ estimate, materials, laborRates, quotes }: SupplierOrderFormProps) {
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes);
+export default function SupplierOrderForm({ estimate, materials, laborRates, quotes, gatePackages = {} }: SupplierOrderFormProps) {
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes, gatePackages);
 
   // Consolidate all materials into one master list
   const consolidatedMaterials = [

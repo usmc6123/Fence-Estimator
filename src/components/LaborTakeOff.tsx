@@ -17,6 +17,7 @@ interface LaborTakeOffProps {
   aiProjectScope: string | null;
   setAiProjectScope: (scope: string | null) => void;
   onUpdateEstimate?: (update: Partial<Estimate>) => void;
+  gatePackages?: Record<string, any[]>;
 }
 
 export default function LaborTakeOff({ 
@@ -26,9 +27,10 @@ export default function LaborTakeOff({
   quotes,
   aiProjectScope,
   setAiProjectScope,
-  onUpdateEstimate
+  onUpdateEstimate,
+  gatePackages = {}
 }: LaborTakeOffProps) {
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes);
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes, gatePackages);
   const [isGenerating, setIsGenerating] = useState(false);
   const [localAiScope, setLocalAiScope] = useState<string>(estimate.laborScope || aiProjectScope || '');
   const [customInstructions, setCustomInstructions] = useState<string>('');

@@ -22,6 +22,7 @@ interface SavedEstimatesProps {
   materials: MaterialItem[];
   laborRates: LaborRates;
   quotes?: SupplierQuote[];
+  gatePackages?: Record<string, any[]>;
 }
 
 const STATUS_FLOW: JobStatus[] = ['Estimate Pending', 'Estimate Sent', 'Accepted', 'Completed'];
@@ -71,7 +72,8 @@ export default function SavedEstimates({
   user, 
   materials, 
   laborRates,
-  quotes = []
+  quotes = [],
+  gatePackages = {}
 }: SavedEstimatesProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filter, setFilter] = React.useState<'all' | 'active' | 'completed' | 'declined' | 'archived'>('active');
@@ -214,7 +216,7 @@ export default function SavedEstimates({
         manualGatePrices: sendModalEstimate.manualGatePrices || {}
       } as any;
       
-      const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes);
+      const recalculatedTakeOff = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes, gatePackages);
       const pricing = recalculatedTakeOff.pricing;
       const finalPrice = pricing.finalCustomerPrice;
 

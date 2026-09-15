@@ -1099,7 +1099,7 @@ export default function App() {
   }
 
   if (isJobPortal) {
-    return <JobPortal user={user} materials={materials} laborRates={laborRates} quotes={quotes} />;
+    return <JobPortal user={user} materials={materials} laborRates={laborRates} quotes={quotes} gatePackages={gatePackages} />;
   }
 
   if (isCustomerPortal) {
@@ -1300,6 +1300,7 @@ export default function App() {
               materials={materials}
               laborRates={laborRates}
               quotes={quotes}
+              gatePackages={gatePackages}
             />
           )}
           {activeTab === 'financials' && (
@@ -1334,6 +1335,7 @@ export default function App() {
               materials={materials} 
               laborRates={laborRates} 
               quotes={quotes}
+              gatePackages={gatePackages}
               aiProjectScope={aiProjectScope}
               setAiProjectScope={setAiProjectScope}
               onUpdateEstimate={handleUpdateEstimate}
@@ -1345,6 +1347,7 @@ export default function App() {
               materials={materials} 
               laborRates={laborRates}
               quotes={quotes}
+              gatePackages={gatePackages}
               aiContractScope={aiContractScope}
               setAiContractScope={setAiContractScope}
               onUpdateEstimate={handleUpdateEstimate}
@@ -1352,7 +1355,7 @@ export default function App() {
             />
           )}
           {activeTab === 'supplier-order' && (
-            <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} quotes={quotes} />
+            <SupplierOrderForm estimate={estimate} materials={materials} laborRates={laborRates} quotes={quotes} gatePackages={gatePackages} />
           )}
           {activeTab === 'quotes' && (
             <QuoteManager 

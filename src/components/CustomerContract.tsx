@@ -19,6 +19,7 @@ interface CustomerContractProps {
   onUpdateEstimate?: (update: Partial<Estimate>) => void;
   isCustomerView?: boolean;
   contractItemTemplates?: ContractItemTemplate[];
+  gatePackages?: Record<string, any[]>;
 }
 
 export default function CustomerContract({ 
@@ -30,7 +31,8 @@ export default function CustomerContract({
   setAiContractScope,
   onUpdateEstimate,
   isCustomerView = false,
-  contractItemTemplates = []
+  contractItemTemplates = [],
+  gatePackages = {}
 }: CustomerContractProps) {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -476,10 +478,10 @@ export default function CustomerContract({
       customContractLineItems: customLineItems,
       customContractLineItemsTotal: customContractLineItemsTotal
     };
-    const calculated = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes);
+    const calculated = calculateDetailedTakeOff(mergedEstimate, materials, laborRates, quotes, gatePackages);
     
     return calculated;
-  }, [estimate, materials, laborRates, quotes, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal]);
+  }, [estimate, materials, laborRates, quotes, sectionTotals, gateTotals, demoTotals, manualGrandTotal, manualGatePrices, isCustomerView, customLineItems, customContractLineItemsTotal, gatePackages]);
 
   const hasIron = data.runs.some(r => r.styleType === 'Metal');
 
