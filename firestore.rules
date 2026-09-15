@@ -244,5 +244,15 @@ service cloud.firestore {
     match /ghlContactSyncTraces/{traceId} {
       allow read, write: if isCompanyMember();
     }
+
+    match /contractItemTemplates/{templateId} {
+      allow read, list: if isCompanyMember();
+      allow create, update, delete: if canWriteData();
+    }
+
+    match /gatePackages/{packageId} {
+      allow read, list: if isCompanyMember();
+      allow create, update, delete: if canWriteData();
+    }
   }
 }

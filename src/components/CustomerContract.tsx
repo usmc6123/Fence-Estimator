@@ -182,43 +182,58 @@ export default function CustomerContract({
       const linkedLabor = (estimate.customLaborItems || []).filter(l => item.linkedLaborItemIds?.includes(l.id));
       const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
 
-      const template: Omit<ContractItemTemplate, 'id'> = {
+      const template: any = {
         title: item.title,
-        description: item.description,
-        amount: item.amount,
-        taxable: item.taxable,
-        showOnContract: item.showOnContract,
-        includeInPricePerFoot: item.includeInPricePerFoot,
-        pricingMode: item.pricingMode,
-        bundledLabor: linkedLabor.map(l => ({ name: l.name, cost: l.cost })),
+        description: item.description || '',
+        amount: item.amount || 0,
+        taxable: item.taxable || false,
+        showOnContract: item.showOnContract ?? true,
+        includeInPricePerFoot: item.includeInPricePerFoot || false,
+        pricingMode: item.pricingMode || 'standalone_charge',
+        companyId: 'lonestarfence',
+        bundledLabor: linkedLabor.map(l => ({ 
+          name: l.name || '', 
+          cost: Number(l.cost) || 0 
+        })),
         bundledMaterials: linkedMats.map(m => {
           const baseMat = materials.find(mat => mat.id === m.id) || {
             id: m.id,
             name: m.name,
-            category: m.category as any,
-            unit: m.unit as any,
-            cost: m.unitCost
+            category: m.category || 'Other',
+            unit: m.unit || 'Each',
+            cost: m.unitCost || 0
           };
+          
           return {
-            material: baseMat as MaterialItem,
-            qty: m.qty,
-            unitPrice: m.unitCost
+            material: {
+              id: baseMat.id,
+              name: baseMat.name || '',
+              category: baseMat.category || 'Other',
+              unit: baseMat.unit || 'Each',
+              cost: Number(baseMat.cost) || 0,
+              companyId: 'lonestarfence'
+            },
+            qty: Number(m.qty) || 0,
+            unitPrice: Number(m.unitCost) || 0
           };
         }),
         updatedAt: new Date().toISOString()
       };
 
       const existing = contractItemTemplates.find(t => t.title.toLowerCase() === item.title.toLowerCase());
-      const docId = existing ? existing.id : crypto.randomUUID();
       
-      if (!existing) {
-        (template as any).createdAt = new Date().toISOString();
+      let docRef;
+      if (existing) {
+        docRef = doc(db, 'contractItemTemplates', existing.id);
+      } else {
+        docRef = doc(collection(db, 'contractItemTemplates'));
+        template.createdAt = new Date().toISOString();
       }
 
-      await setDoc(doc(db, 'contractItemTemplates', docId), template, { merge: true });
+      await setDoc(docRef, template, { merge: true });
       alert(existing ? 'Master template updated successfully.' : 'Template saved successfully.');
     } catch (err) {
-      console.error('Failed to save template:', err);
+      console.error('Failed to save custom contract template:', err);
       alert('Failed to save template. Check console for details.');
     } finally {
       setIsSavingTemplate(null);

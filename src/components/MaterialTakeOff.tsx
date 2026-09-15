@@ -186,10 +186,18 @@ export default function MaterialTakeOff({
         const gate = run.gateDetails![gateIndex];
         const packageKey = getGatePackageKey(run, gate);
         await setDoc(doc(db, 'gatePackages', packageKey), {
-          items: newItems,
+          items: newItems.map(item => ({
+            id: item.id,
+            name: item.name || '',
+            qty: Number(item.qty) || 0,
+            unit: item.unit || 'Each',
+            unitCost: Number(item.unitCost) || 0,
+            category: item.category || 'Other'
+          })),
           updatedAt: new Date().toISOString(),
-          styleId: run.styleId,
-          gateType: gate.type
+          styleId: run.styleId || 'default',
+          gateType: gate.type || 'Single',
+          companyId: 'lonestarfence'
         }, { merge: true });
       } catch (err) {
         console.error('Failed to save master gate package:', err);
