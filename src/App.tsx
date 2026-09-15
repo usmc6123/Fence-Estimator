@@ -12,6 +12,7 @@ import LaborPricing from './components/LaborPricing';
 import MaterialTakeOff from './components/MaterialTakeOff';
 import LaborTakeOff from './components/LaborTakeOff';
 import CustomerContract from './components/CustomerContract';
+import { ContractItemTemplate } from './types';
 import SupplierOrderForm from './components/SupplierOrderForm';
 import QuoteManager from './components/QuoteManager';
 import Settings from './components/Settings';
@@ -194,6 +195,7 @@ export default function App() {
   }, []);
 
   const [gatePackages, setGatePackages] = React.useState<Record<string, any[]>>({});
+  const [contractItemTemplates, setContractItemTemplates] = React.useState<ContractItemTemplate[]>([]);
 
   React.useEffect(() => {
     const q = query(collection(db, 'gatePackages'));
@@ -205,6 +207,20 @@ export default function App() {
       setGatePackages(packages);
     }, (error) => {
       console.error("Error listening to gate packages:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  React.useEffect(() => {
+    const q = query(collection(db, 'contractItemTemplates'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const templates: ContractItemTemplate[] = [];
+      snapshot.forEach((doc) => {
+        templates.push({ id: doc.id, ...doc.data() } as ContractItemTemplate);
+      });
+      setContractItemTemplates(templates);
+    }, (error) => {
+      console.error("Error listening to contract item templates:", error);
     });
     return () => unsubscribe();
   }, []);
@@ -1327,6 +1343,7 @@ export default function App() {
               aiContractScope={aiContractScope}
               setAiContractScope={setAiContractScope}
               onUpdateEstimate={handleUpdateEstimate}
+              contractItemTemplates={contractItemTemplates}
             />
           )}
           {activeTab === 'supplier-order' && (

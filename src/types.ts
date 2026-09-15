@@ -244,6 +244,28 @@ export interface CustomContractLineItem {
   updatedAt?: string;
 }
 
+export interface ContractItemTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  amount: number;
+  taxable?: boolean;
+  showOnContract: boolean;
+  includeInPricePerFoot?: boolean;
+  pricingMode?: 'standalone_charge' | 'bundled_price';
+  bundledLabor?: {
+    name: string;
+    cost: number;
+  }[];
+  bundledMaterials?: {
+    material: MaterialItem;
+    qty: number;
+    unitPrice?: number;
+  }[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Estimate {
   id: string;
   estimateNumber?: number;

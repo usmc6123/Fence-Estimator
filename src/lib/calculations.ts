@@ -229,7 +229,7 @@ function getPostDimensions(name: string, id: string): string {
   return '';
 }
 
-function createTakeOffItem(
+export function createTakeOffItem(
   material: MaterialItem, 
   qty: number, 
   category?: string,

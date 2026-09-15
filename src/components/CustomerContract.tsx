@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Printer, FileText, Sparkles, Loader2, Download, Send, CheckCircle2, Navigation, RefreshCcw, Save, TrendingUp, ExternalLink, AlertCircle, Trash2, Layers, Package } from 'lucide-react';
-import { Estimate, MaterialItem, LaborRates, SupplierQuote, CustomContractLineItem } from '../types';
-import { calculateDetailedTakeOff, DetailedTakeOff } from '../lib/calculations';
+import { Estimate, MaterialItem, LaborRates, SupplierQuote, CustomContractLineItem, ContractItemTemplate } from '../types';
+import { calculateDetailedTakeOff, DetailedTakeOff, createTakeOffItem } from '../lib/calculations';
 import { cn, formatCurrency, getEstimateFinalPrice } from '../lib/utils';
 import { COMPANY_INFO, FENCE_STYLES } from '../constants';
 import { generateAIScope } from '../services/geminiService';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { doc, setDoc, deleteDoc, collection } from 'firebase/firestore';
 
 interface CustomerContractProps {
   estimate: Partial<Estimate>;
@@ -16,6 +18,7 @@ interface CustomerContractProps {
   setAiContractScope: (scope: string | null) => void;
   onUpdateEstimate?: (update: Partial<Estimate>) => void;
   isCustomerView?: boolean;
+  contractItemTemplates?: ContractItemTemplate[];
 }
 
 export default function CustomerContract({ 
@@ -26,7 +29,8 @@ export default function CustomerContract({
   aiContractScope,
   setAiContractScope,
   onUpdateEstimate,
-  isCustomerView = false
+  isCustomerView = false,
+  contractItemTemplates = []
 }: CustomerContractProps) {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -163,6 +167,138 @@ export default function CustomerContract({
     const updated = customLineItems.filter(item => item.id !== id);
     setCustomLineItems(updated);
     setHasUnsavedChanges(true);
+  };
+
+  const [isSavingTemplate, setIsSavingTemplate] = useState<string | null>(null);
+
+  const handleSaveTemplate = async (item: CustomContractLineItem) => {
+    if (!item.title) {
+      alert('Please provide a title before saving as a template.');
+      return;
+    }
+
+    setIsSavingTemplate(item.id);
+    try {
+      const linkedLabor = (estimate.customLaborItems || []).filter(l => item.linkedLaborItemIds?.includes(l.id));
+      const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
+
+      const template: Omit<ContractItemTemplate, 'id'> = {
+        title: item.title,
+        description: item.description,
+        amount: item.amount,
+        taxable: item.taxable,
+        showOnContract: item.showOnContract,
+        includeInPricePerFoot: item.includeInPricePerFoot,
+        pricingMode: item.pricingMode,
+        bundledLabor: linkedLabor.map(l => ({ name: l.name, cost: l.cost })),
+        bundledMaterials: linkedMats.map(m => {
+          const baseMat = materials.find(mat => mat.id === m.id) || {
+            id: m.id,
+            name: m.name,
+            category: m.category as any,
+            unit: m.unit as any,
+            cost: m.unitCost
+          };
+          return {
+            material: baseMat as MaterialItem,
+            qty: m.qty,
+            unitPrice: m.unitCost
+          };
+        }),
+        updatedAt: new Date().toISOString()
+      };
+
+      const existing = contractItemTemplates.find(t => t.title.toLowerCase() === item.title.toLowerCase());
+      const docId = existing ? existing.id : crypto.randomUUID();
+      
+      if (!existing) {
+        (template as any).createdAt = new Date().toISOString();
+      }
+
+      await setDoc(doc(db, 'contractItemTemplates', docId), template, { merge: true });
+      alert(existing ? 'Master template updated successfully.' : 'Template saved successfully.');
+    } catch (err) {
+      console.error('Failed to save template:', err);
+      alert('Failed to save template. Check console for details.');
+    } finally {
+      setIsSavingTemplate(null);
+    }
+  };
+
+  const handleLoadTemplate = (templateId: string) => {
+    const template = contractItemTemplates.find(t => t.id === templateId);
+    if (!template) return;
+
+    const bundleId = crypto.randomUUID();
+    
+    // 1. Create the new line item
+    const newLineItem: CustomContractLineItem = {
+      id: bundleId,
+      title: template.title,
+      description: template.description || '',
+      amount: template.amount,
+      taxable: template.taxable ?? false,
+      showOnContract: template.showOnContract ?? true,
+      includeInPricePerFoot: template.includeInPricePerFoot ?? false,
+      pricingMode: template.pricingMode || 'standalone_charge',
+      linkedLaborItemIds: [],
+      linkedMaterialItemIds: [],
+      sortOrder: customLineItems.length + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const updates: Partial<Estimate> = {};
+
+    // 2. Recreate labor items
+    if (template.bundledLabor && template.bundledLabor.length > 0) {
+      const newLaborItems = template.bundledLabor.map(l => ({
+        id: crypto.randomUUID(),
+        name: l.name,
+        cost: l.cost,
+        parentBundleId: bundleId
+      }));
+      newLineItem.linkedLaborItemIds = newLaborItems.map(l => l.id);
+      updates.customLaborItems = [...(estimate.customLaborItems || []), ...newLaborItems];
+    }
+
+    // 3. Recreate material items
+    if (template.bundledMaterials && template.bundledMaterials.length > 0) {
+      const newManualQuantities = { ...(estimate.manualQuantities || {}) };
+      const newManualPrices = { ...(estimate.manualPrices || {}) };
+      const newParentBundleIds = { ...(estimate.manualParentBundleIds || {}) };
+      
+      template.bundledMaterials.forEach(bm => {
+        const matId = bm.material.id;
+        newManualQuantities[matId] = (newManualQuantities[matId] || 0) + bm.qty;
+        newManualPrices[matId] = bm.unitPrice ?? bm.material.cost;
+        newParentBundleIds[matId] = bundleId;
+        
+        if (!newLineItem.linkedMaterialItemIds) newLineItem.linkedMaterialItemIds = [];
+        if (!newLineItem.linkedMaterialItemIds.includes(matId)) {
+           newLineItem.linkedMaterialItemIds.push(matId);
+        }
+      });
+      
+      updates.manualQuantities = newManualQuantities;
+      updates.manualPrices = newManualPrices;
+      updates.manualParentBundleIds = newParentBundleIds;
+    }
+
+    setCustomLineItems(prev => [...prev, newLineItem]);
+    if (Object.keys(updates).length > 0) {
+      onUpdateEstimate?.(updates);
+    }
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('Are you sure you want to delete this reusable template? This will not affect existing contracts.')) return;
+    try {
+      await deleteDoc(doc(db, 'contractItemTemplates', templateId));
+    } catch (err) {
+      console.error('Failed to delete template:', err);
+    }
   };
 
   const data: DetailedTakeOff = React.useMemo(() => {
@@ -1107,14 +1243,25 @@ Please structure the contract narrative with professional Markdown bold headers 
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleDeleteCustomLineItem(item.id)}
-                          className="flex items-center gap-2 px-4 py-2 text-american-red hover:bg-american-red/10 rounded-xl transition-all ml-auto text-[10px] font-black uppercase tracking-widest"
-                          title="Delete line item"
-                        >
-                          <Trash2 size={14} />
-                          <span>Delete</span>
-                        </button>
+                        <div className="flex items-center gap-2 ml-auto">
+                          <button
+                            onClick={() => handleSaveTemplate(item)}
+                            disabled={isSavingTemplate === item.id}
+                            className="flex items-center gap-2 px-4 py-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                            title={contractItemTemplates.some(t => t.title.toLowerCase() === item.title?.toLowerCase()) ? 'Update Master Template' : 'Save as Master Template'}
+                          >
+                            {isSavingTemplate === item.id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            <span>{contractItemTemplates.some(t => t.title.toLowerCase() === item.title?.toLowerCase()) ? 'Update Master' : 'Save Template'}</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCustomLineItem(item.id)}
+                            className="flex items-center gap-2 px-4 py-2 text-american-red hover:bg-american-red/10 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest"
+                            title="Delete line item"
+                          >
+                            <Trash2 size={14} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1320,15 +1467,54 @@ Please structure the contract narrative with professional Markdown bold headers 
               </div>
             )}
 
-            <div className="flex justify-between items-center pt-2">
+            <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
                 onClick={handleAddCustomLineItem}
                 className="px-5 py-3 bg-american-blue text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-american-blue/95 active:scale-95 transition-all shadow-md flex items-center gap-2"
               >
                 Add Custom Line Item
               </button>
+
+              {contractItemTemplates.length > 0 && (
+                <div className="relative group">
+                  <button
+                    className="px-5 py-3 bg-slate-100 text-american-blue rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+                  >
+                    <Layers size={16} />
+                    Load Reusable Item
+                  </button>
+                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <div className="p-4 bg-slate-50 border-b border-slate-100">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Templates</span>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {contractItemTemplates.map(template => (
+                        <div key={template.id} className="group/item flex items-center justify-between p-3 hover:bg-american-blue/5 transition-colors border-b border-slate-50 last:border-0">
+                          <button
+                            onClick={() => handleLoadTemplate(template.id)}
+                            className="flex-1 text-left"
+                          >
+                            <p className="text-xs font-black text-american-blue">{template.title}</p>
+                            <p className="text-[9px] font-bold text-slate-400">{formatCurrency(template.amount)}</p>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTemplate(template.id);
+                            }}
+                            className="p-1.5 text-slate-300 hover:text-american-red transition-colors opacity-0 group-hover/item:opacity-100"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {customLineItems.length > 0 && (
-                <div className="text-right">
+                <div className="ml-auto text-right">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Custom Subtotal</span>
                   <span className="text-base font-black text-american-blue">{formatCurrency(customContractLineItemsTotal)}</span>
                 </div>
