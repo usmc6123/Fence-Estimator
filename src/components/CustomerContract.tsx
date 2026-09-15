@@ -95,6 +95,13 @@ export default function CustomerContract({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  
+  useEffect(() => {
+    if (showTemplateSelector) {
+      console.log("[Saved Template Selector] State changed to OPEN", { templateCount: contractItemTemplates.length });
+    }
+  }, [showTemplateSelector, contractItemTemplates.length]);
+
   const isInitialMount = React.useRef(true);
 
   const customContractLineItemsTotal = React.useMemo(() => {
@@ -1513,7 +1520,7 @@ Please structure the contract narrative with professional Markdown bold headers 
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-4 pt-2">
+            <div className="relative flex flex-wrap items-center gap-4 pt-2">
               <button
                 onClick={handleAddCustomLineItem}
                 className="px-5 py-3 bg-american-blue text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-american-blue/95 active:scale-95 transition-all shadow-md flex items-center gap-2"
@@ -1522,7 +1529,11 @@ Please structure the contract narrative with professional Markdown bold headers 
               </button>
 
               <button
-                onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                onClick={() => {
+                  const newState = !showTemplateSelector;
+                  console.log("[Saved Template Selector] Button clicked. New state will be:", newState);
+                  setShowTemplateSelector(newState);
+                }}
                 className="px-5 py-3 bg-slate-100 text-american-blue rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all shadow-sm flex items-center gap-2"
               >
                 <Layers size={16} />
@@ -1530,53 +1541,85 @@ Please structure the contract narrative with professional Markdown bold headers 
               </button>
 
               {showTemplateSelector && (
-                <div className="absolute bottom-full left-0 mb-4 w-96 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
-                  <div className="p-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-[11px] font-black uppercase tracking-widest text-american-blue">Saved Templates</h3>
-                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">Select a master template to add</p>
+                <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                  <div 
+                    className="w-full max-w-xl bg-white rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-american-blue">Saved Item Templates</h3>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">Select a master template to add to this estimate</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowTemplateSelector(false)}
+                        className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 group"
+                      >
+                        <Trash2 size={20} className="rotate-45 group-hover:text-american-red transition-colors" />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => setShowTemplateSelector(false)}
-                      className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"
-                    >
-                      <Trash2 size={14} className="rotate-45" />
-                    </button>
-                  </div>
-                  <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-                    {contractItemTemplates.length === 0 ? (
-                      <div className="p-8 text-center">
-                        <Package size={32} className="mx-auto text-slate-200 mb-3" />
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No saved templates found</p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-50">
-                        {contractItemTemplates.map(template => (
-                          <div key={template.id} className="group/item flex items-center justify-between p-4 hover:bg-american-blue/5 transition-all">
-                            <button
-                              onClick={() => handleLoadTemplate(template.id)}
-                              className="flex-1 text-left"
-                            >
-                              <p className="text-sm font-black text-american-blue group-hover/item:text-american-blue/80 transition-colors">{template.title}</p>
-                              {template.description && (
-                                <p className="text-[10px] font-medium text-slate-500 mt-0.5 line-clamp-1">{template.description}</p>
-                              )}
-                              <p className="text-[11px] font-black text-american-blue mt-1 bg-american-blue/10 inline-block px-2 py-0.5 rounded-lg">{formatCurrency(template.amount)}</p>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteTemplate(template.id);
-                              }}
-                              className="p-2 text-slate-300 hover:text-american-red hover:bg-american-red/10 rounded-xl transition-all opacity-0 group-hover/item:opacity-100"
-                              title="Delete template"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                    
+                    <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-2">
+                      {contractItemTemplates.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                            <Package size={32} className="text-slate-300" />
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No saved templates found</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1">Save a custom line item as a template to see it here</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2">
+                          {contractItemTemplates.map(template => (
+                            <div key={template.id} className="group/item flex items-center justify-between p-4 hover:bg-american-blue/5 rounded-2xl transition-all border border-transparent hover:border-american-blue/10">
+                              <button
+                                onClick={() => {
+                                  console.log("[Saved Template Selector] Loading template:", template.id);
+                                  handleLoadTemplate(template.id);
+                                }}
+                                className="flex-1 text-left"
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-black text-american-blue">{template.title}</p>
+                                  {template.pricingMode === 'bundled_price' && (
+                                    <span className="text-[9px] font-black uppercase bg-american-blue/10 text-american-blue px-2 py-0.5 rounded-full">Bundled</span>
+                                  )}
+                                </div>
+                                {template.description && (
+                                  <p className="text-[11px] font-medium text-slate-500 mb-2 line-clamp-2">{template.description}</p>
+                                )}
+                                <div className="flex items-center gap-3">
+                                  <p className="text-xs font-black text-american-blue bg-white border border-slate-100 px-3 py-1 rounded-lg shadow-sm">{formatCurrency(template.amount)}</p>
+                                  <div className="flex items-center gap-2 opacity-60">
+                                    {template.bundledLabor?.length > 0 && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{template.bundledLabor.length} Labor</span>}
+                                    {template.bundledMaterials?.length > 0 && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{template.bundledMaterials.length} Materials</span>}
+                                  </div>
+                                </div>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTemplate(template.id);
+                                }}
+                                className="p-3 text-slate-300 hover:text-american-red hover:bg-american-red/10 rounded-xl transition-all opacity-0 group-hover/item:opacity-100"
+                                title="Delete template"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                      <button
+                        onClick={() => setShowTemplateSelector(false)}
+                        className="px-6 py-3 bg-white text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

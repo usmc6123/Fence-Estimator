@@ -213,12 +213,14 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    const q = query(collection(db, 'contractItemTemplates'));
+    // Filter by companyId as requested in Step 5 for consistency with Save Template
+    const q = query(collection(db, 'contractItemTemplates'), where('companyId', '==', 'lonestarfence'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const templates: ContractItemTemplate[] = [];
       snapshot.forEach((doc) => {
         templates.push({ id: doc.id, ...doc.data() } as ContractItemTemplate);
       });
+      console.log("[App] Contract templates loaded (filtered by lonestarfence):", templates.length);
       setContractItemTemplates(templates);
     }, (error) => {
       console.error("Error listening to contract item templates:", error);
