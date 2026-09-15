@@ -548,7 +548,11 @@ export default function CustomerContract({
           stainingCharge: Number(finalStainValue),
           finalPrep: Number(finalPrepValue),
           gates: run.gateDetails || run.gates || [],
-          style: run.fenceType || run.styleName || run.styleId || run.style || '',
+          style: (() => {
+            const rawStyle = run.styleName || run.fenceType || run.styleId || run.style || '';
+            const matchingStyle = FENCE_STYLES.find(s => s.id === rawStyle || s.name === rawStyle);
+            return matchingStyle ? matchingStyle.name : rawStyle;
+          })(),
           styleType: run.styleType || '',
           height: run.height || 6,
           hasRotBoard: !!run.hasRotBoard,

@@ -255,7 +255,7 @@ export default function SavedEstimates({
         : 'None';
 
       // Fence type summary
-      const styles = Array.from(new Set(recalculatedTakeOff.runs.map((r: any) => r.style || 'Custom Fence')));
+      const styles = Array.from(new Set(recalculatedTakeOff.runs.map((r: any) => r.styleName || 'Custom Fence')));
       const fenceType = styles.length === 0 ? 'Custom Fence' : styles.length === 1 ? styles[0] : 'Multi-Style Wood/Iron Fence';
 
       const height = mergedEstimate.defaultHeight || (recalculatedTakeOff.runs[0]?.height) || 6;
@@ -269,7 +269,7 @@ export default function SavedEstimates({
         const finalDemoValue = pricingRun.finalDemo !== undefined ? pricingRun.finalDemo : (pricingRun.demoCharge || run.demoCharge || run.finalDemo || 0);
         return {
           runName: run.runName || origRun.name || `Section ${i + 1}`,
-          fenceType: run.style || origRun.styleId || '',
+          fenceType: run.styleName || origRun.styleId || '',
           height: run.height || 6,
           linearFeet: run.netLF,
           fenceRate: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
@@ -319,7 +319,7 @@ export default function SavedEstimates({
             demoCharge: finalDemoValue,
             stainingCharge: finalStainValue,
             gateDetails: run.gates || origRun.gateDetails || origRun.gates || [],
-            styleName: run.style || '',
+            styleName: run.styleName || '',
             styleType: run.styleType || '',
             height: run.height || 6,
             hasRotBoard: !!run.hasRotBoard,
@@ -330,7 +330,7 @@ export default function SavedEstimates({
             ironPanelType: run.ironPanelType || '',
             
             // Explicit run snapshot properties requested
-            fenceType: run.style || origRun.styleId || '',
+            fenceType: run.styleName || origRun.styleId || '',
             fenceRate: run.netLF > 0 ? finalFenceValue / run.netLF : 0,
             fenceTotal: finalFenceValue,
             gatesTotal: finalGateValue,
