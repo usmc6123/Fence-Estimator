@@ -584,11 +584,26 @@ export function resolveEstimateMaterialPricing(
   return baseMaterials.map(m => ({ ...m, priceSource: 'Library' }));
 }
 
+/**
+ * Generates a unique key for a gate package based on its configuration.
+ */
+export function getGatePackageKey(run: any, gate: any): string {
+  const styleId = run.styleId || 'default';
+  const type = gate.type || 'Single';
+  const width = gate.width || 4;
+  const construction = gate.construction || 'default';
+  const height = run.height || 6;
+  const clFinish = run.chainLinkFinish || 'default';
+  
+  return `${styleId}-${type}-${width}-${construction}-${height}-${clFinish}`.toLowerCase();
+}
+
 export function calculateDetailedTakeOff(
   estimate: Partial<Estimate>,
   rawMaterials: MaterialItem[],
   laborRates: LaborRates,
-  allQuotes: SupplierQuote[] = []
+  allQuotes: SupplierQuote[] = [],
+  gatePackages: Record<string, any[]> = {}
 ): DetailedTakeOff {
   const materials = resolveEstimateMaterialPricing(estimate, rawMaterials, allQuotes);
 
@@ -1197,11 +1212,20 @@ export function calculateDetailedTakeOff(
           return items;
         };
 
+        const packageKey = getGatePackageKey(run, gate);
+        const savedPackage = gatePackages[packageKey];
+
         if (gate.customItems && gate.customItems.length > 0) {
           gateItems = gate.customItems.map(ci => ({
             ...ci,
             total: ci.qty * ci.unitCost,
-            priceSource: 'Manual Override'
+            priceSource: 'Estimate Specific'
+          }));
+        } else if (savedPackage && savedPackage.length > 0) {
+          gateItems = savedPackage.map(pi => ({
+            ...pi,
+            total: pi.qty * pi.unitCost,
+            priceSource: 'Master Package'
           }));
         } else {
           gateItems = generateDefaultGateItems();

@@ -97,7 +97,8 @@ export function calculateCustomerEstimate(
   data: Partial<CustomerEstimateData>,
   customMaterials?: MaterialItem[],
   customLaborRates?: LaborRates,
-  customEstimateConfig?: any
+  customEstimateConfig?: any,
+  gatePackages: Record<string, any[]> = {}
 ): EstimateBreakdown {
   const lf = data.linearFeet || 0;
   const height = data.height || 6;
@@ -247,7 +248,7 @@ export function calculateCustomerEstimate(
     ]
   };
 
-  const takeoff = calculateDetailedTakeOff(mockEstimate, activeMaterials, activeLaborRates);
+  const takeoff = calculateDetailedTakeOff(mockEstimate, activeMaterials, activeLaborRates, [], gatePackages);
 
   // Classify products into posts, gates, materials, labor
   let postsCost = 0;

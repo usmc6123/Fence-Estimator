@@ -47,7 +47,8 @@ const INITIAL_DATA: CustomerEstimateData = {
 export function useCustomerEstimator(
   propMaterials?: MaterialItem[],
   propLaborRates?: LaborRates,
-  propEstimate?: Partial<Estimate>
+  propEstimate?: Partial<Estimate>,
+  gatePackages: Record<string, any[]> = {}
 ) {
   const [step, setStep] = React.useState<number>(1);
   const [data, setData] = React.useState<CustomerEstimateData>(INITIAL_DATA);
@@ -60,12 +61,12 @@ export function useCustomerEstimator(
 
   // Real-time calculation breakdown
   const [breakdown, setBreakdown] = React.useState<EstimateBreakdown>(() => 
-    calculateCustomerEstimate(INITIAL_DATA, propMaterials, propLaborRates, propEstimate)
+    calculateCustomerEstimate(INITIAL_DATA, propMaterials, propLaborRates, propEstimate, gatePackages)
   );
 
   React.useEffect(() => {
-    setBreakdown(calculateCustomerEstimate(data, propMaterials, propLaborRates, propEstimate));
-  }, [data, propMaterials, propLaborRates, propEstimate]);
+    setBreakdown(calculateCustomerEstimate(data, propMaterials, propLaborRates, propEstimate, gatePackages));
+  }, [data, propMaterials, propLaborRates, propEstimate, gatePackages]);
 
   const updateField = React.useCallback(<K extends keyof CustomerEstimateData>(
     field: K,

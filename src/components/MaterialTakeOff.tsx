@@ -6,7 +6,7 @@ import {
   ShieldCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { Estimate, MaterialItem, LaborRates, SupplierQuote, User } from '../types';
-import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem } from '../lib/calculations';
+import { calculateDetailedTakeOff, DetailedTakeOff, RunTakeOff, TakeOffItem, getGatePackageKey } from '../lib/calculations';
 import { cn, formatCurrency } from '../lib/utils';
 import { COMPANY_INFO } from '../constants';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -40,9 +40,20 @@ interface MaterialTakeOffProps {
   setMaterials: React.Dispatch<React.SetStateAction<MaterialItem[]>>;
   user: User | null;
   onRefreshMaterials?: () => void;
+  gatePackages?: Record<string, any[]>;
 }
 
-export default function MaterialTakeOff({ estimate, materials, laborRates, quotes, setEstimate, setMaterials, user, onRefreshMaterials }: MaterialTakeOffProps) {
+export default function MaterialTakeOff({ 
+  estimate, 
+  materials, 
+  laborRates, 
+  quotes, 
+  setEstimate, 
+  setMaterials, 
+  user, 
+  onRefreshMaterials,
+  gatePackages = {} 
+}: MaterialTakeOffProps) {
   const [showPrices, setShowPrices] = React.useState(true);
   const [showAddManual, setShowAddManual] = React.useState(false);
   const [editingGate, setEditingGate] = React.useState<{ runIndex: number, gateIndex: number, gateId: string } | null>(null);
@@ -72,7 +83,7 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
     Array.from(new Set(quotes.map(q => q.supplierName))).sort()
   , [quotes]);
 
-  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes);
+  const data: DetailedTakeOff = calculateDetailedTakeOff(estimate, materials, laborRates, quotes, gatePackages);
 
   const [pricingItem, setPricingItem] = React.useState<MaterialItem | null>(null);
   const [isUpdatingPrice, setIsUpdatingPrice] = React.useState(false);
@@ -163,11 +174,26 @@ export default function MaterialTakeOff({ estimate, materials, laborRates, quote
     );
   };
 
-  const handleUpdateGateItems = (runIndex: number, gateIndex: number, newItems: any[]) => {
+  const handleUpdateGateItems = async (runIndex: number, gateIndex: number, newItems: any[]) => {
     const newRuns = [...(estimate.runs || [])];
     if (newRuns[runIndex] && newRuns[runIndex].gateDetails) {
       newRuns[runIndex].gateDetails![gateIndex].customItems = newItems;
       setEstimate({ ...estimate, runs: newRuns });
+
+      // Persist to Master Gate Package
+      try {
+        const run = newRuns[runIndex];
+        const gate = run.gateDetails![gateIndex];
+        const packageKey = getGatePackageKey(run, gate);
+        await setDoc(doc(db, 'gatePackages', packageKey), {
+          items: newItems,
+          updatedAt: new Date().toISOString(),
+          styleId: run.styleId,
+          gateType: gate.type
+        }, { merge: true });
+      } catch (err) {
+        console.error('Failed to save master gate package:', err);
+      }
     }
   };
 

@@ -19,6 +19,7 @@ interface CustomerEstimatorProps {
   materials?: MaterialItem[];
   laborRates?: LaborRates;
   estimate?: Partial<Estimate>;
+  gatePackages?: Record<string, any[]>;
 }
 
 export default function CustomerEstimator({ 
@@ -26,6 +27,7 @@ export default function CustomerEstimator({
   materials,
   laborRates,
   estimate,
+  gatePackages = {}
 }: CustomerEstimatorProps) {
   const {
     step,
@@ -42,7 +44,7 @@ export default function CustomerEstimator({
     handleBack,
     handleSubmit,
     resetEstimator,
-  } = useCustomerEstimator(materials, laborRates, estimate);
+  } = useCustomerEstimator(materials, laborRates, estimate, gatePackages);
 
   // Internal tab state for the suite (only active if NOT standalone)
   const [activeSubTab, setActiveSubTab] = React.useState<'estimator' | 'crm' | 'embed' | 'photos'>('estimator');

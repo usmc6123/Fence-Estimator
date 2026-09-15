@@ -193,6 +193,22 @@ export default function App() {
     };
   }, []);
 
+  const [gatePackages, setGatePackages] = React.useState<Record<string, any[]>>({});
+
+  React.useEffect(() => {
+    const q = query(collection(db, 'gatePackages'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const packages: Record<string, any[]> = {};
+      snapshot.forEach((doc) => {
+        packages[doc.id] = doc.data().items || [];
+      });
+      setGatePackages(packages);
+    }, (error) => {
+      console.error("Error listening to gate packages:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Update transparent client-use path translation with global currentUserId
   React.useEffect(() => {
     if (!user) {
@@ -1066,7 +1082,7 @@ export default function App() {
   }
 
   if (isCustomerPortal) {
-    return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} />;
+    return <CustomerEstimator standalone={true} materials={materials} laborRates={laborRates} estimate={estimate} gatePackages={gatePackages} />;
   }
 
   if (isContractPortal) {
@@ -1216,7 +1232,7 @@ export default function App() {
             />
           )}
           {activeTab === 'customer-estimator' && (
-            <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} />
+            <CustomerEstimator materials={materials} laborRates={laborRates} estimate={estimate} gatePackages={gatePackages} />
           )}
           {activeTab === 'estimator' && (
             <Estimator 
@@ -1244,6 +1260,7 @@ export default function App() {
               }}
               isAdminVerifying={isAdminVerifying}
               globalDefaultSupplierId={globalDefaultSupplierId}
+              gatePackages={gatePackages}
             />
           )}
           {activeTab === 'scheduler' && (
@@ -1287,6 +1304,7 @@ export default function App() {
               setEstimate={handleUpdateEstimate}
               setMaterials={setMaterials}
               user={user}
+              gatePackages={gatePackages}
             />
           )}
           {activeTab === 'labor-breakdown' && (

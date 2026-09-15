@@ -35,6 +35,7 @@ interface EstimatorProps {
   onNavigate: (path: string) => void;
   isAdminVerifying?: boolean;
   globalDefaultSupplierId?: string;
+  gatePackages?: Record<string, any[]>;
 }
 
 export default function Estimator({ 
@@ -51,7 +52,8 @@ export default function Estimator({
   setAdminToken,
   onNavigate,
   isAdminVerifying = false,
-  globalDefaultSupplierId = ''
+  globalDefaultSupplierId = '',
+  gatePackages = {}
 }: EstimatorProps) {
   // Gracefully clean up case where last name is misplaced in the email field
   const resolvedClientName = React.useMemo(() => {
@@ -510,7 +512,7 @@ export default function Estimator({
   };
 
   const calculateCosts = () => {
-    const detailedData = calculateDetailedTakeOff(estimate, materials, globalLaborRates, quotes);
+    const detailedData = calculateDetailedTakeOff(estimate, materials, globalLaborRates, quotes, gatePackages);
 
     const runBreakdown = detailedData.runs.map(run => {
       const chargeTotal = ((run.fenceMaterialCost + run.fenceLaborCost) * markupFactor) + (run.fenceMaterialCost * taxFactor);
@@ -705,7 +707,7 @@ export default function Estimator({
       });
     }
 
-    const recalculatedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates);
+    const recalculatedTakeOff = calculateDetailedTakeOff(estimate, resolvedMaterials, globalLaborRates, [], gatePackages);
     const pricing = recalculatedTakeOff.pricing;
     const finalPrice = pricing.finalCustomerPrice || pricing.grandTotal || 0;
 
@@ -3883,7 +3885,7 @@ export default function Estimator({
                             </thead>
                             <tbody className="bg-white">
                               {(() => {
-                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates);
+                                const takeoffData = calculateDetailedTakeOff(estimate, materials, globalLaborRates, [], gatePackages);
                                 return (takeoffData.allResolvedIronPosts || []).map((p, i) => (
                                   <tr key={p.id} className="border-t border-american-blue/5">
                                     <td className="p-3 font-bold">{i + 1}</td>
