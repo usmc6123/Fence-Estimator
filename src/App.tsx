@@ -27,7 +27,7 @@ import CrewSchedulePortal from './components/CrewSchedulePortal';
 import JobPortal from './components/JobPortal';
 import { MATERIALS, DEFAULT_LABOR_RATES, FENCE_STYLES, DEFAULT_ESTIMATE, COMPANY_INFO } from './constants';
 import { MaterialItem, LaborRates, Estimate, SupplierQuote, SupplierQuoteSnapshot, SavedEstimate, User } from './types';
-import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc } from './lib/firebase';
+import { testConnection, setGlobalUserId, getEstimatesCollection, getEstimateDoc, auth, signOut } from './lib/firebase';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import AdminConsole from './pages/admin-console';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, updateDoc, getDoc, setDoc } from 'firebase/firestore';
@@ -95,16 +95,6 @@ export default function App() {
   });
   const [isAdminVerifying, setIsAdminVerifying] = React.useState(!!localStorage.getItem('company_admin_token'));
 
-  // Firebase Auth diagnostic listener
-  React.useEffect(() => {
-    const { onAuthStateChanged, auth } = Promise.resolve().then(() => import('./lib/firebase')).then(m => ({ onAuthStateChanged: m.onAuthStateChanged, auth: m.auth }));
-    
-    // Using a simpler approach since we already import auth from lib/firebase at the top
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      console.log("[Firebase Auth Diagnostic] State:", fbUser ? `Signed in as ${fbUser.email} (UID: ${fbUser.uid})` : "Signed out");
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Sync adminToken with currentUser token for admins
   React.useEffect(() => {
@@ -940,7 +930,6 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      const { signOut, auth } = await import('./lib/firebase');
       await signOut(auth);
       setLocalUser(null);
       localStorage.removeItem('company_local_user');

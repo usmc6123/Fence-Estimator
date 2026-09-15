@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Sparkles, Check, ChevronRight, CreditCard, Calendar, LogIn, ArrowRight, Loader2, RefreshCw, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { auth, signInWithEmailAndPassword } from '../lib/firebase';
 
 interface UserTierInfo {
   tier: 'free' | 'paid';
@@ -40,7 +41,6 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
       if (response.ok && data.success) {
         // Bridge with Firebase Auth for Firestore direct client writes
         try {
-          const { auth, signInWithEmailAndPassword } = await import('../lib/firebase');
           await signInWithEmailAndPassword(auth, targetEmail, targetPassword);
           console.log("Firebase Auth synced successfully for", targetEmail);
         } catch (fbErr) {
@@ -48,7 +48,6 @@ export function AuthPage({ onSuccess, onLocalLogin }: AuthPageProps) {
           // Fallback for bootstrapped admins if they are using the default password for Firebase but something else for local auth
           if (targetEmail === 'usmc6123@gmail.com' || targetEmail === 'bradens@lonestarfenceworks.com') {
             try {
-              const { auth, signInWithEmailAndPassword } = await import('../lib/firebase');
               await signInWithEmailAndPassword(auth, targetEmail, 'password123');
               console.log("Firebase Auth synced via fallback for", targetEmail);
             } catch (fallbackErr) {
