@@ -94,6 +94,7 @@ export default function CustomerContract({
   const [customLineItems, setCustomLineItems] = useState<CustomContractLineItem[]>(estimate.customContractLineItems || []);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const isInitialMount = React.useRef(true);
 
   const customContractLineItemsTotal = React.useMemo(() => {
@@ -281,6 +282,7 @@ export default function CustomerContract({
       showOnContract: template.showOnContract ?? true,
       includeInPricePerFoot: template.includeInPricePerFoot ?? false,
       pricingMode: template.pricingMode || 'standalone_charge',
+      linkedRunId: undefined, // Always Global (Project Level) as requested
       linkedLaborItemIds: [],
       linkedMaterialItemIds: [],
       sortOrder: customLineItems.length + 1,
@@ -325,11 +327,15 @@ export default function CustomerContract({
       updates.manualParentBundleIds = newParentBundleIds;
     }
 
-    setCustomLineItems(prev => [...prev, newLineItem]);
-    if (Object.keys(updates).length > 0) {
-      onUpdateEstimate?.(updates);
-    }
+    const newCustomLineItems = [...customLineItems, newLineItem];
+    setCustomLineItems(newCustomLineItems);
+    
+    // Persist changes immediately to estimate object to ensure bundled links are saved
+    updates.customContractLineItems = newCustomLineItems;
+    onUpdateEstimate?.(updates);
+    
     setHasUnsavedChanges(true);
+    setShowTemplateSelector(false);
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
@@ -1515,40 +1521,62 @@ Please structure the contract narrative with professional Markdown bold headers 
                 Add Custom Line Item
               </button>
 
-              {contractItemTemplates.length > 0 && (
-                <div className="relative group">
-                  <button
-                    className="px-5 py-3 bg-slate-100 text-american-blue rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all shadow-sm flex items-center gap-2"
-                  >
-                    <Layers size={16} />
-                    Load Reusable Item
-                  </button>
-                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <div className="p-4 bg-slate-50 border-b border-slate-100">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Templates</span>
+              <button
+                onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                className="px-5 py-3 bg-slate-100 text-american-blue rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+              >
+                <Layers size={16} />
+                Add Saved Item
+              </button>
+
+              {showTemplateSelector && (
+                <div className="absolute bottom-full left-0 mb-4 w-96 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                  <div className="p-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-[11px] font-black uppercase tracking-widest text-american-blue">Saved Templates</h3>
+                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">Select a master template to add</p>
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto">
-                      {contractItemTemplates.map(template => (
-                        <div key={template.id} className="group/item flex items-center justify-between p-3 hover:bg-american-blue/5 transition-colors border-b border-slate-50 last:border-0">
-                          <button
-                            onClick={() => handleLoadTemplate(template.id)}
-                            className="flex-1 text-left"
-                          >
-                            <p className="text-xs font-black text-american-blue">{template.title}</p>
-                            <p className="text-[9px] font-bold text-slate-400">{formatCurrency(template.amount)}</p>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteTemplate(template.id);
-                            }}
-                            className="p-1.5 text-slate-300 hover:text-american-red transition-colors opacity-0 group-hover/item:opacity-100"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    <button 
+                      onClick={() => setShowTemplateSelector(false)}
+                      className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"
+                    >
+                      <Trash2 size={14} className="rotate-45" />
+                    </button>
+                  </div>
+                  <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {contractItemTemplates.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <Package size={32} className="mx-auto text-slate-200 mb-3" />
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No saved templates found</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-50">
+                        {contractItemTemplates.map(template => (
+                          <div key={template.id} className="group/item flex items-center justify-between p-4 hover:bg-american-blue/5 transition-all">
+                            <button
+                              onClick={() => handleLoadTemplate(template.id)}
+                              className="flex-1 text-left"
+                            >
+                              <p className="text-sm font-black text-american-blue group-hover/item:text-american-blue/80 transition-colors">{template.title}</p>
+                              {template.description && (
+                                <p className="text-[10px] font-medium text-slate-500 mt-0.5 line-clamp-1">{template.description}</p>
+                              )}
+                              <p className="text-[11px] font-black text-american-blue mt-1 bg-american-blue/10 inline-block px-2 py-0.5 rounded-lg">{formatCurrency(template.amount)}</p>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteTemplate(template.id);
+                              }}
+                              className="p-2 text-slate-300 hover:text-american-red hover:bg-american-red/10 rounded-xl transition-all opacity-0 group-hover/item:opacity-100"
+                              title="Delete template"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
