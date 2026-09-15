@@ -1454,6 +1454,10 @@ Please structure the contract narrative with professional Markdown bold headers 
                                   const alreadyBundledId = (estimate.customContractLineItems || []).find(cli => cli.id !== item.id && cli.linkedMaterialItemIds?.includes(mat.id))?.id;
                                   const alreadyBundledName = alreadyBundledId ? (estimate.customContractLineItems || []).find(cli => cli.id === alreadyBundledId)?.title : null;
 
+                                  const contribution = item.templateMaterialContributions?.find(c => c.materialId === mat.id);
+                                  const displayQty = (isChecked && contribution) ? contribution.qty : mat.qty;
+                                  const displayTotal = (isChecked && contribution) ? (contribution.qty * mat.unitCost) : mat.total;
+
                                   const toggleMaterial = () => {
                                     if (alreadyBundledId) return;
                                     const existing = item.linkedMaterialItemIds ?? [];
@@ -1498,14 +1502,14 @@ Please structure the contract narrative with professional Markdown bold headers 
                                         <div className="flex flex-col">
                                           <span className="text-xs font-bold text-slate-700">{mat.name}</span>
                                           <div className="flex items-center gap-2">
-                                            <span className="text-[9px] text-slate-400 font-medium">{mat.qty} {mat.unit}</span>
+                                            <span className="text-[9px] text-slate-400 font-medium">{displayQty} {mat.unit}</span>
                                             {alreadyBundledId && (
                                               <span className="text-[9px] text-amber-600 font-bold">• Bundled: {alreadyBundledName || 'Another Bundle'}</span>
                                             )}
                                           </div>
                                         </div>
                                       </div>
-                                      <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(mat.total)}</span>
+                                      <span className="text-xs font-mono font-bold text-american-blue">{formatCurrency(displayTotal)}</span>
                                     </div>
                                   );
                                 })}
@@ -1525,8 +1529,27 @@ Please structure the contract narrative with professional Markdown bold headers 
                               const linkedLabor = (estimate.customLaborItems || []).filter(l => item.linkedLaborItemIds?.includes(l.id));
                               const linkedLaborCost = linkedLabor.reduce((sum, l) => sum + l.cost, 0);
                               
-                              const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
-                              const linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
+                              let linkedMatCost = 0;
+                              if (item.templateMaterialContributions && item.templateMaterialContributions.length > 0) {
+                                // Template-based instance: use specific contribution quantities for materials that are still linked
+                                linkedMatCost = item.templateMaterialContributions
+                                  .filter(c => item.linkedMaterialItemIds?.includes(c.materialId))
+                                  .reduce((sum, c) => {
+                                    const mat = data.manualSummary.find(m => m.id === c.materialId);
+                                    // Prefer price from manualSummary (which includes overrides), fallback to contribution price or material library
+                                    const unitCost = mat ? mat.unitCost : (c.unitPrice || materials.find(m => m.id === c.materialId)?.cost || 0);
+                                    return sum + (c.qty * unitCost);
+                                  }, 0);
+                                
+                                // Add any EXTRA materials that were manually linked to this bundle but weren't in the template
+                                const contributionIds = new Set(item.templateMaterialContributions.map(c => c.materialId));
+                                const extraMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id) && !contributionIds.has(m.id));
+                                linkedMatCost += extraMats.reduce((sum, m) => sum + m.total, 0);
+                              } else {
+                                // Legacy/Manual bundle: use global quantities
+                                const linkedMats = data.manualSummary.filter(m => item.linkedMaterialItemIds?.includes(m.id));
+                                linkedMatCost = linkedMats.reduce((sum, m) => sum + m.total, 0);
+                              }
                               
                               const totalCost = linkedLaborCost + linkedMatCost;
                               const profit = item.amount - totalCost;
