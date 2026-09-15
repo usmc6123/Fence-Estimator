@@ -147,33 +147,75 @@ export default function CustomerContract({
     const item = customLineItems.find(i => i.id === id);
     if (!item) return;
 
-    const linkedLabor = (estimate.customLaborItems || []).filter(l => l.parentBundleId === id);
-    const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
-      .filter(([_, bundleId]) => bundleId === id)
-      .map(([mid]) => mid);
+    // Check if it has bundled/template contributions that need cleanup
+    const hasBundledCosts = 
+      (item.linkedLaborItemIds && item.linkedLaborItemIds.length > 0) || 
+      (item.templateMaterialContributions && item.templateMaterialContributions.length > 0) ||
+      Object.entries(estimate.manualParentBundleIds || {}).some(([_, bundleId]) => bundleId === id);
 
-    if (linkedLabor.length > 0 || linkedMatIds.length > 0) {
-      if (!confirm(`This bundle has linked costs. Deleting the bundle will unlink these costs and restore them to normal pricing. Continue?`)) {
+    if (hasBundledCosts) {
+      if (!confirm(`This custom item has bundled labor or material costs. These costs will be permanently removed from the estimate if you delete this item. Continue?`)) {
         return;
       }
-      
-      // Unlink labor
-      const updatedLabor = (estimate.customLaborItems || []).map(l => 
-        l.parentBundleId === id ? { ...l, parentBundleId: undefined } : l
-      );
-      
-      // Unlink materials
-      const updatedMatMap = { ...(estimate.manualParentBundleIds || {}) };
-      linkedMatIds.forEach(mid => delete updatedMatMap[mid]);
-      
-      onUpdateEstimate?.({ 
-        customLaborItems: updatedLabor,
-        manualParentBundleIds: updatedMatMap
-      });
     }
 
-    const updated = customLineItems.filter(item => item.id !== id);
-    setCustomLineItems(updated);
+    const updates: Partial<Estimate> = {};
+
+    // 1. Cleanup Labor - Permanently remove labor items created for this bundle
+    if (estimate.customLaborItems) {
+      const updatedLabor = estimate.customLaborItems.filter(l => l.parentBundleId !== id);
+      if (updatedLabor.length !== estimate.customLaborItems.length) {
+        updates.customLaborItems = updatedLabor;
+      }
+    }
+
+    // 2. Cleanup Materials - Reverse contributions and cleanup parent links
+    if (item.templateMaterialContributions && item.templateMaterialContributions.length > 0) {
+      const newManualQuantities = { ...(estimate.manualQuantities || {}) };
+      const updatedMatMap = { ...(estimate.manualParentBundleIds || {}) };
+      
+      item.templateMaterialContributions.forEach(contribution => {
+        const mid = contribution.materialId;
+        if (newManualQuantities[mid] !== undefined) {
+          newManualQuantities[mid] -= contribution.qty;
+          // If quantity is now 0 or less, clean it up completely if it was only from templates
+          if (newManualQuantities[mid] <= 0) {
+            delete newManualQuantities[mid];
+          }
+        }
+      });
+      
+      // Cleanup parent links - Only remove link if NO OTHER bundle still uses this material
+      const otherItems = customLineItems.filter(i => i.id !== id);
+      const stillLinkedMatIds = new Set(otherItems.flatMap(i => i.linkedMaterialItemIds || []));
+      
+      Object.entries(updatedMatMap).forEach(([mid, bundleId]) => {
+        if (bundleId === id && !stillLinkedMatIds.has(mid)) {
+          delete updatedMatMap[mid];
+        }
+      });
+
+      updates.manualQuantities = newManualQuantities;
+      updates.manualParentBundleIds = updatedMatMap;
+    } else {
+      // Legacy cleanup for items that might not have templateMaterialContributions
+      const linkedMatIds = Object.entries(estimate.manualParentBundleIds || {})
+        .filter(([_, bundleId]) => bundleId === id)
+        .map(([mid]) => mid);
+      
+      if (linkedMatIds.length > 0) {
+        const updatedMatMap = { ...(estimate.manualParentBundleIds || {}) };
+        linkedMatIds.forEach(mid => delete updatedMatMap[mid]);
+        updates.manualParentBundleIds = updatedMatMap;
+      }
+    }
+
+    const updatedCustomLineItems = customLineItems.filter(i => i.id !== id);
+    setCustomLineItems(updatedCustomLineItems);
+    updates.customContractLineItems = updatedCustomLineItems;
+    
+    // Always persist the updated custom line items array
+    onUpdateEstimate?.(updates);
     setHasUnsavedChanges(true);
   };
 
@@ -279,7 +321,30 @@ export default function CustomerContract({
 
     const bundleId = crypto.randomUUID();
     
-    // 1. Create the new line item
+    // 1. Calculate material contributions
+    const materialContributions: { materialId: string; qty: number; unitPrice?: number; }[] = [];
+    const newManualQuantities = { ...(estimate.manualQuantities || {}) };
+    const newManualPrices = { ...(estimate.manualPrices || {}) };
+    const newParentBundleIds = { ...(estimate.manualParentBundleIds || {}) };
+    const linkedMaterialItemIds: string[] = [];
+
+    if (template.bundledMaterials && template.bundledMaterials.length > 0) {
+      template.bundledMaterials.forEach(bm => {
+        const matId = bm.material.id;
+        materialContributions.push({
+          materialId: matId,
+          qty: bm.qty,
+          unitPrice: bm.unitPrice ?? bm.material.cost
+        });
+        
+        newManualQuantities[matId] = (newManualQuantities[matId] || 0) + bm.qty;
+        newManualPrices[matId] = bm.unitPrice ?? bm.material.cost;
+        newParentBundleIds[matId] = bundleId;
+        linkedMaterialItemIds.push(matId);
+      });
+    }
+
+    // 2. Create the new line item
     const newLineItem: CustomContractLineItem = {
       id: bundleId,
       title: template.title,
@@ -291,7 +356,8 @@ export default function CustomerContract({
       pricingMode: template.pricingMode || 'standalone_charge',
       linkedRunId: undefined, // Always Global (Project Level) as requested
       linkedLaborItemIds: [],
-      linkedMaterialItemIds: [],
+      linkedMaterialItemIds,
+      templateMaterialContributions: materialContributions,
       sortOrder: customLineItems.length + 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -299,7 +365,7 @@ export default function CustomerContract({
 
     const updates: Partial<Estimate> = {};
 
-    // 2. Recreate labor items
+    // 3. Recreate labor items
     if (template.bundledLabor && template.bundledLabor.length > 0) {
       const newLaborItems = template.bundledLabor.map(l => ({
         id: crypto.randomUUID(),
@@ -311,24 +377,8 @@ export default function CustomerContract({
       updates.customLaborItems = [...(estimate.customLaborItems || []), ...newLaborItems];
     }
 
-    // 3. Recreate material items
-    if (template.bundledMaterials && template.bundledMaterials.length > 0) {
-      const newManualQuantities = { ...(estimate.manualQuantities || {}) };
-      const newManualPrices = { ...(estimate.manualPrices || {}) };
-      const newParentBundleIds = { ...(estimate.manualParentBundleIds || {}) };
-      
-      template.bundledMaterials.forEach(bm => {
-        const matId = bm.material.id;
-        newManualQuantities[matId] = (newManualQuantities[matId] || 0) + bm.qty;
-        newManualPrices[matId] = bm.unitPrice ?? bm.material.cost;
-        newParentBundleIds[matId] = bundleId;
-        
-        if (!newLineItem.linkedMaterialItemIds) newLineItem.linkedMaterialItemIds = [];
-        if (!newLineItem.linkedMaterialItemIds.includes(matId)) {
-           newLineItem.linkedMaterialItemIds.push(matId);
-        }
-      });
-      
+    // 4. Update material state in estimate
+    if (materialContributions.length > 0) {
       updates.manualQuantities = newManualQuantities;
       updates.manualPrices = newManualPrices;
       updates.manualParentBundleIds = newParentBundleIds;
@@ -337,7 +387,7 @@ export default function CustomerContract({
     const newCustomLineItems = [...customLineItems, newLineItem];
     setCustomLineItems(newCustomLineItems);
     
-    // Persist changes immediately to estimate object to ensure bundled links are saved
+    // Persist changes immediately
     updates.customContractLineItems = newCustomLineItems;
     onUpdateEstimate?.(updates);
     

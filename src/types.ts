@@ -239,6 +239,11 @@ export interface CustomContractLineItem {
   linkedRunId?: string; // Links to a specific fence run ID
   linkedLaborItemIds?: string[];
   linkedMaterialItemIds?: string[];
+  templateMaterialContributions?: {
+    materialId: string;
+    qty: number;
+    unitPrice?: number;
+  }[];
   sortOrder?: number;
   createdAt?: string;
   updatedAt?: string;
