@@ -953,8 +953,6 @@ export default function CustomerContract({
         Pre-Stained Style: ${estimate.isPreStained ? 'Yes' : 'No'}
         Stain Color: ${estimate.defaultColor || 'N/A'}
         Increase Post Depth: ${estimate.increasePostDepth ? 'Yes' : 'No'}
-        Total Contract Price: $${(data.pricing.finalCustomerPrice || 0).toFixed(2)}
-        Demolition Removal Price: $${(data.pricing.demoRemovalPrice || 0).toFixed(2)}
       `.trim();
 
       const sectionsSpecsText = data.runs.map((run, index) => {
@@ -997,7 +995,7 @@ export default function CustomerContract({
         `;
       }).join('\n\n');
 
-      const calculationMaterialsText = data.summary.map(item => `- ${item.name}: ${item.qty} ${item.unit}`).join('\n') || 'None';
+      const calculationMaterialsText = data.summary.map(item => `- ${item.name}`).join('\n') || 'None';
 
       const prompt = `
 You are a senior project manager and estimator for Lone Star Fence Works, a premium fence contractor in Texas.
@@ -1005,30 +1003,32 @@ Your tone is professional, confident, clear, and legally protective. No fluff. W
 This document is a contract Scope of Work that reads as if it was written specifically for this customer's project. The customer must understand exactly what will be built without referring back to an estimate sheet.
 
 CRITICAL INSTRUCTIONS (FORBIDDEN VOCABULARY & RULES):
-1. NEVER say "Refer to estimate", "See estimate", or "Per contract selections".
-2. NEVER use the phrase "As selected" or "As specified".
-3. NEVER use the word "Typically" or "Or equivalent".
-4. NEVER say "Metal or wood posts". You MUST explicitly state the precise post type being installed based on the section specs.
-5. If the information exists in the estimate facts below, state it explicitly. Do not leaves choices open.
-6. Under "Reused Posts (Warranty)": If any section says "Reusing Existing Posts: Yes", you MUST include this exact disclaimer verbatim:
+1. NEVER include any pricing, costs, dollar amounts, unit prices, labor prices, material prices, totals, subtotals, or other financial information. The Scope of Work is for work description, not financials.
+2. NEVER include calculated material quantities (e.g., number of posts, number of pickets, number of rails, counts of concrete bags, fasteners, or material sticks). You may describe the materials being used, but do not expose the purchasing quantities.
+3. NEVER say "Refer to estimate", "See estimate", or "Per contract selections".
+4. NEVER use the phrase "As selected" or "As specified".
+5. NEVER use the word "Typically" or "Or equivalent".
+6. NEVER say "Metal or wood posts". You MUST explicitly state the precise post type being installed based on the section specs.
+7. If the information exists in the estimate facts below, state it explicitly. Do not leaves choices open.
+8. Under "Reused Posts (Warranty)": If any section says "Reusing Existing Posts: Yes", you MUST include this exact disclaimer verbatim:
    "Contractor will reuse existing posts provided by Customer. Contractor's warranty DOES NOT apply to existing posts."
-7. DAMP LUMBER BRANDING: Do not use premium self-promoting terminology such as "#1 Grade" or similar quality marketing slogans for lumber. Use the exact wood species/types as configured in the estimate (e.g. Japanese Cedar, Western Red Cedar, or Pressure-Treated Pine).
-8. SECTION DISTINCTIVENESS: Clearly differentiate between "New Installation" and "Staining/Restoration" sections in the output document. Staining/Restoration work on existing fences MUST NOT be described as a new installation. Focus staining on: surface prep, application method, and limitations (natural tone variations, age/moisture absorption, weather-dependency).
-9. INCREASED POST DEPTH: If global specs indicate "Increase Post Depth: Yes", you MUST include this specification in the post installation description: "Increased post depth: +12 inches (Total post depth: 48 inches). Posts are upgraded to 1-foot-longer structural posts and set with deeper set labor."
+9. DAMP LUMBER BRANDING: Do not use premium self-promoting terminology such as "#1 Grade" or similar quality marketing slogans for lumber. Use the exact wood species/types as configured in the estimate (e.g. Japanese Cedar, Western Red Cedar, or Pressure-Treated Pine).
+10. SECTION DISTINCTIVENESS: Clearly differentiate between "New Installation" and "Staining/Restoration" sections in the output document. Staining/Restoration work on existing fences MUST NOT be described as a new installation. Focus staining on: surface prep, application method, and limitations (natural tone variations, age/moisture absorption, weather-dependency).
+11. INCREASED POST DEPTH: If global specs indicate "Increase Post Depth: Yes", you MUST include this specification in the post installation description: "Increased post depth: +12 inches (Total post depth: 48 inches). Posts are upgraded to 1-foot-longer structural posts and set with deeper set labor."
 
 LONE STAR FENCE WORKS COMPANY SPECIFICATIONS & DEFAULTS:
 Use these specific standard specifications when writing:
 - POST FOOTINGS:
   - Required Wording: "Posts will be installed in round concrete footings measuring {diameter}\" in diameter by {depth}\" deep."
-  - Rule 1 (8' Wood Fence): 10" in diameter by 36" deep.
+  - Rule 1 (8' Wood Fence): 8" in diameter by 36" deep. (STRICT: Do NOT use 10" for 8' wood fences).
   - Rule 2 (6' Wood Fence or lower): 8" in diameter by 24" deep.
   - Rule 3 (Wrought Iron): 8" in diameter by 24" deep.
   - Rule 4 (Chain Link): 8" in diameter by 24" deep.
   - Rule 5 (Pipe / No-Climb): 8" in diameter by 24" deep.
   - Rule 6 (Vinyl & others): 8" in diameter by 24" deep.
   - Methodology: All posts are wet-set in concrete.
-- STEEL POSTS: "Schedule 20 galvanized steel posts" wet-set in concrete. Post spacing set approximately 8 feet on center.
-- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" wet-set in concrete.
+- STEEL POSTS: "Schedule 20 galvanized steel posts" wet-set in concrete. Post spacing: 8 feet on center for standard fences, but strictly 6 feet on center for any 8-foot-tall wood fences.
+- WOOD POSTS (Only if PT Pine selection or explicit wood post type chosen): "Pressure-treated Schedule 20 equivalent structural wood posts (4x4)" wet-set in concrete. Spacing: 8 feet on center for standard, 6 feet on center for 8-foot wood fences.
 - RAILS:
   - For 6' (foot) tall fences: 3 nominal 2x4 rails.
   - For 8' (foot) tall fences: 4 nominal 2x4 rails.

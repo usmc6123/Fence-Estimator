@@ -492,11 +492,13 @@ export default function LaborTakeOff({
         `}).join('\n')}
 
         Requirements to include in the generated text:
-        - Specific hole depths as mentioned: 8"x24" for standard, 8"x36" for 8' wood. Gate posts 1' deeper.
+        - NEVER include any pricing, costs, dollar amounts, or financial information.
+        - NEVER include specific calculated material quantities (e.g. number of posts, pickets, or bags of concrete). Describe the materials and methods instead.
+        - For 8' WOOD FENCES: Posts shall be described as spaced strictly 6 feet on center.
+        - Specific hole depths: 8"x24" for standard, 8"x36" for 8' wood. (Gate posts 1' deeper).
         - Detailed construction steps for the specific styles mentioned. Clearly distinguish between "Board on Board" (overlapping) and "Side by Side" picket orientation. For Board on Board, specify that pickets in the back layer must have exactly 3.5" of spacing between them, with the front layer centered over the gaps.
         - Utility Verification: Mandatory check of 811 markings. Instructions to stop digging if unknown obstructions are found.
         - Private Line Due Diligence: Explicitly mention responsibility for avoiding private lines not marked by 811, including sprinkler systems, septic lines, and power to auxiliary buildings/sheds.
-        - Material management (how many pickets, posts, bags of concrete etc based on the manifest).
         - Quality control standards: Level/Plum requirements.
         - Cleanup expectations.
         - DO NOT include general PPE or safety requirements (the crew is responsible for their own safety gear).
